@@ -102,6 +102,7 @@ model Zone {
   tournament   Tournament  @relation(fields: [tournamentId], references: [id])
   clubZones    ClubZone[]
   matches      Match[]
+  standings    CategoryStanding[]
   @@unique([tournamentId, name])
 }
 
@@ -124,6 +125,7 @@ model Club {
   otherGoals      OtherGoal[]
   goals           Goal[]
   userRoles       UserRole[]
+  categoryStandings CategoryStanding[]
 }
 
 model ClubZone {
@@ -146,7 +148,6 @@ model Category {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   tournaments TournamentCategory[]
-  rosters   Roster[]
   userRoles UserRole[]
 }
 
@@ -159,6 +160,8 @@ model TournamentCategory {
   tournament   Tournament @relation(fields: [tournamentId], references: [id])
   category     Category   @relation(fields: [categoryId], references: [id])
   matches      MatchCategory[]
+  rosters      Roster[]
+  standings    CategoryStanding[]
 
   @@unique([tournamentId, categoryId])
 }
@@ -298,6 +301,8 @@ model User {
   passwordResets   PasswordResetToken[]
   matchCategories  MatchCategory[]
   attachments      MatchAttachment[]
+  matchLogs        MatchLog[]
+  auditLogs        AuditLog[]
 }
 
 model Role {
