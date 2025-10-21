@@ -1,0 +1,410 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RoleKey {
+  ADMIN
+  COLLABORATOR
+  DELEGATE
+  COACH
+  USER
+}
+
+enum Module {
+  LIGAS
+  TORNEOS
+  ZONAS
+  FIXTURE
+  PARTIDOS
+  RESULTADOS
+  TABLAS
+  CLUBES
+  CATEGORIAS
+  JUGADORES
+  PLANTELES
+  CONFIGURACION
+  USUARIOS
+  ROLES
+  PERMISOS
+  REPORTES
+}
+
+enum Action {
+  VIEW
+  CREATE
+  UPDATE
+  DELETE
+  MANAGE
+}
+
+enum Scope {
+  GLOBAL
+  LIGA
+  CLUB
+  CATEGORIA
+}
+
+enum TournamentChampionMode {
+  ROUND_AND_ANNUAL
+  GLOBAL
+}
+
+enum MatchStatus {
+  PROGRAMMED
+  PENDING
+  FINISHED
+}
+
+enum Round {
+  FIRST
+  SECOND
+}
+
+model League {
+  id         Int        @id @default(autoincrement())
+  name       String
+  slug       String     @unique
+  colorHex   String     @default('#0057b8')
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  tournaments Tournament[]
+  clubs      Club[]
+  userRoles  UserRole[]
+}
+
+model Tournament {
+  id           Int                      @id @default(autoincrement())
+  leagueId     Int
+  name         String
+  year         Int
+  championMode TournamentChampionMode   @default(GLOBAL)
+  startDate    DateTime?
+  endDate      DateTime?
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+  league       League                   @relation(fields: [leagueId], references: [id])
+  zones        Zone[]
+  categories   TournamentCategory[]
+  matches      Match[]
+}
+
+model Zone {
+  id           Int         @id @default(autoincrement())
+  tournamentId Int
+  name         String
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  tournament   Tournament  @relation(fields: [tournamentId], references: [id])
+  clubZones    ClubZone[]
+  matches      Match[]
+  @@unique([tournamentId, name])
+}
+
+model Club {
+  id              Int        @id @default(autoincrement())
+  name            String
+  shortName       String?
+  slug            String     @unique
+  leagueId        Int?
+  primaryColor    String?
+  secondaryColor  String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  league          League?    @relation(fields: [leagueId], references: [id])
+  zones           ClubZone[]
+  rosters         Roster[]
+  players         Player[]
+  homeMatches     Match[]    @relation("homeClub")
+  awayMatches     Match[]    @relation("awayClub")
+  otherGoals      OtherGoal[]
+  goals           Goal[]
+  userRoles       UserRole[]
+}
+
+model ClubZone {
+  id        Int      @id @default(autoincrement())
+  clubId    Int
+  zoneId    Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  club      Club     @relation(fields: [clubId], references: [id])
+  zone      Zone     @relation(fields: [zoneId], references: [id])
+
+  @@unique([clubId, zoneId])
+  @@unique([zoneId, clubId])
+}
+
+model Category {
+  id        Int        @id @default(autoincrement())
+  name      String
+  birthYear Int
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  tournaments TournamentCategory[]
+  rosters   Roster[]
+  userRoles UserRole[]
+}
+
+model TournamentCategory {
+  id           Int        @id @default(autoincrement())
+  tournamentId Int
+  categoryId   Int
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  tournament   Tournament @relation(fields: [tournamentId], references: [id])
+  category     Category   @relation(fields: [categoryId], references: [id])
+  matches      MatchCategory[]
+
+  @@unique([tournamentId, categoryId])
+}
+
+model Roster {
+  id                   Int        @id @default(autoincrement())
+  clubId               Int
+  tournamentCategoryId Int
+  lockedAt             DateTime?
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+  club                 Club       @relation(fields: [clubId], references: [id])
+  tournamentCategory   TournamentCategory @relation(fields: [tournamentCategoryId], references: [id])
+  players              RosterPlayer[]
+
+  @@unique([clubId, tournamentCategoryId])
+}
+
+model Player {
+  id          Int      @id @default(autoincrement())
+  clubId      Int
+  firstName   String
+  lastName    String
+  birthDate   DateTime
+  document    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  club        Club     @relation(fields: [clubId], references: [id])
+  goals       Goal[]
+  rosters     RosterPlayer[]
+}
+
+model RosterPlayer {
+  id        Int      @id @default(autoincrement())
+  rosterId  Int
+  playerId  Int
+  jersey    Int?
+  createdAt DateTime @default(now())
+  roster    Roster   @relation(fields: [rosterId], references: [id])
+  player    Player   @relation(fields: [playerId], references: [id])
+
+  @@unique([rosterId, playerId])
+}
+
+model Match {
+  id           Int        @id @default(autoincrement())
+  tournamentId Int
+  zoneId       Int
+  matchday     Int
+  round        Round
+  date         DateTime?
+  status       MatchStatus @default(PROGRAMMED)
+  homeClubId   Int?
+  awayClubId   Int?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  tournament   Tournament @relation(fields: [tournamentId], references: [id])
+  zone         Zone       @relation(fields: [zoneId], references: [id])
+  homeClub     Club?      @relation("homeClub", fields: [homeClubId], references: [id])
+  awayClub     Club?      @relation("awayClub", fields: [awayClubId], references: [id])
+  categories   MatchCategory[]
+  attachments  MatchAttachment[]
+  logs         MatchLog[]
+}
+
+model MatchCategory {
+  id                   Int       @id @default(autoincrement())
+  matchId              Int
+  tournamentCategoryId Int
+  homeScore            Int       @default(0)
+  awayScore            Int       @default(0)
+  closedAt             DateTime?
+  closedById           Int?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  match                Match     @relation(fields: [matchId], references: [id])
+  tournamentCategory   TournamentCategory @relation(fields: [tournamentCategoryId], references: [id])
+  goals                Goal[]
+  otherGoals           OtherGoal[]
+  closedBy             User?     @relation(fields: [closedById], references: [id])
+}
+
+model Goal {
+  id              Int      @id @default(autoincrement())
+  matchCategoryId Int
+  playerId        Int
+  clubId          Int
+  minute          Int?
+  createdAt       DateTime @default(now())
+  matchCategory   MatchCategory @relation(fields: [matchCategoryId], references: [id])
+  player          Player   @relation(fields: [playerId], references: [id])
+  club            Club     @relation(fields: [clubId], references: [id])
+}
+
+model OtherGoal {
+  id              Int      @id @default(autoincrement())
+  matchCategoryId Int
+  clubId          Int
+  goals           Int
+  createdAt       DateTime @default(now())
+  matchCategory   MatchCategory @relation(fields: [matchCategoryId], references: [id])
+  club            Club     @relation(fields: [clubId], references: [id])
+}
+
+model MatchAttachment {
+  id           Int      @id @default(autoincrement())
+  matchId      Int
+  url          String
+  uploadedById Int
+  createdAt    DateTime @default(now())
+  match        Match    @relation(fields: [matchId], references: [id])
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+}
+
+model MatchLog {
+  id        Int      @id @default(autoincrement())
+  matchId   Int
+  userId    Int?
+  action    String
+  createdAt DateTime @default(now())
+  match     Match    @relation(fields: [matchId], references: [id])
+  user      User?    @relation(fields: [userId], references: [id])
+}
+
+model User {
+  id               Int        @id @default(autoincrement())
+  email            String     @unique
+  passwordHash     String
+  firstName        String
+  lastName         String
+  emailVerifiedAt  DateTime?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  roles            UserRole[]
+  tokens           UserToken[]
+  verifications    EmailVerificationToken[]
+  passwordResets   PasswordResetToken[]
+  matchCategories  MatchCategory[]
+  attachments      MatchAttachment[]
+}
+
+model Role {
+  id          Int        @id @default(autoincrement())
+  key         RoleKey    @unique
+  name        String
+  description String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  assignments UserRole[]
+  permissions RolePermission[]
+}
+
+model Permission {
+  id          Int        @id @default(autoincrement())
+  module      Module
+  action      Action
+  scope       Scope
+  description String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  roles       RolePermission[]
+
+  @@unique([module, action, scope])
+}
+
+model RolePermission {
+  roleId       Int
+  permissionId Int
+  createdAt    DateTime @default(now())
+  role         Role     @relation(fields: [roleId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  @@id([roleId, permissionId])
+}
+
+model UserRole {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  roleId     Int
+  leagueId   Int?
+  clubId     Int?
+  categoryId Int?
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id])
+  role       Role     @relation(fields: [roleId], references: [id])
+  league     League?  @relation(fields: [leagueId], references: [id])
+  club       Club?    @relation(fields: [clubId], references: [id])
+  category   Category? @relation(fields: [categoryId], references: [id])
+}
+
+model UserToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model EmailVerificationToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  token     String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model PasswordResetToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  token     String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+
+model CategoryStanding {
+  id                   Int      @id @default(autoincrement())
+  zoneId               Int
+  tournamentCategoryId Int
+  clubId               Int
+  played               Int      @default(0)
+  wins                 Int      @default(0)
+  draws                Int      @default(0)
+  losses               Int      @default(0)
+  goalsFor             Int      @default(0)
+  goalsAgainst         Int      @default(0)
+  points               Int      @default(0)
+  goalDifference       Int      @default(0)
+  updatedAt            DateTime @updatedAt
+  zone                 Zone     @relation(fields: [zoneId], references: [id])
+  tournamentCategory   TournamentCategory @relation(fields: [tournamentCategoryId], references: [id])
+  club                 Club     @relation(fields: [clubId], references: [id])
+
+  @@unique([zoneId, tournamentCategoryId, clubId])
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  action    String
+  metadata  Json?
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id])
+}
