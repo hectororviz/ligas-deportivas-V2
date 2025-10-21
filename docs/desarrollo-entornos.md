@@ -2,6 +2,11 @@
 
 Esta guía explica cómo preparar, desarrollar y probar el monorepo de **Ligas Deportivas** en Visual Studio Code (VS Code) usando Windows 10/11 y Linux (Ubuntu y Arch Linux). Incluye los requisitos para el backend NestJS + Prisma, el frontend Flutter Web y la infraestructura opcional con Docker Compose.
 
+Credenciales por defecto del administrador
+
+Usuario (email): admin@ligas.local
+Contraseña: Admin123
+
 ## 1. Preparación inicial común
 
 ### 1.1 Clonar el repositorio y abrirlo en VS Code
