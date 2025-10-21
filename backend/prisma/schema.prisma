@@ -69,7 +69,7 @@ model League {
   id         Int        @id @default(autoincrement())
   name       String
   slug       String     @unique
-  colorHex   String     @default('#0057b8')
+  colorHex   String     @default("#0057b8")
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
   tournaments Tournament[]
