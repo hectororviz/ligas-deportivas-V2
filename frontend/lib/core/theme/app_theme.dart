@@ -42,11 +42,11 @@ class AppTheme {
         selectedLabelTextStyle:
             const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0057B8)),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         elevation: 0,
-        margin: const EdgeInsets.all(12)
+        margin: const EdgeInsets.all(12),
       ),
     );
   }
