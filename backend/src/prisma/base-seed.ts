@@ -155,8 +155,15 @@ export async function seedBaseData(prisma: PrismaClient) {
     { module: Module.TABLAS, action: Action.VIEW, scope: Scope.GLOBAL }
   ]);
 
-  const adminEmail = 'admin@ligas.local';
-  const adminPassword = 'Admin123';
+  const adminEmailRaw = process.env.ADMIN_EMAIL?.trim();
+  const adminEmailEnv = adminEmailRaw ? adminEmailRaw.toLowerCase() : undefined;
+  const adminEmail = adminEmailEnv && adminEmailEnv.length > 0 ? adminEmailEnv : 'admin@ligas.local';
+  const adminPasswordEnv = process.env.ADMIN_PASSWORD?.trim();
+  const adminPassword = adminPasswordEnv && adminPasswordEnv.length > 0 ? adminPasswordEnv : 'Admin123';
+  const resetAdminPasswordRaw = process.env.SEED_RESET_ADMIN_PASSWORD?.trim();
+  const resetAdminPasswordFlag = resetAdminPasswordRaw ? resetAdminPasswordRaw.toLowerCase() : undefined;
+  const shouldResetAdminPassword = resetAdminPasswordFlag !== 'false';
+
   const existingAdmin = await prisma.user.findUnique({ where: { email: adminEmail } });
 
   let admin = existingAdmin;
@@ -170,11 +177,32 @@ export async function seedBaseData(prisma: PrismaClient) {
         emailVerifiedAt: new Date()
       }
     });
-  } else if (!existingAdmin.emailVerifiedAt) {
-    admin = await prisma.user.update({
-      where: { id: existingAdmin.id },
-      data: { emailVerifiedAt: new Date() }
-    });
+  } else {
+    const updateData: { emailVerifiedAt?: Date; passwordHash?: string } = {};
+
+    if (!existingAdmin.emailVerifiedAt) {
+      updateData.emailVerifiedAt = new Date();
+    }
+
+    if (shouldResetAdminPassword) {
+      let isSamePassword = false;
+      try {
+        isSamePassword = await bcrypt.compare(adminPassword, existingAdmin.passwordHash);
+      } catch {
+        isSamePassword = false;
+      }
+
+      if (!isSamePassword) {
+        updateData.passwordHash = await bcrypt.hash(adminPassword, 12);
+      }
+    }
+
+    if (Object.keys(updateData).length > 0) {
+      admin = await prisma.user.update({
+        where: { id: existingAdmin.id },
+        data: updateData
+      });
+    }
   }
 
   if (!admin) {
