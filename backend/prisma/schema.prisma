@@ -352,6 +352,8 @@ model UserRole {
   league     League?  @relation(fields: [leagueId], references: [id])
   club       Club?    @relation(fields: [clubId], references: [id])
   category   Category? @relation(fields: [categoryId], references: [id])
+
+  @@unique([userId, roleId, leagueId, clubId, categoryId])
 }
 
 model UserToken {
