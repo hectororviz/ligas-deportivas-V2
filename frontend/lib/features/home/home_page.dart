@@ -19,10 +19,10 @@ class HomePage extends StatelessWidget {
             style: Theme.of(context).textTheme.bodyLarge,
           ),
           const SizedBox(height: 24),
-          Wrap(
+          const Wrap(
             spacing: 16,
             runSpacing: 16,
-            children: const [
+            children: [
               _SummaryCard(title: 'Ligas activas', value: '0'),
               _SummaryCard(title: 'Torneos en curso', value: '0'),
               _SummaryCard(title: 'Partidos confirmados', value: '0'),

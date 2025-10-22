@@ -1,0 +1,45 @@
+# -------- Node / Nest / Angular --------
+node_modules/
+dist/
+tmp/
+temp/
+nyc_output/
+coverage/
+angular/
+angular/cache/
+.sass-cache/
+*.log
+
+# -------- Flutter / Dart --------
+.dart_tool/
+.packages
+.pub-cache/
+build/
+flutter-plugins
+flutter-plugins-dependencies
+melos_tool/
+metadata
+
+# Android
+android/.gradle/
+android/.idea/
+android/local.properties
+android/**/build/
+android/**/captures/
+
+# iOS
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.podspec
+ios/**/DerivedData/
+ios/**/build/
+
+# -------- IDEs / OS --------
+.vscode/
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# -------- Otros --------
+
