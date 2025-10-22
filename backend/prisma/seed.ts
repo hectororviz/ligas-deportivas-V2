@@ -41,6 +41,10 @@ async function main() {
     ensurePermission(module, Action.VIEW, Scope.CATEGORIA);
   });
 
+  [Module.JUGADORES, Module.PLANTELES].forEach((module) => {
+    ensurePermission(module, Action.VIEW, Scope.CATEGORIA);
+  });
+
   const permissions = await Promise.all(
     Array.from(permissionsData.values()).map((permission) =>
       prisma.permission.upsert({
@@ -163,22 +167,24 @@ async function main() {
     }
   });
 
-  await prisma.userRole.upsert({
+  const existingAdminRole = await prisma.userRole.findFirst({
     where: {
-      userId_roleId_leagueId_clubId_categoryId: {
-        userId: admin.id,
-        roleId: roleMap.get(RoleKey.ADMIN)!,
-        leagueId: null,
-        clubId: null,
-        categoryId: null
-      }
-    },
-    update: {},
-    create: {
       userId: admin.id,
-      roleId: roleMap.get(RoleKey.ADMIN)!
+      roleId: roleMap.get(RoleKey.ADMIN)!,
+      leagueId: null,
+      clubId: null,
+      categoryId: null
     }
   });
+
+  if (!existingAdminRole) {
+    await prisma.userRole.create({
+      data: {
+        userId: admin.id,
+        roleId: roleMap.get(RoleKey.ADMIN)!
+      }
+    });
+  }
 }
 
 main()
