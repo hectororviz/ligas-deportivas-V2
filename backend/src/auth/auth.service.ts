@@ -20,7 +20,7 @@ import { VerifyEmailDto } from './dto/verify-email.dto';
 import { RequestPasswordResetDto } from './dto/request-password-reset.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 
-interface AuthTokens {
+export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
 }
