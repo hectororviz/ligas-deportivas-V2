@@ -846,8 +846,7 @@ class _ClubDetailsView extends StatelessWidget {
                   children: [
                     TileLayer(
                       urlTemplate:
-                          'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      subdomains: const ['a', 'b', 'c'],
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                       userAgentPackageName: 'ligas_app',
                     ),
                     MarkerLayer(
@@ -1569,8 +1568,7 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
                 children: [
                   TileLayer(
                     urlTemplate:
-                        'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    subdomains: const ['a', 'b', 'c'],
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                     userAgentPackageName: 'ligas_app',
                   ),
                   if (_selectedLocation != null)
@@ -1852,8 +1850,8 @@ class Club {
       secondaryHex: secondary,
       instagramUrl: json['instagramUrl'] as String?,
       facebookUrl: json['facebookUrl'] as String?,
-      latitude: (json['latitude'] as num?)?.toDouble(),
-      longitude: (json['longitude'] as num?)?.toDouble(),
+      latitude: _parseCoordinate(json['latitude']),
+      longitude: _parseCoordinate(json['longitude']),
     );
   }
 
@@ -1894,6 +1892,19 @@ Color? _parseHexColor(String? value) {
   } catch (_) {
     return null;
   }
+}
+
+double? _parseCoordinate(dynamic value) {
+  if (value == null) {
+    return null;
+  }
+  if (value is num) {
+    return value.toDouble();
+  }
+  if (value is String) {
+    return double.tryParse(value);
+  }
+  return null;
 }
 
 String _normalizeForSort(String value) {
