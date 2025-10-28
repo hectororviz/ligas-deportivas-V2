@@ -166,7 +166,8 @@ class AuthUser {
     required this.email,
     required this.firstName,
     required this.lastName,
-    required this.roles
+    required this.roles,
+    required this.permissions,
   });
 
   factory AuthUser.fromJson(Map<String, dynamic> json) => AuthUser(
@@ -175,6 +176,9 @@ class AuthUser {
         firstName: json['firstName'] as String,
         lastName: json['lastName'] as String,
         roles: (json['roles'] as List<dynamic>? ?? []).cast<String>(),
+        permissions: (json['permissions'] as List<dynamic>? ?? [])
+            .map((entry) => PermissionGrant.fromJson(entry as Map<String, dynamic>))
+            .toList(),
       );
 
   final int id;
@@ -182,6 +186,108 @@ class AuthUser {
   final String firstName;
   final String lastName;
   final List<String> roles;
+  final List<PermissionGrant> permissions;
 
   String get fullName => '$firstName $lastName';
+
+  bool hasPermission({
+    required String module,
+    required String action,
+    int? leagueId,
+  }) {
+    for (final grant in permissions) {
+      if (!grant.matches(module: module, action: action, leagueId: leagueId)) {
+        continue;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  Set<int>? allowedLeaguesFor({
+    required String module,
+    required String action,
+  }) {
+    final matching = permissions.where(
+      (grant) => grant.module == module && grant.action == action,
+    );
+    if (matching.any((grant) => grant.scope == PermissionScope.global)) {
+      return null;
+    }
+    final leagueIds = matching
+        .where((grant) => grant.scope == PermissionScope.league)
+        .expand((grant) => grant.leagues ?? const <int>[])
+        .toSet();
+    return leagueIds;
+  }
+}
+
+class PermissionGrant {
+  PermissionGrant({
+    required this.module,
+    required this.action,
+    required this.scope,
+    this.leagues,
+    this.clubs,
+    this.categories,
+  });
+
+  factory PermissionGrant.fromJson(Map<String, dynamic> json) {
+    return PermissionGrant(
+      module: json['module'] as String? ?? 'DESCONOCIDO',
+      action: json['action'] as String? ?? 'DESCONOCIDO',
+      scope: PermissionScope.parse(json['scope'] as String?),
+      leagues: (json['leagues'] as List<dynamic>?)?.map((e) => e as int).toList(),
+      clubs: (json['clubs'] as List<dynamic>?)?.map((e) => e as int).toList(),
+      categories: (json['categories'] as List<dynamic>?)?.map((e) => e as int).toList(),
+    );
+  }
+
+  final String module;
+  final String action;
+  final PermissionScope scope;
+  final List<int>? leagues;
+  final List<int>? clubs;
+  final List<int>? categories;
+
+  bool matches({
+    required String module,
+    required String action,
+    int? leagueId,
+  }) {
+    if (module != this.module || action != this.action) {
+      return false;
+    }
+    switch (scope) {
+      case PermissionScope.global:
+        return true;
+      case PermissionScope.league:
+        if (leagueId == null) {
+          return (leagues?.isNotEmpty ?? false);
+        }
+        return leagues?.contains(leagueId) ?? false;
+      case PermissionScope.club:
+      case PermissionScope.category:
+        return true;
+    }
+  }
+}
+
+enum PermissionScope { global, league, club, category; }
+
+extension on PermissionScope {
+  static PermissionScope parse(String? value) {
+    switch (value) {
+      case 'GLOBAL':
+        return PermissionScope.global;
+      case 'LIGA':
+        return PermissionScope.league;
+      case 'CLUB':
+        return PermissionScope.club;
+      case 'CATEGORIA':
+        return PermissionScope.category;
+      default:
+        return PermissionScope.global;
+    }
+  }
 }
