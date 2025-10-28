@@ -10,6 +10,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
+import '../../shared/widgets/table_filters_bar.dart';
 
 const _moduleClubes = 'CLUBES';
 const _actionCreate = 'CREATE';
@@ -210,32 +211,28 @@ class _ClubsPageState extends ConsumerState<ClubsPage> {
             Card(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                child: TableFiltersBar(
                   children: [
-                    Wrap(
-                      spacing: 16,
-                      runSpacing: 12,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        SizedBox(
-                          width: 280,
-                          child: TextField(
-                            controller: _searchController,
-                            decoration: const InputDecoration(
-                              prefixIcon: Icon(Icons.search),
-                              labelText: 'Buscar por nombre',
-                              hintText: 'Ej. Deportivo Central',
-                            ),
-                          ),
-                        ),
-                        DropdownButtonFormField<ClubStatusFilter>(
+                    TableFilterField(
+                      label: 'Buscar',
+                      width: 320,
+                      child: TableFilterSearchField(
+                        controller: _searchController,
+                        placeholder: 'Buscar por nombre o liga',
+                        showClearButton: filters.query.isNotEmpty,
+                        onClear: () {
+                          _searchController.clear();
+                          ref.read(clubsFiltersProvider.notifier).setQuery('');
+                        },
+                      ),
+                    ),
+                    TableFilterField(
+                      label: 'Estado',
+                      width: 200,
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<ClubStatusFilter>(
                           value: filters.status,
-                          decoration: const InputDecoration(
-                            labelText: 'Estado',
-                            border: OutlineInputBorder(),
-                            isDense: true,
-                          ),
+                          isExpanded: true,
                           items: ClubStatusFilter.values
                               .map(
                                 (value) => DropdownMenuItem(
@@ -252,32 +249,20 @@ class _ClubsPageState extends ConsumerState<ClubsPage> {
                             }
                           },
                         ),
-                        DropdownButtonFormField<int>(
-                          value: filters.pageSize,
-                          decoration: const InputDecoration(
-                            labelText: 'Filas por página',
-                            border: OutlineInputBorder(),
-                            isDense: true,
-                          ),
-                          items: const [25, 50]
-                              .map(
-                                (value) => DropdownMenuItem(
-                                  value: value,
-                                  child: Text('$value'),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) {
-                            if (value != null) {
-                              ref
-                                  .read(clubsFiltersProvider.notifier)
-                                  .setPageSize(value);
-                            }
-                          },
-                        )
-                      ],
+                      ),
                     ),
                   ],
+                  trailing: TextButton.icon(
+                    onPressed: filters.query.isEmpty &&
+                            filters.status == ClubStatusFilter.all
+                        ? null
+                        : () {
+                            _searchController.clear();
+                            ref.read(clubsFiltersProvider.notifier).reset();
+                          },
+                    icon: const Icon(Icons.filter_alt_off_outlined),
+                    label: const Text('Limpiar filtros'),
+                  ),
                 ),
               ),
             ),
@@ -341,6 +326,9 @@ class _ClubsPageState extends ConsumerState<ClubsPage> {
                           total: paginated.total,
                           onPageChanged: (page) =>
                               ref.read(clubsFiltersProvider.notifier).setPage(page),
+                          onPageSizeChanged: (value) => ref
+                              .read(clubsFiltersProvider.notifier)
+                              .setPageSize(value),
                         ),
                       ],
                     ),
@@ -559,12 +547,16 @@ class _ClubsPaginationFooter extends StatelessWidget {
     required this.pageSize,
     required this.total,
     required this.onPageChanged,
+    required this.onPageSizeChanged,
+    this.pageSizes = const [25, 50],
   });
 
   final int page;
   final int pageSize;
   final int total;
   final ValueChanged<int> onPageChanged;
+  final ValueChanged<int> onPageSizeChanged;
+  final List<int> pageSizes;
 
   @override
   Widget build(BuildContext context) {
@@ -572,13 +564,38 @@ class _ClubsPaginationFooter extends StatelessWidget {
     final start = ((page - 1) * pageSize) + 1;
     final end = math.min(page * pageSize, total);
 
+    final availableSizes = {...pageSizes, pageSize}.toList()..sort();
+    final theme = Theme.of(context);
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       child: Row(
         children: [
           Text('Mostrando $start-$end de $total',
-              style: Theme.of(context).textTheme.bodySmall),
+              style: theme.textTheme.bodySmall),
           const Spacer(),
+          Text('Filas por página', style: theme.textTheme.bodySmall),
+          const SizedBox(width: 8),
+          DropdownButtonHideUnderline(
+            child: DropdownButton<int>(
+              value: pageSize,
+              isDense: true,
+              items: availableSizes
+                  .map(
+                    (value) => DropdownMenuItem(
+                      value: value,
+                      child: Text('$value'),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value != null && value != pageSize) {
+                  onPageSizeChanged(value);
+                }
+              },
+            ),
+          ),
+          const SizedBox(width: 16),
           IconButton(
             tooltip: 'Página anterior',
             onPressed: page > 1 ? () => onPageChanged(page - 1) : null,
