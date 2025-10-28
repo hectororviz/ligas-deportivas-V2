@@ -9,6 +9,8 @@ import '../../features/fixtures/presentation/fixtures_page.dart';
 import '../../features/home/home_page.dart';
 import '../../features/leagues/presentation/leagues_page.dart';
 import '../../features/results/presentation/results_page.dart';
+import '../../features/settings/league_colors_page.dart';
+import '../../features/settings/role_permissions_page.dart';
 import '../../features/settings/settings_page.dart';
 import '../../features/shared/widgets/app_shell.dart';
 import '../../features/standings/presentation/standings_page.dart';
@@ -57,7 +59,20 @@ GoRouter createRouter(Ref ref) {
           GoRoute(path: '/fixtures', builder: (context, state) => const FixturesPage()),
           GoRoute(path: '/results', builder: (context, state) => const ResultsPage()),
           GoRoute(path: '/standings', builder: (context, state) => const StandingsPage()),
-          GoRoute(path: '/settings', builder: (context, state) => const SettingsPage()),
+          GoRoute(
+            path: '/settings',
+            builder: (context, state) => const SettingsPage(),
+            routes: [
+              GoRoute(
+                path: 'colors',
+                builder: (context, state) => const LeagueColorsPage(),
+              ),
+              GoRoute(
+                path: 'permissions',
+                builder: (context, state) => const RolePermissionsPage(),
+              )
+            ],
+          ),
         ],
       )
     ],
