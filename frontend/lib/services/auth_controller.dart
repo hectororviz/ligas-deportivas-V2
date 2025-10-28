@@ -209,7 +209,7 @@ class AuthUser {
     required String action,
   }) {
     final matching = permissions.where(
-      (grant) => grant.module == module && grant.action == action,
+      (grant) => grant.module == module && grant.matchesAction(action),
     );
     if (matching.any((grant) => grant.scope == PermissionScope.global)) {
       return null;
@@ -250,12 +250,16 @@ class PermissionGrant {
   final List<int>? clubs;
   final List<int>? categories;
 
+  bool matchesAction(String other) {
+    return action == other || action == 'MANAGE';
+  }
+
   bool matches({
     required String module,
     required String action,
     int? leagueId,
   }) {
-    if (module != this.module || action != this.action) {
+    if (module != this.module || !matchesAction(action)) {
       return false;
     }
     switch (scope) {
