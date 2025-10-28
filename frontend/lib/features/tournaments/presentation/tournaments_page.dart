@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
 import '../../leagues/presentation/leagues_page.dart';
+import '../../shared/widgets/table_filters_bar.dart';
 
 const _moduleTorneos = 'TORNEOS';
 const _actionCreate = 'CREATE';
@@ -353,134 +354,139 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Wrap(
-                        spacing: 16,
-                        runSpacing: 12,
-                        crossAxisAlignment: WrapCrossAlignment.center,
+                      TableFiltersBar(
                         children: [
-                          SizedBox(
-                            width: 280,
-                            child: TextField(
+                          TableFilterField(
+                            label: 'Buscar',
+                            width: 320,
+                            child: TableFilterSearchField(
                               controller: _searchController,
+                              placeholder: 'Buscar por nombre o liga',
+                              showClearButton: filters.query.isNotEmpty,
                               onChanged: (value) => ref
                                   .read(tournamentFiltersProvider.notifier)
                                   .updateQuery(value),
-                              decoration: InputDecoration(
-                                labelText: 'Buscar por nombre o liga',
-                                prefixIcon: const Icon(Icons.search),
-                                suffixIcon: filters.query.isNotEmpty
-                                    ? IconButton(
-                                        onPressed: () {
-                                          _searchController.clear();
-                                          ref
-                                              .read(tournamentFiltersProvider.notifier)
-                                              .updateQuery('');
-                                        },
-                                        icon: const Icon(Icons.clear),
-                                      )
-                                    : null,
-                              ),
+                              onClear: () {
+                                _searchController.clear();
+                                ref
+                                    .read(tournamentFiltersProvider.notifier)
+                                    .updateQuery('');
+                              },
                             ),
                           ),
-                          SizedBox(
+                          TableFilterField(
+                            label: 'Liga',
                             width: 220,
                             child: leaguesAsync.when(
                               data: (leagues) {
-                                return DropdownButtonFormField<int?>(
-                                  value: filters.leagueId,
-                                  decoration: const InputDecoration(labelText: 'Liga'),
-                                  items: [
-                                    const DropdownMenuItem<int?>(
-                                      value: null,
-                                      child: Text('Todas las ligas'),
-                                    ),
-                                    ...leagues.map(
-                                      (league) => DropdownMenuItem<int?>(
-                                        value: league.id,
-                                        child: Text(league.name),
+                                return DropdownButtonHideUnderline(
+                                  child: DropdownButton<int?>(
+                                    value: filters.leagueId,
+                                    isExpanded: true,
+                                    items: [
+                                      const DropdownMenuItem<int?>(
+                                        value: null,
+                                        child: Text('Todas las ligas'),
                                       ),
-                                    ),
-                                  ],
-                                  onChanged: (value) => ref
-                                      .read(tournamentFiltersProvider.notifier)
-                                      .updateLeague(value),
+                                      ...leagues.map(
+                                        (league) => DropdownMenuItem<int?>(
+                                          value: league.id,
+                                          child: Text(league.name),
+                                        ),
+                                      ),
+                                    ],
+                                    onChanged: (value) => ref
+                                        .read(tournamentFiltersProvider.notifier)
+                                        .updateLeague(value),
+                                  ),
                                 );
                               },
-                              loading: () => const LinearProgressIndicator(),
-                              error: (error, _) => InputDecorator(
-                                decoration: const InputDecoration(
-                                  labelText: 'Liga',
-                                  errorText: 'No disponible',
-                                ),
-                                child: Text('Error: $error'),
+                              loading: () => const SizedBox(
+                                height: 24,
+                                child: LinearProgressIndicator(),
+                              ),
+                              error: (error, _) => Text(
+                                'Error: $error',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(color: Theme.of(context).colorScheme.error),
                               ),
                             ),
                           ),
-                          SizedBox(
+                          TableFilterField(
+                            label: 'Año',
                             width: 160,
-                            child: DropdownButtonFormField<int?>(
-                              value: filters.year,
-                              decoration: const InputDecoration(labelText: 'Año'),
-                              items: [
-                                const DropdownMenuItem<int?>(
-                                  value: null,
-                                  child: Text('Todos'),
-                                ),
-                                ...years.map(
-                                  (year) => DropdownMenuItem<int?>(
-                                    value: year,
-                                    child: Text(year.toString()),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<int?>(
+                                value: filters.year,
+                                isExpanded: true,
+                                items: [
+                                  const DropdownMenuItem<int?>(
+                                    value: null,
+                                    child: Text('Todos'),
                                   ),
-                                ),
-                              ],
-                              onChanged: (value) => ref
-                                  .read(tournamentFiltersProvider.notifier)
-                                  .updateYear(value),
+                                  ...years.map(
+                                    (year) => DropdownMenuItem<int?>(
+                                      value: year,
+                                      child: Text(year.toString()),
+                                    ),
+                                  ),
+                                ],
+                                onChanged: (value) => ref
+                                    .read(tournamentFiltersProvider.notifier)
+                                    .updateYear(value),
+                              ),
                             ),
                           ),
-                          SizedBox(
+                          TableFilterField(
+                            label: 'Estado',
                             width: 220,
-                            child: DropdownButtonFormField<TournamentStatus?>(
-                              value: filters.status,
-                              decoration: const InputDecoration(labelText: 'Estado'),
-                              items: const [
-                                DropdownMenuItem<TournamentStatus?>(
-                                  value: null,
-                                  child: Text('Todos los estados'),
-                                ),
-                                DropdownMenuItem<TournamentStatus?>(
-                                  value: TournamentStatus.draft,
-                                  child: Text('Borrador'),
-                                ),
-                                DropdownMenuItem<TournamentStatus?>(
-                                  value: TournamentStatus.scheduled,
-                                  child: Text('Programado'),
-                                ),
-                                DropdownMenuItem<TournamentStatus?>(
-                                  value: TournamentStatus.inProgress,
-                                  child: Text('En juego'),
-                                ),
-                                DropdownMenuItem<TournamentStatus?>(
-                                  value: TournamentStatus.finished,
-                                  child: Text('Finalizado'),
-                                ),
-                              ],
-                              onChanged: (value) => ref
-                                  .read(tournamentFiltersProvider.notifier)
-                                  .updateStatus(value),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<TournamentStatus?>(
+                                value: filters.status,
+                                isExpanded: true,
+                                items: const [
+                                  DropdownMenuItem<TournamentStatus?>(
+                                    value: null,
+                                    child: Text('Todos los estados'),
+                                  ),
+                                  DropdownMenuItem<TournamentStatus?>(
+                                    value: TournamentStatus.draft,
+                                    child: Text('Borrador'),
+                                  ),
+                                  DropdownMenuItem<TournamentStatus?>(
+                                    value: TournamentStatus.scheduled,
+                                    child: Text('Programado'),
+                                  ),
+                                  DropdownMenuItem<TournamentStatus?>(
+                                    value: TournamentStatus.inProgress,
+                                    child: Text('En juego'),
+                                  ),
+                                  DropdownMenuItem<TournamentStatus?>(
+                                    value: TournamentStatus.finished,
+                                    child: Text('Finalizado'),
+                                  ),
+                                ],
+                                onChanged: (value) => ref
+                                    .read(tournamentFiltersProvider.notifier)
+                                    .updateStatus(value),
+                              ),
                             ),
-                          ),
-                          TextButton.icon(
-                            onPressed: filters.isEmpty
-                                ? null
-                                : () {
-                                    _searchController.clear();
-                                    ref.read(tournamentFiltersProvider.notifier).clear();
-                                  },
-                            icon: const Icon(Icons.filter_alt_off_outlined),
-                            label: const Text('Limpiar filtros'),
                           ),
                         ],
+                        trailing: TextButton.icon(
+                          onPressed: filters.isEmpty
+                              ? null
+                              : () {
+                                  _searchController.clear();
+                                  ref
+                                      .read(tournamentFiltersProvider.notifier)
+                                      .clear();
+                                },
+                          icon: const Icon(Icons.filter_alt_off_outlined),
+                          label: const Text('Limpiar filtros'),
+                        ),
                       ),
                       const SizedBox(height: 16),
                       const Divider(height: 1),
