@@ -30,36 +30,46 @@ class _RolePermissionsPageState extends ConsumerState<RolePermissionsPage> {
   Set<int> _selectedPermissions = {};
   bool _isSaving = false;
 
-  @override
-  void initState() {
-    super.initState();
-    ref.listen<AsyncValue<List<RoleModel>>>(rolesProvider, (previous, next) {
-      next.whenData(_synchronizeSelectedRole);
-    });
-  }
-
   void _synchronizeSelectedRole(List<RoleModel> roles) {
+    if (!mounted) {
+      return;
+    }
+
+    int? newSelectedRoleId;
+    Set<int>? newSelectedPermissions;
+
     if (roles.isEmpty) {
-      setState(() {
-        _selectedRoleId = null;
-        _selectedPermissions = {};
-      });
-      return;
-    }
-
-    if (_selectedRoleId == null || !roles.any((role) => role.id == _selectedRoleId)) {
+      if (_selectedRoleId != null || _selectedPermissions.isNotEmpty) {
+        newSelectedRoleId = null;
+        newSelectedPermissions = {};
+      }
+    } else if (_selectedRoleId == null ||
+        !roles.any((role) => role.id == _selectedRoleId)) {
       final first = roles.first;
-      setState(() {
-        _selectedRoleId = first.id;
-        _selectedPermissions = {...first.permissionIds};
-      });
-      return;
+      newSelectedRoleId = first.id;
+      newSelectedPermissions = {...first.permissionIds};
+    } else {
+      final current = roles.firstWhere((role) => role.id == _selectedRoleId);
+      final updatedPermissions = {...current.permissionIds};
+      if (_selectedPermissions.length != updatedPermissions.length ||
+          !_selectedPermissions.containsAll(updatedPermissions)) {
+        newSelectedPermissions = updatedPermissions;
+      }
     }
 
-    final current = roles.firstWhere((role) => role.id == _selectedRoleId);
-    setState(() {
-      _selectedPermissions = {...current.permissionIds};
-    });
+    if (newSelectedRoleId != null || newSelectedPermissions != null) {
+      final roleIdToApply = newSelectedRoleId ?? _selectedRoleId;
+      final permissionsToApply = newSelectedPermissions ?? _selectedPermissions;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _selectedRoleId = roleIdToApply;
+          _selectedPermissions = permissionsToApply;
+        });
+      });
+    }
   }
 
   void _onRoleChanged(int? roleId, List<RoleModel> roles) {
@@ -139,11 +149,13 @@ class _RolePermissionsPageState extends ConsumerState<RolePermissionsPage> {
           ),
           const SizedBox(height: 24),
           rolesAsync.when(
-            data: (roles) => Row(
-              children: [
-                Expanded(
-                  child: DropdownButtonFormField<int>(
-                    value: _selectedRoleId,
+            data: (roles) {
+              _synchronizeSelectedRole(roles);
+              return Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<int>(
+                      value: _selectedRoleId,
                     decoration: const InputDecoration(labelText: 'Rol'),
                     onChanged: (value) => _onRoleChanged(value, roles),
                     items: roles
