@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -7,16 +8,26 @@ class SettingsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(24.0),
-      children: const [
-        ListTile(
-          leading: Icon(Icons.palette_outlined),
-          title: Text('Colores por liga'),
-          subtitle: Text('Configura los colores identificatorios de cada liga.'),
+      children: [
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.palette_outlined),
+            title: const Text('Colores por liga'),
+            subtitle:
+                const Text('Configura los colores identificatorios de cada liga.'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/settings/colors'),
+          ),
         ),
-        ListTile(
-          leading: Icon(Icons.security_outlined),
-          title: Text('Permisos y roles'),
-          subtitle: Text('Administra el acceso a módulos según rol y alcance.'),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.security_outlined),
+            title: const Text('Permisos y roles'),
+            subtitle:
+                const Text('Administra el acceso a módulos según rol y alcance.'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/settings/permissions'),
+          ),
         ),
       ],
     );
