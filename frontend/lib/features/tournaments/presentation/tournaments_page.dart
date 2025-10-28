@@ -153,22 +153,28 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
     if (!mounted) {
       return;
     }
-    final result = await _showTournamentForm(
-      context,
-      leagues: allowedLeagues,
-      readOnly: false,
-      allowedLeagueIds:
-          user?.allowedLeaguesFor(module: _moduleTorneos, action: _actionCreate),
-    );
-    if (!mounted || result == null) {
-      return;
-    }
-    if (result == _TournamentFormResult.saved) {
-      ref.invalidate(_tournamentsSourceProvider);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Torneo guardado correctamente.')),
+
+    _TournamentFormResult? result;
+    do {
+      result = await _showTournamentForm(
+        context,
+        leagues: allowedLeagues,
+        readOnly: false,
+        allowedLeagueIds:
+            user?.allowedLeaguesFor(module: _moduleTorneos, action: _actionCreate),
+        allowSaveAndAdd: true,
       );
-    }
+      if (!mounted || result == null) {
+        break;
+      }
+      if (result == _TournamentFormResult.saved ||
+          result == _TournamentFormResult.savedAndAddAnother) {
+        ref.invalidate(_tournamentsSourceProvider);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Torneo guardado correctamente.')),
+        );
+      }
+    } while (result == _TournamentFormResult.savedAndAddAnother);
   }
 
   Future<_TournamentFormResult?> _showTournamentForm(
@@ -177,6 +183,7 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
     required List<League> leagues,
     required bool readOnly,
     Set<int>? allowedLeagueIds,
+    bool allowSaveAndAdd = false,
   }) {
     final size = MediaQuery.sizeOf(context);
     final isCompact = size.width < 640;
@@ -185,6 +192,7 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
       tournament: tournament,
       readOnly: readOnly,
       allowedLeagueIds: allowedLeagueIds,
+      allowSaveAndAdd: allowSaveAndAdd,
     );
     if (isCompact) {
       return showModalBottomSheet<_TournamentFormResult>(
@@ -295,7 +303,10 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
     final tournamentsAsync = ref.watch(tournamentsProvider);
     final authState = ref.watch(authControllerProvider);
     final user = authState.user;
-    final canCreate = user?.hasPermission(module: _moduleTorneos, action: _actionCreate) ?? false;
+    final isAdmin = user?.roles.contains('ADMIN') ?? false;
+    final canCreate = isAdmin ||
+        (user?.hasPermission(module: _moduleTorneos, action: _actionCreate) ??
+            false);
     final years = ref.watch(availableTournamentYearsProvider);
     final leaguesAsync = ref.watch(leaguesProvider);
     final filters = ref.watch(tournamentFiltersProvider);
@@ -306,7 +317,7 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
           ? FloatingActionButton.extended(
               onPressed: _openCreateTournament,
               icon: const Icon(Icons.add),
-              label: const Text('Crear torneo'),
+              label: const Text('+ Nuevo torneo'),
             )
           : null,
       body: Padding(
@@ -762,7 +773,7 @@ class _TournamentsDataTable extends StatelessWidget {
   }
 }
 
-enum _TournamentFormResult { saved }
+enum _TournamentFormResult { saved, savedAndAddAnother }
 
 class _TournamentFormDialog extends ConsumerStatefulWidget {
   const _TournamentFormDialog({
@@ -770,12 +781,14 @@ class _TournamentFormDialog extends ConsumerStatefulWidget {
     this.tournament,
     required this.readOnly,
     this.allowedLeagueIds,
+    this.allowSaveAndAdd = false,
   });
 
   final List<League> leagues;
   final TournamentSummary? tournament;
   final bool readOnly;
   final Set<int>? allowedLeagueIds;
+  final bool allowSaveAndAdd;
 
   @override
   ConsumerState<_TournamentFormDialog> createState() => _TournamentFormDialogState();
@@ -826,7 +839,7 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
     return allowed.contains(candidate.id) ? candidate.id : null;
   }
 
-  Future<void> _submit() async {
+  Future<void> _submit({required bool addAnother}) async {
     if (_isSaving || widget.readOnly) {
       return;
     }
@@ -883,7 +896,11 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
       if (!mounted) {
         return;
       }
-      Navigator.of(context).pop(_TournamentFormResult.saved);
+      Navigator.of(context).pop(
+        addAnother
+            ? _TournamentFormResult.savedAndAddAnother
+            : _TournamentFormResult.saved,
+      );
     } on DioException catch (error) {
       final message = error.response?.data is Map<String, dynamic>
           ? (error.response!.data['message'] as String?)
@@ -1122,8 +1139,25 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
                   child: const Text('Cancelar'),
                 ),
                 const SizedBox(width: 12),
+                if (widget.allowSaveAndAdd &&
+                    widget.tournament == null &&
+                    !widget.readOnly) ...[
+                  FilledButton.tonal(
+                    onPressed: _isSaving ? null : () => _submit(addAnother: true),
+                    child: _isSaving
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Guardar y agregar otro'),
+                  ),
+                  const SizedBox(width: 12),
+                ],
                 FilledButton(
-                  onPressed: widget.readOnly || _isSaving ? null : _submit,
+                  onPressed: widget.readOnly || _isSaving
+                      ? null
+                      : () => _submit(addAnother: false),
                   child: _isSaving
                       ? const SizedBox(
                           width: 18,
