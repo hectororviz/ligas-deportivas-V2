@@ -191,8 +191,8 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
     final horizontalPadding = 48.0;
     final maxDialogWidth = 720.0;
     final estimatedContentWidth = isCompact
-        ? math.max(0, size.width - horizontalPadding)
-        : math.max(0, math.min(maxDialogWidth, size.width - horizontalPadding));
+        ? math.max(0.0, size.width - horizontalPadding)
+        : math.max(0.0, math.min(maxDialogWidth, size.width - horizontalPadding));
 
     final form = _TournamentFormDialog(
       leagues: leagues,
