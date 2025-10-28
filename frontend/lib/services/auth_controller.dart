@@ -273,9 +273,12 @@ class PermissionGrant {
   }
 }
 
-enum PermissionScope { global, league, club, category; }
+enum PermissionScope {
+  global,
+  league,
+  club,
+  category;
 
-extension on PermissionScope {
   static PermissionScope parse(String? value) {
     switch (value) {
       case 'GLOBAL':
