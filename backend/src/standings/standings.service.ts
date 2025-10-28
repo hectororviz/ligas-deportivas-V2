@@ -20,8 +20,8 @@ export class StandingsService {
       where: { id: matchId },
       include: {
         zone: true,
-        categories: true
-      }
+        categories: true,
+      },
     });
     if (!match) {
       return;
@@ -33,9 +33,23 @@ export class StandingsService {
   }
 
   async recalculateForCategory(zoneId: number, tournamentCategoryId: number) {
+    const tournamentCategory = await this.prisma.tournamentCategory.findUnique({
+      where: { id: tournamentCategoryId },
+      include: {
+        tournament: true,
+        category: true,
+      },
+    });
+
+    if (!tournamentCategory) {
+      return;
+    }
+
+    const { tournament } = tournamentCategory;
+
     const clubAssignments = await this.prisma.clubZone.findMany({
       where: { zoneId },
-      select: { clubId: true }
+      select: { clubId: true },
     });
 
     const clubIds = clubAssignments.map((assignment) => assignment.clubId);
@@ -45,12 +59,12 @@ export class StandingsService {
         tournamentCategoryId,
         closedAt: { not: null },
         match: {
-          zoneId
-        }
+          zoneId,
+        },
       },
       include: {
-        match: true
-      }
+        match: true,
+      },
     });
 
     const accumulator = new Map<number, StandingAccumulator>();
@@ -63,7 +77,7 @@ export class StandingsService {
         draws: 0,
         losses: 0,
         goalsFor: 0,
-        goalsAgainst: 0
+        goalsAgainst: 0,
       });
     }
 
@@ -109,8 +123,11 @@ export class StandingsService {
       losses: row.losses,
       goalsFor: row.goalsFor,
       goalsAgainst: row.goalsAgainst,
-      points: row.wins * 3 + row.draws,
-      goalDifference: row.goalsFor - row.goalsAgainst
+      points:
+        row.wins * tournament.pointsWin +
+        row.draws * tournament.pointsDraw +
+        row.losses * tournament.pointsLoss,
+      goalDifference: row.goalsFor - row.goalsAgainst,
     }));
 
     if (standings.length) {
@@ -121,29 +138,25 @@ export class StandingsService {
   async getZoneStandings(zoneId: number, tournamentCategoryId: number) {
     return this.prisma.categoryStanding.findMany({
       where: { zoneId, tournamentCategoryId },
-      orderBy: [
-        { points: 'desc' },
-        { goalDifference: 'desc' },
-        { goalsFor: 'desc' }
-      ],
+      orderBy: [{ points: 'desc' }, { goalDifference: 'desc' }, { goalsFor: 'desc' }],
       include: {
-        club: true
-      }
+        club: true,
+      },
     });
   }
 
   async getTournamentStandings(tournamentId: number) {
     const entries = await this.prisma.categoryStanding.findMany({
       where: {
-        zone: { tournamentId }
+        zone: { tournamentId },
       },
       include: {
         club: true,
         zone: true,
         tournamentCategory: {
-          include: { category: true }
-        }
-      }
+          include: { category: true },
+        },
+      },
     });
 
     const grouped = new Map<number, { category: string; categoryId: number; standings: any[] }>();
@@ -154,7 +167,7 @@ export class StandingsService {
         grouped.set(key, {
           category: entry.tournamentCategory.category.name,
           categoryId: entry.tournamentCategory.categoryId,
-          standings: []
+          standings: [],
         });
       }
       grouped.get(key)?.standings.push(entry);
@@ -176,7 +189,7 @@ export class StandingsService {
       tournamentCategoryId,
       categoryId: data.categoryId,
       categoryName: data.category,
-      standings: data.standings
+      standings: data.standings,
     }));
   }
 
@@ -185,21 +198,21 @@ export class StandingsService {
       where: {
         zone: {
           tournament: {
-            leagueId
-          }
-        }
+            leagueId,
+          },
+        },
       },
       include: {
         club: true,
         zone: {
           include: {
-            tournament: true
-          }
+            tournament: true,
+          },
         },
         tournamentCategory: {
-          include: { category: true }
-        }
-      }
+          include: { category: true },
+        },
+      },
     });
 
     const grouped = new Map<string, any>();
@@ -218,7 +231,8 @@ export class StandingsService {
           draws: 0,
           losses: 0,
           goalsFor: 0,
-          goalsAgainst: 0
+          goalsAgainst: 0,
+          points: 0,
         });
       }
       const row = grouped.get(key);
@@ -228,17 +242,18 @@ export class StandingsService {
       row.losses += entry.losses;
       row.goalsFor += entry.goalsFor;
       row.goalsAgainst += entry.goalsAgainst;
+      row.points += entry.points;
     }
 
     const result = new Map<number, any[]>();
 
     for (const [, row] of grouped) {
-      const points = row.wins * 3 + row.draws;
+      const points = row.points;
       const goalDifference = row.goalsFor - row.goalsAgainst;
       const data = {
         ...row,
         points,
-        goalDifference
+        goalDifference,
       };
       if (!result.has(row.categoryId)) {
         result.set(row.categoryId, []);
@@ -261,13 +276,13 @@ export class StandingsService {
     return Array.from(result.entries()).map(([categoryId, standings]) => ({
       categoryId,
       categoryName: standings[0]?.categoryName ?? '',
-      standings
+      standings,
     }));
   }
 
   private createAccumulator(
     clubId: number,
-    accumulator: Map<number, StandingAccumulator>
+    accumulator: Map<number, StandingAccumulator>,
   ): StandingAccumulator {
     const row: StandingAccumulator = {
       clubId,
@@ -276,7 +291,7 @@ export class StandingsService {
       draws: 0,
       losses: 0,
       goalsFor: 0,
-      goalsAgainst: 0
+      goalsAgainst: 0,
     };
     accumulator.set(clubId, row);
     return row;

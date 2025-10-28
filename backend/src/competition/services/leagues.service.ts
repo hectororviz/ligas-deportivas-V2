@@ -13,14 +13,15 @@ export class LeaguesService {
       data: {
         name: dto.name,
         slug: dto.slug ?? slugify(dto.name),
-        colorHex: dto.colorHex
-      }
+        colorHex: dto.colorHex,
+        gameDay: dto.gameDay,
+      },
     });
   }
 
   findAll() {
     return this.prisma.league.findMany({
-      orderBy: { name: 'asc' }
+      orderBy: { name: 'asc' },
     });
   }
 
@@ -28,8 +29,8 @@ export class LeaguesService {
     return this.prisma.league.findUnique({
       where: { id },
       include: {
-        tournaments: true
-      }
+        tournaments: true,
+      },
     });
   }
 
@@ -40,7 +41,7 @@ export class LeaguesService {
     }
     return this.prisma.league.update({
       where: { id },
-      data
+      data,
     });
   }
 }

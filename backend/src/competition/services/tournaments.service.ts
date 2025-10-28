@@ -14,10 +14,13 @@ export class TournamentsService {
         leagueId: dto.leagueId,
         name: dto.name,
         year: dto.year,
+        pointsWin: dto.pointsWin,
+        pointsDraw: dto.pointsDraw,
+        pointsLoss: dto.pointsLoss,
         championMode: dto.championMode,
         startDate: dto.startDate ? new Date(dto.startDate) : undefined,
-        endDate: dto.endDate ? new Date(dto.endDate) : undefined
-      }
+        endDate: dto.endDate ? new Date(dto.endDate) : undefined,
+      },
     });
   }
 
@@ -27,10 +30,10 @@ export class TournamentsService {
       include: {
         zones: true,
         categories: {
-          include: { category: true }
-        }
+          include: { category: true },
+        },
       },
-      orderBy: [{ year: 'desc' }, { name: 'asc' }]
+      orderBy: [{ year: 'desc' }, { name: 'asc' }],
     });
   }
 
@@ -42,14 +45,14 @@ export class TournamentsService {
         zones: {
           include: {
             clubZones: {
-              include: { club: true }
-            }
-          }
+              include: { club: true },
+            },
+          },
         },
         categories: {
-          include: { category: true }
-        }
-      }
+          include: { category: true },
+        },
+      },
     });
   }
 
@@ -58,29 +61,91 @@ export class TournamentsService {
     return this.prisma.zone.create({
       data: {
         name: dto.name,
-        tournamentId
-      }
+        tournamentId,
+      },
     });
   }
 
   async addCategory(tournamentId: number, dto: AddTournamentCategoryDto) {
-    await this.prisma.tournament.findUniqueOrThrow({ where: { id: tournamentId } });
+    const tournament = await this.prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      include: {
+        zones: {
+          include: {
+            clubZones: {
+              include: { club: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!tournament) {
+      throw new BadRequestException('Torneo inexistente');
+    }
+
+    const category = await this.prisma.category.findUnique({ where: { id: dto.categoryId } });
+
+    if (!category) {
+      throw new BadRequestException('Categoría inexistente');
+    }
+
+    if (!category.active) {
+      throw new BadRequestException('Solo se pueden habilitar categorías activas');
+    }
+
     const existing = await this.prisma.tournamentCategory.findUnique({
       where: {
         tournamentId_categoryId: {
           tournamentId,
-          categoryId: dto.categoryId
-        }
-      }
+          categoryId: dto.categoryId,
+        },
+      },
     });
     if (existing) {
       throw new BadRequestException('La categoría ya está asignada al torneo');
     }
+
+    if (dto.enabled && !dto.gameTime) {
+      throw new BadRequestException(
+        'La hora de juego es obligatoria cuando la categoría está habilitada',
+      );
+    }
+
+    if (dto.enabled) {
+      const clubAssignments = tournament.zones.flatMap((zone) => zone.clubZones);
+      if (clubAssignments.length) {
+        const clubIds = clubAssignments.map((assignment) => assignment.clubId);
+        const teams = await this.prisma.team.findMany({
+          where: {
+            clubId: { in: clubIds },
+            categoryId: dto.categoryId,
+          },
+          select: { clubId: true },
+        });
+        const clubIdsWithTeam = new Set(teams.map((team) => team.clubId));
+        const missing = clubAssignments.filter(
+          (assignment) => !clubIdsWithTeam.has(assignment.clubId),
+        );
+        if (missing.length) {
+          const missingNames = missing
+            .map((assignment) => assignment.club.name)
+            .filter((value, index, array) => array.indexOf(value) === index)
+            .join(', ');
+          throw new BadRequestException(
+            `Los siguientes clubes no tienen equipos en la categoría ${category.name}: ${missingNames}`,
+          );
+        }
+      }
+    }
+
     return this.prisma.tournamentCategory.create({
       data: {
         tournamentId,
-        categoryId: dto.categoryId
-      }
+        categoryId: dto.categoryId,
+        enabled: dto.enabled,
+        gameTime: dto.enabled ? dto.gameTime : null,
+      },
     });
   }
 }

@@ -1,7 +1,4 @@
-import 'dart:typed_data';
-
 import 'package:dio/dio.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -218,11 +215,9 @@ class _LeaguesDataTable extends StatelessWidget {
       dataRowMinHeight: 64,
       columns: const [
         DataColumn(label: Text('Liga')),
-        DataColumn(label: Text('Deporte')),
-        DataColumn(label: Text('Visibilidad')),
+        DataColumn(label: Text('Identificador')),
+        DataColumn(label: Text('Día de juego')),
         DataColumn(label: Text('Color distintivo')),
-        DataColumn(label: Text('Competencia')),
-        DataColumn(label: Text('Puntuación')),
         DataColumn(label: Text('Acciones')),
       ],
       rows: leagues
@@ -252,13 +247,9 @@ class _LeaguesDataTable extends StatelessWidget {
                     ),
                   ],
                 )),
-                DataCell(Text(league.sport)),
-                DataCell(_VisibilityChip(visibility: league.visibility)),
+                DataCell(Text(league.slug ?? '—')),
+                DataCell(Text(league.gameDay.label)),
                 DataCell(_ColorPreview(color: league.color, colorHex: league.colorHex)),
-                DataCell(Text(league.competition.isActive ? 'Activa' : 'Inactiva')),
-                DataCell(Text('V ${league.competition.scoring.winPoints} · '
-                    'E ${league.competition.scoring.drawPoints} · '
-                    'D ${league.competition.scoring.lossPoints}')),
                 DataCell(
                   FilledButton.tonalIcon(
                     onPressed: isAdmin ? () => onEdit(league) : null,
@@ -320,28 +311,6 @@ class _ColorPreview extends StatelessWidget {
   }
 }
 
-class _VisibilityChip extends StatelessWidget {
-  const _VisibilityChip({required this.visibility});
-
-  final LeagueVisibility visibility;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final isPublic = visibility == LeagueVisibility.public;
-    final backgroundColor = isPublic ? colorScheme.secondaryContainer : colorScheme.surfaceVariant;
-    final foregroundColor = isPublic ? colorScheme.onSecondaryContainer : colorScheme.onSurfaceVariant;
-    return Container(
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      child: Text(isPublic ? 'Público' : 'Privado', style: TextStyle(color: foregroundColor)),
-    );
-  }
-}
-
 class _LeagueAvatar extends StatelessWidget {
   const _LeagueAvatar({required this.league});
 
@@ -349,18 +318,18 @@ class _LeagueAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (league.logoUrl == null || league.logoUrl!.isEmpty) {
-      return CircleAvatar(
-        radius: 24,
-        backgroundColor: league.color.withOpacity(0.15),
-        child: Icon(Icons.emoji_events_outlined, color: league.color),
-      );
-    }
+    final background = league.color.withOpacity(0.15);
+    final textStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
+          color: league.color,
+          fontWeight: FontWeight.w600,
+        );
     return CircleAvatar(
       radius: 24,
-      backgroundColor: Colors.transparent,
-      backgroundImage: NetworkImage(league.logoUrl!),
-      onBackgroundImageError: (_, __) {},
+      backgroundColor: background,
+      child: Text(
+        league.initials,
+        style: textStyle,
+      ),
     );
   }
 }
@@ -449,71 +418,41 @@ class _LeagueFormDialog extends ConsumerStatefulWidget {
 class _LeagueFormDialogState extends ConsumerState<_LeagueFormDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
+  late final TextEditingController _slugController;
   late final TextEditingController _colorController;
-  late final TextEditingController _winPointsController;
-  late final TextEditingController _drawPointsController;
-  late final TextEditingController _lossPointsController;
-  late bool _active;
-  late String _sport;
-  late LeagueVisibility _visibility;
-  PlatformFile? _selectedLogo;
-  Uint8List? _logoPreview;
+  late GameDay _gameDay;
   bool _isSaving = false;
   String? _errorMessage;
-
-  static const _sportOptions = <String>[
-    'Fútbol',
-    'Básquet',
-    'Vóley',
-    'Handball',
-    'Rugby',
-  ];
 
   @override
   void initState() {
     super.initState();
     final league = widget.league;
     _nameController = TextEditingController(text: league?.name ?? '');
-    _colorController = TextEditingController(text: (league?.colorHex ?? '#0057B8').toUpperCase());
-    _winPointsController = TextEditingController(text: '${league?.competition.scoring.winPoints ?? 3}');
-    _drawPointsController = TextEditingController(text: '${league?.competition.scoring.drawPoints ?? 1}');
-    _lossPointsController = TextEditingController(text: '${league?.competition.scoring.lossPoints ?? 0}');
-    _active = league?.competition.isActive ?? true;
-    _sport = league?.sport ?? _sportOptions.first;
-    _visibility = league?.visibility ?? LeagueVisibility.public;
+    _slugController = TextEditingController(text: league?.slug ?? '');
+    _colorController =
+        TextEditingController(text: (league?.colorHex ?? '#0057B8').toUpperCase());
+    _gameDay = league?.gameDay ?? GameDay.domingo;
   }
 
   @override
   void dispose() {
     _nameController.dispose();
+    _slugController.dispose();
     _colorController.dispose();
-    _winPointsController.dispose();
-    _drawPointsController.dispose();
-    _lossPointsController.dispose();
     super.dispose();
   }
 
-  Future<void> _pickLogo() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-      allowMultiple: false,
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) {
-      return;
+  String? _validateSlug(String? value) {
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) {
+      return null;
     }
-    final file = result.files.single;
-    setState(() {
-      _selectedLogo = file;
-      _logoPreview = file.bytes;
-    });
-  }
-
-  void _removeLogo() {
-    setState(() {
-      _selectedLogo = null;
-      _logoPreview = null;
-    });
+    final regex = RegExp(r'^[a-z0-9-]+$');
+    if (!regex.hasMatch(text)) {
+      return 'Solo se permiten minúsculas, números y guiones.';
+    }
+    return null;
   }
 
   Future<void> _submit({required bool addAnother}) async {
@@ -530,63 +469,30 @@ class _LeagueFormDialogState extends ConsumerState<_LeagueFormDialog> {
     });
 
     final api = ref.read(apiClientProvider);
-    final payload = {
+    final colorHex = _colorController.text.trim().toUpperCase();
+    final slug = _slugController.text.trim();
+    final payload = <String, dynamic>{
       'name': _nameController.text.trim(),
-      'sport': _sport,
-      'visibility': _visibility.apiValue,
-      'colorHex': _colorController.text.trim().toUpperCase(),
-      'competitionConfig': {
-        'active': _active,
-        'scoring': {
-          'win': int.tryParse(_winPointsController.text.trim()) ?? 0,
-          'draw': int.tryParse(_drawPointsController.text.trim()) ?? 0,
-          'loss': int.tryParse(_lossPointsController.text.trim()) ?? 0,
-        }
-      },
+      'colorHex': colorHex,
+      'gameDay': _gameDay.apiValue,
     };
 
-    dynamic dataToSend = payload;
-    if (_selectedLogo != null) {
-      final formData = FormData.fromMap(payload);
-      final file = _selectedLogo!;
-      try {
-        final bytes = file.bytes;
-        if (bytes != null) {
-          formData.files.add(
-            MapEntry(
-              'logo',
-              MultipartFile.fromBytes(bytes, filename: file.name),
-            ),
-          );
-        } else if (file.path != null) {
-          formData.files.add(
-            MapEntry(
-              'logo',
-              MultipartFile.fromFileSync(file.path!, filename: file.name),
-            ),
-          );
-        }
-      } catch (error) {
-        setState(() {
-          _isSaving = false;
-          _errorMessage = 'No se pudo preparar el logo seleccionado: $error';
-        });
-        return;
-      }
-      dataToSend = formData;
+    if (slug.isNotEmpty) {
+      payload['slug'] = slug;
     }
 
     try {
       if (widget.league == null) {
-        await api.post('/leagues', data: dataToSend);
+        await api.post('/leagues', data: payload);
       } else {
-        await api.patch('/leagues/${widget.league!.id}', data: dataToSend);
+        await api.patch('/leagues/${widget.league!.id}', data: payload);
       }
       ref.invalidate(leaguesProvider);
       if (!mounted) {
         return;
       }
-      Navigator.of(context).pop(addAnother ? _LeagueFormResult.savedAndAddAnother : _LeagueFormResult.saved);
+      Navigator.of(context)
+          .pop(addAnother ? _LeagueFormResult.savedAndAddAnother : _LeagueFormResult.saved);
     } on DioException catch (error) {
       final message = error.response?.data is Map<String, dynamic>
           ? (error.response!.data['message'] as String?)
@@ -612,7 +518,6 @@ class _LeagueFormDialogState extends ConsumerState<_LeagueFormDialog> {
       }
     }
   }
-
   @override
   Widget build(BuildContext context) {
     final content = Form(
@@ -648,16 +553,27 @@ class _LeagueFormDialogState extends ConsumerState<_LeagueFormDialog> {
             },
           ),
           const SizedBox(height: 16),
-          DropdownButtonFormField<String>(
-            value: _sport,
+          TextFormField(
+            controller: _slugController,
             decoration: const InputDecoration(
-              labelText: 'Deporte',
+              labelText: 'Identificador (slug)',
+              hintText: 'ej. liga-metropolitana',
+              helperText: 'Opcional. Si lo dejas vacío se generará automáticamente.',
             ),
-            items: _sportOptions
+            textInputAction: TextInputAction.next,
+            validator: _validateSlug,
+          ),
+          const SizedBox(height: 16),
+          DropdownButtonFormField<GameDay>(
+            value: _gameDay,
+            decoration: const InputDecoration(
+              labelText: 'Día de juego',
+            ),
+            items: GameDay.values
                 .map(
-                  (sport) => DropdownMenuItem(
-                    value: sport,
-                    child: Text(sport),
+                  (day) => DropdownMenuItem(
+                    value: day,
+                    child: Text(day.label),
                   ),
                 )
                 .toList(),
@@ -665,86 +581,16 @@ class _LeagueFormDialogState extends ConsumerState<_LeagueFormDialog> {
               if (value == null) {
                 return;
               }
-              setState(() => _sport = value);
+              setState(() => _gameDay = value);
             },
-          ),
-          const SizedBox(height: 16),
-          DropdownButtonFormField<LeagueVisibility>(
-            value: _visibility,
-            decoration: const InputDecoration(labelText: 'Visibilidad'),
-            items: LeagueVisibility.values
-                .map(
-                  (visibility) => DropdownMenuItem(
-                    value: visibility,
-                    child: Text(visibility.label),
-                  ),
-                )
-                .toList(),
-            onChanged: (value) {
-              if (value == null) {
-                return;
-              }
-              setState(() => _visibility = value);
-            },
-          ),
-          const SizedBox(height: 16),
-          _HexColorField(controller: _colorController),
-          const SizedBox(height: 16),
-          _LogoSelector(
-            file: _selectedLogo,
-            previewBytes: _logoPreview,
-            existingUrl: widget.league?.logoUrl,
-            onPick: _pickLogo,
-            onRemove: _removeLogo,
-            isLoading: _isSaving,
-          ),
-          const SizedBox(height: 20),
-          SwitchListTile.adaptive(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Competencia activa'),
-            subtitle: const Text('Controla si la liga participa actualmente en torneos.'),
-            value: _active,
-            onChanged: (value) => setState(() => _active = value),
           ),
           const SizedBox(height: 8),
           Text(
-            'Puntuación',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+            'Este día será la base para programar los partidos regulares de la liga.',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 16,
-            runSpacing: 12,
-            children: [
-              SizedBox(
-                width: 160,
-                child: TextFormField(
-                  controller: _winPointsController,
-                  decoration: const InputDecoration(labelText: 'Puntos por victoria'),
-                  keyboardType: TextInputType.number,
-                  validator: _validatePoints,
-                ),
-              ),
-              SizedBox(
-                width: 160,
-                child: TextFormField(
-                  controller: _drawPointsController,
-                  decoration: const InputDecoration(labelText: 'Puntos por empate'),
-                  keyboardType: TextInputType.number,
-                  validator: _validatePoints,
-                ),
-              ),
-              SizedBox(
-                width: 160,
-                child: TextFormField(
-                  controller: _lossPointsController,
-                  decoration: const InputDecoration(labelText: 'Puntos por derrota'),
-                  keyboardType: TextInputType.number,
-                  validator: _validatePoints,
-                ),
-              ),
-            ],
-          ),
+          const SizedBox(height: 16),
+          _HexColorField(controller: _colorController),
           if (_errorMessage != null) ...[
             const SizedBox(height: 16),
             Text(
@@ -796,16 +642,7 @@ class _LeagueFormDialogState extends ConsumerState<_LeagueFormDialog> {
     return SingleChildScrollView(child: content);
   }
 
-  String? _validatePoints(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'Ingresa un valor numérico.';
-    }
-    final parsed = int.tryParse(value.trim());
-    if (parsed == null || parsed < 0) {
-      return 'Ingresa un número entero válido.';
-    }
-    return null;
-  }
+
 }
 
 class _HexColorField extends StatelessWidget {
@@ -866,141 +703,30 @@ class _HexColorField extends StatelessWidget {
   }
 }
 
-class _LogoSelector extends StatelessWidget {
-  const _LogoSelector({
-    required this.onPick,
-    required this.onRemove,
-    required this.isLoading,
-    this.file,
-    this.previewBytes,
-    this.existingUrl,
-  });
-
-  final VoidCallback onPick;
-  final VoidCallback onRemove;
-  final bool isLoading;
-  final PlatformFile? file;
-  final Uint8List? previewBytes;
-  final String? existingUrl;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasSelection = file != null || (existingUrl != null && existingUrl!.isNotEmpty);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Logo o imagen (opcional)',
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
-        InkWell(
-          onTap: isLoading ? null : onPick,
-          borderRadius: BorderRadius.circular(16),
-          child: DottedBorder(
-            color: Theme.of(context).colorScheme.outlineVariant,
-            radius: const Radius.circular(16),
-            dashPattern: const [8, 6],
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (previewBytes != null)
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.memory(previewBytes!, width: 120, height: 120, fit: BoxFit.cover),
-                    )
-                  else if (existingUrl != null && existingUrl!.isNotEmpty)
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.network(
-                        existingUrl!,
-                        width: 120,
-                        height: 120,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Icon(
-                          Icons.broken_image_outlined,
-                          size: 48,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                    )
-                  else
-                    Icon(Icons.image_outlined, size: 48, color: Theme.of(context).colorScheme.primary),
-                  const SizedBox(height: 12),
-                  Text(
-                    hasSelection ? 'Cambiar imagen' : 'Arrastra y suelta o selecciona un archivo',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Formatos PNG o JPG hasta 2 MB.',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        if (hasSelection) ...[
-          const SizedBox(height: 12),
-          if (file != null && (previewBytes == null || previewBytes!.isEmpty))
-            Text(
-              file!.name,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          if (previewBytes == null && existingUrl == null)
-            Text(
-              'Se adjuntará ${file?.name ?? 'tu imagen seleccionada'} al guardar.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: isLoading ? null : onRemove,
-            icon: const Icon(Icons.delete_outline),
-            label: const Text('Quitar imagen'),
-          )
-        ]
-      ],
-    );
-  }
-}
-
 class League {
   League({
     required this.id,
     required this.name,
+    required this.slug,
     required this.colorHex,
-    required this.sport,
-    required this.visibility,
-    required this.competition,
-    this.logoUrl,
+    required this.gameDay,
   });
 
   factory League.fromJson(Map<String, dynamic> json) {
-    final visibilityRaw = (json['visibility'] as String?)?.toUpperCase();
     return League(
       id: json['id'] as int,
       name: json['name'] as String,
+      slug: json['slug'] as String?,
       colorHex: (json['colorHex'] as String? ?? '#0057B8').toUpperCase(),
-      sport: json['sport'] as String? ?? 'Fútbol',
-      visibility: _parseLeagueVisibility(visibilityRaw),
-      logoUrl: json['logoUrl'] as String?,
-      competition:
-          LeagueCompetition.fromJson(json['competitionConfig'] as Map<String, dynamic>?),
+      gameDay: _parseGameDay(json['gameDay'] as String?),
     );
   }
 
   final int id;
   final String name;
+  final String? slug;
   final String colorHex;
-  final String sport;
-  final LeagueVisibility visibility;
-  final String? logoUrl;
-  final LeagueCompetition competition;
+  final GameDay gameDay;
 
   Color get color {
     try {
@@ -1009,120 +735,37 @@ class League {
       return const Color(0xFF0057B8);
     }
   }
-}
 
-class LeagueCompetition {
-  const LeagueCompetition({required this.isActive, required this.scoring});
-
-  factory LeagueCompetition.fromJson(Map<String, dynamic>? json) {
-    final scoringJson = json != null ? json['scoring'] as Map<String, dynamic>? : null;
-    return LeagueCompetition(
-      isActive: json?['active'] as bool? ?? true,
-      scoring: LeagueScoring.fromJson(scoringJson),
-    );
-  }
-
-  final bool isActive;
-  final LeagueScoring scoring;
-}
-
-class LeagueScoring {
-  const LeagueScoring({required this.winPoints, required this.drawPoints, required this.lossPoints});
-
-  factory LeagueScoring.fromJson(Map<String, dynamic>? json) {
-    return LeagueScoring(
-      winPoints: json?['win'] as int? ?? 3,
-      drawPoints: json?['draw'] as int? ?? 1,
-      lossPoints: json?['loss'] as int? ?? 0,
-    );
-  }
-
-  final int winPoints;
-  final int drawPoints;
-  final int lossPoints;
-}
-
-enum LeagueVisibility { public, private }
-
-extension LeagueVisibilityX on LeagueVisibility {
-  String get label => this == LeagueVisibility.public ? 'Público' : 'Privado';
-
-  String get apiValue => this == LeagueVisibility.public ? 'PUBLIC' : 'PRIVATE';
-}
-
-LeagueVisibility _parseLeagueVisibility(String? value) {
-  switch (value) {
-    case 'PRIVATE':
-      return LeagueVisibility.private;
-    case 'PUBLIC':
-    default:
-      return LeagueVisibility.public;
+  String get initials {
+    final parts = name.trim().split(RegExp(r'\s+')).where((part) => part.isNotEmpty).toList();
+    if (parts.isEmpty) {
+      return '?';
+    }
+    return parts.take(2).map((part) => part[0].toUpperCase()).join();
   }
 }
 
-class DottedBorder extends StatelessWidget {
-  const DottedBorder({
-    super.key,
-    required this.child,
-    required this.color,
-    required this.radius,
-    required this.dashPattern,
-  });
+enum GameDay {
+  domingo('DOMINGO', 'Domingo'),
+  lunes('LUNES', 'Lunes'),
+  martes('MARTES', 'Martes'),
+  miercoles('MIERCOLES', 'Miércoles'),
+  jueves('JUEVES', 'Jueves'),
+  viernes('VIERNES', 'Viernes'),
+  sabado('SABADO', 'Sábado');
 
-  final Widget child;
-  final Color color;
-  final Radius radius;
-  final List<double> dashPattern;
+  const GameDay(this.apiValue, this.label);
 
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _DottedBorderPainter(
-        color: color,
-        radius: radius,
-        dashPattern: dashPattern,
-      ),
-      child: ClipRRect(borderRadius: BorderRadius.all(radius), child: child),
-    );
-  }
+  final String apiValue;
+  final String label;
 }
 
-class _DottedBorderPainter extends CustomPainter {
-  _DottedBorderPainter({required this.color, required this.radius, required this.dashPattern});
-
-  final Color color;
-  final Radius radius;
-  final List<double> dashPattern;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    final rrect = RRect.fromRectAndRadius(rect, radius);
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.4;
-
-    final path = Path()..addRRect(rrect);
-    final metrics = path.computeMetrics();
-    for (final metric in metrics) {
-      double distance = 0.0;
-      int index = 0;
-      while (distance < metric.length) {
-        final length = dashPattern[index % dashPattern.length];
-        final next = distance + length;
-        final extract = metric.extractPath(distance, next);
-        if (index.isEven) {
-          canvas.drawPath(extract, paint);
-        }
-        distance = next;
-        index++;
-      }
+GameDay _parseGameDay(String? value) {
+  final normalized = value?.toUpperCase();
+  for (final day in GameDay.values) {
+    if (day.apiValue == normalized) {
+      return day;
     }
   }
-
-  @override
-  bool shouldRepaint(covariant _DottedBorderPainter oldDelegate) {
-    return color != oldDelegate.color || radius != oldDelegate.radius || dashPattern != oldDelegate.dashPattern;
-  }
+  return GameDay.domingo;
 }

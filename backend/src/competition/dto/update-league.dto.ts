@@ -1,4 +1,5 @@
-import { IsHexColor, IsOptional, IsString, Matches } from 'class-validator';
+import { GameDay } from '@prisma/client';
+import { IsEnum, IsHexColor, IsOptional, IsString, Matches } from 'class-validator';
 
 export class UpdateLeagueDto {
   @IsOptional()
@@ -12,4 +13,8 @@ export class UpdateLeagueDto {
   @IsOptional()
   @IsHexColor()
   colorHex?: string;
+
+  @IsOptional()
+  @IsEnum(GameDay)
+  gameDay?: GameDay;
 }

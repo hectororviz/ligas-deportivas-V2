@@ -21,4 +21,13 @@ export class CreateTournamentDto {
   @IsOptional()
   @IsDateString()
   endDate?: string;
+
+  @IsInt()
+  pointsWin!: number;
+
+  @IsInt()
+  pointsDraw!: number;
+
+  @IsInt()
+  pointsLoss!: number;
 }
