@@ -156,32 +156,33 @@ class _RolePermissionsPageState extends ConsumerState<RolePermissionsPage> {
                   Expanded(
                     child: DropdownButtonFormField<int>(
                       value: _selectedRoleId,
-                    decoration: const InputDecoration(labelText: 'Rol'),
-                    onChanged: (value) => _onRoleChanged(value, roles),
-                    items: roles
-                        .map(
-                          (role) => DropdownMenuItem<int>(
-                            value: role.id,
-                            child: Text(role.displayName),
-                          ),
-                        )
-                        .toList(),
+                      decoration: const InputDecoration(labelText: 'Rol'),
+                      onChanged: (value) => _onRoleChanged(value, roles),
+                      items: roles
+                          .map(
+                            (role) => DropdownMenuItem<int>(
+                              value: role.id,
+                              child: Text(role.displayName),
+                            ),
+                          )
+                          .toList(),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                FilledButton.icon(
-                  onPressed: (_selectedRoleId == null || _isSaving) ? null : _saveChanges,
-                  icon: _isSaving
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Icon(Icons.save_outlined),
-                  label: const Text('Guardar cambios'),
-                )
-              ],
-            ),
+                  const SizedBox(width: 12),
+                  FilledButton.icon(
+                    onPressed: (_selectedRoleId == null || _isSaving) ? null : _saveChanges,
+                    icon: _isSaving
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.save_outlined),
+                    label: const Text('Guardar cambios'),
+                  )
+                ],
+              );
+            },
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (error, stack) => Center(child: Text('No se pudieron cargar los roles: $error')),
           ),
