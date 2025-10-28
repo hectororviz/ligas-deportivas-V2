@@ -196,7 +196,6 @@ class _LeaguesPageState extends ConsumerState<LeaguesPage> {
             ],
           ),
         ),
-      ),
     );
   }
 }
