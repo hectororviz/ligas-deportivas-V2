@@ -303,7 +303,10 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
     final tournamentsAsync = ref.watch(tournamentsProvider);
     final authState = ref.watch(authControllerProvider);
     final user = authState.user;
-    final canCreate = user?.hasPermission(module: _moduleTorneos, action: _actionCreate) ?? false;
+    final isAdmin = user?.roles.contains('ADMIN') ?? false;
+    final canCreate = isAdmin ||
+        (user?.hasPermission(module: _moduleTorneos, action: _actionCreate) ??
+            false);
     final years = ref.watch(availableTournamentYearsProvider);
     final leaguesAsync = ref.watch(leaguesProvider);
     final filters = ref.watch(tournamentFiltersProvider);
