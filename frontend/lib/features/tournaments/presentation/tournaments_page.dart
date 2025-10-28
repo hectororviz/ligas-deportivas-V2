@@ -1287,12 +1287,13 @@ class _CategorySelectionTableState extends State<_CategorySelectionTable> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final child = constraints.hasBoundedWidth
-            ? ConstrainedBox(
-                constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                child: table,
-              )
-            : table;
+        Widget child = IntrinsicWidth(child: table);
+        if (constraints.hasBoundedWidth) {
+          child = ConstrainedBox(
+            constraints: BoxConstraints(minWidth: constraints.maxWidth),
+            child: child,
+          );
+        }
         return SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: child,
