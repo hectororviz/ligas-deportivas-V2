@@ -187,7 +187,7 @@ class _LeaguesPageState extends ConsumerState<LeaguesPage> {
                     onRetry: () => ref.invalidate(leaguesProvider),
                   ),
                 ),
-              )
+              ),
             ],
           ),
         ),
