@@ -1287,7 +1287,7 @@ class _CategorySelectionTableState extends State<_CategorySelectionTable> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        Widget child = IntrinsicWidth(child: table);
+        Widget child = table;
         if (constraints.hasBoundedWidth) {
           child = ConstrainedBox(
             constraints: BoxConstraints(minWidth: constraints.maxWidth),
