@@ -54,6 +54,16 @@ enum TournamentChampionMode {
   GLOBAL
 }
 
+enum GameDay {
+  DOMINGO
+  LUNES
+  MARTES
+  MIERCOLES
+  JUEVES
+  VIERNES
+  SABADO
+}
+
 enum MatchStatus {
   PROGRAMMED
   PENDING
@@ -70,6 +80,7 @@ model League {
   name       String
   slug       String     @unique
   colorHex   String     @default("#0057b8")
+  gameDay    GameDay
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
   tournaments Tournament[]
@@ -82,6 +93,9 @@ model Tournament {
   leagueId     Int
   name         String
   year         Int
+  pointsWin    Int                      @default(3)
+  pointsDraw   Int                      @default(1)
+  pointsLoss   Int                      @default(0)
   championMode TournamentChampionMode   @default(GLOBAL)
   startDate    DateTime?
   endDate      DateTime?
@@ -126,6 +140,7 @@ model Club {
   goals           Goal[]
   userRoles       UserRole[]
   categoryStandings CategoryStanding[]
+  teams           Team[]
 }
 
 model ClubZone {
@@ -144,17 +159,21 @@ model ClubZone {
 model Category {
   id        Int        @id @default(autoincrement())
   name      String
-  birthYear Int
+  active    Boolean    @default(true)
+  presentation Boolean @default(false)
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   tournaments TournamentCategory[]
   userRoles UserRole[]
+  teams     Team[]
 }
 
 model TournamentCategory {
   id           Int        @id @default(autoincrement())
   tournamentId Int
   categoryId   Int
+  enabled      Boolean    @default(false)
+  gameTime     String?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
   tournament   Tournament @relation(fields: [tournamentId], references: [id])
@@ -164,6 +183,19 @@ model TournamentCategory {
   standings    CategoryStanding[]
 
   @@unique([tournamentId, categoryId])
+}
+
+model Team {
+  id         Int      @id @default(autoincrement())
+  clubId     Int
+  categoryId Int
+  name       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  club       Club     @relation(fields: [clubId], references: [id])
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  @@unique([clubId, categoryId])
 }
 
 model Roster {

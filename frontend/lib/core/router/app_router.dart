@@ -15,6 +15,7 @@ import '../../features/settings/settings_page.dart';
 import '../../features/shared/widgets/app_shell.dart';
 import '../../features/standings/presentation/standings_page.dart';
 import '../../features/tournaments/presentation/tournaments_page.dart';
+import '../../features/zones/presentation/zones_page.dart';
 import '../../services/auth_controller.dart';
 
 class GoRouterRefreshStream extends ChangeNotifier {
@@ -56,6 +57,7 @@ GoRouter createRouter(Ref ref) {
           GoRoute(path: '/home', builder: (context, state) => const HomePage()),
           GoRoute(path: '/leagues', builder: (context, state) => const LeaguesPage()),
           GoRoute(path: '/tournaments', builder: (context, state) => const TournamentsPage()),
+          GoRoute(path: '/zones', builder: (context, state) => const ZonesPage()),
           GoRoute(path: '/fixtures', builder: (context, state) => const FixturesPage()),
           GoRoute(path: '/results', builder: (context, state) => const ResultsPage()),
           GoRoute(path: '/standings', builder: (context, state) => const StandingsPage()),

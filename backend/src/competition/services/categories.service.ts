@@ -8,11 +8,18 @@ export class CategoriesService {
 
   create(dto: CreateCategoryDto) {
     return this.prisma.category.create({
-      data: dto
+      data: {
+        name: dto.name,
+        active: dto.active ?? true,
+        presentation: dto.presentation ?? false,
+      },
     });
   }
 
   findAll() {
-    return this.prisma.category.findMany({ orderBy: { birthYear: 'asc' } });
+    return this.prisma.category.findMany({
+      where: { active: true },
+      orderBy: { name: 'asc' },
+    });
   }
 }
