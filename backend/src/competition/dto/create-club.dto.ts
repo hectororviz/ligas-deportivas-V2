@@ -1,10 +1,23 @@
-import { IsHexColor, IsNotEmpty, IsOptional, Matches } from 'class-validator';
+import { Transform } from 'class-transformer';
+import {
+  IsBoolean,
+  IsHexColor,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUrl,
+  Matches,
+  MaxLength,
+} from 'class-validator';
 
 export class CreateClubDto {
   @IsNotEmpty()
   name!: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(100)
   shortName?: string;
 
   @IsOptional()
@@ -21,4 +34,52 @@ export class CreateClubDto {
   @IsOptional()
   @IsHexColor()
   secondaryColor?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+    if (typeof value === 'boolean') {
+      return value;
+    }
+    if (typeof value === 'string') {
+      return value.toLowerCase() == 'true' || value == '1';
+    }
+    return Boolean(value);
+  })
+  @IsBoolean()
+  active?: boolean;
+
+  @IsOptional()
+  @IsUrl({}, { message: 'Ingresa una URL válida para el escudo.' })
+  logoUrl?: string;
+
+  @IsOptional()
+  @MaxLength(120)
+  instagram?: string;
+
+  @IsOptional()
+  @MaxLength(120)
+  facebook?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+    return typeof value === 'number' ? value : Number(value);
+  })
+  @IsNumber({ allowNaN: false, allowInfinity: false }, { message: 'Latitud inválida.' })
+  latitude?: number;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+    return typeof value === 'number' ? value : Number(value);
+  })
+  @IsNumber({ allowNaN: false, allowInfinity: false }, { message: 'Longitud inválida.' })
+  longitude?: number;
 }
