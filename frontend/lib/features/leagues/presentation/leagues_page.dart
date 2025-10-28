@@ -153,7 +153,10 @@ class _LeaguesPageState extends ConsumerState<LeaguesPage> {
                               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                               child: Row(
                                 children: [
-                                  Icon(Icons.table_view_outlined, color: Theme.of(context).colorScheme.primary),
+                                  Icon(
+                                    Icons.table_view_outlined,
+                                    color: Theme.of(context).colorScheme.primary,
+                                  ),
                                   const SizedBox(width: 12),
                                   Text(
                                     'Ligas registradas',
@@ -163,8 +166,10 @@ class _LeaguesPageState extends ConsumerState<LeaguesPage> {
                                         ?.copyWith(fontWeight: FontWeight.w600),
                                   ),
                                   const Spacer(),
-                                  Text('${leagues.length} registradas',
-                                      style: Theme.of(context).textTheme.bodyMedium),
+                                  Text(
+                                    '${leagues.length} registradas',
+                                    style: Theme.of(context).textTheme.bodyMedium,
+                                  ),
                                 ],
                               ),
                             ),
@@ -187,11 +192,10 @@ class _LeaguesPageState extends ConsumerState<LeaguesPage> {
                     onRetry: () => ref.invalidate(leaguesProvider),
                   ),
                 ),
-              )
+              ),
             ],
           ),
         ),
-      ),
     );
   }
 }
