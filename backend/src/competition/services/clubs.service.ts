@@ -125,7 +125,7 @@ export class ClubsService {
         data.shortName = dto.shortName ? dto.shortName.trim() : null;
       }
       if (dto.leagueId !== undefined) {
-        data.leagueId = dto.leagueId;
+        data.league = { connect: { id: dto.leagueId } };
       }
       if (dto.primaryColor !== undefined) {
         data.primaryColor = dto.primaryColor?.toUpperCase() ?? null;
