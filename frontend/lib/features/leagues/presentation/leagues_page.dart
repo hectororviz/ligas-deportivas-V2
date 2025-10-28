@@ -213,6 +213,7 @@ class _LeaguesDataTable extends StatelessWidget {
     final table = DataTable(
       headingRowHeight: 52,
       dataRowMinHeight: 64,
+      dataRowMaxHeight: 80,
       columns: const [
         DataColumn(label: Text('Liga')),
         DataColumn(label: Text('Identificador')),
