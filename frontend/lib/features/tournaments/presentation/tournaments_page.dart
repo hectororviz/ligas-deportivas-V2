@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -187,12 +188,19 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
   }) {
     final size = MediaQuery.sizeOf(context);
     final isCompact = size.width < 640;
+    final horizontalPadding = 48.0;
+    final maxDialogWidth = 720.0;
+    final estimatedContentWidth = isCompact
+        ? math.max(0, size.width - horizontalPadding)
+        : math.max(0, math.min(maxDialogWidth, size.width - horizontalPadding));
+
     final form = _TournamentFormDialog(
       leagues: leagues,
       tournament: tournament,
       readOnly: readOnly,
       allowedLeagueIds: allowedLeagueIds,
       allowSaveAndAdd: allowSaveAndAdd,
+      maxContentWidth: estimatedContentWidth,
     );
     if (isCompact) {
       return showModalBottomSheet<_TournamentFormResult>(
@@ -782,6 +790,7 @@ class _TournamentFormDialog extends ConsumerStatefulWidget {
     required this.readOnly,
     this.allowedLeagueIds,
     this.allowSaveAndAdd = false,
+    required this.maxContentWidth,
   });
 
   final List<League> leagues;
@@ -789,6 +798,7 @@ class _TournamentFormDialog extends ConsumerStatefulWidget {
   final bool readOnly;
   final Set<int>? allowedLeagueIds;
   final bool allowSaveAndAdd;
+  final double maxContentWidth;
 
   @override
   ConsumerState<_TournamentFormDialog> createState() => _TournamentFormDialogState();
@@ -1108,6 +1118,7 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
                   onChanged: (selection) {
                     setState(() {});
                   },
+                  minWidth: widget.maxContentWidth,
                 );
               },
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -1186,17 +1197,33 @@ class _CategorySelectionTable extends StatefulWidget {
     required this.selections,
     required this.readOnly,
     required this.onChanged,
+    required this.minWidth,
   });
 
   final List<_CategorySelection> selections;
   final bool readOnly;
   final ValueChanged<_CategorySelection> onChanged;
+  final double minWidth;
 
   @override
   State<_CategorySelectionTable> createState() => _CategorySelectionTableState();
 }
 
 class _CategorySelectionTableState extends State<_CategorySelectionTable> {
+  late final ScrollController _horizontalController;
+
+  @override
+  void initState() {
+    super.initState();
+    _horizontalController = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _horizontalController.dispose();
+    super.dispose();
+  }
+
   Future<void> _pickTime(_CategorySelection selection) async {
     if (!selection.include || widget.readOnly) {
       return;
@@ -1285,20 +1312,22 @@ class _CategorySelectionTableState extends State<_CategorySelectionTable> {
       rows: rows,
     );
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        Widget child = IntrinsicWidth(child: table);
-        if (constraints.hasBoundedWidth) {
-          child = ConstrainedBox(
-            constraints: BoxConstraints(minWidth: constraints.maxWidth),
-            child: child,
-          );
-        }
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: child,
-        );
+    final constrainedTable = ConstrainedBox(
+      constraints: BoxConstraints(minWidth: widget.minWidth),
+      child: table,
+    );
+
+    return Scrollbar(
+      controller: _horizontalController,
+      thumbVisibility: true,
+      notificationPredicate: (notification) {
+        return notification.metrics.axis == Axis.horizontal;
       },
+      child: SingleChildScrollView(
+        controller: _horizontalController,
+        scrollDirection: Axis.horizontal,
+        child: constrainedTable,
+      ),
     );
   }
 }
