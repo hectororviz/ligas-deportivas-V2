@@ -139,7 +139,10 @@ export class PlayersService {
       data.active = dto.active;
     }
     if (dto.clubId !== undefined) {
-      data.clubId = dto.clubId ?? null;
+      data.club =
+        dto.clubId === null
+          ? { disconnect: true }
+          : { connect: { id: dto.clubId } };
     }
     if (dto.address !== undefined) {
       data.addressStreet = this.normalizeNullable(dto.address?.street);
