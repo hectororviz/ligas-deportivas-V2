@@ -1,0 +1,3 @@
+ALTER TABLE "Category"
+    ADD COLUMN "minPlayers" INTEGER NOT NULL DEFAULT 7,
+    ADD COLUMN "mandatory" BOOLEAN NOT NULL DEFAULT true;

@@ -9,6 +9,7 @@ import '../../features/fixtures/presentation/fixtures_page.dart';
 import '../../features/home/home_page.dart';
 import '../../features/leagues/presentation/leagues_page.dart';
 import '../../features/clubs/presentation/clubs_page.dart';
+import '../../features/clubs/presentation/club_admin_page.dart';
 import '../../features/categories/presentation/categories_page.dart';
 import '../../features/players/presentation/players_page.dart';
 import '../../features/results/presentation/results_page.dart';
@@ -60,6 +61,13 @@ GoRouter createRouter(Ref ref) {
           GoRoute(path: '/home', builder: (context, state) => const HomePage()),
           GoRoute(path: '/leagues', builder: (context, state) => const LeaguesPage()),
           GoRoute(path: '/clubs', builder: (context, state) => const ClubsPage()),
+          GoRoute(
+            path: '/clubs/:slug/admin',
+            builder: (context, state) {
+              final slug = state.pathParameters['slug']!;
+              return ClubAdminPage(slug: slug);
+            },
+          ),
           GoRoute(path: '/categories', builder: (context, state) => const CategoriesPage()),
           GoRoute(path: '/players', builder: (context, state) => const PlayersPage()),
           GoRoute(path: '/tournaments', builder: (context, state) => const TournamentsPage()),

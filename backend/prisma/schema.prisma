@@ -175,6 +175,8 @@ model Category {
   birthYearMin Int
   birthYearMax Int
   gender       Gender
+  minPlayers   Int                  @default(7)
+  mandatory    Boolean              @default(true)
   promotional  Boolean              @default(false)
   active       Boolean              @default(true)
   createdAt    DateTime             @default(now())
