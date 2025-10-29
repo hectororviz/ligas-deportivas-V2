@@ -90,7 +90,7 @@ export class ZonesService {
         throw new BadRequestException('El club ya está asignado a esta zona');
       }
 
-      await this.ensureClubEligibility(tx, zone, clubId);
+      await this.ensureClubEligibility(tx, zone, clubId, false);
 
       if (existingAssignment) {
         await tx.clubZone.delete({
@@ -243,6 +243,7 @@ export class ZonesService {
     tx: Prisma.TransactionClient,
     zone: ZoneContext,
     clubId: number,
+    strict = true,
   ) {
     const enabledCategories = zone.tournament.categories;
     if (!enabledCategories.length) {
@@ -264,6 +265,11 @@ export class ZonesService {
     }
 
     const teamCategoryIds = new Set(teams.map((team) => team.tournamentCategoryId));
+
+    if (!strict) {
+      return;
+    }
+
     const missingRequired = enabledCategories.filter(
       (assignment) => assignment.category.mandatory && !teamCategoryIds.has(assignment.id),
     );

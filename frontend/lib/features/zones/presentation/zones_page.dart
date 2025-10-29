@@ -600,6 +600,10 @@ class _ZoneEditorDialogState extends ConsumerState<_ZoneEditorDialog> {
   }
 
   Future<void> _save() async {
+    await _submit(finalize: false);
+  }
+
+  Future<void> _submit({required bool finalize}) async {
     if (_submitting) {
       return;
     }
@@ -611,9 +615,15 @@ class _ZoneEditorDialogState extends ConsumerState<_ZoneEditorDialog> {
       return;
     }
     final zoneName = _nameController.text.trim();
-    if (widget.zone == null && zoneName.isEmpty) {
+    if (_zoneId == null && zoneName.isEmpty) {
       setState(() {
         _errorMessage = 'El nombre de la zona es obligatorio.';
+      });
+      return;
+    }
+    if (finalize && _zoneId == null) {
+      setState(() {
+        _errorMessage = 'Guarda la zona antes de confirmarla.';
       });
       return;
     }
@@ -624,8 +634,8 @@ class _ZoneEditorDialogState extends ConsumerState<_ZoneEditorDialog> {
     try {
       final api = ref.read(apiClientProvider);
       int zoneId = _zoneId ?? 0;
-      String finalName = widget.zone?.name ?? zoneName;
-      if (widget.zone == null) {
+      String finalName = zoneName.isNotEmpty ? zoneName : (widget.zone?.name ?? zoneName);
+      if (_zoneId == null) {
         final response = await api.post<Map<String, dynamic>>(
           '/tournaments/${tournament.id}/zones',
           data: {'name': zoneName},
@@ -633,28 +643,33 @@ class _ZoneEditorDialogState extends ConsumerState<_ZoneEditorDialog> {
         final data = response.data ?? <String, dynamic>{};
         zoneId = data['id'] as int? ?? 0;
         finalName = data['name'] as String? ?? zoneName;
+        _zoneId = zoneId;
       }
-      final desired = Set<int>.from(_selectedClubs);
-      final initial = Set<int>.from(_initialSelectedClubs);
-      if (widget.zone == null) {
-        for (final clubId in desired) {
-          await api.post('/zones/$zoneId/clubs', data: {'clubId': clubId});
-        }
-      } else {
-        final toRemove = initial.difference(desired);
-        final toAdd = desired.difference(initial);
-        for (final clubId in toRemove) {
-          await api.delete('/zones/$zoneId/clubs/$clubId');
-        }
-        for (final clubId in toAdd) {
-          await api.post('/zones/$zoneId/clubs', data: {'clubId': clubId});
-        }
+
+      if (zoneId <= 0) {
+        setState(() {
+          _errorMessage = 'No pudimos determinar la zona creada. Intenta nuevamente.';
+        });
+        return;
       }
+
+      await _syncSelectedClubs(api, zoneId);
+
+      if (finalize) {
+        await api.post('/zones/$zoneId/finalize');
+      }
+
       if (!mounted) {
         return;
       }
+
       Navigator.of(context).pop(
-        ZoneEditorResult(zoneId: zoneId, name: finalName, saved: true, finalized: false),
+        ZoneEditorResult(
+          zoneId: zoneId,
+          name: finalName,
+          saved: true,
+          finalized: finalize,
+        ),
       );
     } catch (error) {
       setState(() {
@@ -669,7 +684,32 @@ class _ZoneEditorDialogState extends ConsumerState<_ZoneEditorDialog> {
     }
   }
 
-  Future<void> _finalize() async {
+  Future<void> _syncSelectedClubs(ApiClient api, int zoneId) async {
+    final desired = Set<int>.from(_selectedClubs);
+    final initial = Set<int>.from(_initialSelectedClubs);
+    final toRemove = initial.difference(desired);
+    final toAdd = desired.difference(initial);
+
+    if (toAdd.isEmpty && toRemove.isEmpty) {
+      _initialSelectedClubs
+        ..clear()
+        ..addAll(_selectedClubs);
+      return;
+    }
+
+    for (final clubId in toRemove) {
+      await api.delete('/zones/$zoneId/clubs/$clubId');
+    }
+    for (final clubId in toAdd) {
+      await api.post('/zones/$zoneId/clubs', data: {'clubId': clubId});
+    }
+
+    _initialSelectedClubs
+      ..clear()
+      ..addAll(_selectedClubs);
+  }
+
+  Future<void> _confirm() async {
     if (_submitting || _zoneId == null) {
       return;
     }
@@ -677,9 +717,9 @@ class _ZoneEditorDialogState extends ConsumerState<_ZoneEditorDialog> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Confirmar finalización'),
+          title: const Text('Confirmar zona'),
           content: const Text(
-            'Para bloquear la zona debes asegurarte de que todos los clubes cumplan los requisitos. ¿Deseas continuar?',
+            'Para confirmar la zona debes asegurarte de que todos los clubes cumplan los requisitos. ¿Deseas continuar?',
           ),
           actions: [
             TextButton(
@@ -688,7 +728,7 @@ class _ZoneEditorDialogState extends ConsumerState<_ZoneEditorDialog> {
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Finalizar'),
+              child: const Text('Confirmar'),
             ),
           ],
         );
@@ -697,35 +737,7 @@ class _ZoneEditorDialogState extends ConsumerState<_ZoneEditorDialog> {
     if (confirm != true) {
       return;
     }
-    setState(() {
-      _submitting = true;
-      _errorMessage = null;
-    });
-    try {
-      final api = ref.read(apiClientProvider);
-      await api.post('/zones/${_zoneId!}/finalize');
-      if (!mounted) {
-        return;
-      }
-      Navigator.of(context).pop(
-        ZoneEditorResult(
-          zoneId: _zoneId!,
-          name: widget.zone?.name ?? _nameController.text.trim(),
-          saved: false,
-          finalized: true,
-        ),
-      );
-    } catch (error) {
-      setState(() {
-        _errorMessage = _mapError(error);
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _submitting = false;
-        });
-      }
-    }
+    await _submit(finalize: true);
   }
 
   @override
@@ -842,7 +854,6 @@ class _ZoneEditorDialogState extends ConsumerState<_ZoneEditorDialog> {
                             itemBuilder: (context, index) {
                               final club = _clubs[index];
                               final selected = _selectedClubs.contains(club.id);
-                              final canSelect = club.eligible;
                               final isDisabled = _submitting || !canEdit;
                               final indicatorColor = club.eligible ? Colors.green : Colors.redAccent;
                               final tooltip = _buildEligibilityTooltip(club);
@@ -860,23 +871,19 @@ class _ZoneEditorDialogState extends ConsumerState<_ZoneEditorDialog> {
                                   onChanged: isDisabled
                                       ? null
                                       : (checked) {
-                                          if (checked == true) {
-                                            if (!canSelect) {
-                                              return;
+                                          setState(() {
+                                            if (checked == true) {
+                                              _selectedClubs.add(club.id);
+                                            } else {
+                                              _selectedClubs.remove(club.id);
                                             }
-                                            setState(() => _selectedClubs.add(club.id));
-                                          } else {
-                                            setState(() => _selectedClubs.remove(club.id));
-                                          }
+                                          });
                                         },
                                 ),
-                                enabled: canSelect || selected,
+                                enabled: !isDisabled,
                                 onTap: isDisabled
                                     ? null
                                     : () {
-                                        if (!canSelect && !selected) {
-                                          return;
-                                        }
                                         setState(() {
                                           if (selected) {
                                             _selectedClubs.remove(club.id);
@@ -905,14 +912,14 @@ class _ZoneEditorDialogState extends ConsumerState<_ZoneEditorDialog> {
               const Spacer(),
               if (widget.zone != null)
                 FilledButton.tonal(
-                  onPressed: canEdit && !_submitting ? _finalize : null,
+                  onPressed: canEdit && !_submitting ? _confirm : null,
                   child: _submitting
                       ? const SizedBox(
                           height: 16,
                           width: 16,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('Finalizar'),
+                      : const Text('Confirmar'),
                 ),
               const SizedBox(width: 12),
               FilledButton(
