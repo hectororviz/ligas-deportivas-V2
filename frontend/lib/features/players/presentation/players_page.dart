@@ -28,6 +28,9 @@ final playersProvider = FutureProvider<PaginatedPlayers>((ref) async {
         await api.get<Map<String, dynamic>>('/players', queryParameters: {
       if (filters.query.trim().isNotEmpty) 'search': filters.query.trim(),
       if (filters.status != PlayerStatusFilter.all) 'status': filters.status.name,
+      if (filters.clubId != null) 'clubId': filters.clubId,
+      if (filters.gender.apiValue != null) 'gender': filters.gender.apiValue,
+      if (filters.birthYear != null) 'birthYear': filters.birthYear,
       'page': filters.page,
       'pageSize': filters.pageSize,
     });
@@ -217,6 +220,9 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
             false;
     final playersAsync = ref.watch(playersProvider);
     final filters = ref.watch(playersFiltersProvider);
+    final clubsAsync = ref.watch(clubsCatalogProvider);
+    final currentYear = DateTime.now().year;
+    final birthYearOptions = List<int>.generate(60, (index) => currentYear - index);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -266,6 +272,103 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
                       ),
                     ),
                     TableFilterField(
+                      label: 'Club',
+                      width: 240,
+                      child: clubsAsync.when(
+                        data: (clubs) {
+                          final items = [
+                            const DropdownMenuItem<int?>(
+                              value: null,
+                              child: Text('Todos'),
+                            ),
+                            ...clubs.map(
+                              (club) => DropdownMenuItem<int?>(
+                                value: club.id,
+                                child: Text(club.name),
+                              ),
+                            ),
+                          ];
+                          return DropdownButtonHideUnderline(
+                            child: DropdownButton<int?>(
+                              value: filters.clubId,
+                              isExpanded: true,
+                              items: items,
+                              onChanged: (value) {
+                                ref
+                                    .read(playersFiltersProvider.notifier)
+                                    .setClubId(value);
+                              },
+                            ),
+                          );
+                        },
+                        loading: () => const Center(
+                          child: SizedBox(
+                            height: 24,
+                            width: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                        error: (error, _) => Center(
+                          child: Tooltip(
+                            message: 'No se pudieron cargar los clubes: $error',
+                            child: const Icon(Icons.error_outline, color: Colors.redAccent),
+                          ),
+                        ),
+                      ),
+                    ),
+                    TableFilterField(
+                      label: 'Género',
+                      width: 200,
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<PlayerGenderFilter>(
+                          value: filters.gender,
+                          isExpanded: true,
+                          items: PlayerGenderFilter.values
+                              .map(
+                                (value) => DropdownMenuItem(
+                                  value: value,
+                                  child: Text(value.label),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (value) {
+                            if (value != null) {
+                              ref
+                                  .read(playersFiltersProvider.notifier)
+                                  .setGender(value);
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                    TableFilterField(
+                      label: 'Categoría (año)',
+                      width: 200,
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<int?>(
+                          value: filters.birthYear,
+                          isExpanded: true,
+                          items: [
+                            const DropdownMenuItem<int?>(
+                              value: null,
+                              child: Text('Todas'),
+                            ),
+                            ...birthYearOptions.map(
+                              (year) => DropdownMenuItem<int?>(
+                                value: year,
+                                child: Text('$year'),
+                              ),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            ref
+                                .read(playersFiltersProvider.notifier)
+                                .setBirthYear(value);
+                          },
+                        ),
+                      ),
+                    ),
+                    TableFilterField(
                       label: 'Estado',
                       width: 200,
                       child: DropdownButtonHideUnderline(
@@ -292,15 +395,12 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
                     ),
                   ],
                   trailing: TextButton.icon(
-                    onPressed: filters.query.isEmpty &&
-                            filters.status == PlayerStatusFilter.all
-                        ? null
-                        : () {
+                    onPressed: filters.hasActiveFilters
+                        ? () {
                             _searchController.clear();
-                            ref
-                                .read(playersFiltersProvider.notifier)
-                                .reset();
-                          },
+                            ref.read(playersFiltersProvider.notifier).reset();
+                          }
+                        : null,
                     icon: const Icon(Icons.filter_alt_off_outlined),
                     label: const Text('Limpiar filtros'),
                   ),
@@ -312,8 +412,7 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
               child: playersAsync.when(
                 data: (paginated) {
                   if (paginated.players.isEmpty) {
-                    if (filters.query.isNotEmpty ||
-                        filters.status != PlayerStatusFilter.all) {
+                    if (filters.hasActiveFilters) {
                       return _PlayersEmptyFilterState(onClear: () {
                         ref.read(playersFiltersProvider.notifier).reset();
                         _searchController.clear();
@@ -390,28 +489,49 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
   }
 }
 
+const _playersFilterUnset = Object();
+
 class _PlayersFilters {
   const _PlayersFilters({
     this.query = '',
     this.status = PlayerStatusFilter.all,
+    this.clubId,
+    this.gender = PlayerGenderFilter.all,
+    this.birthYear,
     this.page = 1,
     this.pageSize = 25,
   });
 
   final String query;
   final PlayerStatusFilter status;
+  final int? clubId;
+  final PlayerGenderFilter gender;
+  final int? birthYear;
   final int page;
   final int pageSize;
+
+  bool get hasActiveFilters =>
+      query.trim().isNotEmpty ||
+      status != PlayerStatusFilter.all ||
+      clubId != null ||
+      gender != PlayerGenderFilter.all ||
+      birthYear != null;
 
   _PlayersFilters copyWith({
     String? query,
     PlayerStatusFilter? status,
     int? page,
     int? pageSize,
+    Object? clubId = _playersFilterUnset,
+    PlayerGenderFilter? gender,
+    Object? birthYear = _playersFilterUnset,
   }) {
     return _PlayersFilters(
       query: query ?? this.query,
       status: status ?? this.status,
+      clubId: clubId == _playersFilterUnset ? this.clubId : clubId as int?,
+      gender: gender ?? this.gender,
+      birthYear: birthYear == _playersFilterUnset ? this.birthYear : birthYear as int?,
       page: page ?? this.page,
       pageSize: pageSize ?? this.pageSize,
     );
@@ -429,6 +549,18 @@ class _PlayersFiltersController extends StateNotifier<_PlayersFilters> {
     state = state.copyWith(status: status, page: 1);
   }
 
+  void setClubId(int? clubId) {
+    state = state.copyWith(clubId: clubId, page: 1);
+  }
+
+  void setGender(PlayerGenderFilter gender) {
+    state = state.copyWith(gender: gender, page: 1);
+  }
+
+  void setBirthYear(int? birthYear) {
+    state = state.copyWith(birthYear: birthYear, page: 1);
+  }
+
   void setPage(int page) {
     state = state.copyWith(page: page);
   }
@@ -443,6 +575,8 @@ class _PlayersFiltersController extends StateNotifier<_PlayersFilters> {
 }
 
 enum PlayerStatusFilter { all, active, inactive }
+
+enum PlayerGenderFilter { all, male, female, mixed }
 
 extension on PlayerStatusFilter {
   String get label {
@@ -461,6 +595,34 @@ extension on PlayerStatusFilter {
         PlayerStatusFilter.active => 'active',
         PlayerStatusFilter.inactive => 'inactive',
       };
+}
+
+extension on PlayerGenderFilter {
+  String get label {
+    switch (this) {
+      case PlayerGenderFilter.all:
+        return 'Todos';
+      case PlayerGenderFilter.male:
+        return 'Masculino';
+      case PlayerGenderFilter.female:
+        return 'Femenino';
+      case PlayerGenderFilter.mixed:
+        return 'Mixto';
+    }
+  }
+
+  String? get apiValue {
+    switch (this) {
+      case PlayerGenderFilter.all:
+        return null;
+      case PlayerGenderFilter.male:
+        return 'MASCULINO';
+      case PlayerGenderFilter.female:
+        return 'FEMENINO';
+      case PlayerGenderFilter.mixed:
+        return 'MIXTO';
+    }
+  }
 }
 
 class _PlayersDataTable extends StatelessWidget {
@@ -493,6 +655,7 @@ class _PlayersDataTable extends StatelessWidget {
       columns: const [
         DataColumn(label: Text('Apellido')),
         DataColumn(label: Text('Nombre')),
+        DataColumn(label: Text('Club')),
         DataColumn(label: Text('Género')),
         DataColumn(label: Text('Nacimiento')),
         DataColumn(label: Text('Estado')),
@@ -507,6 +670,7 @@ class _PlayersDataTable extends StatelessWidget {
               cells: [
                 DataCell(Text(player.lastName)),
                 DataCell(Text(player.firstName)),
+                DataCell(Text(player.club?.name ?? 'Sin club asignado')),
                 DataCell(Text(player.genderLabel)),
                 DataCell(Text(player.formattedBirthDateWithAge)),
                 DataCell(
