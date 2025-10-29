@@ -19,6 +19,7 @@ const _navigationItems = <NavigationItem>[
   NavigationItem(label: 'Inicio', icon: Icons.dashboard_outlined, route: '/home'),
   NavigationItem(label: 'Ligas', icon: Icons.emoji_events_outlined, route: '/leagues'),
   NavigationItem(label: 'Clubes', icon: Icons.groups_2_outlined, route: '/clubs'),
+  NavigationItem(label: 'Jugadores', icon: Icons.person_outline, route: '/players'),
   NavigationItem(label: 'Torneos', icon: Icons.calendar_today_outlined, route: '/tournaments'),
   NavigationItem(label: 'Zonas', icon: Icons.grid_view_outlined, route: '/zones'),
   NavigationItem(label: 'Fixture', icon: Icons.sports_soccer_outlined, route: '/fixtures'),
