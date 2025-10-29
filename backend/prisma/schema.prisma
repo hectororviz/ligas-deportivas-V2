@@ -236,7 +236,7 @@ model Player {
   lastName              String
   birthDate             DateTime
   dni                   String         @unique
-  gender                Gender
+  gender                Gender         @default(MASCULINO)
   active                Boolean        @default(true)
   addressStreet         String?
   addressNumber         String?
