@@ -579,45 +579,59 @@ class _ClubsPaginationFooter extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-      child: Row(
-        children: [
-          Text('Mostrando $start-$end de $total',
-              style: theme.textTheme.bodySmall),
-          const Spacer(),
-          Text('Filas por página', style: theme.textTheme.bodySmall),
-          const SizedBox(width: 8),
-          DropdownButtonHideUnderline(
-            child: DropdownButton<int>(
-              value: pageSize,
-              isDense: true,
-              items: availableSizes
-                  .map(
-                    (value) => DropdownMenuItem(
-                      value: value,
-                      child: Text('$value'),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (value) {
-                if (value != null && value != pageSize) {
-                  onPageSizeChanged(value);
-                }
-              },
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Wrap(
+          spacing: 16,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text('Mostrando $start-$end de $total',
+                style: theme.textTheme.bodySmall),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Filas por página', style: theme.textTheme.bodySmall),
+                const SizedBox(width: 8),
+                DropdownButtonHideUnderline(
+                  child: DropdownButton<int>(
+                    value: pageSize,
+                    isDense: true,
+                    items: availableSizes
+                        .map(
+                          (value) => DropdownMenuItem(
+                            value: value,
+                            child: Text('$value'),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value != null && value != pageSize) {
+                        onPageSizeChanged(value);
+                      }
+                    },
+                  ),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(width: 16),
-          IconButton(
-            tooltip: 'Página anterior',
-            onPressed: page > 1 ? () => onPageChanged(page - 1) : null,
-            icon: const Icon(Icons.chevron_left),
-          ),
-          Text('$page de $totalPages'),
-          IconButton(
-            tooltip: 'Página siguiente',
-            onPressed: page < totalPages ? () => onPageChanged(page + 1) : null,
-            icon: const Icon(Icons.chevron_right),
-          ),
-        ],
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'Página anterior',
+                  onPressed: page > 1 ? () => onPageChanged(page - 1) : null,
+                  icon: const Icon(Icons.chevron_left),
+                ),
+                Text('$page de $totalPages'),
+                IconButton(
+                  tooltip: 'Página siguiente',
+                  onPressed: page < totalPages ? () => onPageChanged(page + 1) : null,
+                  icon: const Icon(Icons.chevron_right),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

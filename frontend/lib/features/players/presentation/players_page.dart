@@ -760,36 +760,45 @@ class _PlayersPaginationFooter extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-      child: Row(
-        children: [
-          Text('Página $page de $totalPages'),
-          const Spacer(),
-          DropdownButton<int>(
-            value: pageSize,
-            items: const [10, 25, 50, 100]
-                .map((size) => DropdownMenuItem(
-                      value: size,
-                      child: Text('$size por página'),
-                    ))
-                .toList(),
-            onChanged: (value) {
-              if (value != null) {
-                onPageSizeChanged(value);
-              }
-            },
-          ),
-          const SizedBox(width: 16),
-          IconButton(
-            tooltip: 'Página anterior',
-            onPressed: page > 1 ? () => onPageChanged(page - 1) : null,
-            icon: const Icon(Icons.chevron_left),
-          ),
-          IconButton(
-            tooltip: 'Página siguiente',
-            onPressed: page < totalPages ? () => onPageChanged(page + 1) : null,
-            icon: const Icon(Icons.chevron_right),
-          ),
-        ],
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Wrap(
+          spacing: 16,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text('Página $page de $totalPages'),
+            DropdownButton<int>(
+              value: pageSize,
+              items: const [10, 25, 50, 100]
+                  .map((size) => DropdownMenuItem(
+                        value: size,
+                        child: Text('$size por página'),
+                      ))
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) {
+                  onPageSizeChanged(value);
+                }
+              },
+            ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'Página anterior',
+                  onPressed: page > 1 ? () => onPageChanged(page - 1) : null,
+                  icon: const Icon(Icons.chevron_left),
+                ),
+                IconButton(
+                  tooltip: 'Página siguiente',
+                  onPressed: page < totalPages ? () => onPageChanged(page + 1) : null,
+                  icon: const Icon(Icons.chevron_right),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
