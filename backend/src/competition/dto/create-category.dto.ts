@@ -18,6 +18,13 @@ export class CreateCategoryDto {
   @IsEnum(Gender)
   gender!: Gender;
 
+  @IsInt()
+  @Min(1)
+  minPlayers!: number;
+
+  @IsBoolean()
+  mandatory!: boolean;
+
   @IsOptional()
   @IsBoolean()
   active?: boolean;

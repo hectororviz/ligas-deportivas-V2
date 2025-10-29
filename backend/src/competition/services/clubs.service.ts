@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Gender, Prisma } from '@prisma/client';
 
 import { slugify } from '../../common/utils/slugify';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -8,6 +8,9 @@ import { CreateClubDto } from '../dto/create-club.dto';
 import { ListClubsDto } from '../dto/list-clubs.dto';
 import { UpdateClubDto } from '../dto/update-club.dto';
 import { UpdateClubTeamsDto } from '../dto/update-club-teams.dto';
+import { ListRosterPlayersDto } from '../dto/list-roster-players.dto';
+import { UpdateRosterPlayersDto } from '../dto/update-roster-players.dto';
+import { JoinTournamentDto } from '../dto/join-tournament.dto';
 
 interface FindClubsInput extends ListClubsDto {}
 
@@ -100,6 +103,464 @@ export class ClubsService {
       throw new NotFoundException('Club no encontrado');
     }
     return club;
+  }
+
+  async findAdminOverviewBySlug(slug: string) {
+    const club = await this.prisma.club.findUnique({
+      where: { slug },
+    });
+    if (!club) {
+      throw new NotFoundException('Club no encontrado');
+    }
+
+    const teams = await this.prisma.team.findMany({
+      where: { clubId: club.id },
+      include: {
+        tournamentCategory: {
+          include: {
+            category: true,
+            tournament: true,
+          },
+        },
+      },
+      orderBy: [
+        { tournamentCategory: { tournament: { year: 'desc' } } },
+        { tournamentCategory: { tournament: { name: 'asc' } } },
+        { tournamentCategory: { category: { name: 'asc' } } },
+      ],
+    });
+
+    const rosterList = await this.prisma.roster.findMany({
+      where: { clubId: club.id },
+      include: {
+        _count: {
+          select: { players: true },
+        },
+      },
+    });
+
+    const rosterMap = new Map<number, { id: number; playerCount: number }>();
+    rosterList.forEach((roster) => {
+      rosterMap.set(roster.tournamentCategoryId, {
+        id: roster.id,
+        playerCount: roster._count.players,
+      });
+    });
+
+    const processedCategories = new Set<number>();
+    const tournamentsMap = new Map<
+      number,
+      {
+        id: number;
+        name: string;
+        year: number;
+        leagueId: number;
+        categories: Array<{
+          tournamentCategoryId: number;
+          categoryId: number;
+          categoryName: string;
+          birthYearMin: number;
+          birthYearMax: number;
+          gender: string;
+          minPlayers: number;
+          mandatory: boolean;
+          enabledCount: number;
+        }>;
+      }
+    >();
+
+    for (const team of teams) {
+      const tournamentCategory = team.tournamentCategory;
+      if (!tournamentCategory) {
+        continue;
+      }
+      if (processedCategories.has(tournamentCategory.id)) {
+        continue;
+      }
+      processedCategories.add(tournamentCategory.id);
+
+      const tournament = tournamentCategory.tournament;
+      if (!tournament) {
+        continue;
+      }
+
+      let tournamentEntry = tournamentsMap.get(tournament.id);
+      if (!tournamentEntry) {
+        tournamentEntry = {
+          id: tournament.id,
+          name: tournament.name,
+          year: tournament.year,
+          leagueId: tournament.leagueId,
+          categories: [],
+        };
+        tournamentsMap.set(tournament.id, tournamentEntry);
+      }
+
+      const category = tournamentCategory.category;
+      const rosterInfo = rosterMap.get(tournamentCategory.id);
+      tournamentEntry.categories.push({
+        tournamentCategoryId: tournamentCategory.id,
+        categoryId: category.id,
+        categoryName: category.name,
+        birthYearMin: category.birthYearMin,
+        birthYearMax: category.birthYearMax,
+        gender: category.gender,
+        minPlayers: category.minPlayers,
+        mandatory: category.mandatory,
+        enabledCount: rosterInfo?.playerCount ?? 0,
+      });
+    }
+
+    const tournaments = Array.from(tournamentsMap.values()).map((tournament) => ({
+      ...tournament,
+      categories: tournament.categories.sort((a, b) => a.categoryName.localeCompare(b.categoryName)),
+    }));
+
+    tournaments.sort((a, b) => {
+      if (a.year !== b.year) {
+        return b.year - a.year;
+      }
+      return a.name.localeCompare(b.name);
+    });
+
+    return {
+      club: {
+        id: club.id,
+        name: club.name,
+        slug: club.slug,
+        active: club.active,
+        primaryColor: club.primaryColor,
+        secondaryColor: club.secondaryColor,
+        logoUrl: club.logoUrl,
+        instagramUrl: club.instagramUrl,
+        facebookUrl: club.facebookUrl,
+      },
+      tournaments,
+    };
+  }
+
+  async listEligibleRosterPlayers(
+    clubId: number,
+    tournamentCategoryId: number,
+    query: ListRosterPlayersDto,
+  ) {
+    await this.prisma.club.findUniqueOrThrow({ where: { id: clubId } });
+
+    const tournamentCategory = await this.prisma.tournamentCategory.findUnique({
+      where: { id: tournamentCategoryId },
+      include: {
+        category: true,
+        teams: {
+          where: { clubId },
+          select: { id: true },
+        },
+      },
+    });
+
+    if (!tournamentCategory) {
+      throw new NotFoundException('Categoría del torneo no encontrada');
+    }
+
+    if (!tournamentCategory.teams.length) {
+      throw new BadRequestException('El club no participa en esta categoría del torneo.');
+    }
+
+    const roster = await this.prisma.roster.findUnique({
+      where: {
+        clubId_tournamentCategoryId: {
+          clubId,
+          tournamentCategoryId,
+        },
+      },
+      select: {
+        id: true,
+        players: {
+          select: { playerId: true },
+        },
+      },
+    });
+
+    const enabledIds = new Set<number>(roster?.players.map((player) => player.playerId) ?? []);
+
+    const { page = 1, pageSize = 20, onlyEnabled } = query;
+    const skip = (page - 1) * pageSize;
+
+    const category = tournamentCategory.category;
+    const startDate = new Date(category.birthYearMin, 0, 1);
+    const endDate = new Date(category.birthYearMax, 11, 31, 23, 59, 59, 999);
+
+    const where: Prisma.PlayerWhereInput = {
+      clubId,
+      active: true,
+      birthDate: {
+        gte: startDate,
+        lte: endDate,
+      },
+    };
+
+    if (category.gender !== Gender.MIXTO) {
+      where.gender = category.gender;
+    }
+
+    if (onlyEnabled) {
+      if (enabledIds.size === 0) {
+        return {
+          page,
+          pageSize,
+          total: 0,
+          enabledCount: enabledIds.size,
+          minPlayers: category.minPlayers,
+          mandatory: category.mandatory,
+          players: [],
+        };
+      }
+      where.id = { in: Array.from(enabledIds.values()) };
+    }
+
+    const [total, players] = await this.prisma.$transaction([
+      this.prisma.player.count({ where }),
+      this.prisma.player.findMany({
+        where,
+        orderBy: [
+          { lastName: 'asc' },
+          { firstName: 'asc' },
+        ],
+        skip,
+        take: pageSize,
+      }),
+    ]);
+
+    return {
+      page,
+      pageSize,
+      total,
+      enabledCount: enabledIds.size,
+      minPlayers: category.minPlayers,
+      mandatory: category.mandatory,
+      players: players.map((player) => ({
+        id: player.id,
+        firstName: player.firstName,
+        lastName: player.lastName,
+        birthDate: player.birthDate,
+        gender: player.gender,
+        enabled: enabledIds.has(player.id),
+      })),
+    };
+  }
+
+  async updateRosterPlayers(
+    clubId: number,
+    tournamentCategoryId: number,
+    dto: UpdateRosterPlayersDto,
+  ) {
+    await this.prisma.club.findUniqueOrThrow({ where: { id: clubId } });
+
+    const tournamentCategory = await this.prisma.tournamentCategory.findUnique({
+      where: { id: tournamentCategoryId },
+      include: {
+        category: true,
+        teams: {
+          where: { clubId },
+          select: { id: true },
+        },
+      },
+    });
+
+    if (!tournamentCategory) {
+      throw new NotFoundException('Categoría del torneo no encontrada');
+    }
+
+    if (!tournamentCategory.teams.length) {
+      throw new BadRequestException('El club no participa en esta categoría del torneo.');
+    }
+
+    const category = tournamentCategory.category;
+    const startDate = new Date(category.birthYearMin, 0, 1);
+    const endDate = new Date(category.birthYearMax, 11, 31, 23, 59, 59, 999);
+
+    const uniquePlayerIds = Array.from(new Set(dto.playerIds ?? []));
+
+    if (uniquePlayerIds.length) {
+      const players = await this.prisma.player.findMany({
+        where: {
+          id: { in: uniquePlayerIds },
+          clubId,
+          active: true,
+          birthDate: {
+            gte: startDate,
+            lte: endDate,
+          },
+          ...(category.gender !== Gender.MIXTO ? { gender: category.gender } : {}),
+        },
+      });
+
+      if (players.length !== uniquePlayerIds.length) {
+        const foundIds = new Set(players.map((player) => player.id));
+        const missing = uniquePlayerIds.filter((id) => !foundIds.has(id));
+        throw new BadRequestException(
+          `Algunos jugadores no son elegibles para esta categoría: ${missing.join(', ')}`,
+        );
+      }
+    }
+
+    const roster = await this.prisma.roster.upsert({
+      where: {
+        clubId_tournamentCategoryId: {
+          clubId,
+          tournamentCategoryId,
+        },
+      },
+      update: {},
+      create: {
+        clubId,
+        tournamentCategoryId,
+      },
+    });
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.rosterPlayer.deleteMany({ where: { rosterId: roster.id } });
+      if (uniquePlayerIds.length) {
+        await tx.rosterPlayer.createMany({
+          data: uniquePlayerIds.map((playerId) => ({ rosterId: roster.id, playerId })),
+        });
+      }
+    });
+
+    return {
+      enabledCount: uniquePlayerIds.length,
+      minPlayers: category.minPlayers,
+      mandatory: category.mandatory,
+    };
+  }
+
+  async listAvailableTournaments(clubId: number) {
+    const club = await this.prisma.club.findUnique({ where: { id: clubId } });
+    if (!club) {
+      throw new NotFoundException('Club no encontrado');
+    }
+
+    const tournaments = await this.prisma.tournament.findMany({
+      where: {
+        categories: {
+          some: {
+            enabled: true,
+            category: { active: true },
+          },
+        },
+        NOT: {
+          categories: {
+            some: {
+              teams: {
+                some: { clubId },
+              },
+            },
+          },
+        },
+      },
+      include: {
+        categories: {
+          where: {
+            enabled: true,
+            category: { active: true },
+          },
+          include: {
+            category: true,
+          },
+        },
+      },
+      orderBy: [
+        { year: 'desc' },
+        { name: 'asc' },
+      ],
+    });
+
+    return tournaments
+      .map((tournament) => ({
+        id: tournament.id,
+        name: tournament.name,
+        year: tournament.year,
+        leagueId: tournament.leagueId,
+        categories: tournament.categories.map((assignment) => ({
+          tournamentCategoryId: assignment.id,
+          categoryId: assignment.categoryId,
+          categoryName: assignment.category.name,
+          birthYearMin: assignment.category.birthYearMin,
+          birthYearMax: assignment.category.birthYearMax,
+          gender: assignment.category.gender,
+          minPlayers: assignment.category.minPlayers,
+          mandatory: assignment.category.mandatory,
+        })),
+      }))
+      .filter((tournament) => tournament.categories.length > 0);
+  }
+
+  async joinTournament(clubId: number, dto: JoinTournamentDto) {
+    const club = await this.prisma.club.findUnique({ where: { id: clubId } });
+    if (!club) {
+      throw new NotFoundException('Club no encontrado');
+    }
+
+    const tournament = await this.prisma.tournament.findUnique({
+      where: { id: dto.tournamentId },
+      include: {
+        categories: {
+          where: {
+            enabled: true,
+            category: { active: true },
+          },
+          include: {
+            category: true,
+            teams: {
+              where: { clubId },
+              select: { id: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!tournament) {
+      throw new NotFoundException('Torneo no encontrado');
+    }
+
+    const alreadyParticipates = tournament.categories.some((assignment) => assignment.teams.length > 0);
+    if (alreadyParticipates) {
+      throw new BadRequestException('El club ya participa en este torneo.');
+    }
+
+    const uniqueCategoryIds = Array.from(new Set(dto.tournamentCategoryIds ?? []));
+    if (!uniqueCategoryIds.length) {
+      throw new BadRequestException('Debe seleccionar al menos una categoría.');
+    }
+
+    const validCategoryIds = new Set(tournament.categories.map((assignment) => assignment.id));
+    const invalid = uniqueCategoryIds.filter((id) => !validCategoryIds.has(id));
+    if (invalid.length) {
+      throw new BadRequestException('Alguna de las categorías seleccionadas no pertenece al torneo.');
+    }
+
+    const assignments = tournament.categories.filter((assignment) => uniqueCategoryIds.includes(assignment.id));
+
+    if (!assignments.length) {
+      throw new BadRequestException('Debe seleccionar al menos una categoría habilitada.');
+    }
+
+    const shortName = club.shortName ? club.shortName.trim() : '';
+    const publicNameBase = shortName.length > 0 ? shortName : club.name;
+
+    await this.prisma.team.createMany({
+      data: assignments.map((assignment) => ({
+        clubId,
+        tournamentCategoryId: assignment.id,
+        publicName: publicNameBase,
+        active: true,
+      })),
+    });
+
+    return {
+      tournamentId: tournament.id,
+      categories: assignments.map((assignment) => assignment.id),
+    };
   }
 
   async update(id: number, dto: UpdateClubDto) {

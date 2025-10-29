@@ -140,6 +140,8 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage> {
             children: [
               _DetailRow(label: 'Años de nacimiento', value: category.birthYearRangeLabel),
               _DetailRow(label: 'Género', value: category.genderLabel),
+              _DetailRow(label: 'Mínimo de jugadores', value: '${category.minPlayers}'),
+              _DetailRow(label: 'Obligatoria', value: category.mandatory ? 'Sí' : 'No'),
               _DetailRow(label: 'Estado', value: category.active ? 'Activa' : 'Inactiva'),
             ],
           ),
@@ -347,6 +349,8 @@ class _CategoriesDataTable extends StatelessWidget {
         DataColumn(label: Text('Nombre')),
         DataColumn(label: Text('Años de nacimiento')),
         DataColumn(label: Text('Género')),
+        DataColumn(label: Text('Mín. jugadores')),
+        DataColumn(label: Text('Obligatoria')),
         DataColumn(label: Text('Activo')),
         DataColumn(label: Text('Acciones')),
       ],
@@ -357,6 +361,8 @@ class _CategoriesDataTable extends StatelessWidget {
                 DataCell(Text(category.name)),
                 DataCell(Text(category.birthYearRangeLabel)),
                 DataCell(Text(category.genderLabel)),
+                DataCell(Text(category.minPlayers.toString())),
+                DataCell(Text(category.mandatory ? 'Sí' : 'No')),
                 DataCell(Text(category.active ? 'Activo' : 'Inactivo')),
                 DataCell(
                   Wrap(
@@ -509,8 +515,10 @@ class _CategoryFormDialogState extends ConsumerState<_CategoryFormDialog> {
   late final TextEditingController _nameController;
   late final TextEditingController _minYearController;
   late final TextEditingController _maxYearController;
+  late final TextEditingController _minPlayersController;
   String _gender = 'MASCULINO';
   bool _active = true;
+  bool _mandatory = true;
   bool _isSaving = false;
   Object? _errorMessage;
 
@@ -523,9 +531,12 @@ class _CategoryFormDialogState extends ConsumerState<_CategoryFormDialog> {
         TextEditingController(text: category?.birthYearMin.toString() ?? '');
     _maxYearController =
         TextEditingController(text: category?.birthYearMax.toString() ?? '');
+    _minPlayersController =
+        TextEditingController(text: (category?.minPlayers ?? 7).toString());
     if (category != null) {
       _gender = category.gender;
       _active = category.active;
+      _mandatory = category.mandatory;
     }
   }
 
@@ -534,6 +545,7 @@ class _CategoryFormDialogState extends ConsumerState<_CategoryFormDialog> {
     _nameController.dispose();
     _minYearController.dispose();
     _maxYearController.dispose();
+    _minPlayersController.dispose();
     super.dispose();
   }
 
@@ -544,9 +556,16 @@ class _CategoryFormDialogState extends ConsumerState<_CategoryFormDialog> {
     }
     final minYear = int.tryParse(_minYearController.text.trim());
     final maxYear = int.tryParse(_maxYearController.text.trim());
+    final minPlayers = int.tryParse(_minPlayersController.text.trim());
     if (minYear == null || maxYear == null) {
       setState(() {
         _errorMessage = 'Ingresá un rango de años válido.';
+      });
+      return;
+    }
+    if (minPlayers == null || minPlayers < 1) {
+      setState(() {
+        _errorMessage = 'Ingresá un mínimo de jugadores válido (mayor o igual a 1).';
       });
       return;
     }
@@ -570,6 +589,8 @@ class _CategoryFormDialogState extends ConsumerState<_CategoryFormDialog> {
         'birthYearMax': maxYear,
         'gender': _gender,
         'active': _active,
+        'minPlayers': minPlayers,
+        'mandatory': _mandatory,
       };
       if (widget.category == null) {
         await api.post('/categories', data: payload);
@@ -695,6 +716,26 @@ class _CategoryFormDialogState extends ConsumerState<_CategoryFormDialog> {
                   ],
                 ),
                 const SizedBox(height: 16),
+                TextFormField(
+                  controller: _minPlayersController,
+                  decoration: const InputDecoration(
+                    labelText: 'Mínimo de jugadores',
+                    helperText: 'Cantidad mínima de habilitados para marcar la categoría en verde',
+                  ),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Obligatorio';
+                    }
+                    final parsed = int.tryParse(value.trim());
+                    if (parsed == null || parsed < 1) {
+                      return 'Ingresá un número válido mayor o igual a 1.';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
                   value: _gender,
                   items: const [
@@ -710,6 +751,14 @@ class _CategoryFormDialogState extends ConsumerState<_CategoryFormDialog> {
                   decoration: const InputDecoration(labelText: 'Género'),
                 ),
                 const SizedBox(height: 16),
+                SwitchListTile.adaptive(
+                  value: _mandatory,
+                  onChanged: (value) => setState(() => _mandatory = value),
+                  title: const Text('Categoría obligatoria'),
+                  subtitle: const Text('Determina si se exige cumplir el mínimo de jugadores.'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+                const SizedBox(height: 8),
                 SwitchListTile.adaptive(
                   value: _active,
                   onChanged: (value) => setState(() => _active = value),
@@ -764,6 +813,8 @@ class CategorySummary {
     required this.birthYearMin,
     required this.birthYearMax,
     required this.gender,
+    required this.minPlayers,
+    required this.mandatory,
     required this.active,
   });
 
@@ -773,6 +824,8 @@ class CategorySummary {
         birthYearMin: json['birthYearMin'] as int,
         birthYearMax: json['birthYearMax'] as int,
         gender: json['gender'] as String? ?? 'MIXTO',
+        minPlayers: json['minPlayers'] as int? ?? 7,
+        mandatory: json['mandatory'] as bool? ?? true,
         active: json['active'] as bool? ?? true,
       );
 
@@ -781,6 +834,8 @@ class CategorySummary {
   final int birthYearMin;
   final int birthYearMax;
   final String gender;
+  final int minPlayers;
+  final bool mandatory;
   final bool active;
 
   String get birthYearRangeLabel {
@@ -800,4 +855,6 @@ class CategorySummary {
         return 'Mixto';
     }
   }
+
+  String get mandatoryLabel => mandatory ? 'Obligatoria' : 'Opcional';
 }

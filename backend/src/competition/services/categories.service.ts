@@ -23,6 +23,8 @@ export class CategoriesService {
           birthYearMin: dto.birthYearMin,
           birthYearMax: dto.birthYearMax,
           gender: dto.gender,
+          minPlayers: dto.minPlayers,
+          mandatory: dto.mandatory,
           active: dto.active ?? true,
           promotional: dto.promotional ?? false,
         },
@@ -50,6 +52,8 @@ export class CategoriesService {
       birthYearMin: dto.birthYearMin,
       birthYearMax: dto.birthYearMax,
       gender: dto.gender,
+      minPlayers: dto.minPlayers,
+      mandatory: dto.mandatory,
     };
 
     if (dto.active !== undefined) {

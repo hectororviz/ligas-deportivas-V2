@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../services/api_client.dart';
@@ -140,8 +141,16 @@ class _ClubsPageState extends ConsumerState<ClubsPage> {
     );
   }
 
-  Future<void> _openClubDetails(Club club) {
-    return showDialog<void>(
+  Future<void> _openClubDetails(Club club) async {
+    if (club.slug != null) {
+      if (!mounted) {
+        return;
+      }
+      GoRouter.of(context).push('/clubs/${club.slug}/admin');
+      return;
+    }
+
+    await showDialog<void>(
       context: context,
       builder: (context) {
         return AlertDialog(
