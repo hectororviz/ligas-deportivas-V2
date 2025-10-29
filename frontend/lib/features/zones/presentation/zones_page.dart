@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:dio/dio.dart';
@@ -6,12 +7,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
+import '../../shared/widgets/table_filters_bar.dart';
 
 final zonesProvider = FutureProvider<List<ZoneSummary>>((ref) async {
   final api = ref.read(apiClientProvider);
   final response = await api.get<List<dynamic>>('/zones');
   final data = response.data ?? [];
   return data.map((json) => ZoneSummary.fromJson(json as Map<String, dynamic>)).toList();
+});
+
+final zonesFiltersProvider =
+    StateNotifierProvider<ZonesFiltersController, ZonesFilters>((ref) {
+  return ZonesFiltersController();
 });
 
 class ZonesPage extends ConsumerStatefulWidget {
@@ -22,6 +29,59 @@ class ZonesPage extends ConsumerStatefulWidget {
 }
 
 class _ZonesPageState extends ConsumerState<ZonesPage> {
+  late final TextEditingController _searchController;
+  Timer? _debounce;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController();
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 250), () {
+      ref.read(zonesFiltersProvider.notifier).setQuery(_searchController.text);
+    });
+  }
+
+  void _clearFilters() {
+    _searchController.clear();
+    ref.read(zonesFiltersProvider.notifier).reset();
+  }
+
+  List<ZoneSummary> _applyFilters(List<ZoneSummary> zones, ZonesFilters filters) {
+    final query = filters.query.trim().toLowerCase();
+    return zones.where((zone) {
+      if (filters.leagueName != null && zone.leagueName != filters.leagueName) {
+        return false;
+      }
+      if (filters.tournamentId != null && zone.tournamentId != filters.tournamentId) {
+        return false;
+      }
+      if (filters.status != null && zone.status != filters.status) {
+        return false;
+      }
+      if (query.isNotEmpty) {
+        final haystack = '${zone.name} ${zone.leagueName} ${zone.tournamentName} ${zone.tournamentYear}'
+            .toLowerCase();
+        if (!haystack.contains(query)) {
+          return false;
+        }
+      }
+      return true;
+    }).toList();
+  }
+
   Future<void> _openCreateZone() async {
     final result = await _showZoneEditor();
     if (!mounted || result == null) {
@@ -145,6 +205,7 @@ class _ZonesPageState extends ConsumerState<ZonesPage> {
     final zonesAsync = ref.watch(zonesProvider);
     final authState = ref.watch(authControllerProvider);
     final isAdmin = authState.user?.roles.contains('ADMIN') ?? false;
+    final filters = ref.watch(zonesFiltersProvider);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -179,47 +240,202 @@ class _ZonesPageState extends ConsumerState<ZonesPage> {
                   if (zones.isEmpty) {
                     return _EmptyZonesState(onCreate: isAdmin ? _openCreateZone : null);
                   }
+
+                  final filteredZones = _applyFilters(zones, filters);
+
+                  final leagues = <String>{
+                    for (final zone in zones) zone.leagueName,
+                  }.toList()
+                    ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+                  final tournamentsMap = <int, _ZoneTournamentFilterOption>{};
+                  for (final zone in zones) {
+                    if (filters.leagueName != null && zone.leagueName != filters.leagueName) {
+                      continue;
+                    }
+                    if (zone.tournamentId == 0) {
+                      continue;
+                    }
+                    tournamentsMap[zone.tournamentId] = _ZoneTournamentFilterOption(
+                      id: zone.tournamentId,
+                      name: zone.tournamentName,
+                      year: zone.tournamentYear,
+                    );
+                  }
+                  final tournamentOptions = tournamentsMap.values.toList()
+                    ..sort((a, b) {
+                      final yearCompare = b.year.compareTo(a.year);
+                      if (yearCompare != 0) {
+                        return yearCompare;
+                      }
+                      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+                    });
+
+                  final filtersController = ref.read(zonesFiltersProvider.notifier);
+                  if (filters.leagueName != null && !leagues.contains(filters.leagueName)) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      filtersController.setLeague(null);
+                    });
+                  }
+                  final tournamentIds = tournamentOptions.map((option) => option.id).toSet();
+                  if (filters.tournamentId != null && !tournamentIds.contains(filters.tournamentId)) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      filtersController.setTournament(null);
+                    });
+                  }
+
+                  final hasActiveFilters = filters.hasActiveFilters;
+                  final headerCountText = hasActiveFilters
+                      ? '${filteredZones.length} de ${zones.length} configuradas'
+                      : '${zones.length} configuradas';
+
                   return Card(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.grid_view_outlined,
-                                  color: Theme.of(context).colorScheme.primary,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.grid_view_outlined,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                'Zonas registradas',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w600),
+                              ),
+                              const Spacer(),
+                              Text(
+                                headerCountText,
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Divider(height: 1),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
+                          child: TableFiltersBar(
+                            children: [
+                              TableFilterField(
+                                label: 'Buscar',
+                                width: 280,
+                                child: TableFilterSearchField(
+                                  controller: _searchController,
+                                  placeholder: 'Buscar por liga, torneo o zona',
+                                  showClearButton: filters.query.isNotEmpty,
+                                  onClear: () {
+                                    _searchController.clear();
+                                    ref.read(zonesFiltersProvider.notifier).setQuery('');
+                                  },
                                 ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  'Zonas registradas',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleMedium
-                                      ?.copyWith(fontWeight: FontWeight.w600),
+                              ),
+                              TableFilterField(
+                                label: 'Liga',
+                                width: 200,
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<String?>(
+                                    value: leagues.contains(filters.leagueName)
+                                        ? filters.leagueName
+                                        : null,
+                                    isExpanded: true,
+                                    items: [
+                                      const DropdownMenuItem<String?>(
+                                        value: null,
+                                        child: Text('Todas'),
+                                      ),
+                                      ...leagues.map(
+                                        (league) => DropdownMenuItem<String?>(
+                                          value: league,
+                                          child: Text(league),
+                                        ),
+                                      ),
+                                    ],
+                                    onChanged: (value) {
+                                      ref.read(zonesFiltersProvider.notifier).setLeague(value);
+                                    },
+                                  ),
                                 ),
-                                const Spacer(),
-                                Text(
-                                  '${zones.length} configuradas',
-                                  style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                              TableFilterField(
+                                label: 'Torneo',
+                                width: 220,
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<int?>(
+                                    value: tournamentIds.contains(filters.tournamentId)
+                                        ? filters.tournamentId
+                                        : null,
+                                    isExpanded: true,
+                                    items: [
+                                      const DropdownMenuItem<int?>(
+                                        value: null,
+                                        child: Text('Todos'),
+                                      ),
+                                      ...tournamentOptions.map(
+                                        (option) => DropdownMenuItem<int?>(
+                                          value: option.id,
+                                          child: Text(option.label),
+                                        ),
+                                      ),
+                                    ],
+                                    onChanged: (value) {
+                                      ref.read(zonesFiltersProvider.notifier).setTournament(value);
+                                    },
+                                  ),
                                 ),
-                              ],
+                              ),
+                              TableFilterField(
+                                label: 'Estado',
+                                width: 200,
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<ZoneStatus?>(
+                                    value: filters.status,
+                                    isExpanded: true,
+                                    items: [
+                                      const DropdownMenuItem<ZoneStatus?>(
+                                        value: null,
+                                        child: Text('Todos'),
+                                      ),
+                                      ...ZoneStatus.values.map(
+                                        (status) => DropdownMenuItem<ZoneStatus?>(
+                                          value: status,
+                                          child: Text(status.label),
+                                        ),
+                                      ),
+                                    ],
+                                    onChanged: (value) {
+                                      ref.read(zonesFiltersProvider.notifier).setStatus(value);
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ],
+                            trailing: TextButton.icon(
+                              onPressed: hasActiveFilters ? _clearFilters : null,
+                              icon: const Icon(Icons.filter_alt_off_outlined),
+                              label: const Text('Limpiar filtros'),
                             ),
                           ),
-                          const Divider(height: 1),
-                          Expanded(
-                            child: _ZonesDataTable(
-                              zones: zones,
-                              isAdmin: isAdmin,
-                              onView: _openZoneDetails,
-                              onEdit: _openZoneEditor,
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                        const Divider(height: 1),
+                        Expanded(
+                          child: filteredZones.isEmpty
+                              ? hasActiveFilters
+                                  ? _ZonesEmptyFilterState(onClear: _clearFilters)
+                                  : const SizedBox.shrink()
+                              : _ZonesDataTable(
+                                  zones: filteredZones,
+                                  isAdmin: isAdmin,
+                                  onView: _openZoneDetails,
+                                  onEdit: _openZoneEditor,
+                                ),
+                        ),
+                      ],
                     ),
                   );
                 },
@@ -367,6 +583,31 @@ class _EmptyZonesState extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ZonesEmptyFilterState extends StatelessWidget {
+  const _ZonesEmptyFilterState({required this.onClear});
+
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.filter_alt_off_outlined, size: 48),
+          const SizedBox(height: 12),
+          const Text('No se encontraron zonas con los filtros seleccionados.'),
+          const SizedBox(height: 16),
+          FilledButton.tonal(
+            onPressed: onClear,
+            child: const Text('Limpiar filtros'),
+          ),
+        ],
       ),
     );
   }
@@ -1048,13 +1289,26 @@ class _ZoneDetailsDialogState extends ConsumerState<_ZoneDetailsDialog> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'Clubes en ${detail.name}',
+                    detail.name,
                     style: Theme.of(context)
                         .textTheme
                         .titleLarge
                         ?.copyWith(fontWeight: FontWeight.w700),
                   ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${detail.tournament.leagueName} · ${detail.tournament.name} ${detail.tournament.year}',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
                   const SizedBox(height: 16),
+                  Text(
+                    'Clubes asignados (${clubs.length})',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 12),
                   if (clubs.isEmpty)
                     const Text('Aún no hay clubes asignados a esta zona.')
                   else
@@ -1063,36 +1317,32 @@ class _ZoneDetailsDialogState extends ConsumerState<_ZoneDetailsDialog> {
                       child: Scrollbar(
                         controller: _clubScrollController,
                         thumbVisibility: estimatedHeight > maxListHeight,
-                        child: ListView.separated(
+                        child: SingleChildScrollView(
                           controller: _clubScrollController,
-                          padding: EdgeInsets.zero,
-                          itemCount: clubs.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1),
-                          itemBuilder: (context, index) {
-                            final clubStatus = clubs[index];
-                            final eligibility = clubStatus.eligibility;
-                            final meetsMinimums = clubStatus.meetsMinimums;
-                            final indicatorColor =
-                                meetsMinimums ? Colors.green : Colors.redAccent;
-                            final tooltip = eligibility != null
-                                ? buildEligibilityTooltip(eligibility)
-                                : 'No se pudo determinar la disponibilidad de jugadores para este club.';
-                            return ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              leading: Tooltip(
-                                message: tooltip,
-                                child: Icon(
-                                  Icons.circle,
-                                  size: 14,
-                                  color: indicatorColor,
-                                ),
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                minWidth: constraints.maxWidth,
                               ),
-                              title: Text(clubStatus.club.name),
-                              subtitle: clubStatus.club.shortName != null
-                                  ? Text('Alias: ${clubStatus.club.shortName}')
-                                  : null,
-                            );
-                          },
+                              child: DataTable(
+                                columns: const [
+                                  DataColumn(label: Text('#')),
+                                  DataColumn(label: Text('Club')),
+                                  DataColumn(label: Text('Alias')),
+                                  DataColumn(label: Text('Elegibilidad')),
+                                ],
+                                headingRowHeight: 48,
+                                dataRowMinHeight: 56,
+                                dataRowMaxHeight: 72,
+                                rows: [
+                                  for (var i = 0; i < clubs.length; i++)
+                                    _buildClubRow(context, clubs[i], index: i + 1),
+                                ],
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -1104,6 +1354,39 @@ class _ZoneDetailsDialogState extends ConsumerState<_ZoneDetailsDialog> {
       },
     );
   }
+}
+
+DataRow _buildClubRow(BuildContext context, _ZoneClubStatus clubStatus,
+    {required int index}) {
+  final eligibility = clubStatus.eligibility;
+  final meetsMinimums = clubStatus.meetsMinimums;
+  final indicatorColor =
+      meetsMinimums ? Colors.green : Theme.of(context).colorScheme.error;
+  final label = meetsMinimums ? 'Completa' : 'Incompleta';
+  final tooltip = eligibility != null
+      ? buildEligibilityTooltip(eligibility)
+      : 'No se pudo determinar la disponibilidad de jugadores para este club.';
+
+  return DataRow(
+    cells: [
+      DataCell(Text('$index')),
+      DataCell(Text(clubStatus.club.name)),
+      DataCell(Text(clubStatus.club.shortName ?? '—')),
+      DataCell(
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Tooltip(
+              message: tooltip,
+              child: Icon(Icons.circle, size: 12, color: indicatorColor),
+            ),
+            const SizedBox(width: 8),
+            Text(label),
+          ],
+        ),
+      ),
+    ],
+  );
 }
 
 class _ZoneDetailsData {
@@ -1128,10 +1411,90 @@ class _ZoneClubStatus {
   }
 }
 
+class ZonesFilters {
+  const ZonesFilters({
+    this.query = '',
+    this.leagueName,
+    this.tournamentId,
+    this.status,
+  });
+
+  final String query;
+  final String? leagueName;
+  final int? tournamentId;
+  final ZoneStatus? status;
+
+  bool get hasActiveFilters =>
+      query.trim().isNotEmpty || leagueName != null || tournamentId != null || status != null;
+
+  ZonesFilters copyWith({String? query}) {
+    return ZonesFilters(
+      query: query ?? this.query,
+      leagueName: leagueName,
+      tournamentId: tournamentId,
+      status: status,
+    );
+  }
+}
+
+class ZonesFiltersController extends StateNotifier<ZonesFilters> {
+  ZonesFiltersController() : super(const ZonesFilters());
+
+  void setQuery(String query) {
+    state = state.copyWith(query: query);
+  }
+
+  void setLeague(String? leagueName) {
+    state = ZonesFilters(
+      query: state.query,
+      leagueName: leagueName,
+      tournamentId: null,
+      status: state.status,
+    );
+  }
+
+  void setTournament(int? tournamentId) {
+    state = ZonesFilters(
+      query: state.query,
+      leagueName: state.leagueName,
+      tournamentId: tournamentId,
+      status: state.status,
+    );
+  }
+
+  void setStatus(ZoneStatus? status) {
+    state = ZonesFilters(
+      query: state.query,
+      leagueName: state.leagueName,
+      tournamentId: state.tournamentId,
+      status: status,
+    );
+  }
+
+  void reset() {
+    state = const ZonesFilters();
+  }
+}
+
+class _ZoneTournamentFilterOption {
+  const _ZoneTournamentFilterOption({
+    required this.id,
+    required this.name,
+    required this.year,
+  });
+
+  final int id;
+  final String name;
+  final int year;
+
+  String get label => '$name $year';
+}
+
 class ZoneSummary {
   ZoneSummary({
     required this.id,
     required this.name,
+    required this.tournamentId,
     required this.status,
     required this.lockedAt,
     required this.tournamentName,
@@ -1150,6 +1513,7 @@ class ZoneSummary {
     return ZoneSummary(
       id: json['id'] as int,
       name: json['name'] as String? ?? 'Sin nombre',
+      tournamentId: tournament['id'] as int? ?? 0,
       status: ZoneStatusX.fromApi(statusValue),
       lockedAt: lockedAtValue != null ? DateTime.tryParse(lockedAtValue) : null,
       tournamentName: tournament['name'] as String? ?? 'Torneo',
@@ -1162,6 +1526,7 @@ class ZoneSummary {
 
   final int id;
   final String name;
+  final int tournamentId;
   final ZoneStatus status;
   final DateTime? lockedAt;
   final String tournamentName;

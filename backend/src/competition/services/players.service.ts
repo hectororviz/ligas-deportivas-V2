@@ -6,7 +6,9 @@ import { CreatePlayerDto } from '../dto/create-player.dto';
 import { ListPlayersDto } from '../dto/list-players.dto';
 import { UpdatePlayerDto } from '../dto/update-player.dto';
 
-type PlayerWithClub = Prisma.PlayerGetPayload<{ include: { club: { select: { id: true; name: true } } } }>;
+type PlayerWithClub = Prisma.PlayerGetPayload<{
+  include: { club: { select: { id: true; name: true } } };
+}>;
 
 @Injectable()
 export class PlayersService {
@@ -16,9 +18,9 @@ export class PlayersService {
     club: {
       select: {
         id: true,
-        name: true
-      }
-    }
+        name: true,
+      },
+    },
   } satisfies Prisma.PlayerInclude;
 
   async create(dto: CreatePlayerDto) {
@@ -39,9 +41,9 @@ export class PlayersService {
           addressCity: this.normalizeNullable(dto.address?.city),
           emergencyName: this.normalizeNullable(dto.emergencyContact?.name),
           emergencyRelationship: this.normalizeNullable(dto.emergencyContact?.relationship),
-          emergencyPhone: this.normalizeNullable(dto.emergencyContact?.phone)
+          emergencyPhone: this.normalizeNullable(dto.emergencyContact?.phone),
         },
-        include: this.include
+        include: this.include,
       });
 
       return this.mapPlayer(player);
@@ -51,7 +53,7 @@ export class PlayersService {
   }
 
   async findAll(query: ListPlayersDto) {
-    const { search, status, dni, page, pageSize, clubId } = query;
+    const { search, status, dni, page, pageSize, clubId, gender, birthYear } = query;
 
     const where: Prisma.PlayerWhereInput = {};
 
@@ -63,7 +65,7 @@ export class PlayersService {
       where.OR = [
         { firstName: { contains: term, mode: 'insensitive' } },
         { lastName: { contains: term, mode: 'insensitive' } },
-        { dni: { contains: term, mode: 'insensitive' } }
+        { dni: { contains: term, mode: 'insensitive' } },
       ];
     }
 
@@ -77,6 +79,20 @@ export class PlayersService {
       where.clubId = clubId;
     }
 
+    if (gender) {
+      where.gender = gender;
+    }
+
+    if (birthYear !== undefined) {
+      const start = new Date(Date.UTC(birthYear, 0, 1));
+      const end = new Date(Date.UTC(birthYear + 1, 0, 1));
+      where.birthDate = {
+        ...((where.birthDate as Prisma.DateTimeFilter?) ?? {}),
+        gte: start,
+        lt: end,
+      };
+    }
+
     const skip = (page - 1) * pageSize;
 
     const [total, players] = await this.prisma.$transaction([
@@ -84,27 +100,24 @@ export class PlayersService {
       this.prisma.player.findMany({
         where,
         include: this.include,
-        orderBy: [
-          { lastName: 'asc' },
-          { firstName: 'asc' }
-        ],
+        orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
         skip,
-        take: pageSize
-      })
+        take: pageSize,
+      }),
     ]);
 
     return {
       data: players.map((player) => this.mapPlayer(player)),
       total,
       page,
-      pageSize
+      pageSize,
     };
   }
 
   async findById(id: number) {
     const player = await this.prisma.player.findUnique({
       where: { id },
-      include: this.include
+      include: this.include,
     });
     if (!player) {
       throw new NotFoundException('Jugador no encontrado');
@@ -143,10 +156,7 @@ export class PlayersService {
       data.active = dto.active;
     }
     if (dto.clubId !== undefined) {
-      data.club =
-        dto.clubId === null
-          ? { disconnect: true }
-          : { connect: { id: dto.clubId } };
+      data.club = dto.clubId === null ? { disconnect: true } : { connect: { id: dto.clubId } };
     }
     if (dto.address !== undefined) {
       data.addressStreet = this.normalizeNullable(dto.address?.street);
@@ -163,7 +173,7 @@ export class PlayersService {
       const player = await this.prisma.player.update({
         where: { id },
         data,
-        include: this.include
+        include: this.include,
       });
       return this.mapPlayer(player);
     } catch (error) {
@@ -174,7 +184,11 @@ export class PlayersService {
   private mapPlayer(player: PlayerWithClub) {
     const addressFields = [player.addressStreet, player.addressNumber, player.addressCity];
     const hasAddress = addressFields.some((value) => value && value.trim().length > 0);
-    const emergencyFields = [player.emergencyName, player.emergencyRelationship, player.emergencyPhone];
+    const emergencyFields = [
+      player.emergencyName,
+      player.emergencyRelationship,
+      player.emergencyPhone,
+    ];
     const hasEmergency = emergencyFields.some((value) => value && value.trim().length > 0);
 
     return {
@@ -190,16 +204,16 @@ export class PlayersService {
         ? {
             street: player.addressStreet,
             number: player.addressNumber,
-            city: player.addressCity
+            city: player.addressCity,
           }
         : null,
       emergencyContact: hasEmergency
         ? {
             name: player.emergencyName,
             relationship: player.emergencyRelationship,
-            phone: player.emergencyPhone
+            phone: player.emergencyPhone,
           }
-        : null
+        : null,
     };
   }
 
@@ -218,8 +232,8 @@ export class PlayersService {
     const existing = await this.prisma.player.findFirst({
       where: {
         dni: dni.trim(),
-        NOT: excludeId ? { id: excludeId } : undefined
-      }
+        NOT: excludeId ? { id: excludeId } : undefined,
+      },
     });
 
     if (existing) {
