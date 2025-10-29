@@ -433,6 +433,17 @@ class _ZoneEditorDialogState extends ConsumerState<_ZoneEditorDialog> {
   String? _errorMessage;
   int? _zoneId;
 
+  double? _clubListHeight() {
+    if (!widget.scrollableList || _clubs.isEmpty) {
+      return null;
+    }
+    const minHeight = 160.0;
+    const maxHeight = 320.0;
+    const rowHeight = 68.0;
+    final estimatedHeight = _clubs.length * rowHeight;
+    return estimatedHeight.clamp(minHeight, maxHeight).toDouble();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -714,6 +725,7 @@ class _ZoneEditorDialogState extends ConsumerState<_ZoneEditorDialog> {
     }
 
     final canEdit = !_zoneLocked && !_tournamentLocked && _status == ZoneStatus.open;
+    final listHeight = _clubListHeight();
 
     return SizedBox(
       width: double.infinity,
@@ -791,7 +803,6 @@ class _ZoneEditorDialogState extends ConsumerState<_ZoneEditorDialog> {
           ),
           const SizedBox(height: 8),
           Container(
-            constraints: const BoxConstraints(maxHeight: 320),
             decoration: BoxDecoration(
               border: Border.all(color: Theme.of(context).dividerColor),
               borderRadius: BorderRadius.circular(12),
@@ -805,46 +816,69 @@ class _ZoneEditorDialogState extends ConsumerState<_ZoneEditorDialog> {
                           child: Text('No hay clubes inscriptos en este torneo.'),
                         ),
                       )
-                    : ListView.separated(
-                        primary: false,
-                        shrinkWrap: !widget.scrollableList,
-                        physics: widget.scrollableList
-                            ? const AlwaysScrollableScrollPhysics()
-                            : const NeverScrollableScrollPhysics(),
-                        itemCount: _clubs.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (context, index) {
-                          final club = _clubs[index];
-                          final selected = _selectedClubs.contains(club.id);
-                          final canSelect = club.eligible;
-                          final isDisabled = _submitting || !canEdit;
-                          final indicatorColor = club.eligible ? Colors.green : Colors.redAccent;
-                          final tooltip = _buildEligibilityTooltip(club);
-                          return ListTile(
-                            leading: Tooltip(
-                              message: tooltip,
-                              child: Icon(Icons.circle, size: 14, color: indicatorColor),
-                            ),
-                            title: Text(club.name),
-                            subtitle: club.shortName != null
-                                ? Text('Alias: ${club.shortName}')
-                                : Text('${club.categories.where((category) => category.hasTeam).length} categorías con equipo'),
-                            trailing: Checkbox(
-                              value: selected,
-                              onChanged: isDisabled
-                                  ? null
-                                  : (checked) {
-                                      if (checked == true) {
-                                        if (!canSelect) {
+                    : Builder(
+                        builder: (context) {
+                          Widget listView = ListView.separated(
+                            primary: false,
+                            shrinkWrap: !widget.scrollableList,
+                            physics: widget.scrollableList
+                                ? const AlwaysScrollableScrollPhysics()
+                                : const NeverScrollableScrollPhysics(),
+                            itemCount: _clubs.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final club = _clubs[index];
+                              final selected = _selectedClubs.contains(club.id);
+                              final canSelect = club.eligible;
+                              final isDisabled = _submitting || !canEdit;
+                              final indicatorColor = club.eligible ? Colors.green : Colors.redAccent;
+                              final tooltip = _buildEligibilityTooltip(club);
+                              return ListTile(
+                                leading: Tooltip(
+                                  message: tooltip,
+                                  child: Icon(Icons.circle, size: 14, color: indicatorColor),
+                                ),
+                                title: Text(club.name),
+                                subtitle: club.shortName != null
+                                    ? Text('Alias: ${club.shortName}')
+                                    : Text('${club.categories.where((category) => category.hasTeam).length} categorías con equipo'),
+                                trailing: Checkbox(
+                                  value: selected,
+                                  onChanged: isDisabled
+                                      ? null
+                                      : (checked) {
+                                          if (checked == true) {
+                                            if (!canSelect) {
+                                              return;
+                                            }
+                                            setState(() => _selectedClubs.add(club.id));
+                                          } else {
+                                            setState(() => _selectedClubs.remove(club.id));
+                                          }
+                                        },
+                                ),
+                                enabled: canSelect || selected,
+                                onTap: isDisabled
+                                    ? null
+                                    : () {
+                                        if (!canSelect && !selected) {
                                           return;
                                         }
-                                        setState(() => _selectedClubs.add(club.id));
-                                      } else {
-                                        setState(() => _selectedClubs.remove(club.id));
-                                      }
-                                    },
-                            ),
+                                        setState(() {
+                                          if (selected) {
+                                            _selectedClubs.remove(club.id);
+                                          } else {
+                                            _selectedClubs.add(club.id);
+                                          }
+                                        });
+                                      },
+                              );
+                            },
                           );
+                          if (listHeight != null) {
+                            listView = SizedBox(height: listHeight, child: listView);
+                          }
+                          return listView;
                         },
                       ),
           ),
