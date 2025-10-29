@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -116,13 +118,22 @@ class _ZonesPageState extends ConsumerState<ZonesPage> {
     return showDialog<ZoneEditorResult>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          scrollable: true,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        const insetPadding = EdgeInsets.symmetric(horizontal: 24, vertical: 24);
+        final media = MediaQuery.of(context);
+        final availableHeight = media.size.height - insetPadding.vertical - media.viewInsets.vertical;
+
+        return Dialog(
+          insetPadding: insetPadding,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          content: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 640),
-            child: _ZoneEditorDialog(zone: zone),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 640,
+              maxHeight: availableHeight > 0 ? availableHeight : media.size.height * 0.8,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              child: _ZoneEditorDialog(zone: zone),
+            ),
           ),
         );
       },
@@ -433,14 +444,16 @@ class _ZoneEditorDialogState extends ConsumerState<_ZoneEditorDialog> {
   String? _errorMessage;
   int? _zoneId;
 
-  double? _clubListHeight() {
+  double? _clubListHeight(BuildContext context) {
     if (!widget.scrollableList || _clubs.isEmpty) {
       return null;
     }
     const minHeight = 160.0;
-    const maxHeight = 320.0;
     const rowHeight = 68.0;
     final estimatedHeight = _clubs.length * rowHeight;
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final targetHeight = math.min(screenHeight * 0.45, 360.0);
+    final maxHeight = math.max(minHeight, targetHeight);
     return estimatedHeight.clamp(minHeight, maxHeight).toDouble();
   }
 
@@ -725,7 +738,7 @@ class _ZoneEditorDialogState extends ConsumerState<_ZoneEditorDialog> {
     }
 
     final canEdit = !_zoneLocked && !_tournamentLocked && _status == ZoneStatus.open;
-    final listHeight = _clubListHeight();
+    final listHeight = _clubListHeight(context);
 
     return SizedBox(
       width: double.infinity,
