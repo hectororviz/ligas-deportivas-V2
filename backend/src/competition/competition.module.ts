@@ -6,12 +6,14 @@ import { CategoriesService } from './services/categories.service';
 import { TournamentsService } from './services/tournaments.service';
 import { FixtureService } from './services/fixture.service';
 import { MatchesService } from './services/matches.service';
+import { PlayersService } from './services/players.service';
 import { LeaguesController } from './controllers/leagues.controller';
 import { ClubsController } from './controllers/clubs.controller';
 import { CategoriesController } from './controllers/categories.controller';
 import { TournamentsController } from './controllers/tournaments.controller';
 import { FixtureController } from './controllers/fixture.controller';
 import { MatchesController } from './controllers/matches.controller';
+import { PlayersController } from './controllers/players.controller';
 import { StandingsController } from './controllers/standings.controller';
 import { StandingsService } from '../standings/standings.service';
 import { StorageModule } from '../storage/storage.module';
@@ -26,7 +28,8 @@ import { AccessControlModule } from '../rbac/access-control.module';
     TournamentsService,
     FixtureService,
     MatchesService,
-    StandingsService
+    StandingsService,
+    PlayersService
   ],
   controllers: [
     LeaguesController,
@@ -35,7 +38,8 @@ import { AccessControlModule } from '../rbac/access-control.module';
     TournamentsController,
     FixtureController,
     MatchesController,
-    StandingsController
+    StandingsController,
+    PlayersController
   ]
 })
 export class CompetitionModule {}

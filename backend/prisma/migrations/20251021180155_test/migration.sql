@@ -120,11 +120,18 @@ CREATE TABLE "Roster" (
 -- CreateTable
 CREATE TABLE "Player" (
     "id" SERIAL NOT NULL,
-    "clubId" INTEGER NOT NULL,
+    "clubId" INTEGER,
     "firstName" TEXT NOT NULL,
     "lastName" TEXT NOT NULL,
     "birthDate" TIMESTAMP(3) NOT NULL,
-    "document" TEXT,
+    "dni" TEXT NOT NULL,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "addressStreet" TEXT,
+    "addressNumber" TEXT,
+    "addressCity" TEXT,
+    "emergencyName" TEXT,
+    "emergencyRelationship" TEXT,
+    "emergencyPhone" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -355,6 +362,9 @@ CREATE UNIQUE INDEX "Zone_tournamentId_name_key" ON "Zone"("tournamentId", "name
 CREATE UNIQUE INDEX "Club_slug_key" ON "Club"("slug");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "Player_dni_key" ON "Player"("dni");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "ClubZone_clubId_zoneId_key" ON "ClubZone"("clubId", "zoneId");
 
 -- CreateIndex
@@ -418,7 +428,7 @@ ALTER TABLE "Roster" ADD CONSTRAINT "Roster_clubId_fkey" FOREIGN KEY ("clubId") 
 ALTER TABLE "Roster" ADD CONSTRAINT "Roster_tournamentCategoryId_fkey" FOREIGN KEY ("tournamentCategoryId") REFERENCES "TournamentCategory"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Player" ADD CONSTRAINT "Player_clubId_fkey" FOREIGN KEY ("clubId") REFERENCES "Club"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Player" ADD CONSTRAINT "Player_clubId_fkey" FOREIGN KEY ("clubId") REFERENCES "Club"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "RosterPlayer" ADD CONSTRAINT "RosterPlayer_rosterId_fkey" FOREIGN KEY ("rosterId") REFERENCES "Roster"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
