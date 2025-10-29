@@ -119,7 +119,7 @@ export class ClubsService {
         tournamentCategory: {
           include: {
             category: true,
-            tournament: true,
+            tournament: { include: { league: true } },
           },
         },
       },
@@ -155,6 +155,7 @@ export class ClubsService {
         name: string;
         year: number;
         leagueId: number;
+        leagueName: string;
         categories: Array<{
           tournamentCategoryId: number;
           categoryId: number;
@@ -191,6 +192,7 @@ export class ClubsService {
           name: tournament.name,
           year: tournament.year,
           leagueId: tournament.leagueId,
+          leagueName: tournament.league?.name ?? '—',
           categories: [],
         };
         tournamentsMap.set(tournament.id, tournamentEntry);
@@ -467,6 +469,7 @@ export class ClubsService {
             category: true,
           },
         },
+        league: true,
       },
       orderBy: [
         { year: 'desc' },
@@ -480,6 +483,7 @@ export class ClubsService {
         name: tournament.name,
         year: tournament.year,
         leagueId: tournament.leagueId,
+        leagueName: tournament.league?.name ?? '—',
         categories: tournament.categories.map((assignment) => ({
           tournamentCategoryId: assignment.id,
           categoryId: assignment.categoryId,

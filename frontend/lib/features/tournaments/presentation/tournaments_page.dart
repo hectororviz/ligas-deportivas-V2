@@ -8,22 +8,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
+import '../../categories/providers/categories_catalog_provider.dart';
 import '../../leagues/presentation/leagues_page.dart';
 import '../../shared/widgets/table_filters_bar.dart';
 
 const _moduleTorneos = 'TORNEOS';
 const _actionCreate = 'CREATE';
 const _actionUpdate = 'UPDATE';
-
-final categoriesCatalogProvider =
-    FutureProvider<List<CategoryModel>>((ref) async {
-  final response = await ref.read(apiClientProvider).get<List<dynamic>>('/categories');
-  final data = response.data ?? [];
-  return data
-      .map((json) => CategoryModel.fromJson(json as Map<String, dynamic>))
-      .where((category) => category.active)
-      .toList();
-});
 
 final tournamentFiltersProvider =
     StateNotifierProvider<TournamentFiltersController, TournamentFilters>(
@@ -369,7 +360,7 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
           ? FloatingActionButton.extended(
               onPressed: _openCreateTournament,
               icon: const Icon(Icons.add),
-              label: const Text('+ Nuevo torneo'),
+              label: const Text('Agregar torneo'),
             )
           : null,
       body: Padding(
@@ -843,6 +834,7 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
   late TextEditingController _nameController;
   late TextEditingController _yearController;
   int? _selectedLeagueId;
+  String _selectedGender = 'MIXTO';
   bool _isSaving = false;
   String? _errorMessage;
   String? _categoryError;
@@ -859,6 +851,7 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
     _nameController = TextEditingController(text: tournament?.name ?? '');
     _yearController = TextEditingController(text: defaultYear.toString());
     _selectedLeagueId = tournament?.leagueId ?? _defaultLeagueId();
+    _selectedGender = tournament?.gender ?? 'MIXTO';
   }
 
   @override
@@ -914,6 +907,7 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
       'pointsWin': 3,
       'pointsDraw': 1,
       'pointsLoss': 0,
+      'gender': _selectedGender,
     };
     final selections = _selections;
     final selectedCategories =
@@ -996,7 +990,12 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
   }
 
   bool _validateCategories() {
-    final included = _selections.where((selection) => selection.include).toList();
+    final included = _selections
+        .where(
+          (selection) =>
+              _matchesSelectedGender(selection.category) && selection.include,
+        )
+        .toList();
     if (included.isEmpty) {
       _categoryError = 'Selecciona al menos una categoría participante.';
       return false;
@@ -1011,23 +1010,57 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
   }
 
   void _initializeSelections(List<CategoryModel> categories) {
-    if (_categoriesInitialized) {
+    final existingSelectionsById = {
+      for (final selection in _selections) selection.category.id: selection
+    };
+    final currentIds = existingSelectionsById.keys.toSet();
+    final categoryIds = categories.map((category) => category.id).toSet();
+    final shouldRebuild = !_categoriesInitialized ||
+        currentIds.length != categoryIds.length ||
+        categories.any((category) => !currentIds.contains(category.id));
+
+    if (!shouldRebuild) {
       return;
     }
     final assignments = widget.tournament?.categories ?? const [];
     final byCategoryId = {
       for (final assignment in assignments) assignment.categoryId: assignment
     };
-    _selections = categories
-        .map(
-          (category) => _CategorySelection(
-            category: category,
-            include: byCategoryId[category.id]?.enabled ?? false,
-            time: _parseGameTime(byCategoryId[category.id]?.gameTime),
-          ),
-        )
-        .toList();
+    _selections = categories.map((category) {
+      final previous = existingSelectionsById[category.id];
+      if (previous != null) {
+        final restored = _CategorySelection(
+          category: category,
+          include: previous.include,
+          time: previous.time,
+        )..countsForGeneral = previous.countsForGeneral;
+        return restored;
+      }
+      final assignment = byCategoryId[category.id];
+      return _CategorySelection(
+        category: category,
+        include: assignment?.enabled ?? false,
+        time: _parseGameTime(assignment?.gameTime),
+      );
+    }).toList();
     _categoriesInitialized = true;
+    _applyGenderFilter();
+  }
+
+  void _applyGenderFilter() {
+    for (final selection in _selections) {
+      if (!_matchesSelectedGender(selection.category)) {
+        selection
+          ..include = false
+          ..time = null
+          ..countsForGeneral =
+              selection.category.promotional ? false : true;
+      }
+    }
+  }
+
+  bool _matchesSelectedGender(CategoryModel category) {
+    return category.gender == _selectedGender;
   }
 
   TimeOfDay? _parseGameTime(String? value) {
@@ -1155,6 +1188,43 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
                 return null;
               },
             ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              value: _selectedGender,
+              decoration:
+                  const InputDecoration(labelText: 'Género del torneo'),
+              items: const [
+                DropdownMenuItem(
+                  value: 'MIXTO',
+                  child: Text('Mixto'),
+                ),
+                DropdownMenuItem(
+                  value: 'MASCULINO',
+                  child: Text('Masculino'),
+                ),
+                DropdownMenuItem(
+                  value: 'FEMENINO',
+                  child: Text('Femenino'),
+                ),
+              ],
+              onChanged: widget.readOnly
+                  ? null
+                  : (value) {
+                      if (value == null) {
+                        return;
+                      }
+                      setState(() {
+                        _selectedGender = value;
+                        _applyGenderFilter();
+                      });
+                    },
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Selecciona el género del torneo.';
+                }
+                return null;
+              },
+            ),
             const SizedBox(height: 24),
             Text(
               'Categorías participantes',
@@ -1169,8 +1239,21 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
                 if (!_categoriesInitialized) {
                   _initializeSelections(categories);
                 }
+                final visibleSelections = _selections
+                    .where((selection) =>
+                        _matchesSelectedGender(selection.category))
+                    .toList();
+                if (visibleSelections.isEmpty) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Text(
+                      'No hay categorías disponibles para el género seleccionado.',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  );
+                }
                 return _CategorySelectionTable(
-                  selections: _selections,
+                  selections: visibleSelections,
                   readOnly: widget.readOnly,
                   onChanged: (selection) {
                     setState(() {});
@@ -1407,54 +1490,6 @@ class _CategorySelection {
   bool countsForGeneral;
 }
 
-class CategoryModel {
-  CategoryModel({
-    required this.id,
-    required this.name,
-    required this.birthYearMin,
-    required this.birthYearMax,
-    required this.gender,
-    required this.promotional,
-    required this.active,
-  });
-
-  factory CategoryModel.fromJson(Map<String, dynamic> json) => CategoryModel(
-        id: json['id'] as int,
-        name: json['name'] as String,
-        birthYearMin: json['birthYearMin'] as int,
-        birthYearMax: json['birthYearMax'] as int,
-        gender: json['gender'] as String? ?? 'MIXTO',
-        promotional: json['promotional'] as bool? ?? false,
-        active: json['active'] as bool? ?? true,
-      );
-
-  final int id;
-  final String name;
-  final int birthYearMin;
-  final int birthYearMax;
-  final String gender;
-  final bool promotional;
-  final bool active;
-
-  String get genderLabel {
-    switch (gender) {
-      case 'MASCULINO':
-        return 'Masculino';
-      case 'FEMENINO':
-        return 'Femenino';
-      default:
-        return 'Mixto';
-    }
-  }
-
-  String get birthYearRangeLabel {
-    if (birthYearMin == birthYearMax) {
-      return '$birthYearMin';
-    }
-    return '$birthYearMin - $birthYearMax';
-  }
-}
-
 class TournamentSummary {
   TournamentSummary({
     required this.id,
@@ -1462,6 +1497,7 @@ class TournamentSummary {
     required this.year,
     required this.leagueId,
     required this.leagueName,
+    required this.gender,
     required this.zonesCount,
     required this.categories,
     required this.startDate,
@@ -1483,6 +1519,7 @@ class TournamentSummary {
       year: json['year'] as int,
       leagueId: league.id,
       leagueName: league.name,
+      gender: json['gender'] as String? ?? 'MIXTO',
       zonesCount: (json['zones'] as List<dynamic>? ?? []).length,
       categories: categories,
       startDate: json['startDate'] != null
@@ -1500,6 +1537,7 @@ class TournamentSummary {
   final int year;
   final int leagueId;
   final String leagueName;
+  final String gender;
   final int zonesCount;
   final List<TournamentCategoryAssignment> categories;
   final DateTime? startDate;
@@ -1508,6 +1546,17 @@ class TournamentSummary {
 
   int get enabledCategoriesCount =>
       categories.where((category) => category.enabled).length;
+
+  String get genderLabel {
+    switch (gender) {
+      case 'MASCULINO':
+        return 'Masculino';
+      case 'FEMENINO':
+        return 'Femenino';
+      default:
+        return 'Mixto';
+    }
+  }
 
   TournamentStatus get status {
     if (enabledCategoriesCount == 0 || zonesCount == 0) {

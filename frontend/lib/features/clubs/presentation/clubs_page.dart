@@ -146,7 +146,7 @@ class _ClubsPageState extends ConsumerState<ClubsPage> {
       if (!mounted) {
         return;
       }
-      GoRouter.of(context).push('/clubs/${club.slug}/admin');
+      GoRouter.of(context).push('/club/${club.slug}');
       return;
     }
 

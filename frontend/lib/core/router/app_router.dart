@@ -62,7 +62,7 @@ GoRouter createRouter(Ref ref) {
           GoRoute(path: '/leagues', builder: (context, state) => const LeaguesPage()),
           GoRoute(path: '/clubs', builder: (context, state) => const ClubsPage()),
           GoRoute(
-            path: '/clubs/:slug/admin',
+            path: '/club/:slug',
             builder: (context, state) {
               final slug = state.pathParameters['slug']!;
               return ClubAdminPage(slug: slug);
