@@ -49,6 +49,12 @@ enum Scope {
   CATEGORIA
 }
 
+enum Gender {
+  MASCULINO
+  FEMENINO
+  MIXTO
+}
+
 enum TournamentChampionMode {
   ROUND_AND_ANNUAL
   GLOBAL
@@ -76,77 +82,78 @@ enum Round {
 }
 
 model League {
-  id         Int        @id @default(autoincrement())
-  name       String
-  slug       String     @unique
-  colorHex   String     @default("#0057b8")
-  gameDay    GameDay
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  id          Int          @id @default(autoincrement())
+  name        String
+  slug        String       @unique
+  colorHex    String       @default("#0057b8")
+  gameDay     GameDay
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
   tournaments Tournament[]
-  clubs      Club[]
-  userRoles  UserRole[]
+  clubs       Club[]
+  userRoles   UserRole[]
 }
 
 model Tournament {
-  id           Int                      @id @default(autoincrement())
+  id           Int                    @id @default(autoincrement())
   leagueId     Int
   name         String
   year         Int
-  pointsWin    Int                      @default(3)
-  pointsDraw   Int                      @default(1)
-  pointsLoss   Int                      @default(0)
-  championMode TournamentChampionMode   @default(GLOBAL)
+  pointsWin    Int                    @default(3)
+  pointsDraw   Int                    @default(1)
+  pointsLoss   Int                    @default(0)
+  championMode TournamentChampionMode @default(GLOBAL)
   startDate    DateTime?
   endDate      DateTime?
-  createdAt    DateTime                 @default(now())
-  updatedAt    DateTime                 @updatedAt
-  league       League                   @relation(fields: [leagueId], references: [id])
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+  league       League                 @relation(fields: [leagueId], references: [id])
   zones        Zone[]
   categories   TournamentCategory[]
   matches      Match[]
 }
 
 model Zone {
-  id           Int         @id @default(autoincrement())
+  id           Int                @id @default(autoincrement())
   tournamentId Int
   name         String
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  tournament   Tournament  @relation(fields: [tournamentId], references: [id])
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  tournament   Tournament         @relation(fields: [tournamentId], references: [id])
   clubZones    ClubZone[]
   matches      Match[]
   standings    CategoryStanding[]
+
   @@unique([tournamentId, name])
 }
 
 model Club {
-  id              Int        @id @default(autoincrement())
-  name            String
-  shortName       String?
-  slug            String     @unique
-  leagueId        Int?
-  primaryColor    String?
-  secondaryColor  String?
-  active          Boolean    @default(true)
-  logoUrl         String?
-  instagramUrl    String?
-  facebookUrl     String?
-  latitude        Decimal?   @db.Decimal(11, 8)
-  longitude       Decimal?   @db.Decimal(11, 8)
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
-  league          League?    @relation(fields: [leagueId], references: [id])
-  zones           ClubZone[]
-  rosters         Roster[]
-  players         Player[]
-  homeMatches     Match[]    @relation("homeClub")
-  awayMatches     Match[]    @relation("awayClub")
-  otherGoals      OtherGoal[]
-  goals           Goal[]
-  userRoles       UserRole[]
+  id                Int                @id @default(autoincrement())
+  name              String
+  shortName         String?
+  slug              String             @unique
+  leagueId          Int?
+  primaryColor      String?
+  secondaryColor    String?
+  active            Boolean            @default(true)
+  logoUrl           String?
+  instagramUrl      String?
+  facebookUrl       String?
+  latitude          Decimal?           @db.Decimal(11, 8)
+  longitude         Decimal?           @db.Decimal(11, 8)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  league            League?            @relation(fields: [leagueId], references: [id])
+  zones             ClubZone[]
+  rosters           Roster[]
+  players           Player[]
+  homeMatches       Match[]            @relation("homeClub")
+  awayMatches       Match[]            @relation("awayClub")
+  otherGoals        OtherGoal[]
+  goals             Goal[]
+  userRoles         UserRole[]
   categoryStandings CategoryStanding[]
-  teams           Team[]
+  teams             Team[]
 }
 
 model ClubZone {
@@ -163,55 +170,59 @@ model ClubZone {
 }
 
 model Category {
-  id        Int        @id @default(autoincrement())
-  name      String
-  active    Boolean    @default(true)
-  presentation Boolean @default(false)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  tournaments TournamentCategory[]
-  userRoles UserRole[]
-  teams     Team[]
+  id           Int                  @id @default(autoincrement())
+  name         String               @unique
+  birthYearMin Int
+  birthYearMax Int
+  gender       Gender
+  promotional  Boolean              @default(false)
+  active       Boolean              @default(true)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  tournaments  TournamentCategory[]
+  userRoles    UserRole[]
 }
 
 model TournamentCategory {
-  id           Int        @id @default(autoincrement())
+  id           Int                @id @default(autoincrement())
   tournamentId Int
   categoryId   Int
-  enabled      Boolean    @default(false)
+  enabled      Boolean            @default(false)
   gameTime     String?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  tournament   Tournament @relation(fields: [tournamentId], references: [id])
-  category     Category   @relation(fields: [categoryId], references: [id])
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  tournament   Tournament         @relation(fields: [tournamentId], references: [id])
+  category     Category           @relation(fields: [categoryId], references: [id])
   matches      MatchCategory[]
   rosters      Roster[]
   standings    CategoryStanding[]
+  teams        Team[]
 
   @@unique([tournamentId, categoryId])
 }
 
 model Team {
-  id         Int      @id @default(autoincrement())
-  clubId     Int
-  categoryId Int
-  name       String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  club       Club     @relation(fields: [clubId], references: [id])
-  category   Category @relation(fields: [categoryId], references: [id])
+  id                   Int                @id @default(autoincrement())
+  clubId               Int
+  tournamentCategoryId Int
+  publicName           String
+  active               Boolean            @default(true)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  club                 Club               @relation(fields: [clubId], references: [id])
+  tournamentCategory   TournamentCategory @relation(fields: [tournamentCategoryId], references: [id])
 
-  @@unique([clubId, categoryId])
+  @@unique([clubId, tournamentCategoryId, publicName])
 }
 
 model Roster {
-  id                   Int        @id @default(autoincrement())
+  id                   Int                @id @default(autoincrement())
   clubId               Int
   tournamentCategoryId Int
   lockedAt             DateTime?
-  createdAt            DateTime   @default(now())
-  updatedAt            DateTime   @updatedAt
-  club                 Club       @relation(fields: [clubId], references: [id])
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  club                 Club               @relation(fields: [clubId], references: [id])
   tournamentCategory   TournamentCategory @relation(fields: [tournamentCategoryId], references: [id])
   players              RosterPlayer[]
 
@@ -219,22 +230,23 @@ model Roster {
 }
 
 model Player {
-  id                    Int      @id @default(autoincrement())
+  id                    Int            @id @default(autoincrement())
   clubId                Int?
   firstName             String
   lastName              String
   birthDate             DateTime
-  dni                   String   @unique
-  active                Boolean  @default(true)
+  dni                   String         @unique
+  gender                Gender
+  active                Boolean        @default(true)
   addressStreet         String?
   addressNumber         String?
   addressCity           String?
   emergencyName         String?
   emergencyRelationship String?
   emergencyPhone        String?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-  club                  Club?    @relation(fields: [clubId], references: [id])
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  club                  Club?          @relation(fields: [clubId], references: [id])
   goals                 Goal[]
   rosters               RosterPlayer[]
 }
@@ -252,63 +264,63 @@ model RosterPlayer {
 }
 
 model Match {
-  id           Int        @id @default(autoincrement())
+  id           Int               @id @default(autoincrement())
   tournamentId Int
   zoneId       Int
   matchday     Int
   round        Round
   date         DateTime?
-  status       MatchStatus @default(PROGRAMMED)
+  status       MatchStatus       @default(PROGRAMMED)
   homeClubId   Int?
   awayClubId   Int?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  tournament   Tournament @relation(fields: [tournamentId], references: [id])
-  zone         Zone       @relation(fields: [zoneId], references: [id])
-  homeClub     Club?      @relation("homeClub", fields: [homeClubId], references: [id])
-  awayClub     Club?      @relation("awayClub", fields: [awayClubId], references: [id])
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  tournament   Tournament        @relation(fields: [tournamentId], references: [id])
+  zone         Zone              @relation(fields: [zoneId], references: [id])
+  homeClub     Club?             @relation("homeClub", fields: [homeClubId], references: [id])
+  awayClub     Club?             @relation("awayClub", fields: [awayClubId], references: [id])
   categories   MatchCategory[]
   attachments  MatchAttachment[]
   logs         MatchLog[]
 }
 
 model MatchCategory {
-  id                   Int       @id @default(autoincrement())
+  id                   Int                @id @default(autoincrement())
   matchId              Int
   tournamentCategoryId Int
-  homeScore            Int       @default(0)
-  awayScore            Int       @default(0)
+  homeScore            Int                @default(0)
+  awayScore            Int                @default(0)
   closedAt             DateTime?
   closedById           Int?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
-  match                Match     @relation(fields: [matchId], references: [id])
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  match                Match              @relation(fields: [matchId], references: [id])
   tournamentCategory   TournamentCategory @relation(fields: [tournamentCategoryId], references: [id])
   goals                Goal[]
   otherGoals           OtherGoal[]
-  closedBy             User?     @relation(fields: [closedById], references: [id])
+  closedBy             User?              @relation(fields: [closedById], references: [id])
 }
 
 model Goal {
-  id              Int      @id @default(autoincrement())
+  id              Int           @id @default(autoincrement())
   matchCategoryId Int
   playerId        Int
   clubId          Int
   minute          Int?
-  createdAt       DateTime @default(now())
+  createdAt       DateTime      @default(now())
   matchCategory   MatchCategory @relation(fields: [matchCategoryId], references: [id])
-  player          Player   @relation(fields: [playerId], references: [id])
-  club            Club     @relation(fields: [clubId], references: [id])
+  player          Player        @relation(fields: [playerId], references: [id])
+  club            Club          @relation(fields: [clubId], references: [id])
 }
 
 model OtherGoal {
-  id              Int      @id @default(autoincrement())
+  id              Int           @id @default(autoincrement())
   matchCategoryId Int
   clubId          Int
   goals           Int
-  createdAt       DateTime @default(now())
+  createdAt       DateTime      @default(now())
   matchCategory   MatchCategory @relation(fields: [matchCategoryId], references: [id])
-  club            Club     @relation(fields: [clubId], references: [id])
+  club            Club          @relation(fields: [clubId], references: [id])
 }
 
 model MatchAttachment {
@@ -332,43 +344,43 @@ model MatchLog {
 }
 
 model User {
-  id               Int        @id @default(autoincrement())
-  email            String     @unique
-  passwordHash     String
-  firstName        String
-  lastName         String
-  emailVerifiedAt  DateTime?
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
-  roles            UserRole[]
-  tokens           UserToken[]
-  verifications    EmailVerificationToken[]
-  passwordResets   PasswordResetToken[]
-  matchCategories  MatchCategory[]
-  attachments      MatchAttachment[]
-  matchLogs        MatchLog[]
-  auditLogs        AuditLog[]
+  id              Int                      @id @default(autoincrement())
+  email           String                   @unique
+  passwordHash    String
+  firstName       String
+  lastName        String
+  emailVerifiedAt DateTime?
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+  roles           UserRole[]
+  tokens          UserToken[]
+  verifications   EmailVerificationToken[]
+  passwordResets  PasswordResetToken[]
+  matchCategories MatchCategory[]
+  attachments     MatchAttachment[]
+  matchLogs       MatchLog[]
+  auditLogs       AuditLog[]
 }
 
 model Role {
-  id          Int        @id @default(autoincrement())
-  key         RoleKey    @unique
+  id          Int              @id @default(autoincrement())
+  key         RoleKey          @unique
   name        String
   description String?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
   assignments UserRole[]
   permissions RolePermission[]
 }
 
 model Permission {
-  id          Int        @id @default(autoincrement())
+  id          Int              @id @default(autoincrement())
   module      Module
   action      Action
   scope       Scope
   description String?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
   roles       RolePermission[]
 
   @@unique([module, action, scope])
@@ -377,25 +389,25 @@ model Permission {
 model RolePermission {
   roleId       Int
   permissionId Int
-  createdAt    DateTime @default(now())
-  role         Role     @relation(fields: [roleId], references: [id])
+  createdAt    DateTime   @default(now())
+  role         Role       @relation(fields: [roleId], references: [id])
   permission   Permission @relation(fields: [permissionId], references: [id])
 
   @@id([roleId, permissionId])
 }
 
 model UserRole {
-  id         Int      @id @default(autoincrement())
+  id         Int       @id @default(autoincrement())
   userId     Int
   roleId     Int
   leagueId   Int?
   clubId     Int?
   categoryId Int?
-  createdAt  DateTime @default(now())
-  user       User     @relation(fields: [userId], references: [id])
-  role       Role     @relation(fields: [roleId], references: [id])
-  league     League?  @relation(fields: [leagueId], references: [id])
-  club       Club?    @relation(fields: [clubId], references: [id])
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id])
+  role       Role      @relation(fields: [roleId], references: [id])
+  league     League?   @relation(fields: [leagueId], references: [id])
+  club       Club?     @relation(fields: [clubId], references: [id])
   category   Category? @relation(fields: [categoryId], references: [id])
 
   @@unique([userId, roleId, leagueId, clubId, categoryId])
@@ -411,43 +423,42 @@ model UserToken {
 }
 
 model EmailVerificationToken {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   userId    Int
-  token     String   @unique
+  token     String    @unique
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id])
 }
 
 model PasswordResetToken {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   userId    Int
-  token     String   @unique
+  token     String    @unique
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id])
 }
 
-
 model CategoryStanding {
-  id                   Int      @id @default(autoincrement())
+  id                   Int                @id @default(autoincrement())
   zoneId               Int
   tournamentCategoryId Int
   clubId               Int
-  played               Int      @default(0)
-  wins                 Int      @default(0)
-  draws                Int      @default(0)
-  losses               Int      @default(0)
-  goalsFor             Int      @default(0)
-  goalsAgainst         Int      @default(0)
-  points               Int      @default(0)
-  goalDifference       Int      @default(0)
-  updatedAt            DateTime @updatedAt
-  zone                 Zone     @relation(fields: [zoneId], references: [id])
+  played               Int                @default(0)
+  wins                 Int                @default(0)
+  draws                Int                @default(0)
+  losses               Int                @default(0)
+  goalsFor             Int                @default(0)
+  goalsAgainst         Int                @default(0)
+  points               Int                @default(0)
+  goalDifference       Int                @default(0)
+  updatedAt            DateTime           @updatedAt
+  zone                 Zone               @relation(fields: [zoneId], references: [id])
   tournamentCategory   TournamentCategory @relation(fields: [tournamentCategoryId], references: [id])
-  club                 Club     @relation(fields: [clubId], references: [id])
+  club                 Club               @relation(fields: [clubId], references: [id])
 
   @@unique([zoneId, tournamentCategoryId, clubId])
 }

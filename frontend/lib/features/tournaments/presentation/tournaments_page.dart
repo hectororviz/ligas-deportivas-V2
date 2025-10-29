@@ -21,6 +21,7 @@ final categoriesCatalogProvider =
   final data = response.data ?? [];
   return data
       .map((json) => CategoryModel.fromJson(json as Map<String, dynamic>))
+      .where((category) => category.active)
       .toList();
 });
 
@@ -279,12 +280,22 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
                               : Theme.of(context).disabledColor,
                         ),
                         title: Text(category.categoryName),
-                        subtitle: Text(
-                          category.enabled
-                              ? 'Horario: $timeLabel'
-                              : 'No participa en este torneo',
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              category.enabled
+                                  ? 'Horario: $timeLabel'
+                                  : 'No participa en este torneo',
+                            ),
+                            Text(
+                              '${category.birthYearRangeLabel} · ${category.genderLabel}',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
                         ),
-                        trailing: category.isPromotional
+                        trailing: category.promotional
                             ? const Tooltip(
                                 message: 'Categoría promocional',
                                 child: Icon(Icons.local_fire_department_outlined),
@@ -1253,7 +1264,9 @@ class _CategorySelectionTableState extends State<_CategorySelectionTable> {
           (selection) => DataRow(
             cells: [
               DataCell(Text(selection.category.name)),
-              DataCell(Text(selection.category.isPromotional ? 'Sí' : 'No')),
+              DataCell(Text(selection.category.birthYearRangeLabel)),
+              DataCell(Text(selection.category.genderLabel)),
+              DataCell(Text(selection.category.promotional ? 'Sí' : 'No')),
               DataCell(
                 Checkbox(
                   value: selection.include,
@@ -1265,7 +1278,7 @@ class _CategorySelectionTableState extends State<_CategorySelectionTable> {
                             if (!selection.include) {
                               selection.time = null;
                               selection.countsForGeneral =
-                                  selection.category.isPromotional ? false : true;
+                                  selection.category.promotional ? false : true;
                             }
                           });
                           widget.onChanged(selection);
@@ -1310,6 +1323,8 @@ class _CategorySelectionTableState extends State<_CategorySelectionTable> {
     final table = DataTable(
       columns: const [
         DataColumn(label: Text('Categoría')),
+        DataColumn(label: Text('Años de nacimiento')),
+        DataColumn(label: Text('Género')),
         DataColumn(label: Text('Promocional')),
         DataColumn(label: Text('Incluir')),
         DataColumn(label: Text('Horario')),
@@ -1343,7 +1358,7 @@ class _CategorySelection {
     required this.category,
     this.include = false,
     TimeOfDay? time,
-  })  : countsForGeneral = category.isPromotional ? false : true,
+  })  : countsForGeneral = category.promotional ? false : true,
         time = include ? time : null;
 
   final CategoryModel category;
@@ -1356,18 +1371,48 @@ class CategoryModel {
   CategoryModel({
     required this.id,
     required this.name,
-    required this.isPromotional,
+    required this.birthYearMin,
+    required this.birthYearMax,
+    required this.gender,
+    required this.promotional,
+    required this.active,
   });
 
   factory CategoryModel.fromJson(Map<String, dynamic> json) => CategoryModel(
         id: json['id'] as int,
         name: json['name'] as String,
-        isPromotional: json['presentation'] as bool? ?? false,
+        birthYearMin: json['birthYearMin'] as int,
+        birthYearMax: json['birthYearMax'] as int,
+        gender: json['gender'] as String? ?? 'MIXTO',
+        promotional: json['promotional'] as bool? ?? false,
+        active: json['active'] as bool? ?? true,
       );
 
   final int id;
   final String name;
-  final bool isPromotional;
+  final int birthYearMin;
+  final int birthYearMax;
+  final String gender;
+  final bool promotional;
+  final bool active;
+
+  String get genderLabel {
+    switch (gender) {
+      case 'MASCULINO':
+        return 'Masculino';
+      case 'FEMENINO':
+        return 'Femenino';
+      default:
+        return 'Mixto';
+    }
+  }
+
+  String get birthYearRangeLabel {
+    if (birthYearMin == birthYearMax) {
+      return '$birthYearMin';
+    }
+    return '$birthYearMin - $birthYearMax';
+  }
 }
 
 class TournamentSummary {
@@ -1446,7 +1491,10 @@ class TournamentCategoryAssignment {
   TournamentCategoryAssignment({
     required this.categoryId,
     required this.categoryName,
-    required this.isPromotional,
+    required this.categoryBirthYearMin,
+    required this.categoryBirthYearMax,
+    required this.categoryGender,
+    required this.promotional,
     required this.enabled,
     required this.gameTime,
   });
@@ -1456,7 +1504,10 @@ class TournamentCategoryAssignment {
     return TournamentCategoryAssignment(
       categoryId: json['categoryId'] as int,
       categoryName: category?['name'] as String? ?? 'Categoría',
-      isPromotional: category?['presentation'] as bool? ?? false,
+      categoryBirthYearMin: category?['birthYearMin'] as int? ?? 0,
+      categoryBirthYearMax: category?['birthYearMax'] as int? ?? 0,
+      categoryGender: category?['gender'] as String? ?? 'MIXTO',
+      promotional: category?['promotional'] as bool? ?? false,
       enabled: json['enabled'] as bool? ?? false,
       gameTime: json['gameTime'] as String?,
     );
@@ -1464,9 +1515,33 @@ class TournamentCategoryAssignment {
 
   final int categoryId;
   final String categoryName;
-  final bool isPromotional;
+  final int categoryBirthYearMin;
+  final int categoryBirthYearMax;
+  final String categoryGender;
+  final bool promotional;
   final bool enabled;
   final String? gameTime;
+
+  String get genderLabel {
+    switch (categoryGender) {
+      case 'MASCULINO':
+        return 'Masculino';
+      case 'FEMENINO':
+        return 'Femenino';
+      default:
+        return 'Mixto';
+    }
+  }
+
+  String get birthYearRangeLabel {
+    if (categoryBirthYearMin == 0 && categoryBirthYearMax == 0) {
+      return '—';
+    }
+    if (categoryBirthYearMin == categoryBirthYearMax) {
+      return '$categoryBirthYearMin';
+    }
+    return '$categoryBirthYearMin - $categoryBirthYearMax';
+  }
 }
 
 enum TournamentStatus { draft, scheduled, inProgress, finished }

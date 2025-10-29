@@ -18,7 +18,11 @@ export class ClubsService {
   private readonly defaultInclude: Prisma.ClubInclude = {
     league: true,
     teams: {
-      include: { category: true },
+      include: {
+        tournamentCategory: {
+          include: { category: true, tournament: true },
+        },
+      },
     },
   };
 
@@ -200,17 +204,18 @@ export class ClubsService {
     const enabledCategories = zone.tournament.categories;
 
     if (enabledCategories.length) {
-      const categoryIds = enabledCategories.map((tc) => tc.categoryId);
+      const tournamentCategoryIds = enabledCategories.map((tc) => tc.id);
       const teams = await this.prisma.team.findMany({
         where: {
           clubId: dto.clubId,
-          categoryId: { in: categoryIds },
+          tournamentCategoryId: { in: tournamentCategoryIds },
+          active: true,
         },
-        select: { categoryId: true },
+        select: { tournamentCategoryId: true },
       });
 
-      const teamCategoryIds = new Set(teams.map((team) => team.categoryId));
-      const missing = enabledCategories.filter((tc) => !teamCategoryIds.has(tc.categoryId));
+      const activeTeamCategoryIds = new Set(teams.map((team) => team.tournamentCategoryId));
+      const missing = enabledCategories.filter((tc) => !activeTeamCategoryIds.has(tc.id));
 
       if (missing.length) {
         const missingNames = missing.map((tc) => tc.category.name).join(', ');
@@ -240,56 +245,68 @@ export class ClubsService {
   async updateTeams(clubId: number, dto: UpdateClubTeamsDto) {
     await this.prisma.club.findUniqueOrThrow({ where: { id: clubId } });
 
-    if (!dto.categoryIds.length) {
+    const payload = dto.teams ?? [];
+
+    const uniqueKeys = new Set<string>();
+    for (const team of payload) {
+      const key = `${team.tournamentCategoryId}-${team.publicName.trim().toLowerCase()}`;
+      if (uniqueKeys.has(key)) {
+        throw new BadRequestException(
+          'No se pueden repetir planteles con el mismo nombre dentro de la misma categoría del torneo.',
+        );
+      }
+      uniqueKeys.add(key);
+    }
+
+    if (!payload.length) {
       await this.prisma.team.deleteMany({ where: { clubId } });
-      return this.prisma.team.findMany({
-        where: { clubId },
-        include: { category: true },
-        orderBy: { category: { name: 'asc' } },
-      });
+      return [];
     }
 
-    const categories = await this.prisma.category.findMany({
-      where: { id: { in: dto.categoryIds } },
+    const tournamentCategoryIds = Array.from(
+      new Set(payload.map((team) => team.tournamentCategoryId)),
+    );
+
+    const tournamentCategories = await this.prisma.tournamentCategory.findMany({
+      where: { id: { in: tournamentCategoryIds } },
+      include: { category: true },
     });
 
-    if (categories.length !== dto.categoryIds.length) {
-      throw new BadRequestException('Alguna de las categorías seleccionadas no existe');
+    if (tournamentCategories.length !== tournamentCategoryIds.length) {
+      throw new BadRequestException('Alguna de las categorías seleccionadas no existe.');
     }
 
-    const inactive = categories.filter((category) => !category.active);
-    if (inactive.length) {
-      const names = inactive.map((category) => category.name).join(', ');
-      throw new BadRequestException(`No se pueden asignar categorías inactivas: ${names}`);
+    const disabled = tournamentCategories.filter((tc) => !tc.enabled || !tc.category.active);
+    if (disabled.length) {
+      const names = disabled.map((tc) => tc.category.name).join(', ');
+      throw new BadRequestException(
+        `No se pueden asignar planteles a categorías inactivas o deshabilitadas: ${names}`,
+      );
     }
 
-    const existingTeams = await this.prisma.team.findMany({
-      where: { clubId },
-      select: { id: true, categoryId: true },
+    await this.prisma.team.deleteMany({ where: { clubId } });
+
+    await this.prisma.team.createMany({
+      data: payload.map((team) => ({
+        clubId,
+        tournamentCategoryId: team.tournamentCategoryId,
+        publicName: team.publicName.trim(),
+        active: team.active,
+      })),
     });
-
-    const targetCategoryIds = new Set(dto.categoryIds);
-    const existingCategoryIds = new Set(existingTeams.map((team) => team.categoryId));
-
-    const toCreate = dto.categoryIds.filter((id) => !existingCategoryIds.has(id));
-    const toDelete = existingTeams
-      .filter((team) => !targetCategoryIds.has(team.categoryId))
-      .map((team) => team.id);
-
-    if (toDelete.length) {
-      await this.prisma.team.deleteMany({ where: { id: { in: toDelete } } });
-    }
-
-    if (toCreate.length) {
-      await this.prisma.team.createMany({
-        data: toCreate.map((categoryId) => ({ clubId, categoryId })),
-      });
-    }
 
     return this.prisma.team.findMany({
       where: { clubId },
-      include: { category: true },
-      orderBy: { category: { name: 'asc' } },
+      include: {
+        tournamentCategory: {
+          include: { category: true, tournament: true },
+        },
+      },
+      orderBy: [
+        { tournamentCategory: { tournament: { year: 'desc' } } },
+        { tournamentCategory: { category: { name: 'asc' } } },
+        { publicName: 'asc' },
+      ],
     });
   }
 
