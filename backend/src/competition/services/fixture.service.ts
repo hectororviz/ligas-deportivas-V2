@@ -94,6 +94,11 @@ export class FixtureService {
           }
         }
 
+        await tx.tournament.update({
+          where: { id: tournamentId },
+          data: { fixtureLockedAt: new Date() },
+        });
+
         return {
           success: true,
           roundsGenerated: totalRoundsPerZone
