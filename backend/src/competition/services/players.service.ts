@@ -86,8 +86,14 @@ export class PlayersService {
     if (birthYear !== undefined) {
       const start = new Date(Date.UTC(birthYear, 0, 1));
       const end = new Date(Date.UTC(birthYear + 1, 0, 1));
+      const existingBirthDateFilter =
+        where.birthDate &&
+        typeof where.birthDate === 'object' &&
+        !(where.birthDate instanceof Date)
+          ? (where.birthDate as Prisma.DateTimeFilter)
+          : undefined;
       where.birthDate = {
-        ...((where.birthDate as Prisma.DateTimeFilter?) ?? {}),
+        ...(existingBirthDateFilter ?? {}),
         gte: start,
         lt: end,
       };
