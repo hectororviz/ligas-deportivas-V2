@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, Post, Put, UseGuards } from '@nestjs/common';
 import { TournamentsService } from '../services/tournaments.service';
 import { CreateTournamentDto } from '../dto/create-tournament.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -7,6 +7,7 @@ import { Permissions } from '../../common/decorators/permissions.decorator';
 import { Action, Module } from '@prisma/client';
 import { CreateZoneDto } from '../dto/create-zone.dto';
 import { AddTournamentCategoryDto } from '../dto/add-tournament-category.dto';
+import { UpdateTournamentDto } from '../dto/update-tournament.dto';
 
 @Controller()
 export class TournamentsController {
@@ -27,6 +28,16 @@ export class TournamentsController {
   @Permissions({ module: Module.TORNEOS, action: Action.CREATE })
   create(@Body() dto: CreateTournamentDto) {
     return this.tournamentsService.create(dto);
+  }
+
+  @Put('tournaments/:id')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @Permissions({ module: Module.TORNEOS, action: Action.UPDATE })
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateTournamentDto,
+  ) {
+    return this.tournamentsService.update(id, dto);
   }
 
   @Post('tournaments/:id/zones')

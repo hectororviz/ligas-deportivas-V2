@@ -180,6 +180,38 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
     } while (result == _TournamentFormResult.savedAndAddAnother);
   }
 
+  Future<void> _openEditTournament(TournamentSummary tournament) async {
+    final leagues = await ref.read(leaguesProvider.future);
+    final user = ref.read(authControllerProvider).user;
+    final allowedLeagues = _filterLeaguesForPermission(leagues, user, _actionUpdate);
+    final allowedLeagueIds =
+        user?.allowedLeaguesFor(module: _moduleTorneos, action: _actionUpdate);
+
+    if (!mounted) {
+      return;
+    }
+
+    final result = await _showTournamentForm(
+      context,
+      tournament: tournament,
+      leagues: allowedLeagues.isEmpty ? leagues : allowedLeagues,
+      readOnly: false,
+      allowedLeagueIds: allowedLeagueIds,
+      allowSaveAndAdd: false,
+    );
+
+    if (!mounted || result == null) {
+      return;
+    }
+
+    if (result == _TournamentFormResult.saved) {
+      ref.invalidate(_tournamentsSourceProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Torneo "${tournament.name}" actualizado.')),
+      );
+    }
+  }
+
   Future<_TournamentFormResult?> _showTournamentForm(
     BuildContext context, {
     TournamentSummary? tournament,
@@ -513,22 +545,7 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
                             return _TournamentsDataTable(
                               tournaments: tournaments,
                               onDetails: _showTournamentDetails,
-                              onEdit: (tournament) {
-                                final canEdit = user?.hasPermission(
-                                          module: _moduleTorneos,
-                                          action: _actionUpdate,
-                                          leagueId: tournament.leagueId,
-                                        ) ??
-                                        false;
-                                if (!canEdit) {
-                                  return;
-                                }
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('La edición de torneos estará disponible próximamente.'),
-                                  ),
-                                );
-                              },
+                              onEdit: _openEditTournament,
                               canEdit: (tournament) => user?.hasPermission(
                                     module: _moduleTorneos,
                                     action: _actionUpdate,
@@ -898,36 +915,59 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
       'pointsDraw': 1,
       'pointsLoss': 0,
     };
+    final selections = _selections;
+    final selectedCategories =
+        selections.where((selection) => selection.include).toList();
+    final categoriesPayload = selections
+        .map((selection) => {
+              'categoryId': selection.category.id,
+              'enabled': selection.include,
+              if (selection.include)
+                'gameTime': _formatTimeOfDay(selection.time!),
+            })
+        .toList();
 
     try {
-      final response = await api.post<Map<String, dynamic>>(
-        '/tournaments',
-        data: payload,
-      );
-      final tournamentId = response.data?['id'] as int?;
-      if (tournamentId == null) {
-        throw StateError('La API no devolvió el identificador del torneo creado.');
-      }
-      final selectedCategories =
-          _selections.where((selection) => selection.include).toList();
-      for (final selection in selectedCategories) {
-        await api.post(
-          '/tournaments/$tournamentId/categories',
+      if (widget.tournament == null) {
+        final response = await api.post<Map<String, dynamic>>(
+          '/tournaments',
+          data: payload,
+        );
+        final tournamentId = response.data?['id'] as int?;
+        if (tournamentId == null) {
+          throw StateError('La API no devolvió el identificador del torneo creado.');
+        }
+        for (final selection in selectedCategories) {
+          await api.post(
+            '/tournaments/$tournamentId/categories',
+            data: {
+              'categoryId': selection.category.id,
+              'enabled': true,
+              'gameTime': _formatTimeOfDay(selection.time!),
+            },
+          );
+        }
+        if (!mounted) {
+          return;
+        }
+        Navigator.of(context).pop(
+          addAnother
+              ? _TournamentFormResult.savedAndAddAnother
+              : _TournamentFormResult.saved,
+        );
+      } else {
+        await api.put(
+          '/tournaments/${widget.tournament!.id}',
           data: {
-            'categoryId': selection.category.id,
-            'enabled': true,
-            'gameTime': _formatTimeOfDay(selection.time!),
+            ...payload,
+            'categories': categoriesPayload,
           },
         );
+        if (!mounted) {
+          return;
+        }
+        Navigator.of(context).pop(_TournamentFormResult.saved);
       }
-      if (!mounted) {
-        return;
-      }
-      Navigator.of(context).pop(
-        addAnother
-            ? _TournamentFormResult.savedAndAddAnother
-            : _TournamentFormResult.saved,
-      );
     } on DioException catch (error) {
       final message = error.response?.data is Map<String, dynamic>
           ? (error.response!.data['message'] as String?)
