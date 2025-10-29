@@ -31,6 +31,7 @@ export class PlayersService {
           lastName: dto.lastName.trim(),
           dni: dto.dni.trim(),
           birthDate: new Date(dto.birthDate),
+          gender: dto.gender,
           active: dto.active ?? true,
           clubId: dto.clubId ?? null,
           addressStreet: this.normalizeNullable(dto.address?.street),
@@ -135,6 +136,9 @@ export class PlayersService {
     if (dto.birthDate !== undefined) {
       data.birthDate = new Date(dto.birthDate);
     }
+    if (dto.gender !== undefined) {
+      data.gender = dto.gender;
+    }
     if (dto.active !== undefined) {
       data.active = dto.active;
     }
@@ -179,6 +183,7 @@ export class PlayersService {
       lastName: player.lastName,
       dni: player.dni,
       birthDate: player.birthDate.toISOString(),
+      gender: player.gender,
       active: player.active,
       club: player.club ? { id: player.club.id, name: player.club.name } : null,
       address: hasAddress

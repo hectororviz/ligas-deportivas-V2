@@ -1,4 +1,5 @@
 import { Transform, Type } from 'class-transformer';
+import { Gender } from '@prisma/client';
 import {
   IsBoolean,
   IsDateString,
@@ -8,6 +9,7 @@ import {
   IsString,
   MaxLength,
   MinLength,
+  IsEnum,
   ValidateIf,
   ValidateNested
 } from 'class-validator';
@@ -65,6 +67,9 @@ export class CreatePlayerDto {
 
   @IsDateString()
   birthDate!: string;
+
+  @IsEnum(Gender)
+  gender!: Gender;
 
   @IsOptional()
   @Transform(({ value }) => {

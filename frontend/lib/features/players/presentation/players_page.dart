@@ -493,6 +493,7 @@ class _PlayersDataTable extends StatelessWidget {
       columns: const [
         DataColumn(label: Text('Apellido')),
         DataColumn(label: Text('Nombre')),
+        DataColumn(label: Text('Género')),
         DataColumn(label: Text('Nacimiento')),
         DataColumn(label: Text('Estado')),
         DataColumn(label: Text('Acciones')),
@@ -506,6 +507,7 @@ class _PlayersDataTable extends StatelessWidget {
               cells: [
                 DataCell(Text(player.lastName)),
                 DataCell(Text(player.firstName)),
+                DataCell(Text(player.genderLabel)),
                 DataCell(Text(player.formattedBirthDateWithAge)),
                 DataCell(
                   Align(
@@ -823,6 +825,7 @@ class _PlayerFormDialogState extends ConsumerState<_PlayerFormDialog> {
   late final TextEditingController _emergencyPhoneController;
   DateTime? _birthDate;
   int? _selectedClubId;
+  String _gender = 'MASCULINO';
   bool _active = true;
   bool _isSaving = false;
   bool _checkingDni = false;
@@ -852,6 +855,7 @@ class _PlayerFormDialogState extends ConsumerState<_PlayerFormDialog> {
     _emergencyPhoneController =
         TextEditingController(text: player?.emergencyContact?.phone ?? '');
     _selectedClubId = player?.club?.id;
+    _gender = player?.gender ?? 'MASCULINO';
     _active = player?.active ?? true;
 
     if (!widget.readOnly) {
@@ -1042,6 +1046,7 @@ class _PlayerFormDialogState extends ConsumerState<_PlayerFormDialog> {
       'birthDate': _birthDate != null
           ? DateFormat('yyyy-MM-dd').format(_birthDate!)
           : null,
+      'gender': _gender,
       'active': _active,
       'clubId': _selectedClubId,
       'address': {
@@ -1183,6 +1188,39 @@ class _PlayerFormDialogState extends ConsumerState<_PlayerFormDialog> {
                 }
                 return null;
               },
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Género',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            ToggleButtons(
+              borderRadius: BorderRadius.circular(12),
+              isSelected: [
+                _gender == 'MASCULINO',
+                _gender == 'FEMENINO',
+              ],
+              onPressed: readOnly
+                  ? null
+                  : (index) {
+                      setState(() {
+                        _gender = index == 0 ? 'MASCULINO' : 'FEMENINO';
+                      });
+                    },
+              children: const [
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Text('Masculino'),
+                ),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Text('Femenino'),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             TextFormField(
@@ -1482,6 +1520,10 @@ class _PlayerDetailsView extends StatelessWidget {
             value: player.formattedBirthDateWithAge,
           ),
           _DetailsRow(
+            label: 'Género',
+            value: player.genderLabel,
+          ),
+          _DetailsRow(
             label: 'Dirección',
             value: player.address?.formatted ?? 'Sin datos',
           ),
@@ -1587,6 +1629,7 @@ class Player {
     required this.lastName,
     required this.dni,
     required this.birthDate,
+    required this.gender,
     required this.active,
     this.club,
     this.address,
@@ -1600,6 +1643,7 @@ class Player {
       lastName: json['lastName'] as String,
       dni: json['dni'] as String,
       birthDate: _parseDate(json['birthDate']),
+      gender: json['gender'] as String? ?? 'MASCULINO',
       active: json['active'] as bool? ?? true,
       club: json['club'] == null
           ? null
@@ -1620,6 +1664,7 @@ class Player {
   final String lastName;
   final String dni;
   final DateTime? birthDate;
+  final String gender;
   final bool active;
   final ClubSummary? club;
   final PlayerAddress? address;
@@ -1640,6 +1685,17 @@ class Player {
     }
     final age = _calculateAge(birthDate!);
     return '${DateFormat('dd/MM/yyyy').format(birthDate!)}${age != null ? ' · $age años' : ''}';
+  }
+
+  String get genderLabel {
+    switch (gender) {
+      case 'FEMENINO':
+        return 'Femenino';
+      case 'MASCULINO':
+        return 'Masculino';
+      default:
+        return 'Otro';
+    }
   }
 }
 

@@ -112,33 +112,6 @@ export class TournamentsService {
       );
     }
 
-    if (dto.enabled) {
-      const clubAssignments = tournament.zones.flatMap((zone) => zone.clubZones);
-      if (clubAssignments.length) {
-        const clubIds = clubAssignments.map((assignment) => assignment.clubId);
-        const teams = await this.prisma.team.findMany({
-          where: {
-            clubId: { in: clubIds },
-            categoryId: dto.categoryId,
-          },
-          select: { clubId: true },
-        });
-        const clubIdsWithTeam = new Set(teams.map((team) => team.clubId));
-        const missing = clubAssignments.filter(
-          (assignment) => !clubIdsWithTeam.has(assignment.clubId),
-        );
-        if (missing.length) {
-          const missingNames = missing
-            .map((assignment) => assignment.club.name)
-            .filter((value, index, array) => array.indexOf(value) === index)
-            .join(', ');
-          throw new BadRequestException(
-            `Los siguientes clubes no tienen equipos en la categoría ${category.name}: ${missingNames}`,
-          );
-        }
-      }
-    }
-
     return this.prisma.tournamentCategory.create({
       data: {
         tournamentId,
