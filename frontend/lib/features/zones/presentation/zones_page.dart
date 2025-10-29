@@ -806,9 +806,10 @@ class _ZoneEditorDialogState extends ConsumerState<_ZoneEditorDialog> {
                         ),
                       )
                     : ListView.separated(
-                        shrinkWrap: true,
+                        primary: false,
+                        shrinkWrap: !widget.scrollableList,
                         physics: widget.scrollableList
-                            ? null
+                            ? const AlwaysScrollableScrollPhysics()
                             : const NeverScrollableScrollPhysics(),
                         itemCount: _clubs.length,
                         separatorBuilder: (_, __) => const Divider(height: 1),
