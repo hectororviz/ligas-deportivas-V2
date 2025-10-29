@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
 import '../../shared/widgets/table_filters_bar.dart';
+import '../providers/categories_catalog_provider.dart';
 
 const _moduleCategories = 'CATEGORIAS';
 const _actionCreate = 'CREATE';
@@ -103,6 +104,7 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage> {
     );
     if (created == true) {
       ref.invalidate(categoriesProvider);
+      ref.invalidate(categoriesCatalogProvider);
       if (!mounted) {
         return;
       }
@@ -119,6 +121,7 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage> {
     );
     if (updated == true) {
       ref.invalidate(categoriesProvider);
+      ref.invalidate(categoriesCatalogProvider);
       if (!mounted) {
         return;
       }

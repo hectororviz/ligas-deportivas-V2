@@ -99,8 +99,8 @@ class _ClubAdminPageState extends ConsumerState<ClubAdminPage> {
         data: (overview) => isAdmin
             ? FloatingActionButton.extended(
                 onPressed: () => _openJoinTournamentDialog(overview),
-                icon: const Icon(Icons.add_circle_outline),
-                label: const Text('Sumar a torneo'),
+                icon: const Icon(Icons.add),
+                label: const Text('Agregar a torneo'),
               )
             : null,
         orElse: () => null,
@@ -151,7 +151,7 @@ class _ClubAdminContent extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Administración de ${overview.club.name}',
+            'Administración de club',
             style: Theme.of(context)
                 .textTheme
                 .headlineMedium
@@ -525,7 +525,9 @@ class _ClubTournamentsAccordionState extends State<_ClubTournamentsAccordion> {
                     message: tooltipMessage,
                     child: Icon(Icons.circle, color: iconColor, size: 16),
                   ),
-                  title: Text('${tournament.name} (${tournament.year})'),
+                  title: Text(
+                    '${tournament.leagueName} - ${tournament.name} (${tournament.year})',
+                  ),
                   subtitle: Text(
                     tournament.categories.isEmpty
                         ? 'Sin categorías asignadas'
@@ -739,6 +741,7 @@ class ClubAdminTournament {
     required this.name,
     required this.year,
     required this.leagueId,
+    required this.leagueName,
     required this.categories,
   });
 
@@ -748,6 +751,7 @@ class ClubAdminTournament {
       name: json['name'] as String,
       year: json['year'] as int,
       leagueId: json['leagueId'] as int,
+      leagueName: json['leagueName'] as String? ?? '—',
       categories: (json['categories'] as List<dynamic>? ?? [])
           .map((item) => ClubAdminCategory.fromJson(item as Map<String, dynamic>))
           .toList(),
@@ -758,6 +762,7 @@ class ClubAdminTournament {
   final String name;
   final int year;
   final int leagueId;
+  final String leagueName;
   final List<ClubAdminCategory> categories;
 
   bool get isCompliant => categories.every((category) => category.isCompliant);
@@ -1556,7 +1561,9 @@ class _ClubJoinTournamentDialogState extends ConsumerState<ClubJoinTournamentDia
                   .map(
                     (item) => DropdownMenuItem(
                       value: item,
-                      child: Text('${item.name} (${item.year})'),
+                      child: Text(
+                        '${item.leagueName} - ${item.name} (${item.year})',
+                      ),
                     ),
                   )
                   .toList(),
@@ -1622,6 +1629,7 @@ class AvailableTournament {
     required this.name,
     required this.year,
     required this.leagueId,
+    required this.leagueName,
     required this.categories,
   });
 
@@ -1631,6 +1639,7 @@ class AvailableTournament {
       name: json['name'] as String,
       year: json['year'] as int,
       leagueId: json['leagueId'] as int,
+      leagueName: json['leagueName'] as String? ?? '—',
       categories: (json['categories'] as List<dynamic>? ?? [])
           .map((item) => AvailableTournamentCategory.fromJson(item as Map<String, dynamic>))
           .toList(),
@@ -1641,6 +1650,7 @@ class AvailableTournament {
   final String name;
   final int year;
   final int leagueId;
+  final String leagueName;
   final List<AvailableTournamentCategory> categories;
 }
 

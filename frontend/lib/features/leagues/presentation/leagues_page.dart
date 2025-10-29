@@ -114,7 +114,7 @@ class _LeaguesPageState extends ConsumerState<LeaguesPage> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openCreateLeague,
         icon: const Icon(Icons.add),
-        label: const Text('Nueva liga'),
+        label: const Text('Agregar liga'),
       ),
       body: Padding(
         padding: const EdgeInsets.all(24.0),

@@ -99,6 +99,7 @@ model Tournament {
   leagueId     Int
   name         String
   year         Int
+  gender       Gender                 @default(MIXTO)
   pointsWin    Int                    @default(3)
   pointsDraw   Int                    @default(1)
   pointsLoss   Int                    @default(0)
