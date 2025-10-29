@@ -952,11 +952,19 @@ class _ZoneDetailsDialog extends ConsumerStatefulWidget {
 
 class _ZoneDetailsDialogState extends ConsumerState<_ZoneDetailsDialog> {
   late Future<_ZoneDetailsData> _future;
+  late final ScrollController _clubScrollController;
 
   @override
   void initState() {
     super.initState();
+    _clubScrollController = ScrollController();
     _future = _load();
+  }
+
+  @override
+  void dispose() {
+    _clubScrollController.dispose();
+    super.dispose();
   }
 
   Future<_ZoneDetailsData> _load() async {
@@ -1023,55 +1031,41 @@ class _ZoneDetailsDialogState extends ConsumerState<_ZoneDetailsDialog> {
         final data = snapshot.data!;
         final detail = data.detail;
         final clubs = data.clubs;
-        return SizedBox(
-          width: double.infinity,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                detail.name,
-                style: Theme.of(context)
-                    .textTheme
-                    .titleLarge
-                    ?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 8),
-              Row(
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            const maxListHeight = 360.0;
+            const rowHeight = 68.0;
+            final estimatedHeight = clubs.length * rowHeight;
+            final constraintMin = math.min(rowHeight, constraints.maxHeight);
+            final effectiveMinHeight = constraintMin > 0 ? constraintMin : rowHeight;
+            final resolvedHeight =
+                estimatedHeight.clamp(effectiveMinHeight, maxListHeight).toDouble();
+
+            return SizedBox(
+              width: double.infinity,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  _ZoneStatusChip(status: detail.status),
-                  const SizedBox(width: 12),
-                  Text('${detail.tournament.leagueName} • ${detail.tournament.name} ${detail.tournament.year}'),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Clubes asignados',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 8),
-              if (clubs.isEmpty)
-                const Text('Aún no hay clubes asignados a esta zona.')
-              else
-                Builder(
-                  builder: (context) {
-                    const maxListHeight = 320.0;
-                    const estimatedTileHeight = 72.0;
-                    final estimatedHeight = clubs.length * estimatedTileHeight;
-                    final minimumHeight = math.min(maxListHeight, estimatedTileHeight);
-                    final listHeight = estimatedHeight
-                        .clamp(minimumHeight, maxListHeight)
-                        .toDouble();
-                    return SizedBox(
-                      height: listHeight,
+                  Text(
+                    'Clubes en ${detail.name}',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleLarge
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 16),
+                  if (clubs.isEmpty)
+                    const Text('Aún no hay clubes asignados a esta zona.')
+                  else
+                    SizedBox(
+                      height: resolvedHeight,
                       child: Scrollbar(
+                        controller: _clubScrollController,
                         thumbVisibility: estimatedHeight > maxListHeight,
                         child: ListView.separated(
-                          shrinkWrap: true,
-                          primary: false,
+                          controller: _clubScrollController,
+                          padding: EdgeInsets.zero,
                           itemCount: clubs.length,
                           separatorBuilder: (_, __) => const Divider(height: 1),
                           itemBuilder: (context, index) {
@@ -1087,8 +1081,11 @@ class _ZoneDetailsDialogState extends ConsumerState<_ZoneDetailsDialog> {
                               contentPadding: EdgeInsets.zero,
                               leading: Tooltip(
                                 message: tooltip,
-                                child:
-                                    Icon(Icons.circle, size: 14, color: indicatorColor),
+                                child: Icon(
+                                  Icons.circle,
+                                  size: 14,
+                                  color: indicatorColor,
+                                ),
                               ),
                               title: Text(clubStatus.club.name),
                               subtitle: clubStatus.club.shortName != null
@@ -1098,11 +1095,11 @@ class _ZoneDetailsDialogState extends ConsumerState<_ZoneDetailsDialog> {
                           },
                         ),
                       ),
-                    );
-                  },
-                ),
-            ],
-          ),
+                    ),
+                ],
+              ),
+            );
+          },
         );
       },
     );
