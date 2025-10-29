@@ -1061,12 +1061,17 @@ class _ZoneDetailsDialogState extends ConsumerState<_ZoneDetailsDialog> {
                     const maxListHeight = 320.0;
                     const estimatedTileHeight = 72.0;
                     final estimatedHeight = clubs.length * estimatedTileHeight;
-                    final listHeight = math.min(maxListHeight, estimatedHeight);
+                    final minimumHeight = math.min(maxListHeight, estimatedTileHeight);
+                    final listHeight = estimatedHeight
+                        .clamp(minimumHeight, maxListHeight)
+                        .toDouble();
                     return SizedBox(
                       height: listHeight,
                       child: Scrollbar(
                         thumbVisibility: estimatedHeight > maxListHeight,
                         child: ListView.separated(
+                          shrinkWrap: true,
+                          primary: false,
                           itemCount: clubs.length,
                           separatorBuilder: (_, __) => const Divider(height: 1),
                           itemBuilder: (context, index) {
