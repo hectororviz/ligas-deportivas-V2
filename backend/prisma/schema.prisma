@@ -219,17 +219,24 @@ model Roster {
 }
 
 model Player {
-  id          Int      @id @default(autoincrement())
-  clubId      Int
-  firstName   String
-  lastName    String
-  birthDate   DateTime
-  document    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  club        Club     @relation(fields: [clubId], references: [id])
-  goals       Goal[]
-  rosters     RosterPlayer[]
+  id                    Int      @id @default(autoincrement())
+  clubId                Int?
+  firstName             String
+  lastName              String
+  birthDate             DateTime
+  dni                   String   @unique
+  active                Boolean  @default(true)
+  addressStreet         String?
+  addressNumber         String?
+  addressCity           String?
+  emergencyName         String?
+  emergencyRelationship String?
+  emergencyPhone        String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  club                  Club?    @relation(fields: [clubId], references: [id])
+  goals                 Goal[]
+  rosters               RosterPlayer[]
 }
 
 model RosterPlayer {
