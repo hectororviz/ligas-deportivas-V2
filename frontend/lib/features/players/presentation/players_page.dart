@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../../../services/api_client.dart';
@@ -22,15 +23,27 @@ final playersFiltersProvider =
 final playersProvider = FutureProvider<PaginatedPlayers>((ref) async {
   final filters = ref.watch(playersFiltersProvider);
   final api = ref.read(apiClientProvider);
-  final response =
-      await api.get<Map<String, dynamic>>('/players', queryParameters: {
-    if (filters.query.trim().isNotEmpty) 'search': filters.query.trim(),
-    if (filters.status != PlayerStatusFilter.all) 'status': filters.status.name,
-    'page': filters.page,
-    'pageSize': filters.pageSize,
-  });
-  final data = response.data ?? {};
-  return PaginatedPlayers.fromJson(data);
+  try {
+    final response =
+        await api.get<Map<String, dynamic>>('/players', queryParameters: {
+      if (filters.query.trim().isNotEmpty) 'search': filters.query.trim(),
+      if (filters.status != PlayerStatusFilter.all) 'status': filters.status.name,
+      'page': filters.page,
+      'pageSize': filters.pageSize,
+    });
+    final data = response.data ?? {};
+    return PaginatedPlayers.fromJson(data);
+  } on DioException catch (error) {
+    if (error.response?.statusCode == 404) {
+      return PaginatedPlayers(
+        players: const [],
+        total: 0,
+        page: filters.page,
+        pageSize: filters.pageSize,
+      );
+    }
+    rethrow;
+  }
 });
 
 final clubsCatalogProvider = FutureProvider<List<ClubSummary>>((ref) async {
@@ -906,6 +919,12 @@ class _PlayerFormDialogState extends ConsumerState<_PlayerFormDialog> {
       }
     } on DioException catch (error) {
       if (!mounted) return;
+      if (error.response?.statusCode == 404) {
+        setState(() {
+          _duplicatePlayer = null;
+        });
+        return;
+      }
       setState(() {
         _errorMessage = error.message;
         _duplicatePlayer = null;
@@ -925,6 +944,42 @@ class _PlayerFormDialogState extends ConsumerState<_PlayerFormDialog> {
     }
   }
 
+  void _handleBirthDateChanged(String value) {
+    if (widget.readOnly) {
+      return;
+    }
+    final text = value.trim();
+    DateTime? parsed;
+    if (text.isNotEmpty) {
+      try {
+        parsed = DateFormat('dd/MM/yyyy').parseStrict(text);
+      } catch (_) {
+        parsed = null;
+      }
+    }
+    setState(() {
+      _birthDate = parsed;
+    });
+  }
+
+  void _ensureBirthDateFormatted() {
+    if (widget.readOnly) {
+      return;
+    }
+    final birthDate = _birthDate;
+    if (birthDate == null) {
+      return;
+    }
+    final formatted = DateFormat('dd/MM/yyyy').format(birthDate);
+    if (_birthDateController.text != formatted) {
+      _birthDateController
+        ..text = formatted
+        ..selection = TextSelection.fromPosition(
+          TextPosition(offset: formatted.length),
+        );
+    }
+  }
+
   Future<void> _pickBirthDate() async {
     if (widget.readOnly) {
       return;
@@ -939,7 +994,7 @@ class _PlayerFormDialogState extends ConsumerState<_PlayerFormDialog> {
       helpText: 'Seleccioná la fecha de nacimiento',
       cancelText: 'Cancelar',
       confirmText: 'Aceptar',
-      locale: const Locale('es'),
+      locale: const Locale('es', 'US'),
     );
     if (picked != null) {
       setState(() {
@@ -1099,15 +1154,27 @@ class _PlayerFormDialogState extends ConsumerState<_PlayerFormDialog> {
             const SizedBox(height: 16),
             TextFormField(
               controller: _birthDateController,
-              readOnly: true,
-              onTap: _pickBirthDate,
               enabled: !readOnly,
+              readOnly: readOnly,
+              keyboardType: TextInputType.number,
+              textInputAction: TextInputAction.next,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[0-9/]')),
+              ],
+              onChanged: _handleBirthDateChanged,
+              onEditingComplete: () {
+                _ensureBirthDateFormatted();
+                FocusScope.of(context).nextFocus();
+              },
               decoration: InputDecoration(
                 labelText: 'Fecha de nacimiento',
                 hintText: 'DD/MM/AAAA',
                 suffixIcon: readOnly
                     ? null
-                    : const Icon(Icons.calendar_today_outlined),
+                    : IconButton(
+                        icon: const Icon(Icons.calendar_today_outlined),
+                        onPressed: _pickBirthDate,
+                      ),
                 helperText: age != null ? 'Edad: $age años' : ' ',
               ),
               validator: (value) {
