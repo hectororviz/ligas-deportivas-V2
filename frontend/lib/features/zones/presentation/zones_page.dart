@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -99,14 +101,15 @@ class _ZonesPageState extends ConsumerState<ZonesPage> {
         useSafeArea: true,
         showDragHandle: true,
         builder: (context) {
-          return Padding(
+          final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+          return SingleChildScrollView(
             padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+              bottom: bottomInset + 24,
               left: 24,
               right: 24,
               top: 12,
             ),
-            child: _ZoneEditorDialog(zone: zone),
+            child: _ZoneEditorDialog(zone: zone, scrollableList: false),
           );
         },
       );
@@ -115,12 +118,22 @@ class _ZonesPageState extends ConsumerState<ZonesPage> {
     return showDialog<ZoneEditorResult>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        const insetPadding = EdgeInsets.symmetric(horizontal: 24, vertical: 24);
+        final media = MediaQuery.of(context);
+        final availableHeight = media.size.height - insetPadding.vertical - media.viewInsets.vertical;
+
+        return Dialog(
+          insetPadding: insetPadding,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          content: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 640),
-            child: _ZoneEditorDialog(zone: zone),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 640,
+              maxHeight: availableHeight > 0 ? availableHeight : media.size.height * 0.8,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              child: _ZoneEditorDialog(zone: zone),
+            ),
           ),
         );
       },
@@ -405,9 +418,10 @@ class ZoneEditorResult {
 }
 
 class _ZoneEditorDialog extends ConsumerStatefulWidget {
-  const _ZoneEditorDialog({this.zone});
+  const _ZoneEditorDialog({this.zone, this.scrollableList = true});
 
   final ZoneSummary? zone;
+  final bool scrollableList;
 
   @override
   ConsumerState<_ZoneEditorDialog> createState() => _ZoneEditorDialogState();
@@ -429,6 +443,19 @@ class _ZoneEditorDialogState extends ConsumerState<_ZoneEditorDialog> {
   bool _tournamentLocked = false;
   String? _errorMessage;
   int? _zoneId;
+
+  double? _clubListHeight(BuildContext context) {
+    if (!widget.scrollableList || _clubs.isEmpty) {
+      return null;
+    }
+    const minHeight = 160.0;
+    const rowHeight = 68.0;
+    final estimatedHeight = _clubs.length * rowHeight;
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final targetHeight = math.min(screenHeight * 0.45, 360.0);
+    final maxHeight = math.max(minHeight, targetHeight);
+    return estimatedHeight.clamp(minHeight, maxHeight).toDouble();
+  }
 
   @override
   void initState() {
@@ -711,8 +738,10 @@ class _ZoneEditorDialogState extends ConsumerState<_ZoneEditorDialog> {
     }
 
     final canEdit = !_zoneLocked && !_tournamentLocked && _status == ZoneStatus.open;
+    final listHeight = _clubListHeight(context);
 
-    return SingleChildScrollView(
+    return SizedBox(
+      width: double.infinity,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -787,7 +816,6 @@ class _ZoneEditorDialogState extends ConsumerState<_ZoneEditorDialog> {
           ),
           const SizedBox(height: 8),
           Container(
-            constraints: const BoxConstraints(maxHeight: 320),
             decoration: BoxDecoration(
               border: Border.all(color: Theme.of(context).dividerColor),
               borderRadius: BorderRadius.circular(12),
@@ -801,43 +829,69 @@ class _ZoneEditorDialogState extends ConsumerState<_ZoneEditorDialog> {
                           child: Text('No hay clubes inscriptos en este torneo.'),
                         ),
                       )
-                    : ListView.separated(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _clubs.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (context, index) {
-                          final club = _clubs[index];
-                          final selected = _selectedClubs.contains(club.id);
-                          final canSelect = club.eligible;
-                          final isDisabled = _submitting || !canEdit;
-                          final indicatorColor = club.eligible ? Colors.green : Colors.redAccent;
-                          final tooltip = _buildEligibilityTooltip(club);
-                          return ListTile(
-                            leading: Tooltip(
-                              message: tooltip,
-                              child: Icon(Icons.circle, size: 14, color: indicatorColor),
-                            ),
-                            title: Text(club.name),
-                            subtitle: club.shortName != null
-                                ? Text('Alias: ${club.shortName}')
-                                : Text('${club.categories.where((category) => category.hasTeam).length} categorías con equipo'),
-                            trailing: Checkbox(
-                              value: selected,
-                              onChanged: isDisabled
-                                  ? null
-                                  : (checked) {
-                                      if (checked == true) {
-                                        if (!canSelect) {
+                    : Builder(
+                        builder: (context) {
+                          Widget listView = ListView.separated(
+                            primary: false,
+                            shrinkWrap: !widget.scrollableList,
+                            physics: widget.scrollableList
+                                ? const AlwaysScrollableScrollPhysics()
+                                : const NeverScrollableScrollPhysics(),
+                            itemCount: _clubs.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final club = _clubs[index];
+                              final selected = _selectedClubs.contains(club.id);
+                              final canSelect = club.eligible;
+                              final isDisabled = _submitting || !canEdit;
+                              final indicatorColor = club.eligible ? Colors.green : Colors.redAccent;
+                              final tooltip = _buildEligibilityTooltip(club);
+                              return ListTile(
+                                leading: Tooltip(
+                                  message: tooltip,
+                                  child: Icon(Icons.circle, size: 14, color: indicatorColor),
+                                ),
+                                title: Text(club.name),
+                                subtitle: club.shortName != null
+                                    ? Text('Alias: ${club.shortName}')
+                                    : Text('${club.categories.where((category) => category.hasTeam).length} categorías con equipo'),
+                                trailing: Checkbox(
+                                  value: selected,
+                                  onChanged: isDisabled
+                                      ? null
+                                      : (checked) {
+                                          if (checked == true) {
+                                            if (!canSelect) {
+                                              return;
+                                            }
+                                            setState(() => _selectedClubs.add(club.id));
+                                          } else {
+                                            setState(() => _selectedClubs.remove(club.id));
+                                          }
+                                        },
+                                ),
+                                enabled: canSelect || selected,
+                                onTap: isDisabled
+                                    ? null
+                                    : () {
+                                        if (!canSelect && !selected) {
                                           return;
                                         }
-                                        setState(() => _selectedClubs.add(club.id));
-                                      } else {
-                                        setState(() => _selectedClubs.remove(club.id));
-                                      }
-                                    },
-                            ),
+                                        setState(() {
+                                          if (selected) {
+                                            _selectedClubs.remove(club.id);
+                                          } else {
+                                            _selectedClubs.add(club.id);
+                                          }
+                                        });
+                                      },
+                              );
+                            },
                           );
+                          if (listHeight != null) {
+                            listView = SizedBox(height: listHeight, child: listView);
+                          }
+                          return listView;
                         },
                       ),
           ),
