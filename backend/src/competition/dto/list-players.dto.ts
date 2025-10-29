@@ -1,5 +1,5 @@
 import { Gender } from '@prisma/client';
-import { Transform, Type } from 'class-transformer';
+import { Transform } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, Min, ValidateIf } from 'class-validator';
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
@@ -56,11 +56,10 @@ export class ListPlayersDto {
     if (typeof value === 'number') {
       return value;
     }
-    const parsed = Number.parseInt(value, 10);
-    return Number.isNaN(parsed) ? value : parsed;
+    const parsed = Number.parseInt(String(value), 10);
+    return Number.isNaN(parsed) ? undefined : parsed;
   })
   @ValidateIf((_, value) => value !== null && value !== undefined)
-  @Type(() => Number)
   @IsInt()
   clubId?: number | null;
 
@@ -72,10 +71,9 @@ export class ListPlayersDto {
     if (typeof value === 'number') {
       return value;
     }
-    const parsed = Number.parseInt(value, 10);
+    const parsed = Number.parseInt(String(value), 10);
     return Number.isNaN(parsed) ? undefined : parsed;
   })
-  @Type(() => Number)
   @IsInt()
   @Min(1900)
   birthYear?: number;
