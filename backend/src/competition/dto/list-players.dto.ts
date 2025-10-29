@@ -1,3 +1,4 @@
+import { Gender } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, Min, ValidateIf } from 'class-validator';
 
@@ -15,6 +16,10 @@ export class ListPlayersDto {
   @IsOptional()
   @IsIn(['all', 'active', 'inactive'])
   status?: 'all' | 'active' | 'inactive';
+
+  @IsOptional()
+  @IsIn(['MASCULINO', 'FEMENINO', 'MIXTO'])
+  gender?: Gender;
 
   @IsOptional()
   @Transform(({ value }) => {
@@ -58,4 +63,20 @@ export class ListPlayersDto {
   @Type(() => Number)
   @IsInt()
   clubId?: number | null;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+    if (typeof value === 'number') {
+      return value;
+    }
+    const parsed = Number.parseInt(value, 10);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1900)
+  birthYear?: number;
 }

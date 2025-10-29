@@ -514,14 +514,15 @@ class _ClubsDataTable extends StatelessWidget {
                   ),
                 ),
                 DataCell(
-                  Wrap(
-                    spacing: 8,
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       OutlinedButton.icon(
                         onPressed: () => onView(club),
                         icon: const Icon(Icons.visibility_outlined),
                         label: const Text('Detalles'),
                       ),
+                      const SizedBox(width: 8),
                       FilledButton.tonalIcon(
                         onPressed: canEdit ? () => onEdit(club) : null,
                         icon: const Icon(Icons.edit_outlined),
