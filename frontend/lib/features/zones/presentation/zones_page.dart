@@ -1265,7 +1265,7 @@ class _ZoneDetailsDialogState extends ConsumerState<_ZoneDetailsDialog> {
                       child: Scrollbar(
                         thumbVisibility: listHeight >= 360.0,
                         child: ListView.separated(
-                          shrinkWrap: true,
+                          primary: false,
                           padding: const EdgeInsets.only(bottom: 8),
                           itemCount: clubs.length,
                           itemBuilder: (context, index) {
