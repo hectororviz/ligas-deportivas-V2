@@ -856,7 +856,7 @@ class _ZoneEditorDialogState extends ConsumerState<_ZoneEditorDialog> {
                               final selected = _selectedClubs.contains(club.id);
                               final isDisabled = _submitting || !canEdit;
                               final indicatorColor = club.eligible ? Colors.green : Colors.redAccent;
-                              final tooltip = _buildEligibilityTooltip(club);
+                              final tooltip = buildEligibilityTooltip(club);
                               return ListTile(
                                 leading: Tooltip(
                                   message: tooltip,
@@ -939,32 +939,6 @@ class _ZoneEditorDialogState extends ConsumerState<_ZoneEditorDialog> {
     );
   }
 
-  String _buildEligibilityTooltip(TournamentClubEligibility club) {
-    if (club.eligible) {
-      return 'El club cumple con todas las categorías requeridas.';
-    }
-    final missingTeams = club.categories.where(
-      (category) => category.mandatory && (!category.hasTeam || category.playersCount < category.minPlayers),
-    );
-    final missingPlayers = club.categories.where(
-      (category) => category.hasTeam && category.playersCount < category.minPlayers,
-    );
-    final buffer = <String>[];
-    if (missingTeams.isNotEmpty) {
-      buffer.add(
-        'Faltan equipos obligatorios: ${missingTeams.map((c) => c.categoryName).join(', ')}.',
-      );
-    }
-    if (missingPlayers.isNotEmpty) {
-      buffer.add(
-        "Jugadores insuficientes en: ${missingPlayers.map((c) => "${c.categoryName} (${c.playersCount}/${c.minPlayers})").join(', ')}.",
-      );
-    }
-    if (buffer.isEmpty) {
-      buffer.add('No cumple los requisitos definidos para el torneo.');
-    }
-    return buffer.join('\n');
-  }
 }
 
 class _ZoneDetailsDialog extends ConsumerStatefulWidget {
@@ -977,24 +951,67 @@ class _ZoneDetailsDialog extends ConsumerStatefulWidget {
 }
 
 class _ZoneDetailsDialogState extends ConsumerState<_ZoneDetailsDialog> {
-  late Future<ZoneDetail> _future;
+  late Future<_ZoneDetailsData> _future;
+  late final ScrollController _clubScrollController;
 
   @override
   void initState() {
     super.initState();
+    _clubScrollController = ScrollController();
     _future = _load();
   }
 
-  Future<ZoneDetail> _load() async {
+  @override
+  void dispose() {
+    _clubScrollController.dispose();
+    super.dispose();
+  }
+
+  Future<_ZoneDetailsData> _load() async {
     final api = ref.read(apiClientProvider);
     final response = await api.get<Map<String, dynamic>>('/zones/${widget.zoneId}');
     final data = response.data ?? <String, dynamic>{};
-    return ZoneDetail.fromJson(data);
+    final detail = ZoneDetail.fromJson(data);
+
+    List<TournamentClubEligibility> tournamentClubs = [];
+    try {
+      final clubsResponse = await api
+          .get<List<dynamic>>('/tournaments/${detail.tournament.id}/zones/clubs');
+      final clubsData = clubsResponse.data ?? [];
+      tournamentClubs = clubsData
+          .map((json) =>
+              TournamentClubEligibility.fromJson(json as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      tournamentClubs = [];
+    }
+
+    final assignedClubIds = detail.clubs.map((club) => club.id).toSet();
+    final eligibilityById = <int, TournamentClubEligibility>{
+      for (final club in tournamentClubs)
+        if (assignedClubIds.contains(club.id)) club.id: club,
+    };
+
+    final sortedClubs = [...detail.clubs]
+      ..sort(
+        (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+      );
+
+    final clubs = sortedClubs
+        .map(
+          (club) => _ZoneClubStatus(
+            club: club,
+            eligibility: eligibilityById[club.id],
+          ),
+        )
+        .toList();
+
+    return _ZoneDetailsData(detail: detail, clubs: clubs);
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<ZoneDetail>(
+    return FutureBuilder<_ZoneDetailsData>(
       future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
@@ -1011,62 +1028,103 @@ class _ZoneDetailsDialogState extends ConsumerState<_ZoneDetailsDialog> {
             ),
           );
         }
-        final detail = snapshot.data!;
-        return SizedBox(
-          width: double.infinity,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                detail.name,
-                style: Theme.of(context)
-                    .textTheme
-                    .titleLarge
-                    ?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 8),
-              Row(
+        final data = snapshot.data!;
+        final detail = data.detail;
+        final clubs = data.clubs;
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            const maxListHeight = 360.0;
+            const rowHeight = 68.0;
+            final estimatedHeight = clubs.length * rowHeight;
+            final constraintMin = math.min(rowHeight, constraints.maxHeight);
+            final effectiveMinHeight = constraintMin > 0 ? constraintMin : rowHeight;
+            final resolvedHeight =
+                estimatedHeight.clamp(effectiveMinHeight, maxListHeight).toDouble();
+
+            return SizedBox(
+              width: double.infinity,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  _ZoneStatusChip(status: detail.status),
-                  const SizedBox(width: 12),
-                  Text('${detail.tournament.leagueName} • ${detail.tournament.name} ${detail.tournament.year}'),
+                  Text(
+                    'Clubes en ${detail.name}',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleLarge
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 16),
+                  if (clubs.isEmpty)
+                    const Text('Aún no hay clubes asignados a esta zona.')
+                  else
+                    SizedBox(
+                      height: resolvedHeight,
+                      child: Scrollbar(
+                        controller: _clubScrollController,
+                        thumbVisibility: estimatedHeight > maxListHeight,
+                        child: ListView.separated(
+                          controller: _clubScrollController,
+                          padding: EdgeInsets.zero,
+                          itemCount: clubs.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (context, index) {
+                            final clubStatus = clubs[index];
+                            final eligibility = clubStatus.eligibility;
+                            final meetsMinimums = clubStatus.meetsMinimums;
+                            final indicatorColor =
+                                meetsMinimums ? Colors.green : Colors.redAccent;
+                            final tooltip = eligibility != null
+                                ? buildEligibilityTooltip(eligibility)
+                                : 'No se pudo determinar la disponibilidad de jugadores para este club.';
+                            return ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: Tooltip(
+                                message: tooltip,
+                                child: Icon(
+                                  Icons.circle,
+                                  size: 14,
+                                  color: indicatorColor,
+                                ),
+                              ),
+                              title: Text(clubStatus.club.name),
+                              subtitle: clubStatus.club.shortName != null
+                                  ? Text('Alias: ${clubStatus.club.shortName}')
+                                  : null,
+                            );
+                          },
+                        ),
+                      ),
+                    ),
                 ],
               ),
-              const SizedBox(height: 16),
-              Text(
-                'Clubes asignados',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 8),
-              if (detail.clubs.isEmpty)
-                const Text('Aún no hay clubes asignados a esta zona.')
-              else
-                SizedBox(
-                  height: 240,
-                  child: ListView.separated(
-                    itemCount: detail.clubs.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (context, index) {
-                      final club = detail.clubs[index];
-                      return ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.shield_outlined),
-                        title: Text(club.name),
-                        subtitle:
-                            club.shortName != null ? Text('Alias: ${club.shortName}') : null,
-                      );
-                    },
-                  ),
-                ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
+  }
+}
+
+class _ZoneDetailsData {
+  const _ZoneDetailsData({required this.detail, required this.clubs});
+
+  final ZoneDetail detail;
+  final List<_ZoneClubStatus> clubs;
+}
+
+class _ZoneClubStatus {
+  const _ZoneClubStatus({required this.club, this.eligibility});
+
+  final ZoneClub club;
+  final TournamentClubEligibility? eligibility;
+
+  bool get meetsMinimums {
+    final categories = eligibility?.categories;
+    if (categories == null || categories.isEmpty) {
+      return false;
+    }
+    return categories.every((category) => category.meetsMinPlayers);
   }
 }
 
@@ -1252,6 +1310,33 @@ class TournamentClubEligibility {
   final String? shortName;
   final bool eligible;
   final List<CategoryEligibility> categories;
+}
+
+String buildEligibilityTooltip(TournamentClubEligibility club) {
+  if (club.eligible) {
+    return 'El club cumple con todas las categorías requeridas.';
+  }
+  final missingTeams = club.categories.where(
+    (category) => category.mandatory && (!category.hasTeam || category.playersCount < category.minPlayers),
+  );
+  final missingPlayers = club.categories.where(
+    (category) => category.hasTeam && category.playersCount < category.minPlayers,
+  );
+  final buffer = <String>[];
+  if (missingTeams.isNotEmpty) {
+    buffer.add(
+      'Faltan equipos obligatorios: ${missingTeams.map((c) => c.categoryName).join(', ')}.',
+    );
+  }
+  if (missingPlayers.isNotEmpty) {
+    buffer.add(
+      "Jugadores insuficientes en: ${missingPlayers.map((c) => "${c.categoryName} (${c.playersCount}/${c.minPlayers})").join(', ')}.",
+    );
+  }
+  if (buffer.isEmpty) {
+    buffer.add('No cumple los requisitos definidos para el torneo.');
+  }
+  return buffer.join('\n');
 }
 
 class CategoryEligibility {
