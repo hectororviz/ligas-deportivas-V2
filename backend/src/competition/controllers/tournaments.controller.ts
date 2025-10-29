@@ -13,6 +13,11 @@ import { UpdateTournamentDto } from '../dto/update-tournament.dto';
 export class TournamentsController {
   constructor(private readonly tournamentsService: TournamentsService) {}
 
+  @Get('tournaments')
+  listAll() {
+    return this.tournamentsService.findAll();
+  }
+
   @Get('leagues/:leagueId/tournaments')
   listByLeague(@Param('leagueId', ParseIntPipe) leagueId: number) {
     return this.tournamentsService.findAllByLeague(leagueId);
@@ -21,6 +26,11 @@ export class TournamentsController {
   @Get('tournaments/:id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.tournamentsService.getTournament(id);
+  }
+
+  @Get('tournaments/:id/zones/clubs')
+  listClubsForZones(@Param('id', ParseIntPipe) id: number) {
+    return this.tournamentsService.listClubsForZones(id);
   }
 
   @Post('tournaments')

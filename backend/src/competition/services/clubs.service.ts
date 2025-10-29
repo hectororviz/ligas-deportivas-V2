@@ -3,7 +3,6 @@ import { Gender, Prisma } from '@prisma/client';
 
 import { slugify } from '../../common/utils/slugify';
 import { PrismaService } from '../../prisma/prisma.service';
-import { AssignClubZoneDto } from '../dto/assign-club-zone.dto';
 import { CreateClubDto } from '../dto/create-club.dto';
 import { ListClubsDto } from '../dto/list-clubs.dto';
 import { UpdateClubDto } from '../dto/update-club.dto';
@@ -632,79 +631,6 @@ export class ClubsService {
     } catch (error) {
       throw this.handlePrismaError(error);
     }
-  }
-
-  async assignToZone(zoneId: number, dto: AssignClubZoneDto) {
-    const zone = await this.prisma.zone.findUnique({
-      where: { id: zoneId },
-      include: {
-        tournament: {
-          include: {
-            zones: {
-              include: {
-                clubZones: true,
-              },
-            },
-            categories: {
-              where: { enabled: true },
-              include: { category: true },
-            },
-          },
-        },
-      },
-    });
-
-    if (!zone) {
-      throw new BadRequestException('Zona inexistente');
-    }
-
-    const alreadyAssigned = zone.tournament.zones.some((zoneItem) =>
-      zoneItem.clubZones.some((assignment) => assignment.clubId === dto.clubId),
-    );
-
-    if (alreadyAssigned) {
-      throw new BadRequestException('El club ya está asignado a una zona en este torneo');
-    }
-
-    const enabledCategories = zone.tournament.categories;
-
-    if (enabledCategories.length) {
-      const tournamentCategoryIds = enabledCategories.map((tc) => tc.id);
-      const teams = await this.prisma.team.findMany({
-        where: {
-          clubId: dto.clubId,
-          tournamentCategoryId: { in: tournamentCategoryIds },
-          active: true,
-        },
-        select: { tournamentCategoryId: true },
-      });
-
-      const activeTeamCategoryIds = new Set(teams.map((team) => team.tournamentCategoryId));
-      const missing = enabledCategories.filter((tc) => !activeTeamCategoryIds.has(tc.id));
-
-      if (missing.length) {
-        const missingNames = missing.map((tc) => tc.category.name).join(', ');
-        throw new BadRequestException(
-          `El club no tiene equipos cargados para las categorías habilitadas: ${missingNames}`,
-        );
-      }
-    }
-
-    await this.prisma.clubZone.create({
-      data: {
-        clubId: dto.clubId,
-        zoneId: zone.id,
-      },
-    });
-
-    return this.prisma.zone.findUnique({
-      where: { id: zoneId },
-      include: {
-        clubZones: {
-          include: { club: true },
-        },
-      },
-    });
   }
 
   async updateTeams(clubId: number, dto: UpdateClubTeamsDto) {

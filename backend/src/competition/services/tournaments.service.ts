@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateTournamentDto } from '../dto/create-tournament.dto';
 import { CreateZoneDto } from '../dto/create-zone.dto';
@@ -8,6 +8,18 @@ import { UpdateTournamentDto } from '../dto/update-tournament.dto';
 @Injectable()
 export class TournamentsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  findAll() {
+    return this.prisma.tournament.findMany({
+      include: {
+        league: true,
+      },
+      orderBy: [
+        { year: 'desc' },
+        { name: 'asc' },
+      ],
+    });
+  }
 
   create(dto: CreateTournamentDto) {
     return this.prisma.tournament.create({
@@ -66,6 +78,142 @@ export class TournamentsService {
         tournamentId,
       },
     });
+  }
+
+  async listClubsForZones(tournamentId: number) {
+    const tournament = await this.prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      include: {
+        categories: {
+          where: { enabled: true },
+          orderBy: { category: { name: 'asc' } },
+          include: {
+            category: true,
+            teams: {
+              where: { active: true },
+              include: {
+                club: {
+                  select: {
+                    id: true,
+                    name: true,
+                    shortName: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!tournament) {
+      throw new NotFoundException('Torneo inexistente');
+    }
+
+    const assignments = tournament.categories;
+    if (!assignments.length) {
+      return [];
+    }
+
+    const clubData = new Map<
+      number,
+      {
+        id: number;
+        name: string;
+        shortName: string | null;
+      }
+    >();
+    const clubTeams = new Map<number, Set<number>>();
+
+    for (const assignment of assignments) {
+      for (const team of assignment.teams) {
+        const club = team.club;
+        if (!club) {
+          continue;
+        }
+        clubData.set(club.id, {
+          id: club.id,
+          name: club.name,
+          shortName: club.shortName ?? null,
+        });
+        if (!clubTeams.has(club.id)) {
+          clubTeams.set(club.id, new Set<number>());
+        }
+        clubTeams.get(club.id)!.add(assignment.id);
+      }
+    }
+
+    const clubIds = Array.from(clubData.keys());
+    if (!clubIds.length) {
+      return [];
+    }
+
+    const tournamentCategoryIds = assignments.map((assignment) => assignment.id);
+    const rosters = await this.prisma.roster.findMany({
+      where: {
+        clubId: { in: clubIds },
+        tournamentCategoryId: { in: tournamentCategoryIds },
+      },
+      include: {
+        players: {
+          select: { playerId: true },
+        },
+      },
+    });
+
+    const rosterCounts = new Map<string, number>();
+    for (const roster of rosters) {
+      const key = this.buildRosterKey(roster.clubId, roster.tournamentCategoryId);
+      rosterCounts.set(key, roster.players.length);
+    }
+
+    const sortedClubs = clubIds
+      .map((id) => clubData.get(id)!)
+      .sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
+
+    return sortedClubs.map((club) => {
+      const teamSet = clubTeams.get(club.id) ?? new Set<number>();
+      const categories = assignments.map((assignment) => {
+        const hasTeam = teamSet.has(assignment.id);
+        const rosterKey = this.buildRosterKey(club.id, assignment.id);
+        const playersCount = rosterCounts.get(rosterKey) ?? 0;
+        const meetsMinPlayers = hasTeam
+          ? playersCount >= assignment.category.minPlayers
+          : !assignment.category.mandatory;
+        return {
+          tournamentCategoryId: assignment.id,
+          categoryId: assignment.categoryId,
+          categoryName: assignment.category.name,
+          mandatory: assignment.category.mandatory,
+          minPlayers: assignment.category.minPlayers,
+          hasTeam,
+          playersCount,
+          meetsMinPlayers,
+        };
+      });
+
+      const eligible = categories.every((category) => {
+        if (category.mandatory) {
+          return category.hasTeam && category.playersCount >= category.minPlayers;
+        }
+        if (!category.hasTeam) {
+          return true;
+        }
+        return category.playersCount >= category.minPlayers;
+      });
+
+      return {
+        id: club.id,
+        name: club.name,
+        shortName: club.shortName,
+        eligible,
+        categories,
+      };
+    });
+  }
+
+  private buildRosterKey(clubId: number, tournamentCategoryId: number) {
+    return `${clubId}-${tournamentCategoryId}`;
   }
 
   async addCategory(tournamentId: number, dto: AddTournamentCategoryDto) {

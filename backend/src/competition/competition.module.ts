@@ -20,6 +20,8 @@ import { StorageModule } from '../storage/storage.module';
 import { AccessControlModule } from '../rbac/access-control.module';
 import { TeamsService } from './services/teams.service';
 import { TeamsController } from './controllers/teams.controller';
+import { ZonesService } from './services/zones.service';
+import { ZonesController } from './controllers/zones.controller';
 
 @Module({
   imports: [PrismaModule, StorageModule, AccessControlModule],
@@ -32,7 +34,8 @@ import { TeamsController } from './controllers/teams.controller';
     MatchesService,
     StandingsService,
     PlayersService,
-    TeamsService
+    TeamsService,
+    ZonesService
   ],
   controllers: [
     LeaguesController,
@@ -43,7 +46,8 @@ import { TeamsController } from './controllers/teams.controller';
     MatchesController,
     StandingsController,
     PlayersController,
-    TeamsController
+    TeamsController,
+    ZonesController
   ]
 })
 export class CompetitionModule {}

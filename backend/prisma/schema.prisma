@@ -60,6 +60,12 @@ enum TournamentChampionMode {
   GLOBAL
 }
 
+enum ZoneStatus {
+  OPEN
+  IN_PROGRESS
+  FINISHED
+}
+
 enum GameDay {
   DOMINGO
   LUNES
@@ -106,6 +112,7 @@ model Tournament {
   championMode TournamentChampionMode @default(GLOBAL)
   startDate    DateTime?
   endDate      DateTime?
+  fixtureLockedAt DateTime?
   createdAt    DateTime               @default(now())
   updatedAt    DateTime               @updatedAt
   league       League                 @relation(fields: [leagueId], references: [id])
@@ -118,6 +125,8 @@ model Zone {
   id           Int                @id @default(autoincrement())
   tournamentId Int
   name         String
+  status       ZoneStatus         @default(OPEN)
+  lockedAt     DateTime?
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
   tournament   Tournament         @relation(fields: [tournamentId], references: [id])
