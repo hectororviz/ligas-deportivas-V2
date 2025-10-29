@@ -277,7 +277,9 @@ class _ZonesPageState extends ConsumerState<ZonesPage> {
                       filtersController.setLeague(null);
                     });
                   }
-                  final tournamentIds = tournamentOptions.map((option) => option.id).toSet();
+                  final tournamentIds = tournamentOptions
+                      .map<int>((_ZoneTournamentFilterOption option) => option.id)
+                      .toSet();
                   if (filters.tournamentId != null && !tournamentIds.contains(filters.tournamentId)) {
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       filtersController.setTournament(null);
@@ -377,7 +379,7 @@ class _ZonesPageState extends ConsumerState<ZonesPage> {
                                         child: Text('Todos'),
                                       ),
                                       ...tournamentOptions.map(
-                                        (option) => DropdownMenuItem<int?>(
+                                        (_ZoneTournamentFilterOption option) => DropdownMenuItem<int?>(
                                           value: option.id,
                                           child: Text(option.label),
                                         ),
@@ -1333,7 +1335,7 @@ class _ZoneDetailsDialogState extends ConsumerState<_ZoneDetailsDialog> {
                       child: Scrollbar(
                         controller: _clubScrollController,
                         thumbVisibility: estimatedHeight > maxListHeight,
-                        child: SingleChildScrollView(
+                        child: ListView.separated(
                           controller: _clubScrollController,
                           padding: const EdgeInsets.only(bottom: 8),
                           itemCount: clubs.length,
@@ -1465,6 +1467,8 @@ class _ZoneClubStatus {
   final ZoneClub club;
   final TournamentClubEligibility? eligibility;
 
+  bool get meetsMinimums => eligibility?.eligible ?? false;
+
   _ClubEligibilityState get availability {
     final eligibility = this.eligibility;
     if (eligibility == null) {
@@ -1533,85 +1537,6 @@ extension on _ClubEligibilityState {
         return theme.colorScheme.onSurfaceVariant;
     }
   }
-}
-
-class ZonesFilters {
-  const ZonesFilters({
-    this.query = '',
-    this.leagueName,
-    this.tournamentId,
-    this.status,
-  });
-
-  final String query;
-  final String? leagueName;
-  final int? tournamentId;
-  final ZoneStatus? status;
-
-  bool get hasActiveFilters =>
-      query.trim().isNotEmpty || leagueName != null || tournamentId != null || status != null;
-
-  ZonesFilters copyWith({String? query}) {
-    return ZonesFilters(
-      query: query ?? this.query,
-      leagueName: leagueName,
-      tournamentId: tournamentId,
-      status: status,
-    );
-  }
-}
-
-class ZonesFiltersController extends StateNotifier<ZonesFilters> {
-  ZonesFiltersController() : super(const ZonesFilters());
-
-  void setQuery(String query) {
-    state = state.copyWith(query: query);
-  }
-
-  void setLeague(String? leagueName) {
-    state = ZonesFilters(
-      query: state.query,
-      leagueName: leagueName,
-      tournamentId: null,
-      status: state.status,
-    );
-  }
-
-  void setTournament(int? tournamentId) {
-    state = ZonesFilters(
-      query: state.query,
-      leagueName: state.leagueName,
-      tournamentId: tournamentId,
-      status: state.status,
-    );
-  }
-
-  void setStatus(ZoneStatus? status) {
-    state = ZonesFilters(
-      query: state.query,
-      leagueName: state.leagueName,
-      tournamentId: state.tournamentId,
-      status: status,
-    );
-  }
-
-  void reset() {
-    state = const ZonesFilters();
-  }
-}
-
-class _ZoneTournamentFilterOption {
-  const _ZoneTournamentFilterOption({
-    required this.id,
-    required this.name,
-    required this.year,
-  });
-
-  final int id;
-  final String name;
-  final int year;
-
-  String get label => '$name $year';
 }
 
 class ZonesFilters {
