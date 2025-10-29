@@ -12,15 +12,113 @@ const _moduleCategories = 'CATEGORIAS';
 const _actionCreate = 'CREATE';
 const _actionUpdate = 'UPDATE';
 
+enum CategoryGenderFilter {
+  all,
+  masculine,
+  feminine,
+  mixed,
+}
+
+extension CategoryGenderFilterLabel on CategoryGenderFilter {
+  String get label {
+    switch (this) {
+      case CategoryGenderFilter.all:
+        return 'Todos';
+      case CategoryGenderFilter.masculine:
+        return 'Masculino';
+      case CategoryGenderFilter.feminine:
+        return 'Femenino';
+      case CategoryGenderFilter.mixed:
+        return 'Mixto';
+    }
+  }
+
+  bool matches(String gender) {
+    switch (this) {
+      case CategoryGenderFilter.all:
+        return true;
+      case CategoryGenderFilter.masculine:
+        return gender == 'MASCULINO';
+      case CategoryGenderFilter.feminine:
+        return gender == 'FEMENINO';
+      case CategoryGenderFilter.mixed:
+        return gender == 'MIXTO';
+    }
+  }
+}
+
+enum CategoryStatusFilter {
+  all,
+  active,
+  inactive,
+}
+
+extension CategoryStatusFilterLabel on CategoryStatusFilter {
+  String get label {
+    switch (this) {
+      case CategoryStatusFilter.all:
+        return 'Todas';
+      case CategoryStatusFilter.active:
+        return 'Activas';
+      case CategoryStatusFilter.inactive:
+        return 'Inactivas';
+    }
+  }
+
+  bool matches(bool isActive) {
+    switch (this) {
+      case CategoryStatusFilter.all:
+        return true;
+      case CategoryStatusFilter.active:
+        return isActive;
+      case CategoryStatusFilter.inactive:
+        return !isActive;
+    }
+  }
+}
+
+const _sentinel = Object();
+
 class _CategoryFilters {
-  const _CategoryFilters({this.query = ''});
+  const _CategoryFilters({
+    this.query = '',
+    this.birthYearFrom,
+    this.birthYearTo,
+    this.gender = CategoryGenderFilter.all,
+    this.status = CategoryStatusFilter.all,
+  });
 
   final String query;
+  final int? birthYearFrom;
+  final int? birthYearTo;
+  final CategoryGenderFilter gender;
+  final CategoryStatusFilter status;
 
-  bool get isEmpty => query.trim().isEmpty;
+  bool get isEmpty =>
+      query.trim().isEmpty &&
+      birthYearFrom == null &&
+      birthYearTo == null &&
+      gender == CategoryGenderFilter.all &&
+      status == CategoryStatusFilter.all;
 
-  _CategoryFilters copyWith({String? query}) {
-    return _CategoryFilters(query: query ?? this.query);
+  _CategoryFilters copyWith({
+    String? query,
+    Object? birthYearFrom = _sentinel,
+    Object? birthYearTo = _sentinel,
+    CategoryGenderFilter? gender,
+    CategoryStatusFilter? status,
+  }) {
+    return _CategoryFilters(
+      query: query ?? this.query,
+      birthYearFrom: identical(birthYearFrom, _sentinel)
+          ? this.birthYearFrom
+          : birthYearFrom as int?,
+      birthYearTo: identical(birthYearTo, _sentinel)
+          ? this.birthYearTo
+          : birthYearTo as int?,
+      gender: gender ?? this.gender,
+      status: status ?? this.status,
+    );
   }
 }
 
@@ -29,6 +127,30 @@ class _CategoryFiltersController extends StateNotifier<_CategoryFilters> {
 
   void setQuery(String query) {
     state = state.copyWith(query: query);
+  }
+
+  void setBirthYearFrom(int? year) {
+    var to = state.birthYearTo;
+    if (year != null && to != null && to < year) {
+      to = year;
+    }
+    state = state.copyWith(birthYearFrom: year, birthYearTo: to);
+  }
+
+  void setBirthYearTo(int? year) {
+    var from = state.birthYearFrom;
+    if (year != null && from != null && from > year) {
+      from = year;
+    }
+    state = state.copyWith(birthYearFrom: from, birthYearTo: year);
+  }
+
+  void setGender(CategoryGenderFilter gender) {
+    state = state.copyWith(gender: gender);
+  }
+
+  void setStatus(CategoryStatusFilter status) {
+    state = state.copyWith(status: status);
   }
 
   void clear() {
@@ -58,17 +180,32 @@ final filteredCategoriesProvider =
   final categories = ref.watch(categoriesProvider);
   return categories.whenData((items) {
     final query = filters.query.trim().toLowerCase();
-    if (query.isEmpty) {
-      return items;
-    }
+    final from = filters.birthYearFrom;
+    final to = filters.birthYearTo;
     return items
         .where((category) {
-          final normalizedName = category.name.toLowerCase();
-          final range = category.birthYearRangeLabel.toLowerCase();
-          final gender = category.genderLabel.toLowerCase();
-          return normalizedName.contains(query) ||
-              range.contains(query) ||
-              gender.contains(query);
+          final matchesQuery = () {
+            if (query.isEmpty) {
+              return true;
+            }
+            final normalizedName = category.name.toLowerCase();
+            final range = category.birthYearRangeLabel.toLowerCase();
+            final genderLabel = category.genderLabel.toLowerCase();
+            return normalizedName.contains(query) ||
+                range.contains(query) ||
+                genderLabel.contains(query);
+          }();
+
+          final matchesFrom = from == null || category.birthYearMax >= from;
+          final matchesTo = to == null || category.birthYearMin <= to;
+          final matchesGender = filters.gender.matches(category.gender);
+          final matchesStatus = filters.status.matches(category.active);
+
+          return matchesQuery &&
+              matchesFrom &&
+              matchesTo &&
+              matchesGender &&
+              matchesStatus;
         })
         .toList();
   });
@@ -95,6 +232,25 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  List<int> _buildYearOptions(
+    List<CategorySummary> categories,
+    _CategoryFilters filters,
+  ) {
+    final years = <int>{};
+    for (final category in categories) {
+      years.add(category.birthYearMin);
+      years.add(category.birthYearMax);
+    }
+    if (filters.birthYearFrom != null) {
+      years.add(filters.birthYearFrom!);
+    }
+    if (filters.birthYearTo != null) {
+      years.add(filters.birthYearTo!);
+    }
+    final sorted = years.toList()..sort();
+    return sorted;
   }
 
   Future<void> _openCreateCategory() async {
@@ -212,7 +368,7 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage> {
                       width: 320,
                       child: TableFilterSearchField(
                         controller: _searchController,
-                        placeholder: 'Buscar por nombre o género',
+                        placeholder: 'Buscar por nombre, años o género',
                         showClearButton: filters.query.isNotEmpty,
                         onChanged: (value) =>
                             ref.read(categoryFiltersProvider.notifier).setQuery(value),
@@ -220,6 +376,150 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage> {
                           _searchController.clear();
                           ref.read(categoryFiltersProvider.notifier).clear();
                         },
+                      ),
+                    ),
+                    TableFilterField(
+                      label: 'Año desde',
+                      width: 160,
+                      child: allCategoriesAsync.when(
+                        data: (categories) {
+                          final options = _buildYearOptions(categories, filters);
+                          final items = [
+                            const DropdownMenuItem<int?>(
+                              value: null,
+                              child: Text('Todos'),
+                            ),
+                            ...options.map(
+                              (year) => DropdownMenuItem<int?>(
+                                value: year,
+                                child: Text('$year'),
+                              ),
+                            ),
+                          ];
+                          return DropdownButtonHideUnderline(
+                            child: DropdownButton<int?>(
+                              value: filters.birthYearFrom,
+                              isExpanded: true,
+                              items: items,
+                              onChanged: (value) {
+                                ref
+                                    .read(categoryFiltersProvider.notifier)
+                                    .setBirthYearFrom(value);
+                              },
+                            ),
+                          );
+                        },
+                        loading: () => const Center(
+                          child: SizedBox(
+                            height: 24,
+                            width: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                        error: (error, _) => Center(
+                          child: Tooltip(
+                            message: 'No se pudieron cargar las categorías: $error',
+                            child:
+                                const Icon(Icons.error_outline, color: Colors.redAccent),
+                          ),
+                        ),
+                      ),
+                    ),
+                    TableFilterField(
+                      label: 'Año hasta',
+                      width: 160,
+                      child: allCategoriesAsync.when(
+                        data: (categories) {
+                          final options = _buildYearOptions(categories, filters);
+                          final items = [
+                            const DropdownMenuItem<int?>(
+                              value: null,
+                              child: Text('Todos'),
+                            ),
+                            ...options.map(
+                              (year) => DropdownMenuItem<int?>(
+                                value: year,
+                                child: Text('$year'),
+                              ),
+                            ),
+                          ];
+                          return DropdownButtonHideUnderline(
+                            child: DropdownButton<int?>(
+                              value: filters.birthYearTo,
+                              isExpanded: true,
+                              items: items,
+                              onChanged: (value) {
+                                ref
+                                    .read(categoryFiltersProvider.notifier)
+                                    .setBirthYearTo(value);
+                              },
+                            ),
+                          );
+                        },
+                        loading: () => const Center(
+                          child: SizedBox(
+                            height: 24,
+                            width: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                        error: (error, _) => Center(
+                          child: Tooltip(
+                            message: 'No se pudieron cargar las categorías: $error',
+                            child:
+                                const Icon(Icons.error_outline, color: Colors.redAccent),
+                          ),
+                        ),
+                      ),
+                    ),
+                    TableFilterField(
+                      label: 'Género',
+                      width: 200,
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<CategoryGenderFilter>(
+                          value: filters.gender,
+                          isExpanded: true,
+                          items: CategoryGenderFilter.values
+                              .map(
+                                (value) => DropdownMenuItem(
+                                  value: value,
+                                  child: Text(value.label),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (value) {
+                            if (value != null) {
+                              ref
+                                  .read(categoryFiltersProvider.notifier)
+                                  .setGender(value);
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                    TableFilterField(
+                      label: 'Estado',
+                      width: 200,
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<CategoryStatusFilter>(
+                          value: filters.status,
+                          isExpanded: true,
+                          items: CategoryStatusFilter.values
+                              .map(
+                                (value) => DropdownMenuItem(
+                                  value: value,
+                                  child: Text(value.label),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (value) {
+                            if (value != null) {
+                              ref
+                                  .read(categoryFiltersProvider.notifier)
+                                  .setStatus(value);
+                            }
+                          },
+                        ),
                       ),
                     ),
                   ],
