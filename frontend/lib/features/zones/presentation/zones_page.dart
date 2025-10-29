@@ -99,14 +99,15 @@ class _ZonesPageState extends ConsumerState<ZonesPage> {
         useSafeArea: true,
         showDragHandle: true,
         builder: (context) {
-          return Padding(
+          final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+          return SingleChildScrollView(
             padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+              bottom: bottomInset + 24,
               left: 24,
               right: 24,
               top: 12,
             ),
-            child: _ZoneEditorDialog(zone: zone),
+            child: _ZoneEditorDialog(zone: zone, scrollableList: false),
           );
         },
       );
@@ -116,6 +117,7 @@ class _ZonesPageState extends ConsumerState<ZonesPage> {
       context: context,
       builder: (context) {
         return AlertDialog(
+          scrollable: true,
           contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           content: ConstrainedBox(
@@ -405,9 +407,10 @@ class ZoneEditorResult {
 }
 
 class _ZoneEditorDialog extends ConsumerStatefulWidget {
-  const _ZoneEditorDialog({this.zone});
+  const _ZoneEditorDialog({this.zone, this.scrollableList = true});
 
   final ZoneSummary? zone;
+  final bool scrollableList;
 
   @override
   ConsumerState<_ZoneEditorDialog> createState() => _ZoneEditorDialogState();
@@ -712,7 +715,8 @@ class _ZoneEditorDialogState extends ConsumerState<_ZoneEditorDialog> {
 
     final canEdit = !_zoneLocked && !_tournamentLocked && _status == ZoneStatus.open;
 
-    return SingleChildScrollView(
+    return SizedBox(
+      width: double.infinity,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -803,7 +807,9 @@ class _ZoneEditorDialogState extends ConsumerState<_ZoneEditorDialog> {
                       )
                     : ListView.separated(
                         shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
+                        physics: widget.scrollableList
+                            ? null
+                            : const NeverScrollableScrollPhysics(),
                         itemCount: _clubs.length,
                         separatorBuilder: (_, __) => const Divider(height: 1),
                         itemBuilder: (context, index) {
