@@ -1333,7 +1333,7 @@ class _ZoneDetailsDialogState extends ConsumerState<_ZoneDetailsDialog> {
                       child: Scrollbar(
                         controller: _clubScrollController,
                         thumbVisibility: estimatedHeight > maxListHeight,
-                        child: ListView.separated(
+                        child: SingleChildScrollView(
                           controller: _clubScrollController,
                           padding: const EdgeInsets.only(bottom: 8),
                           itemCount: clubs.length,
@@ -1353,6 +1353,39 @@ class _ZoneDetailsDialogState extends ConsumerState<_ZoneDetailsDialog> {
       },
     );
   }
+}
+
+DataRow _buildClubRow(BuildContext context, _ZoneClubStatus clubStatus,
+    {required int index}) {
+  final eligibility = clubStatus.eligibility;
+  final meetsMinimums = clubStatus.meetsMinimums;
+  final indicatorColor =
+      meetsMinimums ? Colors.green : Theme.of(context).colorScheme.error;
+  final label = meetsMinimums ? 'Completa' : 'Incompleta';
+  final tooltip = eligibility != null
+      ? buildEligibilityTooltip(eligibility)
+      : 'No se pudo determinar la disponibilidad de jugadores para este club.';
+
+  return DataRow(
+    cells: [
+      DataCell(Text('$index')),
+      DataCell(Text(clubStatus.club.name)),
+      DataCell(Text(clubStatus.club.shortName ?? '—')),
+      DataCell(
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Tooltip(
+              message: tooltip,
+              child: Icon(Icons.circle, size: 12, color: indicatorColor),
+            ),
+            const SizedBox(width: 8),
+            Text(label),
+          ],
+        ),
+      ),
+    ],
+  );
 }
 
 class _ZoneDetailsData {
@@ -1500,6 +1533,85 @@ extension on _ClubEligibilityState {
         return theme.colorScheme.onSurfaceVariant;
     }
   }
+}
+
+class ZonesFilters {
+  const ZonesFilters({
+    this.query = '',
+    this.leagueName,
+    this.tournamentId,
+    this.status,
+  });
+
+  final String query;
+  final String? leagueName;
+  final int? tournamentId;
+  final ZoneStatus? status;
+
+  bool get hasActiveFilters =>
+      query.trim().isNotEmpty || leagueName != null || tournamentId != null || status != null;
+
+  ZonesFilters copyWith({String? query}) {
+    return ZonesFilters(
+      query: query ?? this.query,
+      leagueName: leagueName,
+      tournamentId: tournamentId,
+      status: status,
+    );
+  }
+}
+
+class ZonesFiltersController extends StateNotifier<ZonesFilters> {
+  ZonesFiltersController() : super(const ZonesFilters());
+
+  void setQuery(String query) {
+    state = state.copyWith(query: query);
+  }
+
+  void setLeague(String? leagueName) {
+    state = ZonesFilters(
+      query: state.query,
+      leagueName: leagueName,
+      tournamentId: null,
+      status: state.status,
+    );
+  }
+
+  void setTournament(int? tournamentId) {
+    state = ZonesFilters(
+      query: state.query,
+      leagueName: state.leagueName,
+      tournamentId: tournamentId,
+      status: state.status,
+    );
+  }
+
+  void setStatus(ZoneStatus? status) {
+    state = ZonesFilters(
+      query: state.query,
+      leagueName: state.leagueName,
+      tournamentId: state.tournamentId,
+      status: status,
+    );
+  }
+
+  void reset() {
+    state = const ZonesFilters();
+  }
+}
+
+class _ZoneTournamentFilterOption {
+  const _ZoneTournamentFilterOption({
+    required this.id,
+    required this.name,
+    required this.year,
+  });
+
+  final int id;
+  final String name;
+  final int year;
+
+  String get label => '$name $year';
 }
 
 class ZonesFilters {
