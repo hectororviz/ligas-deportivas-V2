@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:riverpod/riverpod.dart' show ProviderSubscription;
 
 import '../../../services/auth_controller.dart';
 
@@ -26,6 +27,8 @@ class _AccountSettingsPageState extends ConsumerState<AccountSettingsPage> {
   final TextEditingController _newPasswordController = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
 
+  late final ProviderSubscription<AuthState> _authSubscription;
+
   bool _savingProfile = false;
   bool _requestingEmailChange = false;
   bool _savingPassword = false;
@@ -41,7 +44,7 @@ class _AccountSettingsPageState extends ConsumerState<AccountSettingsPage> {
     _languageController.text = user?.language ?? 'es-AR';
     _avatarPreviewUrl = user?.avatarUrls?['256'];
 
-    ref.listen<AuthState>(authControllerProvider, (previous, next) {
+    _authSubscription = ref.listenManual<AuthState>(authControllerProvider, (previous, next) {
       final nextUser = next.user;
       if (nextUser != null && mounted) {
         setState(() {
@@ -56,6 +59,7 @@ class _AccountSettingsPageState extends ConsumerState<AccountSettingsPage> {
 
   @override
   void dispose() {
+    _authSubscription.close();
     _nameController.dispose();
     _emailController.dispose();
     _languageController.dispose();
