@@ -203,7 +203,7 @@ export class FixtureService {
           throw new FixtureAlreadyExistsException();
         }
 
-        const context = await this.getZoneFixtureContext(tx, zoneId);
+        const context = await this.getZoneFixtureContext(tx, zoneId, { allowOpen: true });
 
         const { firstRound, secondRound, totalMatchdays, byes, secondRoundByes, seed } =
           this.buildRoundRobin(context.clubIds, {
@@ -321,7 +321,11 @@ export class FixtureService {
     }
   }
 
-  private async getZoneFixtureContext(tx: Prisma.TransactionClient, zoneId: number): Promise<ZoneFixtureContext> {
+  private async getZoneFixtureContext(
+    tx: Prisma.TransactionClient,
+    zoneId: number,
+    options: { allowOpen?: boolean } = {},
+  ): Promise<ZoneFixtureContext> {
     const zone = await tx.zone.findUnique({
       where: { id: zoneId },
       include: {
@@ -342,7 +346,11 @@ export class FixtureService {
       throw new NotFoundException('Zona inexistente');
     }
 
-    if (zone.status !== ZoneStatus.IN_PROGRESS) {
+    const allowedStatuses: ZoneStatus[] = options.allowOpen
+      ? [ZoneStatus.OPEN, ZoneStatus.IN_PROGRESS]
+      : [ZoneStatus.IN_PROGRESS];
+
+    if (!allowedStatuses.includes(zone.status)) {
       throw new BadRequestException('La zona debe estar en curso para generar el fixture');
     }
 
