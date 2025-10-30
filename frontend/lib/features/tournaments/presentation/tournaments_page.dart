@@ -292,7 +292,7 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
                 else
                   Column(
                     children: tournament.categories.map((category) {
-                      final timeLabel = category.gameTime ?? 'Horario sin definir';
+                      final timeLabel = category.kickoffTime ?? 'Horario sin definir';
                       return ListTile(
                         dense: true,
                         contentPadding: EdgeInsets.zero,
@@ -916,8 +916,9 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
         .map((selection) => {
               'categoryId': selection.category.id,
               'enabled': selection.include,
+              'countsForGeneral': selection.countsForGeneral,
               if (selection.include)
-                'gameTime': _formatTimeOfDay(selection.time!),
+                'kickoffTime': _formatTimeOfDay(selection.time!),
             })
         .toList();
 
@@ -937,7 +938,8 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
             data: {
               'categoryId': selection.category.id,
               'enabled': true,
-              'gameTime': _formatTimeOfDay(selection.time!),
+              'kickoffTime': _formatTimeOfDay(selection.time!),
+              'countsForGeneral': selection.countsForGeneral,
             },
           );
         }
@@ -1037,11 +1039,14 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
         return restored;
       }
       final assignment = byCategoryId[category.id];
-      return _CategorySelection(
+      final selection = _CategorySelection(
         category: category,
         include: assignment?.enabled ?? false,
-        time: _parseGameTime(assignment?.gameTime),
+        time: _parseKickoffTime(assignment?.kickoffTime),
       );
+      selection.countsForGeneral = assignment?.countsForGeneral ??
+          (category.promotional ? false : true);
+      return selection;
     }).toList();
     _categoriesInitialized = true;
     _applyGenderFilter();
@@ -1063,7 +1068,7 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
     return category.gender == _selectedGender;
   }
 
-  TimeOfDay? _parseGameTime(String? value) {
+  TimeOfDay? _parseKickoffTime(String? value) {
     if (value == null || value.isEmpty) {
       return null;
     }
@@ -1585,7 +1590,8 @@ class TournamentCategoryAssignment {
     required this.categoryGender,
     required this.promotional,
     required this.enabled,
-    required this.gameTime,
+    required this.kickoffTime,
+    required this.countsForGeneral,
   });
 
   factory TournamentCategoryAssignment.fromJson(Map<String, dynamic> json) {
@@ -1598,7 +1604,8 @@ class TournamentCategoryAssignment {
       categoryGender: category?['gender'] as String? ?? 'MIXTO',
       promotional: category?['promotional'] as bool? ?? false,
       enabled: json['enabled'] as bool? ?? false,
-      gameTime: json['gameTime'] as String?,
+      kickoffTime: json['kickoffTime'] as String?,
+      countsForGeneral: json['countsForGeneral'] as bool? ?? true,
     );
   }
 
@@ -1609,7 +1616,8 @@ class TournamentCategoryAssignment {
   final String categoryGender;
   final bool promotional;
   final bool enabled;
-  final String? gameTime;
+  final String? kickoffTime;
+  final bool countsForGeneral;
 
   String get genderLabel {
     switch (categoryGender) {

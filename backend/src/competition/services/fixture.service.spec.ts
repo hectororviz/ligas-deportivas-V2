@@ -4,7 +4,7 @@ describe('FixtureService round robin', () => {
   const service = new FixtureService({} as any);
 
   it('generates balanced fixture for even number of clubs', () => {
-    const result = (service as any).buildRoundRobin([1, 2, 3, 4]);
+    const result = (service as any).buildRoundRobin([1, 2, 3, 4], true);
     expect(result.totalMatchdays).toBe(3);
     expect(result.firstRound).toHaveLength(6);
     const firstMatch = result.firstRound[0];
@@ -17,7 +17,7 @@ describe('FixtureService round robin', () => {
   });
 
   it('handles odd number of clubs with byes', () => {
-    const result = (service as any).buildRoundRobin([1, 2, 3, 4, 5]);
+    const result = (service as any).buildRoundRobin([1, 2, 3, 4, 5], true);
     expect(result.totalMatchdays).toBe(5 - 1 + 1); // 6 slots -> 5 matchdays
     const clubs = new Set<number>();
     result.firstRound.forEach((match: any) => {
