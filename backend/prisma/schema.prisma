@@ -63,6 +63,7 @@ enum TournamentChampionMode {
 enum ZoneStatus {
   OPEN
   IN_PROGRESS
+  PLAYING
   FINISHED
 }
 
@@ -127,6 +128,7 @@ model Zone {
   name         String
   status       ZoneStatus         @default(OPEN)
   lockedAt     DateTime?
+  fixtureSeed  Int?
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
   tournament   Tournament         @relation(fields: [tournamentId], references: [id])
@@ -196,19 +198,20 @@ model Category {
 }
 
 model TournamentCategory {
-  id           Int                @id @default(autoincrement())
-  tournamentId Int
-  categoryId   Int
-  enabled      Boolean            @default(false)
-  gameTime     String?
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
-  tournament   Tournament         @relation(fields: [tournamentId], references: [id])
-  category     Category           @relation(fields: [categoryId], references: [id])
-  matches      MatchCategory[]
-  rosters      Roster[]
-  standings    CategoryStanding[]
-  teams        Team[]
+  id                Int                @id @default(autoincrement())
+  tournamentId      Int
+  categoryId        Int
+  enabled           Boolean            @default(false)
+  kickoffTime       String?
+  countsForGeneral  Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  tournament        Tournament         @relation(fields: [tournamentId], references: [id])
+  category          Category           @relation(fields: [categoryId], references: [id])
+  matches           MatchCategory[]
+  rosters           Roster[]
+  standings         CategoryStanding[]
+  teams             Team[]
 
   @@unique([tournamentId, categoryId])
 }
@@ -300,6 +303,8 @@ model MatchCategory {
   id                   Int                @id @default(autoincrement())
   matchId              Int
   tournamentCategoryId Int
+  kickoffTime          String?
+  isPromocional        Boolean            @default(false)
   homeScore            Int                @default(0)
   awayScore            Int                @default(0)
   closedAt             DateTime?

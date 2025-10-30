@@ -15,10 +15,15 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { PermissionsGuard } from '../../rbac/permissions.guard';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { Action, Module } from '@prisma/client';
+import { FixtureService } from '../services/fixture.service';
+import { ZoneFixtureOptionsDto } from '../dto/zone-fixture-options.dto';
 
 @Controller('zones')
 export class ZonesController {
-  constructor(private readonly zonesService: ZonesService) {}
+  constructor(
+    private readonly zonesService: ZonesService,
+    private readonly fixtureService: FixtureService
+  ) {}
 
   @Get()
   list() {
@@ -55,5 +60,25 @@ export class ZonesController {
   @Permissions({ module: Module.ZONAS, action: Action.UPDATE })
   finalize(@Param('zoneId', ParseIntPipe) zoneId: number) {
     return this.zonesService.finalize(zoneId);
+  }
+
+  @Post(':zoneId/fixture/preview')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @Permissions({ module: Module.FIXTURE, action: Action.CREATE })
+  previewFixture(
+    @Param('zoneId', ParseIntPipe) zoneId: number,
+    @Body() options: ZoneFixtureOptionsDto
+  ) {
+    return this.fixtureService.previewForZone(zoneId, options);
+  }
+
+  @Post(':zoneId/fixture')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @Permissions({ module: Module.FIXTURE, action: Action.CREATE })
+  generateFixture(
+    @Param('zoneId', ParseIntPipe) zoneId: number,
+    @Body() options: ZoneFixtureOptionsDto
+  ) {
+    return this.fixtureService.generateForZone(zoneId, options);
   }
 }

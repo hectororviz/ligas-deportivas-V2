@@ -7,7 +7,10 @@ export class AddTournamentCategoryDto {
   @IsBoolean()
   enabled!: boolean;
 
+  @IsBoolean()
+  countsForGeneral!: boolean;
+
   @IsOptional()
   @Matches(/^(?:[01]\d|2[0-3]):[0-5]\d$/)
-  gameTime?: string;
+  kickoffTime?: string;
 }
