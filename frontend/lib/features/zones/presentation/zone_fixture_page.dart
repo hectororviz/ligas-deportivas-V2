@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -49,6 +50,10 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
       final data = response.data ?? <String, dynamic>{};
       setState(() {
         _preview = ZoneFixturePreview.fromJson(data);
+      });
+    } on DioException catch (error) {
+      setState(() {
+        _previewError = 'No se pudo generar el anticipo del fixture: ${_mapError(error)}';
       });
     } catch (error) {
       setState(() {
@@ -108,6 +113,12 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
           const SnackBar(content: Text('Fixture generado correctamente.')),
         );
       }
+    } on DioException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al generar el fixture: ${_mapError(error)}')),
+        );
+      }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -119,6 +130,31 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
         setState(() => _submitting = false);
       }
     }
+  }
+
+  String _mapError(Object error) {
+    if (error is DioException) {
+      final responseData = error.response?.data;
+      if (responseData is Map<String, dynamic>) {
+        final message = responseData['message'];
+        if (message is String && message.isNotEmpty) {
+          return message;
+        }
+        if (message is List) {
+          final first = message.cast<Object?>().firstWhere(
+            (item) => item is String && item.isNotEmpty,
+            orElse: () => null,
+          );
+          if (first is String) {
+            return first;
+          }
+        }
+      }
+      if (error.message != null && error.message!.isNotEmpty) {
+        return error.message!;
+      }
+    }
+    return 'Ocurrió un error inesperado. Intenta nuevamente.';
   }
 
   @override
