@@ -80,7 +80,7 @@ export class TournamentsService {
     });
   }
 
-  async listClubsForZones(tournamentId: number) {
+  async listClubsForZones(tournamentId: number, zoneId?: number) {
     const tournament = await this.prisma.tournament.findUnique({
       where: { id: tournamentId },
       include: {
@@ -103,6 +103,11 @@ export class TournamentsService {
             },
           },
         },
+        zones: {
+          include: {
+            clubZones: true,
+          },
+        },
       },
     });
 
@@ -113,6 +118,16 @@ export class TournamentsService {
     const assignments = tournament.categories;
     if (!assignments.length) {
       return [];
+    }
+
+    const assignedClubIds = new Set<number>();
+    for (const zone of tournament.zones) {
+      if (zoneId != null && zone.id === zoneId) {
+        continue;
+      }
+      for (const assignment of zone.clubZones) {
+        assignedClubIds.add(assignment.clubId);
+      }
     }
 
     const clubData = new Map<
@@ -169,6 +184,7 @@ export class TournamentsService {
 
     const sortedClubs = clubIds
       .map((id) => clubData.get(id)!)
+      .filter((club) => !assignedClubIds.has(club.id))
       .sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
 
     return sortedClubs.map((club) => {

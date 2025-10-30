@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post, Put, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { TournamentsService } from '../services/tournaments.service';
 import { CreateTournamentDto } from '../dto/create-tournament.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -29,8 +39,18 @@ export class TournamentsController {
   }
 
   @Get('tournaments/:id/zones/clubs')
-  listClubsForZones(@Param('id', ParseIntPipe) id: number) {
-    return this.tournamentsService.listClubsForZones(id);
+  listClubsForZones(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('zoneId') zoneId?: string,
+  ) {
+    const parsedZoneId =
+      typeof zoneId === 'string' && zoneId.trim().length
+        ? Number.parseInt(zoneId, 10)
+        : undefined;
+    return this.tournamentsService.listClubsForZones(
+      id,
+      Number.isNaN(parsedZoneId) ? undefined : parsedZoneId,
+    );
   }
 
   @Post('tournaments')
