@@ -734,13 +734,21 @@ class _PlayersDataTable extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth < 720) {
-          return SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: table,
-          );
-        }
-        return table;
+        return Scrollbar(
+          thumbVisibility: true,
+          controller: PrimaryScrollController.maybeOf(context),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.only(bottom: 12),
+            scrollDirection: Axis.vertical,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                child: table,
+              ),
+            ),
+          ),
+        );
       },
     );
   }
@@ -763,10 +771,14 @@ class _PlayersPaginationFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final totalPages = (total / pageSize).ceil().clamp(1, double.maxFinite).toInt();
+    final theme = Theme.of(context);
+    final totalPages = math.max(1, (total / pageSize).ceil());
+    final start = total == 0 ? 0 : ((page - 1) * pageSize) + 1;
+    final end = total == 0 ? 0 : math.min(page * pageSize, total);
+    final availableSizes = {10, 25, 50, 100, pageSize}.toList()..sort();
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       child: Align(
         alignment: Alignment.centerLeft,
         child: Wrap(
@@ -774,20 +786,37 @@ class _PlayersPaginationFooter extends StatelessWidget {
           runSpacing: 8,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            Text('Página $page de $totalPages'),
-            DropdownButton<int>(
-              value: pageSize,
-              items: const [10, 25, 50, 100]
-                  .map((size) => DropdownMenuItem(
-                        value: size,
-                        child: Text('$size por página'),
-                      ))
-                  .toList(),
-              onChanged: (value) {
-                if (value != null) {
-                  onPageSizeChanged(value);
-                }
-              },
+            Text(
+              total == 0
+                  ? 'Mostrando 0 de 0'
+                  : 'Mostrando $start-$end de $total',
+              style: theme.textTheme.bodySmall,
+            ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Filas por página', style: theme.textTheme.bodySmall),
+                const SizedBox(width: 8),
+                DropdownButtonHideUnderline(
+                  child: DropdownButton<int>(
+                    value: pageSize,
+                    isDense: true,
+                    items: availableSizes
+                        .map(
+                          (value) => DropdownMenuItem(
+                            value: value,
+                            child: Text('$value'),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value != null && value != pageSize) {
+                        onPageSizeChanged(value);
+                      }
+                    },
+                  ),
+                ),
+              ],
             ),
             Row(
               mainAxisSize: MainAxisSize.min,
@@ -797,6 +826,7 @@ class _PlayersPaginationFooter extends StatelessWidget {
                   onPressed: page > 1 ? () => onPageChanged(page - 1) : null,
                   icon: const Icon(Icons.chevron_left),
                 ),
+                Text('$page de $totalPages'),
                 IconButton(
                   tooltip: 'Página siguiente',
                   onPressed: page < totalPages ? () => onPageChanged(page + 1) : null,
