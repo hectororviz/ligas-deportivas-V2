@@ -1,96 +1,86 @@
 # Guía de desarrollo y pruebas con Visual Studio Code
 
-Esta guía explica cómo preparar, desarrollar y probar el monorepo de **Ligas Deportivas** en Visual Studio Code (VS Code) usando Windows 10/11 y Linux (Ubuntu y Arch Linux). Incluye los requisitos para el backend NestJS + Prisma, el frontend Flutter Web y la infraestructura opcional con Docker Compose.
+Esta guía reúne los pasos recomendados para preparar, desarrollar y probar el monorepo de **Ligas Deportivas** en Visual Studio Code (VS Code) desde Windows 10/11, Ubuntu y Arch Linux. Cubre requisitos, variables de entorno, comandos habituales y consejos para trabajar con la API NestJS, el frontend Flutter Web y la infraestructura en Docker.
 
-Credenciales por defecto del administrador
+Credenciales semilla del administrador
 
-Usuario (email): admin@ligas.local
-Contraseña: Admin123
+- Usuario (email): `admin@ligas.local`
+- Contraseña: `Admin123`
+
+Las credenciales pueden personalizarse antes de ejecutar el seed inicial mediante variables de entorno (`ADMIN_EMAIL`, `ADMIN_PASSWORD`).【F:backend/src/prisma/base-seed.ts†L120-L204】
 
 ## 1. Preparación inicial común
 
 ### 1.1 Clonar el repositorio y abrirlo en VS Code
-1. Instala Git (en Windows usa [Git for Windows](https://git-scm.com/download/win); en Linux, usa el gestor de paquetes).
+1. Instala Git en tu sistema (en Windows usa [Git for Windows](https://git-scm.com/download/win); en Linux recurre al gestor de paquetes).
 2. Clona el proyecto y ábrelo en VS Code:
    ```bash
    git clone https://github.com/<tu-organizacion>/ligas-deportivas-V2.git
-   code ligas-deportivas-V2
+   cd ligas-deportivas-V2
+   code .
    ```
 
 ### 1.2 Extensiones recomendadas en VS Code
-Instala las extensiones siguientes desde la Marketplace para una mejor experiencia:
-- **ESLint** y **Prettier** para mantener el estilo del backend TypeScript.
-- **Prisma** para resaltar y validar el esquema de base de datos.
-- **Dart** y **Flutter** para trabajar con el frontend.
-- **Thunder Client** o **REST Client** para probar endpoints REST.
-- **Docker** (opcional) si vas a administrar contenedores desde VS Code.
+Instala las siguientes extensiones para mejorar la experiencia:
+- **ESLint** y **Prettier** para el backend TypeScript.
+- **Prisma** para destacar el esquema de base de datos.
+- **Dart** y **Flutter** para el frontend.
+- **REST Client** o **Thunder Client** para probar endpoints.
+- **Docker** (opcional) si administras contenedores desde VS Code.
 
 ### 1.3 Requisitos de software
 El proyecto requiere como mínimo:
-- Node.js 20 o superior.
-- PostgreSQL 15 o superior.
-- Flutter 3.19 o superior para el frontend web.
-- Docker y Docker Compose (opcional) para levantar toda la pila localmente.【F:README.md†L14-L77】
+- Node.js 20 o superior.【F:README.md†L36-L39】
+- PostgreSQL 15 o superior (instalación local o contenedor).【F:README.md†L36-L39】
+- Flutter 3.19 o superior para compilar el frontend web.【F:README.md†L36-L39】
+- Docker Desktop/Engine (opcional) para levantar la pila completa con `docker compose`.【F:README.md†L36-L39】
 
 ### 1.4 Variables de entorno del backend
-Copia el archivo `.env.example` dentro de `backend/` a `.env` y ajusta las variables según tu entorno (datos de PostgreSQL, secretos JWT, configuración SMTP y acceso a MinIO).【F:backend/.env.example†L1-L28】
+1. Copia `backend/.env` como base y ajusta la cadena de conexión, secretos JWT, credenciales SMTP y configuración de almacenamiento según tu entorno.【F:README.md†L43-L60】【F:backend/.env†L1-L29】
+2. Antes de sembrar datos, define (si lo necesitas) las variables `ADMIN_EMAIL`, `ADMIN_PASSWORD` y `SEED_RESET_ADMIN_PASSWORD` para personalizar el usuario administrador inicial.【F:backend/.env†L10-L14】【F:backend/src/prisma/base-seed.ts†L120-L204】
 
 ### 1.5 Flujo general de backend y frontend
-1. Instala dependencias del backend y genera el cliente de Prisma.
-2. Ejecuta migraciones y datos de prueba.
-3. Levanta el backend en modo `start:dev` para recarga en caliente.
-4. Instala dependencias del frontend Flutter y ejecútalo en modo web.
-5. Usa los scripts de pruebas y linting para validar la calidad del código.【F:README.md†L21-L61】【F:backend/package.json†L6-L75】
+1. Instala dependencias y genera el cliente de Prisma (`npm install`, `npx prisma generate`).【F:README.md†L43-L60】
+2. Ejecuta las migraciones y el seed base (`npx prisma migrate dev`, `npm run seed`).【F:README.md†L50-L60】
+3. Levanta la API en modo desarrollo con `npm run start:dev` para habilitar recarga en caliente y el prefijo `/api/v1`.【F:README.md†L56-L60】
+4. En otra terminal instala dependencias del frontend (`flutter pub get`, `flutter pub run build_runner build`).【F:README.md†L68-L75】
+5. Ejecuta la app web apuntando al backend local (`flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:3000/api/v1`).【F:README.md†L76-L80】
 
-### 1.6 Limpiar la base de datos de desarrollo
-Si necesitas vaciar los datos de prueba y dejar la base lista para volver a sembrar la información base:
-
-1. Resetea la base manejada por Prisma desde el backend:
-   ```bash
-   cd backend
-   npx prisma migrate reset --force
-   ```
-   Este comando elimina todas las tablas, vuelve a ejecutar las migraciones y corre automáticamente el `prisma/seed.ts` para restaurar los datos definidos en `src/prisma/base-seed.ts`.
-
-2. Si trabajas con la infraestructura en Docker (`infra/docker-compose.yml`), puedes destruir el volumen persistente de PostgreSQL para empezar desde cero:
-   ```bash
-   cd infra
-   docker compose down -v
-   ```
-   Al siguiente `docker compose up --build` se recreará un volumen limpio y Prisma volverá a sembrar los datos base cuando ejecutes el paso anterior.
+### 1.6 Restablecer la base de datos de desarrollo
+- Para reiniciar el esquema y volver a cargar los datos base, usa `npx prisma migrate reset --force` desde `backend/`. Esto elimina todas las tablas, reaplica migraciones y ejecuta `npm run seed` automáticamente.
+- Si trabajas con Docker, puedes eliminar el volumen persistente de PostgreSQL con `docker compose down -v` desde `infra/`; al reiniciar la pila, Prisma recreará el esquema al correr las migraciones.【F:infra/docker-compose.yml†L4-L44】
 
 ## 2. Configuración en Windows 10/11
 
 ### 2.1 Instalación de dependencias
 1. **Visual Studio Code**: instala la versión estable desde <https://code.visualstudio.com/>.
-2. **Windows Terminal (opcional)**: facilita el uso de PowerShell y WSL.
-3. **Node.js**: instala `nvm-windows` desde <https://github.com/coreybutler/nvm-windows> y ejecuta en PowerShell:
+2. **Windows Terminal (opcional)** para administrar PowerShell y WSL.
+3. **Node.js**: instala `nvm-windows` y, desde PowerShell, ejecuta:
    ```powershell
    nvm install 20
    nvm use 20
    ```
 4. **Flutter**:
    - Descarga el SDK desde <https://docs.flutter.dev/get-started/install/windows>.
-   - Extrae el ZIP en `C:\src\flutter` y añade `C:\src\flutter\bin` al `PATH` de tu usuario.
-   - Ejecuta `flutter doctor` en una terminal para verificar dependencias (instala Chrome si no está presente).
+   - Extrae el ZIP (por ejemplo en `C:\src\flutter`) y agrega `C:\src\flutter\bin` al `PATH`.
+   - Ejecuta `flutter doctor` para validar dependencias (Chrome incluido).
 5. **PostgreSQL**:
-   - Opción 1: instala [PostgreSQL](https://www.postgresql.org/download/windows/) y crea una base de datos `ligas`.
-   - Opción 2: instala [Docker Desktop](https://www.docker.com/products/docker-desktop/) y usa `infra/docker-compose.yml`.
-6. **Git**: instala [Git for Windows](https://git-scm.com/download/win) si no lo hiciste en la sección inicial.
+   - Instala el paquete oficial y crea una base `ligas`, o
+   - Usa Docker Desktop y el `docker-compose.yml` incluido para levantar la base rápidamente.【F:infra/docker-compose.yml†L1-L49】
+6. **Git**: instala [Git for Windows](https://git-scm.com/download/win) si aún no lo hiciste.
 
 ### 2.2 Uso de Docker Compose (opcional)
-Con Docker Desktop ejecutándose, abre una terminal en `infra/` y corre:
+Con Docker Desktop activo, ejecuta en una terminal PowerShell:
 ```powershell
 cd infra
 docker compose up --build
 ```
-Esto levantará PostgreSQL, MinIO, Mailhog, el backend NestJS y el frontend compilado. Los puertos expuestos son 3000 (API), 8080 (frontend), 8025 (Mailhog) y 9001 (MinIO).【F:infra/docker-compose.yml†L1-L60】
+Esto levantará PostgreSQL (puerto 5432), MinIO (9000/9001), Mailhog (8025), la API (3000) y el frontend (8080).【F:infra/docker-compose.yml†L1-L49】【F:README.md†L87-L103】
 
-### 2.3 Configurar la base de datos sin Docker
+### 2.3 Configurar la base sin Docker
 Si prefieres PostgreSQL nativo:
-1. Crea un usuario `postgres` con contraseña `postgres` (o actualiza la cadena en `.env`).
-2. Crea la base de datos `ligas`.
-3. Asegura que el puerto 5432 esté disponible.
+1. Crea el usuario/contraseña indicados en tu `.env` (por defecto `postgres` / `postgres`).【F:backend/.env†L1-L4】
+2. Crea la base `ligas` y asegúrate de que el puerto 5432 esté libre.
 
 ### 2.4 Scripts del backend desde VS Code
 1. Abre una terminal integrada (`Ctrl+ñ`).
@@ -103,29 +93,17 @@ Si prefieres PostgreSQL nativo:
    npm run seed
    npm run start:dev
    ```
-3. Configura un **task** de VS Code (opcional) que ejecute `npm run start:dev` usando el `type` `shell`.
+   Los scripts de lint y pruebas (`npm run lint`, `npm test`, `npm run test:cov`) también están disponibles para tareas automatizadas.【F:README.md†L62-L66】
 
 ### 2.5 Frontend Flutter Web
 1. En otra terminal integrada:
    ```powershell
    cd frontend
    flutter pub get
-   flutter run -d chrome
+   flutter pub run build_runner build --delete-conflicting-outputs
+   flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:3000/api/v1
    ```
-2. Para pruebas y análisis estático:
-   ```powershell
-   flutter test
-   flutter analyze
-   ```
-
-### 2.6 Pruebas y linting del backend
-Desde la carpeta `backend/` puedes ejecutar:
-```powershell
-npm run lint
-npm test
-npm run test:cov
-```
-Configura configuraciones de depuración (`launch.json`) si quieres depurar con el adaptador de Node.js.
+2. Para pruebas y análisis estático ejecuta `flutter test` y `flutter analyze`.【F:README.md†L68-L85】
 
 ## 3. Configuración en Ubuntu
 
@@ -148,14 +126,14 @@ nvm use 20
 sudo snap install flutter --classic
 flutter doctor
 ```
-Asegúrate de tener Google Chrome instalado (`sudo apt install -y google-chrome-stable` desde el repositorio de Google) para usar `flutter run -d chrome`.
+Instala Google Chrome (`sudo apt install google-chrome-stable`) o Chromium para poder ejecutar `flutter run -d chrome`.
 
 ### 3.4 PostgreSQL y Docker (opcional)
-- Instala PostgreSQL nativo: `sudo apt install -y postgresql postgresql-contrib` y crea la base de datos `ligas`.
-- Si prefieres contenedores, instala Docker siguiendo <https://docs.docker.com/engine/install/ubuntu/> y usa `docker compose` con el archivo en `infra/`.
+- PostgreSQL nativo: `sudo apt install -y postgresql postgresql-contrib` y crea la base `ligas` con un usuario acorde a tu `.env`.
+- Docker: sigue la guía oficial <https://docs.docker.com/engine/install/ubuntu/> y utiliza `docker compose up --build` en la carpeta `infra/` cuando quieras levantar toda la pila.【F:infra/docker-compose.yml†L1-L49】
 
-### 3.5 Flujo en VS Code
-Las mismas secuencias del backend y frontend descritas para Windows aplican en Ubuntu. Usa la terminal integrada (`Ctrl+Ñ` en teclado latinoamericano o `Ctrl+\`` en teclado US) para ejecutar los comandos de npm y Flutter.
+### 3.5 Trabajo diario en VS Code
+Los mismos comandos descritos para Windows aplican en Ubuntu. Usa la terminal integrada para ejecutar scripts del backend y frontend, y recuerda exportar `API_BASE_URL` cuando ejecutes `flutter run` si utilizas otro puerto/backend remoto.【F:README.md†L43-L85】
 
 ## 4. Configuración en Arch Linux
 
@@ -173,31 +151,33 @@ nvm use 20
 ```
 
 ### 4.3 Flutter
-- Instala Flutter desde los repositorios comunitarios: `sudo pacman -S --needed flutter`. Añade `export PATH="$PATH:/opt/flutter/bin"` a tu `~/.bashrc` o `~/.zshrc` si no se añade automáticamente.
-- Ejecuta `flutter doctor` y, si usas Chromium, instala `chromium` con `sudo pacman -S chromium`.
+- Instala Flutter desde los repositorios comunitarios: `sudo pacman -S --needed flutter`.
+- Agrega `/opt/flutter/bin` al `PATH` si no se añade automáticamente.
+- Ejecuta `flutter doctor` para validar dependencias y asegúrate de tener `chromium` o Google Chrome instalado.
 
 ### 4.4 PostgreSQL y Docker
-- PostgreSQL: `sudo pacman -S postgresql` y sigue las instrucciones de inicialización (`sudo -iu postgres initdb --locale $LANG -D /var/lib/postgres/data` y `sudo systemctl enable --now postgresql`). Crea la base `ligas`.
-- Docker: `sudo pacman -S docker docker-compose`. Habilita el servicio (`sudo systemctl enable --now docker`) y agrega tu usuario al grupo `docker` (`sudo usermod -aG docker $USER`). Reinicia la sesión antes de ejecutar `docker compose up`.
+- PostgreSQL: `sudo pacman -S postgresql` y sigue las instrucciones de inicialización (`initdb`, habilitar servicio) antes de crear la base `ligas`.
+- Docker: `sudo pacman -S docker docker-compose`, habilita el servicio (`sudo systemctl enable --now docker`) y agrega tu usuario al grupo `docker` antes de ejecutar `docker compose up` en `infra/`.【F:infra/docker-compose.yml†L1-L49】
 
 ### 4.5 Trabajo diario en VS Code
-Repite los comandos de backend (`npm install`, `npx prisma ...`, `npm run start:dev`) y frontend (`flutter pub get`, `flutter run -d chrome`) desde la terminal integrada. Asegúrate de que Prisma puede acceder al socket de PostgreSQL (`localhost:5432`).
+Repite los comandos de backend (`npm install`, `npx prisma ...`, `npm run start:dev`) y frontend (`flutter pub get`, `flutter run ...`) desde la terminal integrada. Si la API corre en Docker u otra máquina, ajusta `API_BASE_URL` en el comando de Flutter para apuntar al host correcto.【F:README.md†L43-L85】
 
-## 5. Ejecución de pruebas y calidad
+## 5. Pruebas y calidad
 
-| Área        | Comando principal | Objetivo |
-|-------------|------------------|----------|
-| Backend     | `npm run lint`   | Ejecuta ESLint sobre `src/` para asegurar estilo consistente.【F:backend/package.json†L11-L12】|
-| Backend     | `npm test`       | Corre la suite de pruebas unitarias con Jest.【F:backend/package.json†L16-L17】|
-| Backend     | `npm run test:cov` | Genera reporte de cobertura con Jest.【F:backend/package.json†L18-L18】|
-| Frontend    | `flutter test`   | Corre pruebas unitarias/widget del cliente Flutter. |
-| Frontend    | `flutter analyze`| Analiza estáticamente el código Dart. |
-| Infra       | `docker compose up --build` | Levanta toda la pila local para pruebas integradas.【F:infra/docker-compose.yml†L1-L60】|
+| Área     | Comando principal | Objetivo |
+|----------|------------------|----------|
+| Backend  | `npm run lint`   | Ejecuta ESLint sobre `src/`.【F:README.md†L62-L66】|
+| Backend  | `npm test`       | Corre la suite de pruebas unitarias con Jest.【F:README.md†L62-L66】|
+| Backend  | `npm run test:cov` | Genera el reporte de cobertura de Jest.【F:README.md†L62-L66】|
+| Frontend | `flutter test`   | Ejecuta pruebas unitarias/widget del cliente Flutter.【F:README.md†L81-L85】|
+| Frontend | `flutter analyze`| Analiza estáticamente el código Dart.【F:README.md†L81-L85】|
+| Infra    | `docker compose up --build` | Levanta todos los servicios para pruebas integrales.【F:README.md†L87-L103】|
 
 ## 6. Consejos adicionales
-- Usa perfiles de VS Code (`F1 → Settings Profiles`) para separar configuraciones de backend y frontend si lo prefieres.
-- Configura `launch.json` con el tipo `pwa-chrome` para depurar Flutter Web desde VS Code.
-- Si cambias las credenciales de la base de datos, actualiza tanto `.env` como `prisma/schema.prisma` según corresponda antes de ejecutar `npx prisma migrate dev`.
-- Mantén sincronizado el repositorio ejecutando `git pull` frecuentemente y usando ramas feature para tus cambios.
 
-Con estas instrucciones podrás desarrollar y probar el proyecto en Windows, Ubuntu y Arch Linux utilizando Visual Studio Code como entorno principal.
+- Mantén sincronizado el repositorio (`git pull`) y utiliza ramas feature para cambios relevantes.
+- Configura tareas (`tasks.json`) o perfiles de depuración en VS Code si deseas automatizar `npm run start:dev` o `flutter run`.
+- Al generar fixtures o resultados, recuerda que la API expone los endpoints bajo `http://localhost:3000/api/v1`; puedes probarlos con Thunder Client antes de integrarlos al frontend.【F:README.md†L56-L60】
+- Si cambias las credenciales de la base, actualiza tanto `.env` como las variables de entorno del contenedor `backend` en `infra/docker-compose.yml` para mantener consistencia.【F:backend/.env†L1-L29】【F:infra/docker-compose.yml†L24-L44】
+
+Con estas pautas tendrás un entorno preparado para desarrollar y validar nuevas funcionalidades de la plataforma.
