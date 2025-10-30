@@ -14,6 +14,10 @@ export interface RequestUser {
   email: string;
   firstName: string;
   lastName: string;
+  language?: string | null;
+  avatarHash?: string | null;
+  avatarUpdatedAt?: Date | null;
+  avatarMime?: string | null;
   roles: string[];
   permissions: PermissionGrant[];
 }

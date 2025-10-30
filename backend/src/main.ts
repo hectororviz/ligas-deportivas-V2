@@ -4,9 +4,11 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
 import * as cookieParser from 'cookie-parser';
+import { join } from 'path';
+import { NestExpressApplication } from '@nestjs/platform-express';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
 
   // Allow frontend (Flutter web) to call the API during development
   const configService = app.get(ConfigService);
@@ -31,6 +33,9 @@ async function bootstrap() {
   app.setGlobalPrefix('api/v1');
   app.use(helmet());
   app.use(cookieParser());
+  app.useStaticAssets(join(process.cwd(), 'storage', 'uploads'), {
+    prefix: '/storage/uploads/'
+  });
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

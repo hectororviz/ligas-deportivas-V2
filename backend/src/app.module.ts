@@ -10,6 +10,7 @@ import { CompetitionModule } from './competition/competition.module';
 import { StorageModule } from './storage/storage.module';
 import { MailModule } from './mail/mail.module';
 import { CaptchaModule } from './captcha/captcha.module';
+import { MeModule } from './me/me.module';
 
 @Module({
   imports: [
@@ -25,7 +26,8 @@ import { CaptchaModule } from './captcha/captcha.module';
     AccessControlModule,
     AuthModule,
     UsersModule,
-    CompetitionModule
+    CompetitionModule,
+    MeModule
   ]
 })
 export class AppModule {}

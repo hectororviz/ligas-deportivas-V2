@@ -120,9 +120,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     ),
                     const SizedBox(height: 12),
                     TextButton(
+                      onPressed: _loading ? null : _showResetPasswordDialog,
+                      child: const Text('¿Olvidaste tu contraseña?'),
+                    ),
+                    TextButton(
                       onPressed: _loading ? null : () => context.go('/register'),
                       child: const Text('Crear cuenta'),
-                    )
+                    ),
                   ],
                 ),
               ),
@@ -131,5 +135,60 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _showResetPasswordDialog() async {
+    final controller = TextEditingController(text: _emailController.text.trim());
+    final formKey = GlobalKey<FormState>();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Recuperar contraseña'),
+          content: Form(
+            key: formKey,
+            child: TextFormField(
+              controller: controller,
+              decoration: const InputDecoration(labelText: 'Correo electrónico'),
+              keyboardType: TextInputType.emailAddress,
+              validator: (value) =>
+                  (value == null || value.isEmpty || !value.contains('@')) ? 'Ingresa un correo válido' : null,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (formKey.currentState!.validate()) {
+                  Navigator.of(context).pop(true);
+                }
+              },
+              child: const Text('Enviar enlace'),
+            )
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+    try {
+      await ref.read(authControllerProvider.notifier).requestPasswordReset(controller.text.trim());
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Enviamos un enlace para recuperar la contraseña.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo enviar el enlace: $error')),
+        );
+      }
+    }
   }
 }
