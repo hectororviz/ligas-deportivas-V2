@@ -631,8 +631,8 @@ class _ScoreInputCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final background = _backgroundColor(outcome);
-    final foreground = _foregroundColor(outcome, theme);
+    final background = _scoreBackgroundColor(outcome);
+    final foreground = _scoreForegroundColor(outcome);
 
     return Container(
       alignment: Alignment.center,
@@ -645,7 +645,7 @@ class _ScoreInputCell extends StatelessWidget {
           enabled: enabled,
           textAlign: TextAlign.center,
           keyboardType: TextInputType.number,
-          inputFormatters: const [FilteringTextInputFormatter.digitsOnly],
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           decoration: const InputDecoration(
             isDense: true,
             contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
@@ -746,6 +746,26 @@ _ScoreOutcome _scoreOutcome(int score, int opponentScore) {
   return _ScoreOutcome.loss;
 }
 
+Color _scoreBackgroundColor(_ScoreOutcome outcome) {
+  if (outcome == _ScoreOutcome.win) {
+    return const Color(0xFFE8F5E9);
+  }
+  if (outcome == _ScoreOutcome.draw) {
+    return const Color(0xFFFFF8E1);
+  }
+  return const Color(0xFFFFEBEE);
+}
+
+Color _scoreForegroundColor(_ScoreOutcome outcome) {
+  if (outcome == _ScoreOutcome.win) {
+    return const Color(0xFF2E7D32);
+  }
+  if (outcome == _ScoreOutcome.draw) {
+    return const Color(0xFFF9A825);
+  }
+  return const Color(0xFFC62828);
+}
+
 class _ScoreCell extends StatelessWidget {
   const _ScoreCell({required this.score, required this.outcome});
 
@@ -755,8 +775,8 @@ class _ScoreCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final background = _backgroundColor(outcome);
-    final foreground = _foregroundColor(outcome, theme);
+    final background = _scoreBackgroundColor(outcome);
+    final foreground = _scoreForegroundColor(outcome);
     return Container(
       alignment: Alignment.center,
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
@@ -771,25 +791,4 @@ class _ScoreCell extends StatelessWidget {
     );
   }
 
-  Color _backgroundColor(_ScoreOutcome outcome) {
-    switch (outcome) {
-      case _ScoreOutcome.win:
-        return const Color(0xFFE8F5E9);
-      case _ScoreOutcome.draw:
-        return const Color(0xFFFFF8E1);
-      case _ScoreOutcome.loss:
-        return const Color(0xFFFFEBEE);
-    }
-  }
-
-  Color _foregroundColor(_ScoreOutcome outcome, ThemeData theme) {
-    switch (outcome) {
-      case _ScoreOutcome.win:
-        return const Color(0xFF2E7D32);
-      case _ScoreOutcome.draw:
-        return const Color(0xFFF9A825);
-      case _ScoreOutcome.loss:
-        return const Color(0xFFC62828);
-    }
-  }
 }
