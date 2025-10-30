@@ -1050,7 +1050,9 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
   bool _isSaving = false;
   bool _hasChanges = false;
   bool _slugManuallyEdited = false;
+  bool _shortNameManuallyEdited = false;
   bool _updatingSlug = false;
+  bool _updatingShortName = false;
   String? _errorMessage;
   LatLng? _selectedLocation;
   late final _ClubFormSnapshot _initialSnapshot;
@@ -1061,7 +1063,10 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
     final club = widget.club;
     _nameController = TextEditingController(text: club?.name ?? '');
     _slugController = TextEditingController(text: club?.slug ?? '');
-    _shortNameController = TextEditingController(text: club?.shortName ?? '');
+    _shortNameController = TextEditingController(
+      text: club?.shortName ?? club?.name ?? '',
+    );
+    _shortNameManuallyEdited = widget.club != null && club?.shortName != null;
     _primaryColorController =
         TextEditingController(text: club?.primaryHex?.toUpperCase() ?? '');
     _secondaryColorController =
@@ -1096,8 +1101,8 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
       location: _selectedLocation,
     );
 
-    _nameController.addListener(_handleFieldChanged);
-    _shortNameController.addListener(_handleFieldChanged);
+    _nameController.addListener(_handleNameChanged);
+    _shortNameController.addListener(_handleShortNameChanged);
     _primaryColorController.addListener(_handleFieldChanged);
     _secondaryColorController.addListener(_handleFieldChanged);
     _instagramController.addListener(_handleFieldChanged);
@@ -1108,6 +1113,8 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
 
   @override
   void dispose() {
+    _nameController.removeListener(_handleNameChanged);
+    _shortNameController.removeListener(_handleShortNameChanged);
     _nameController.dispose();
     _slugController.dispose();
     _shortNameController.dispose();
@@ -1119,6 +1126,30 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
     _longitudeController.dispose();
     _addressController.dispose();
     super.dispose();
+  }
+
+  void _handleNameChanged() {
+    if (!_shortNameManuallyEdited && widget.club == null) {
+      final nameText = _nameController.text;
+      if (_shortNameController.text != nameText) {
+        _updatingShortName = true;
+        _shortNameController.value = _shortNameController.value.copyWith(
+          text: nameText,
+          selection: TextSelection.collapsed(offset: nameText.length),
+        );
+        _updatingShortName = false;
+      }
+    }
+    _handleFieldChanged();
+  }
+
+  void _handleShortNameChanged() {
+    if (_updatingShortName) {
+      _handleFieldChanged();
+      return;
+    }
+    _shortNameManuallyEdited = true;
+    _handleFieldChanged();
   }
 
   void _handleFieldChanged() {
