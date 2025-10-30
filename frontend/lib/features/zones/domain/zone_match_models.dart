@@ -82,6 +82,7 @@ class FixtureClub {
 class ZoneMatchCategory {
   ZoneMatchCategory({
     required this.id,
+    required this.tournamentCategoryId,
     required this.categoryName,
     required this.homeScore,
     required this.awayScore,
@@ -95,6 +96,7 @@ class ZoneMatchCategory {
     final name = category['name'] as String? ?? tournamentCategory['name'] as String? ?? 'Categoría';
     return ZoneMatchCategory(
       id: json['id'] as int? ?? 0,
+      tournamentCategoryId: json['tournamentCategoryId'] as int? ?? json['id'] as int? ?? 0,
       categoryName: name,
       homeScore: json['homeScore'] as int? ?? 0,
       awayScore: json['awayScore'] as int? ?? 0,
@@ -104,6 +106,7 @@ class ZoneMatchCategory {
   }
 
   final int id;
+  final int tournamentCategoryId;
   final String categoryName;
   final int homeScore;
   final int awayScore;

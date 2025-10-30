@@ -30,6 +30,14 @@ export class MatchesController {
     return this.matchesService.listByZone(zoneId);
   }
 
+  @Get('matches/:matchId/categories/:categoryId/result')
+  getResult(
+    @Param('matchId', ParseIntPipe) matchId: number,
+    @Param('categoryId', ParseIntPipe) categoryId: number
+  ) {
+    return this.matchesService.getResult(matchId, categoryId);
+  }
+
   @Patch('matches/:matchId')
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @Permissions({ module: Module.PARTIDOS, action: Action.UPDATE })

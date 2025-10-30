@@ -37,6 +37,78 @@ export class MatchesService {
     });
   }
 
+  async getResult(matchId: number, tournamentCategoryId: number) {
+    const matchCategory = await this.prisma.matchCategory.findFirst({
+      where: { matchId, tournamentCategoryId },
+      include: {
+        match: {
+          select: {
+            homeClubId: true,
+            awayClubId: true
+          }
+        },
+        goals: {
+          include: {
+            player: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true
+              }
+            }
+          }
+        },
+        otherGoals: true
+      }
+    });
+
+    if (!matchCategory) {
+      throw new NotFoundException('Partido/categoría no encontrado');
+    }
+
+    const groupedGoals = new Map<
+      number,
+      {
+        playerId: number;
+        clubId: number;
+        goals: number;
+        player: { id: number; firstName: string | null; lastName: string | null };
+      }
+    >();
+
+    for (const goal of matchCategory.goals) {
+      const existing = groupedGoals.get(goal.playerId);
+      if (existing) {
+        existing.goals += 1;
+      } else {
+        groupedGoals.set(goal.playerId, {
+          playerId: goal.playerId,
+          clubId: goal.clubId,
+          goals: 1,
+          player: {
+            id: goal.playerId,
+            firstName: goal.player.firstName,
+            lastName: goal.player.lastName
+          }
+        });
+      }
+    }
+
+    return {
+      matchId,
+      tournamentCategoryId,
+      homeClubId: matchCategory.match.homeClubId,
+      awayClubId: matchCategory.match.awayClubId,
+      homeScore: matchCategory.homeScore,
+      awayScore: matchCategory.awayScore,
+      playerGoals: Array.from(groupedGoals.values()),
+      otherGoals: matchCategory.otherGoals.map((goal) => ({
+        clubId: goal.clubId,
+        goals: goal.goals
+      }))
+    };
+  }
+
   async updateMatch(matchId: number, dto: UpdateMatchDto) {
     await this.prisma.match.findUniqueOrThrow({ where: { id: matchId } });
     return this.prisma.match.update({
