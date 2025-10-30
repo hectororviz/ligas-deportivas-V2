@@ -14,6 +14,7 @@ import '../../shared/widgets/table_filters_bar.dart';
 const _modulePlayers = 'JUGADORES';
 const _actionCreate = 'CREATE';
 const _actionUpdate = 'UPDATE';
+const int _noClubFilterValue = -1;
 
 final playersFiltersProvider =
     StateNotifierProvider<_PlayersFiltersController, _PlayersFilters>((ref) {
@@ -28,7 +29,9 @@ final playersProvider = FutureProvider<PaginatedPlayers>((ref) async {
         await api.get<Map<String, dynamic>>('/players', queryParameters: {
       if (filters.query.trim().isNotEmpty) 'search': filters.query.trim(),
       if (filters.status != PlayerStatusFilter.all) 'status': filters.status.name,
-      if (filters.clubId != null) 'clubId': filters.clubId,
+      if (filters.clubId != null)
+        'clubId':
+            filters.clubId == _noClubFilterValue ? '' : filters.clubId,
       if (filters.gender.apiValue != null) 'gender': filters.gender.apiValue,
       if (filters.birthYear != null) 'birthYear': filters.birthYear,
       'page': filters.page,
@@ -277,6 +280,10 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
                       child: clubsAsync.when(
                         data: (clubs) {
                           final items = [
+                            const DropdownMenuItem<int?>(
+                              value: _noClubFilterValue,
+                              child: Text('Sin club asignado'),
+                            ),
                             const DropdownMenuItem<int?>(
                               value: null,
                               child: Text('Todos'),
