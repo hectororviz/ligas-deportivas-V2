@@ -1194,67 +1194,31 @@ class _ZoneDetailsDialog extends ConsumerStatefulWidget {
 }
 
 class _ZoneDetailsDialogState extends ConsumerState<_ZoneDetailsDialog> {
-  late Future<_ZoneDetailsData> _future;
-  late final ScrollController _clubScrollController;
+  late Future<ZoneDetail> _future;
 
   @override
   void initState() {
     super.initState();
-    _clubScrollController = ScrollController();
     _future = _load();
   }
 
-  @override
-  void dispose() {
-    _clubScrollController.dispose();
-    super.dispose();
-  }
-
-  Future<_ZoneDetailsData> _load() async {
+  Future<ZoneDetail> _load() async {
     final api = ref.read(apiClientProvider);
-    final response = await api.get<Map<String, dynamic>>('/zones/${widget.zoneId}');
-    final data = response.data ?? <String, dynamic>{};
-    final detail = ZoneDetail.fromJson(data);
-
-    List<TournamentClubEligibility> tournamentClubs = [];
-    try {
-      final clubsResponse = await api
-          .get<List<dynamic>>('/tournaments/${detail.tournament.id}/zones/clubs');
-      final clubsData = clubsResponse.data ?? [];
-      tournamentClubs = clubsData
-          .map((json) =>
-              TournamentClubEligibility.fromJson(json as Map<String, dynamic>))
-          .toList();
-    } catch (_) {
-      tournamentClubs = [];
+    final response = await api.get<Map<String, dynamic>>(
+      '/zones/${widget.zoneId}',
+      queryParameters: {'_': DateTime.now().millisecondsSinceEpoch},
+    );
+    final data = response.data;
+    if (data == null || data.isEmpty) {
+      throw const FormatException('La respuesta del servidor llegó vacía.');
     }
-
-    final assignedClubIds = detail.clubs.map((club) => club.id).toSet();
-    final eligibilityById = <int, TournamentClubEligibility>{
-      for (final club in tournamentClubs)
-        if (assignedClubIds.contains(club.id)) club.id: club,
-    };
-
-    final sortedClubs = [...detail.clubs]
-      ..sort(
-        (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
-      );
-
-    final clubs = sortedClubs
-        .map(
-          (club) => _ZoneClubStatus(
-            club: club,
-            eligibility: eligibilityById[club.id],
-          ),
-        )
-        .toList();
-
-    return _ZoneDetailsData(detail: detail, clubs: clubs);
+    return ZoneDetail.fromJson(data);
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<_ZoneDetailsData>(
+    final theme = Theme.of(context);
+    return FutureBuilder<ZoneDetail>(
       future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
@@ -1271,271 +1235,76 @@ class _ZoneDetailsDialogState extends ConsumerState<_ZoneDetailsDialog> {
             ),
           );
         }
-        final theme = Theme.of(context);
-        final data = snapshot.data!;
-        final detail = data.detail;
-        final clubs = data.clubs;
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            const maxListHeight = 360.0;
-            const tileHeight = 76.0;
-            final estimatedHeight = clubs.length * tileHeight;
-            final listHeight = clubs.isEmpty
-                ? 0.0
-                : math.min(
-                    maxListHeight,
-                    math.max(tileHeight, estimatedHeight.toDouble()),
-                  );
+        final detail = snapshot.data!;
+        final clubs = [...detail.clubs]
+          ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+        final listHeight = clubs.isEmpty
+            ? 0.0
+            : math.min(360.0, math.max(72.0, clubs.length * 64.0));
 
-            return SizedBox(
-              width: double.infinity,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    detail.name,
-                    style:
-                        theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text(
-                        '${detail.tournament.leagueName} · ${detail.tournament.name} ${detail.tournament.year}',
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                      _ZoneStatusChip(status: detail.status),
-                      if (detail.lockedAt != null)
-                        Chip(
-                          avatar: const Icon(Icons.lock_outline, size: 16),
-                          label: const Text('Fixture bloqueado'),
-                          visualDensity: VisualDensity.compact,
-                          backgroundColor: theme.colorScheme.surfaceVariant,
-                          labelStyle: theme.textTheme.labelMedium?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    'Clubes asignados (${clubs.length})',
-                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 12),
-                  if (clubs.isEmpty)
-                    const Text('Aún no hay clubes asignados a esta zona.')
-                  else
+        return SizedBox(
+          width: double.infinity,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                detail.name,
+                style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 16),
+              if (clubs.isEmpty)
+                const Text('Aún no hay clubes asignados a esta zona.')
+              else
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Clubes asignados (${clubs.length})',
+                      style:
+                          theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 12),
                     SizedBox(
                       height: listHeight,
                       child: Scrollbar(
-                        controller: _clubScrollController,
-                        thumbVisibility: estimatedHeight > maxListHeight,
+                        thumbVisibility: listHeight >= 360.0,
                         child: ListView.separated(
-                          controller: _clubScrollController,
+                          primary: false,
                           padding: const EdgeInsets.only(bottom: 8),
                           itemCount: clubs.length,
-                          itemBuilder: (context, index) => _ZoneClubTile(
-                            status: clubs[index],
-                            index: index + 1,
-                          ),
+                          itemBuilder: (context, index) {
+                            final club = clubs[index];
+                            return ListTile(
+                              contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                              leading: CircleAvatar(
+                                radius: 16,
+                                backgroundColor: theme.colorScheme.primaryContainer,
+                                foregroundColor: theme.colorScheme.onPrimaryContainer,
+                                child: Text('${index + 1}'),
+                              ),
+                              title: Text(
+                                club.name,
+                                style: theme.textTheme.titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w600),
+                              ),
+                              subtitle: club.shortName != null && club.shortName!.trim().isNotEmpty
+                                  ? Text('Alias: ${club.shortName}')
+                                  : null,
+                            );
+                          },
                           separatorBuilder: (_, __) => const Divider(height: 1),
                         ),
                       ),
                     ),
-                ],
-              ),
-            );
-          },
+                  ],
+                ),
+            ],
+          ),
         );
       },
     );
-  }
-}
-
-DataRow _buildClubRow(BuildContext context, _ZoneClubStatus clubStatus,
-    {required int index}) {
-  final eligibility = clubStatus.eligibility;
-  final meetsMinimums = clubStatus.meetsMinimums;
-  final indicatorColor =
-      meetsMinimums ? Colors.green : Theme.of(context).colorScheme.error;
-  final label = meetsMinimums ? 'Completa' : 'Incompleta';
-  final tooltip = eligibility != null
-      ? buildEligibilityTooltip(eligibility)
-      : 'No se pudo determinar la disponibilidad de jugadores para este club.';
-
-  return DataRow(
-    cells: [
-      DataCell(Text('$index')),
-      DataCell(Text(clubStatus.club.name)),
-      DataCell(Text(clubStatus.club.shortName ?? '—')),
-      DataCell(
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Tooltip(
-              message: tooltip,
-              child: Icon(Icons.circle, size: 12, color: indicatorColor),
-            ),
-            const SizedBox(width: 8),
-            Text(label),
-          ],
-        ),
-      ),
-    ],
-  );
-}
-
-class _ZoneDetailsData {
-  const _ZoneDetailsData({required this.detail, required this.clubs});
-
-  final ZoneDetail detail;
-  final List<_ZoneClubStatus> clubs;
-}
-
-class _ZoneClubTile extends StatelessWidget {
-  const _ZoneClubTile({required this.status, required this.index});
-
-  final _ZoneClubStatus status;
-  final int index;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final availability = status.availability;
-    final subtitleLines = <Widget>[];
-
-    if (status.club.shortName != null && status.club.shortName!.trim().isNotEmpty) {
-      subtitleLines.add(
-        Text(
-          'Alias: ${status.club.shortName}',
-          style: theme.textTheme.bodySmall,
-        ),
-      );
-    }
-
-    subtitleLines.add(
-      Text(
-        availability.description,
-        style: theme.textTheme.bodySmall?.copyWith(
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
-      ),
-    );
-
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(vertical: 8),
-      minLeadingWidth: 36,
-      leading: CircleAvatar(
-        radius: 16,
-        backgroundColor: theme.colorScheme.primaryContainer,
-        foregroundColor: theme.colorScheme.onPrimaryContainer,
-        child: Text('$index'),
-      ),
-      title: Text(
-        status.club.name,
-        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-      ),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: subtitleLines,
-      ),
-      trailing: Tooltip(
-        message: status.tooltip,
-        child: Chip(
-          label: Text(availability.label),
-          backgroundColor: availability.chipColor(theme),
-          labelStyle: theme.textTheme.labelMedium?.copyWith(
-            color: availability.chipLabelColor(theme),
-            fontWeight: FontWeight.w600,
-          ),
-          visualDensity: VisualDensity.compact,
-        ),
-      ),
-    );
-  }
-}
-
-class _ZoneClubStatus {
-  const _ZoneClubStatus({required this.club, this.eligibility});
-
-  final ZoneClub club;
-  final TournamentClubEligibility? eligibility;
-
-  bool get meetsMinimums => eligibility?.eligible ?? false;
-
-  _ClubEligibilityState get availability {
-    final eligibility = this.eligibility;
-    if (eligibility == null) {
-      return _ClubEligibilityState.unknown;
-    }
-    if (eligibility.eligible) {
-      return _ClubEligibilityState.complete;
-    }
-    return _ClubEligibilityState.incomplete;
-  }
-
-  String get tooltip {
-    final eligibility = this.eligibility;
-    if (eligibility == null) {
-      return 'No se pudo obtener información de elegibilidad para este club en este torneo.';
-    }
-    return buildEligibilityTooltip(eligibility);
-  }
-
-  String get description => availability.description;
-}
-
-enum _ClubEligibilityState { complete, incomplete, unknown }
-
-extension on _ClubEligibilityState {
-  String get label {
-    switch (this) {
-      case _ClubEligibilityState.complete:
-        return 'Completa';
-      case _ClubEligibilityState.incomplete:
-        return 'Incompleta';
-      case _ClubEligibilityState.unknown:
-        return 'Sin datos';
-    }
-  }
-
-  String get description {
-    switch (this) {
-      case _ClubEligibilityState.complete:
-        return 'Cumple con las categorías requeridas.';
-      case _ClubEligibilityState.incomplete:
-        return 'No cumple con todos los requisitos establecidos.';
-      case _ClubEligibilityState.unknown:
-        return 'Sin información de elegibilidad disponible.';
-    }
-  }
-
-  Color chipColor(ThemeData theme) {
-    switch (this) {
-      case _ClubEligibilityState.complete:
-        return theme.colorScheme.secondaryContainer;
-      case _ClubEligibilityState.incomplete:
-        return theme.colorScheme.errorContainer;
-      case _ClubEligibilityState.unknown:
-        return theme.colorScheme.surfaceVariant;
-    }
-  }
-
-  Color chipLabelColor(ThemeData theme) {
-    switch (this) {
-      case _ClubEligibilityState.complete:
-        return theme.colorScheme.onSecondaryContainer;
-      case _ClubEligibilityState.incomplete:
-        return theme.colorScheme.onErrorContainer;
-      case _ClubEligibilityState.unknown:
-        return theme.colorScheme.onSurfaceVariant;
-    }
   }
 }
 
