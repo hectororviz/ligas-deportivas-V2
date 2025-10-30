@@ -426,6 +426,8 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
                       (match) => FixtureMatchRow(
                         homeName: match.homeDisplayName,
                         awayName: match.awayDisplayName,
+                        homePoints: match.homePoints,
+                        awayPoints: match.awayPoints,
                         onTap: () => _openMatchDetail(zone, match),
                       ),
                     )
@@ -626,26 +628,48 @@ class FixtureMatchRow extends StatelessWidget {
     super.key,
     required this.homeName,
     required this.awayName,
+    this.homePoints,
+    this.awayPoints,
     this.onTap,
   });
 
   final String homeName;
   final String awayName;
+  final int? homePoints;
+  final int? awayPoints;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final homePointsLabel = homePoints?.toString() ?? '-';
+    final awayPointsLabel = awayPoints?.toString() ?? '-';
+    final basePointsStyle = theme.textTheme.bodyMedium;
+    final pointsTextStyle = basePointsStyle?.copyWith(fontWeight: FontWeight.w600) ??
+        theme.textTheme.bodyMedium;
+
     final content = Padding(
       padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
       child: Row(
         children: [
-          Expanded(child: Text(homeName, style: Theme.of(context).textTheme.bodyLarge)),
-          Icon(Icons.swap_horiz, color: Theme.of(context).colorScheme.onSurfaceVariant),
+          Expanded(child: Text(homeName, style: theme.textTheme.bodyLarge)),
+          const SizedBox(width: 8),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(homePointsLabel, style: pointsTextStyle),
+              const SizedBox(width: 4),
+              Icon(Icons.swap_horiz, color: theme.colorScheme.onSurfaceVariant),
+              const SizedBox(width: 4),
+              Text(awayPointsLabel, style: pointsTextStyle),
+            ],
+          ),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
               awayName,
               textAlign: TextAlign.right,
-              style: Theme.of(context).textTheme.bodyLarge,
+              style: theme.textTheme.bodyLarge,
             ),
           ),
         ],
@@ -813,11 +837,16 @@ List<_DecoratedMatchday> _decorateMatchdays(
         ? preferredIndex
         : sequentialIndex;
     seenDisplayIndexes.add(displayIndex);
+    final sortedMatches = [...raw.matches]
+      ..sort(
+        (a, b) => a.homeName.toLowerCase().compareTo(b.homeName.toLowerCase()),
+      );
+
     decorated.add(
       _DecoratedMatchday(
         displayIndex: displayIndex,
         round: raw.round,
-        matches: raw.matches,
+        matches: sortedMatches,
         status: status,
         byeClubName: raw.byeClubName,
       ),
