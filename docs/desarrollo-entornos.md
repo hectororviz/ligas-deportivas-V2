@@ -42,6 +42,23 @@ Copia el archivo `.env.example` dentro de `backend/` a `.env` y ajusta las varia
 4. Instala dependencias del frontend Flutter y ejecútalo en modo web.
 5. Usa los scripts de pruebas y linting para validar la calidad del código.【F:README.md†L21-L61】【F:backend/package.json†L6-L75】
 
+### 1.6 Limpiar la base de datos de desarrollo
+Si necesitas vaciar los datos de prueba y dejar la base lista para volver a sembrar la información base:
+
+1. Resetea la base manejada por Prisma desde el backend:
+   ```bash
+   cd backend
+   npx prisma migrate reset --force
+   ```
+   Este comando elimina todas las tablas, vuelve a ejecutar las migraciones y corre automáticamente el `prisma/seed.ts` para restaurar los datos definidos en `src/prisma/base-seed.ts`.
+
+2. Si trabajas con la infraestructura en Docker (`infra/docker-compose.yml`), puedes destruir el volumen persistente de PostgreSQL para empezar desde cero:
+   ```bash
+   cd infra
+   docker compose down -v
+   ```
+   Al siguiente `docker compose up --build` se recreará un volumen limpio y Prisma volverá a sembrar los datos base cuando ejecutes el paso anterior.
+
 ## 2. Configuración en Windows 10/11
 
 ### 2.1 Instalación de dependencias
