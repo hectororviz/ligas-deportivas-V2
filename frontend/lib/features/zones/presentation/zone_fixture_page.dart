@@ -327,21 +327,39 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
           Text('Semilla utilizada: ${preview.seed}', style: Theme.of(context).textTheme.bodyMedium),
           const SizedBox(height: 12),
         ],
-        ...preview.matchdays.map(
+        ..._decorateMatchdays(
+          preview.matchdays
+              .map(
+                (matchday) => _MatchdayContent(
+                  round: matchday.round,
+                  matchdayNumber: matchday.matchday,
+                  matches: matchday.matches
+                      .map(
+                        (match) => FixtureMatchRow(
+                          homeName: clubs[match.homeClubId]?.shortName ??
+                              clubs[match.homeClubId]?.name ??
+                              'Club ${match.homeClubId}',
+                          awayName: clubs[match.awayClubId]?.shortName ??
+                              clubs[match.awayClubId]?.name ??
+                              'Club ${match.awayClubId}',
+                        ),
+                      )
+                      .toList(),
+                  byeClubName: matchday.byeClubId != null
+                      ? clubs[matchday.byeClubId]?.shortName ??
+                          clubs[matchday.byeClubId]?.name ??
+                          'Club ${matchday.byeClubId}'
+                      : null,
+                ),
+              )
+              .toList(),
+        ).map(
           (matchday) => _FixtureMatchdayCard(
-            title: 'Fecha ${matchday.matchday}',
+            title: 'Fecha ${matchday.displayIndex}',
             subtitle: matchday.round.label,
-            matches: matchday.matches
-                .map(
-                  (match) => FixtureMatchRow(
-                    homeName: clubs[match.homeClubId]?.shortName ?? clubs[match.homeClubId]?.name ?? 'Club ${match.homeClubId}',
-                    awayName: clubs[match.awayClubId]?.shortName ?? clubs[match.awayClubId]?.name ?? 'Club ${match.awayClubId}',
-                  ),
-                )
-                .toList(),
-            byeClubName: matchday.byeClubId != null
-                ? clubs[matchday.byeClubId]?.shortName ?? clubs[matchday.byeClubId]?.name ?? 'Club ${matchday.byeClubId}'
-                : null,
+            matches: matchday.matches,
+            byeClubName: matchday.byeClubName,
+            status: matchday.status,
           ),
         ),
         const SizedBox(height: 24),
@@ -365,11 +383,60 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
       return const SizedBox.shrink();
     }
 
-    final grouped = <int, List<ZoneMatch>>{};
+    final grouped = <_MatchdayKey, List<ZoneMatch>>{};
     for (final match in matches) {
-      grouped.putIfAbsent(match.matchday, () => <ZoneMatch>[]).add(match);
+      final key = _MatchdayKey(round: match.round, matchday: match.matchday);
+      grouped.putIfAbsent(key, () => <ZoneMatch>[]).add(match);
     }
-    final matchdays = grouped.keys.toList()..sort();
+
+    final matchdayCards = _decorateMatchdays(
+      grouped.entries
+          .map(
+            (entry) {
+              final dayMatches = entry.value;
+              final round = entry.key.round;
+              final playingClubIds = <int>{};
+              for (final match in dayMatches) {
+                if (match.homeClub?.id != null) {
+                  playingClubIds.add(match.homeClub!.id);
+                }
+                if (match.awayClub?.id != null) {
+                  playingClubIds.add(match.awayClub!.id);
+                }
+              }
+              final byeClubId = zone.clubs.length % 2 == 1
+                  ? zone.clubs.map((club) => club.id).firstWhere(
+                        (clubId) => !playingClubIds.contains(clubId),
+                        orElse: () => 0,
+                      )
+                  : null;
+              final byeName = byeClubId != null && byeClubId != 0
+                  ? (clubs[byeClubId]?.shortName ??
+                      clubs[byeClubId]?.name ??
+                      'Club $byeClubId')
+                  : null;
+
+              return _MatchdayContent(
+                round: round,
+                matchdayNumber: entry.key.matchday,
+                matches: dayMatches
+                    .map(
+                      (match) => FixtureMatchRow(
+                        homeName: match.homeClub?.shortName ??
+                            match.homeClub?.name ??
+                            'Por definir',
+                        awayName: match.awayClub?.shortName ??
+                            match.awayClub?.name ??
+                            'Por definir',
+                      ),
+                    )
+                    .toList(),
+                byeClubName: byeName,
+              );
+            },
+          )
+          .toList(),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -378,42 +445,15 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
           Text('Semilla utilizada: ${zone.fixtureSeed}', style: Theme.of(context).textTheme.bodyMedium),
           const SizedBox(height: 12),
         ],
-        ...matchdays.map((matchday) {
-          final dayMatches = grouped[matchday]!;
-          final round = dayMatches.first.round;
-          final playingClubIds = <int>{};
-          for (final match in dayMatches) {
-            if (match.homeClub?.id != null) {
-              playingClubIds.add(match.homeClub!.id);
-            }
-            if (match.awayClub?.id != null) {
-              playingClubIds.add(match.awayClub!.id);
-            }
-          }
-          final byeClubId = zone.clubs.length % 2 == 1
-              ? zone.clubs.map((club) => club.id).firstWhere(
-                    (clubId) => !playingClubIds.contains(clubId),
-                    orElse: () => 0,
-                  )
-              : null;
-          final byeName = byeClubId != null && byeClubId != 0
-              ? (clubs[byeClubId]?.shortName ?? clubs[byeClubId]?.name ?? 'Club $byeClubId')
-              : null;
-
-          return _FixtureMatchdayCard(
-            title: 'Fecha $matchday',
-            subtitle: round.label,
-            matches: dayMatches
-                .map(
-                  (match) => FixtureMatchRow(
-                    homeName: match.homeClub?.shortName ?? match.homeClub?.name ?? 'Por definir',
-                    awayName: match.awayClub?.shortName ?? match.awayClub?.name ?? 'Por definir',
-                  ),
-                )
-                .toList(),
-            byeClubName: byeName,
-          );
-        }).toList(),
+        ...matchdayCards.map(
+          (matchday) => _FixtureMatchdayCard(
+            title: 'Fecha ${matchday.displayIndex}',
+            subtitle: matchday.round.label,
+            matches: matchday.matches,
+            byeClubName: matchday.byeClubName,
+            status: matchday.status,
+          ),
+        ),
       ],
     );
   }
@@ -573,26 +613,44 @@ class _FixtureMatchdayCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.matches,
+    required this.status,
     this.byeClubName,
   });
 
   final String title;
   final String subtitle;
   final List<FixtureMatchRow> matches;
+  final FixtureMatchdayStatus status;
   final String? byeClubName;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       child: ExpansionTile(
         tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        title: Text(
-          title,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+        title: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(subtitle, style: theme.textTheme.bodySmall),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            _FixtureMatchdayStatusIndicator(status: status),
+          ],
         ),
-        subtitle: Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
         children: [
           const Divider(height: 24),
           ...matches,
@@ -600,7 +658,7 @@ class _FixtureMatchdayCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               'Libre: $byeClubName',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontStyle: FontStyle.italic),
+              style: theme.textTheme.bodyMedium?.copyWith(fontStyle: FontStyle.italic),
             ),
           ],
         ],
@@ -634,6 +692,162 @@ class FixtureMatchRow extends StatelessWidget {
       ),
     );
   }
+}
+
+class _FixtureMatchdayStatusIndicator extends StatelessWidget {
+  const _FixtureMatchdayStatusIndicator({required this.status});
+
+  final FixtureMatchdayStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = status.textColor;
+    final background = status.backgroundColor;
+    final theme = Theme.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: foreground.withOpacity(0.6)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Text(
+        status.label,
+        style: theme.textTheme.labelMedium?.copyWith(
+              color: foreground,
+              fontWeight: FontWeight.w600,
+            ) ??
+            TextStyle(color: foreground, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+}
+
+enum FixtureMatchdayStatus { pending, inProgress, played }
+
+extension FixtureMatchdayStatusX on FixtureMatchdayStatus {
+  String get label {
+    switch (this) {
+      case FixtureMatchdayStatus.pending:
+        return 'Pendiente';
+      case FixtureMatchdayStatus.inProgress:
+        return 'En juego';
+      case FixtureMatchdayStatus.played:
+        return 'Jugado';
+    }
+  }
+
+  Color get textColor {
+    switch (this) {
+      case FixtureMatchdayStatus.pending:
+        return const Color(0xFFC62828);
+      case FixtureMatchdayStatus.inProgress:
+        return const Color(0xFFF9A825);
+      case FixtureMatchdayStatus.played:
+        return const Color(0xFF009688);
+    }
+  }
+
+  Color get backgroundColor {
+    switch (this) {
+      case FixtureMatchdayStatus.pending:
+        return const Color(0xFFFDEDED);
+      case FixtureMatchdayStatus.inProgress:
+        return const Color(0xFFFFF4CF);
+      case FixtureMatchdayStatus.played:
+        return const Color(0xFFDBEDF1);
+    }
+  }
+}
+
+class _MatchdayContent {
+  _MatchdayContent({
+    required this.round,
+    required this.matchdayNumber,
+    required this.matches,
+    this.byeClubName,
+  });
+
+  final FixtureRound round;
+  final int matchdayNumber;
+  final List<FixtureMatchRow> matches;
+  final String? byeClubName;
+}
+
+class _DecoratedMatchday {
+  _DecoratedMatchday({
+    required this.displayIndex,
+    required this.round,
+    required this.matches,
+    required this.status,
+    this.byeClubName,
+  });
+
+  final int displayIndex;
+  final FixtureRound round;
+  final List<FixtureMatchRow> matches;
+  final FixtureMatchdayStatus status;
+  final String? byeClubName;
+}
+
+class _MatchdayKey {
+  const _MatchdayKey({required this.round, required this.matchday});
+
+  final FixtureRound round;
+  final int matchday;
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is _MatchdayKey && other.round == round && other.matchday == matchday;
+  }
+
+  @override
+  int get hashCode => Object.hash(round, matchday);
+}
+
+List<_DecoratedMatchday> _decorateMatchdays(
+  List<_MatchdayContent> matchdays, {
+  int playedMatchdaysCount = 0,
+}) {
+  if (matchdays.isEmpty) {
+    return const <_DecoratedMatchday>[];
+  }
+
+  final sorted = [...matchdays]
+    ..sort((a, b) {
+      final roundComparison = a.round.index.compareTo(b.round.index);
+      if (roundComparison != 0) {
+        return roundComparison;
+      }
+      return a.matchdayNumber.compareTo(b.matchdayNumber);
+    });
+
+  final effectivePlayed = playedMatchdaysCount.clamp(0, sorted.length).toInt();
+  final decorated = <_DecoratedMatchday>[];
+  for (var index = 0; index < sorted.length; index++) {
+    final raw = sorted[index];
+    FixtureMatchdayStatus status;
+    if (index < effectivePlayed) {
+      status = FixtureMatchdayStatus.played;
+    } else if (index == effectivePlayed && effectivePlayed < sorted.length) {
+      status = FixtureMatchdayStatus.inProgress;
+    } else {
+      status = FixtureMatchdayStatus.pending;
+    }
+
+    decorated.add(
+      _DecoratedMatchday(
+        displayIndex: index + 1,
+        round: raw.round,
+        matches: raw.matches,
+        status: status,
+        byeClubName: raw.byeClubName,
+      ),
+    );
+  }
+
+  return decorated;
 }
 
 class _ErrorMessage extends StatelessWidget {
