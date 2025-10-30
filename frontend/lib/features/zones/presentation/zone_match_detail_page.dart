@@ -207,7 +207,8 @@ class _ClubCrest extends StatelessWidget {
     final theme = Theme.of(context);
     const size = 72.0;
 
-    if (club?.logoUrl != null && club!.logoUrl!.isNotEmpty) {
+    final logoUrl = club?.logoUrl;
+    if (logoUrl != null && logoUrl.isNotEmpty) {
       return Container(
         width: size,
         height: size,
@@ -217,10 +218,10 @@ class _ClubCrest extends StatelessWidget {
         ),
         clipBehavior: Clip.antiAlias,
         child: Image.network(
-          club.logoUrl!,
+          logoUrl,
           fit: BoxFit.cover,
           errorBuilder: (context, error, stackTrace) {
-            return _FallbackAvatar(name: club.displayName, club: club);
+            return _FallbackAvatar(name: club?.displayName ?? '—', club: club);
           },
         ),
       );
