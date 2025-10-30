@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -315,225 +317,25 @@ class _CategoriesTable extends ConsumerStatefulWidget {
 }
 
 class _CategoriesTableState extends ConsumerState<_CategoriesTable> {
-  final Map<int, TextEditingController> _homeControllers = {};
-  final Map<int, TextEditingController> _awayControllers = {};
-  final Map<int, int> _initialHomeScores = {};
-  final Map<int, int> _initialAwayScores = {};
-  final Set<int> _savingCategoryIds = <int>{};
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.canEditScores) {
-      _initializeControllers();
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant _CategoriesTable oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!oldWidget.canEditScores && widget.canEditScores) {
-      _initializeControllers();
-      return;
-    }
-    if (oldWidget.canEditScores && !widget.canEditScores) {
-      _disposeControllers();
-      return;
-    }
-    if (widget.canEditScores) {
-      _synchronizeControllers();
-    }
-  }
-
-  @override
-  void dispose() {
-    _disposeControllers();
-    super.dispose();
-  }
-
-  void _initializeControllers() {
-    _disposeControllers();
-    for (final category in widget.match.categories) {
-      final homeController = TextEditingController(text: '${category.homeScore}');
-      final awayController = TextEditingController(text: '${category.awayScore}');
-      homeController.addListener(_onScoreChanged);
-      awayController.addListener(_onScoreChanged);
-      _homeControllers[category.id] = homeController;
-      _awayControllers[category.id] = awayController;
-      _initialHomeScores[category.id] = category.homeScore;
-      _initialAwayScores[category.id] = category.awayScore;
-    }
-  }
-
-  void _synchronizeControllers() {
-    final currentIds = widget.match.categories.map((category) => category.id).toSet();
-    final existingIds = _homeControllers.keys.toSet();
-    if (currentIds.length != existingIds.length || !currentIds.containsAll(existingIds)) {
-      _initializeControllers();
-      return;
-    }
-
-    for (final category in widget.match.categories) {
-      final homeController = _homeControllers[category.id]!;
-      final awayController = _awayControllers[category.id]!;
-
-      final homeText = '${category.homeScore}';
-      final awayText = '${category.awayScore}';
-
-      if (!_savingCategoryIds.contains(category.id) && homeController.text != homeText) {
-        homeController.value = TextEditingValue(
-          text: homeText,
-          selection: TextSelection.collapsed(offset: homeText.length),
-        );
-      }
-
-      if (!_savingCategoryIds.contains(category.id) && awayController.text != awayText) {
-        awayController.value = TextEditingValue(
-          text: awayText,
-          selection: TextSelection.collapsed(offset: awayText.length),
-        );
-      }
-
-      _initialHomeScores[category.id] = category.homeScore;
-      _initialAwayScores[category.id] = category.awayScore;
-    }
-  }
-
-  void _disposeControllers() {
-    for (final controller in _homeControllers.values) {
-      controller.removeListener(_onScoreChanged);
-      controller.dispose();
-    }
-    for (final controller in _awayControllers.values) {
-      controller.removeListener(_onScoreChanged);
-      controller.dispose();
-    }
-    _homeControllers.clear();
-    _awayControllers.clear();
-    _initialHomeScores.clear();
-    _initialAwayScores.clear();
-  }
-
-  void _onScoreChanged() {
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  bool _hasChanges(ZoneMatchCategory category) {
-    final homeValue = int.tryParse(_homeControllers[category.id]?.text ?? '') ?? 0;
-    final awayValue = int.tryParse(_awayControllers[category.id]?.text ?? '') ?? 0;
-    final initialHome = _initialHomeScores[category.id] ?? category.homeScore;
-    final initialAway = _initialAwayScores[category.id] ?? category.awayScore;
-    return homeValue != initialHome || awayValue != initialAway;
-  }
-
-  _ScoreOutcome _homeOutcomeFor(ZoneMatchCategory category) {
-    final homeValue = int.tryParse(_homeControllers[category.id]?.text ?? '') ?? 0;
-    final awayValue = int.tryParse(_awayControllers[category.id]?.text ?? '') ?? 0;
-    return _scoreOutcome(homeValue, awayValue);
-  }
-
-  _ScoreOutcome _awayOutcomeFor(ZoneMatchCategory category) {
-    final homeValue = int.tryParse(_homeControllers[category.id]?.text ?? '') ?? 0;
-    final awayValue = int.tryParse(_awayControllers[category.id]?.text ?? '') ?? 0;
-    return _scoreOutcome(awayValue, homeValue);
-  }
-
-  Future<void> _saveCategory(ZoneMatchCategory category) async {
+  Future<void> _openGoalsDialog(ZoneMatchCategory category) async {
     if (!widget.canEditScores) {
       return;
     }
 
-    final homeValue = int.tryParse(_homeControllers[category.id]?.text ?? '') ?? 0;
-    final awayValue = int.tryParse(_awayControllers[category.id]?.text ?? '') ?? 0;
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) => _MatchCategoryGoalsDialog(
+        match: widget.match,
+        category: category,
+      ),
+    );
 
-    if (homeValue < 0 || awayValue < 0) {
-      if (!mounted) {
-        return;
-      }
+    if (saved == true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Los marcadores deben ser mayores o iguales a cero.')),
+        SnackBar(content: Text('Goles de "${category.categoryName}" actualizados.')),
       );
-      return;
-    }
-
-    FocusScope.of(context).unfocus();
-
-    setState(() {
-      _savingCategoryIds.add(category.id);
-    });
-
-    try {
-      final api = ref.read(apiClientProvider);
-      await api.post(
-        '/matches/${widget.match.id}/categories/${category.id}/result',
-        data: {
-          'homeScore': homeValue,
-          'awayScore': awayValue,
-          'confirm': true,
-          'playerGoals': const [],
-          'otherGoals': const [],
-        },
-      );
-
-      if (!mounted) {
-        return;
-      }
-
-      _initialHomeScores[category.id] = homeValue;
-      _initialAwayScores[category.id] = awayValue;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Marcador de "${category.categoryName}" actualizado.')),
-      );
-
       ref.invalidate(zoneMatchesProvider(widget.zoneId));
-    } on DioException catch (error) {
-      if (!mounted) {
-        return;
-      }
-      final message = _mapError(error);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo actualizar el marcador: $message')),
-      );
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo actualizar el marcador: $error')),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _savingCategoryIds.remove(category.id);
-        });
-      }
     }
-  }
-
-  String _mapError(DioException error) {
-    final responseData = error.response?.data;
-    if (responseData is Map<String, dynamic>) {
-      final message = responseData['message'];
-      if (message is String && message.isNotEmpty) {
-        return message;
-      }
-      if (message is List) {
-        final first = message.cast<Object?>().firstWhere(
-              (item) => item is String && item.isNotEmpty,
-              orElse: () => null,
-            );
-        if (first is String && first.isNotEmpty) {
-          return first;
-        }
-      }
-    }
-    if (error.message != null && error.message!.isNotEmpty) {
-      return error.message!;
-    }
-    return 'Ocurrió un error inesperado. Intenta nuevamente.';
   }
 
   @override
@@ -580,34 +382,17 @@ class _CategoriesTableState extends ConsumerState<_CategoriesTable> {
             TableRow(
               children: [
                 _TableTextCell(label: category.categoryName),
-                if (widget.canEditScores)
-                  _ScoreInputCell(
-                    controller: _homeControllers[category.id]!,
-                    outcome: _homeOutcomeFor(category),
-                    enabled: !_savingCategoryIds.contains(category.id),
-                  )
-                else
-                  _ScoreCell(
-                    score: category.homeScore,
-                    outcome: _scoreOutcome(category.homeScore, category.awayScore),
-                  ),
-                if (widget.canEditScores)
-                  _ScoreInputCell(
-                    controller: _awayControllers[category.id]!,
-                    outcome: _awayOutcomeFor(category),
-                    enabled: !_savingCategoryIds.contains(category.id),
-                  )
-                else
-                  _ScoreCell(
-                    score: category.awayScore,
-                    outcome: _scoreOutcome(category.awayScore, category.homeScore),
-                  ),
+                _ScoreCell(
+                  score: category.homeScore,
+                  outcome: _scoreOutcome(category.homeScore, category.awayScore),
+                ),
+                _ScoreCell(
+                  score: category.awayScore,
+                  outcome: _scoreOutcome(category.awayScore, category.homeScore),
+                ),
                 if (widget.canEditScores)
                   _ActionCell(
-                    onSave: _hasChanges(category) && !_savingCategoryIds.contains(category.id)
-                        ? () => _saveCategory(category)
-                        : null,
-                    saving: _savingCategoryIds.contains(category.id),
+                    onTap: () => _openGoalsDialog(category),
                   ),
               ],
             ),
@@ -617,83 +402,618 @@ class _CategoriesTableState extends ConsumerState<_CategoriesTable> {
   }
 }
 
-class _ScoreInputCell extends StatelessWidget {
-  const _ScoreInputCell({
-    required this.controller,
-    required this.outcome,
-    required this.enabled,
+class _ActionCell extends StatelessWidget {
+  const _ActionCell({
+    required this.onTap,
   });
 
-  final TextEditingController controller;
-  final _ScoreOutcome outcome;
-  final bool enabled;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final background = _scoreBackgroundColor(outcome);
-    final foreground = _scoreForegroundColor(outcome);
-
-    return Container(
-      alignment: Alignment.center,
+    return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-      color: background,
-      child: SizedBox(
-        width: 72,
-        child: TextFormField(
-          controller: controller,
-          enabled: enabled,
-          textAlign: TextAlign.center,
-          keyboardType: TextInputType.number,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          decoration: const InputDecoration(
-            isDense: true,
-            contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-            border: OutlineInputBorder(),
-            focusedBorder: OutlineInputBorder(),
-          ),
-          style: theme.textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: foreground,
-          ),
+      child: FilledButton.icon(
+        onPressed: onTap,
+        icon: const Icon(Icons.sports_soccer_outlined),
+        label: const Text('Cargar goles'),
+        style: FilledButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          textStyle: theme.textTheme.labelLarge,
         ),
       ),
     );
   }
 }
 
-class _ActionCell extends StatelessWidget {
-  const _ActionCell({
-    required this.onSave,
-    required this.saving,
+class _PlayerGoalInput {
+  _PlayerGoalInput({
+    required this.playerId,
+    required this.clubId,
+    required this.fullName,
+    this.goals = 0,
   });
 
-  final VoidCallback? onSave;
-  final bool saving;
+  final int playerId;
+  final int clubId;
+  final String fullName;
+  int goals;
+}
+
+class _RecordedPlayerGoal {
+  _RecordedPlayerGoal({
+    required this.playerId,
+    required this.clubId,
+    required this.goals,
+    required this.fullName,
+  });
+
+  factory _RecordedPlayerGoal.fromJson(Map<String, dynamic> json) {
+    final player = json['player'] as Map<String, dynamic>? ?? <String, dynamic>{};
+    final firstName = (player['firstName'] as String? ?? '').trim();
+    final lastName = (player['lastName'] as String? ?? '').trim();
+    final buffer = <String>[];
+    if (lastName.isNotEmpty) {
+      buffer.add(lastName.toUpperCase());
+    }
+    if (firstName.isNotEmpty) {
+      buffer.add(firstName);
+    }
+    final composed = buffer.join(', ');
+    final fallbackId = json['playerId'];
+    return _RecordedPlayerGoal(
+      playerId: json['playerId'] as int? ?? 0,
+      clubId: json['clubId'] as int? ?? 0,
+      goals: json['goals'] as int? ?? 0,
+      fullName: composed.isNotEmpty
+          ? composed
+          : fallbackId != null
+              ? 'Jugador $fallbackId'
+              : 'Jugador',
+    );
+  }
+
+  final int playerId;
+  final int clubId;
+  final int goals;
+  final String fullName;
+}
+
+class _RecordedOtherGoal {
+  _RecordedOtherGoal({
+    required this.clubId,
+    required this.goals,
+  });
+
+  factory _RecordedOtherGoal.fromJson(Map<String, dynamic> json) {
+    return _RecordedOtherGoal(
+      clubId: json['clubId'] as int? ?? 0,
+      goals: json['goals'] as int? ?? 0,
+    );
+  }
+
+  final int clubId;
+  final int goals;
+}
+
+class _MatchCategoryResult {
+  _MatchCategoryResult({
+    required this.homeClubId,
+    required this.awayClubId,
+    required this.playerGoals,
+    required this.otherGoals,
+  });
+
+  factory _MatchCategoryResult.fromJson(Map<String, dynamic> json) {
+    return _MatchCategoryResult(
+      homeClubId: json['homeClubId'] as int?,
+      awayClubId: json['awayClubId'] as int?,
+      playerGoals: (json['playerGoals'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(_RecordedPlayerGoal.fromJson)
+          .toList(),
+      otherGoals: (json['otherGoals'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(_RecordedOtherGoal.fromJson)
+          .toList(),
+    );
+  }
+
+  final int? homeClubId;
+  final int? awayClubId;
+  final List<_RecordedPlayerGoal> playerGoals;
+  final List<_RecordedOtherGoal> otherGoals;
+}
+
+class _MatchCategoryGoalsDialog extends ConsumerStatefulWidget {
+  const _MatchCategoryGoalsDialog({
+    required this.match,
+    required this.category,
+  });
+
+  final ZoneMatch match;
+  final ZoneMatchCategory category;
+
+  @override
+  ConsumerState<_MatchCategoryGoalsDialog> createState() => _MatchCategoryGoalsDialogState();
+}
+
+class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDialog> {
+  bool _loading = true;
+  bool _saving = false;
+  String? _errorMessage;
+  List<_PlayerGoalInput> _homeEntries = const <_PlayerGoalInput>[];
+  List<_PlayerGoalInput> _awayEntries = const <_PlayerGoalInput>[];
+  int _homeOtherGoals = 0;
+  int _awayOtherGoals = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  int get _homeTotal => _homeEntries.fold<int>(0, (sum, entry) => sum + entry.goals) + _homeOtherGoals;
+
+  int get _awayTotal => _awayEntries.fold<int>(0, (sum, entry) => sum + entry.goals) + _awayOtherGoals;
+
+  Future<void> _loadData() async {
+    final homeClubId = widget.match.homeClub?.id;
+    final awayClubId = widget.match.awayClub?.id;
+    if (homeClubId == null || awayClubId == null) {
+      setState(() {
+        _errorMessage = 'El partido no tiene clubes definidos.';
+        _loading = false;
+      });
+      return;
+    }
+
+    try {
+      final api = ref.read(apiClientProvider);
+      final resultFuture = api.get<Map<String, dynamic>>(
+        '/matches/${widget.match.id}/categories/${widget.category.id}/result',
+      );
+      final homePlayersFuture = api.get<Map<String, dynamic>>(
+        '/clubs/$homeClubId/tournament-categories/${widget.category.tournamentCategoryId}/eligible-players',
+        queryParameters: {
+          'page': 1,
+          'pageSize': 200,
+          'onlyEnabled': true,
+        },
+      );
+      final awayPlayersFuture = api.get<Map<String, dynamic>>(
+        '/clubs/$awayClubId/tournament-categories/${widget.category.tournamentCategoryId}/eligible-players',
+        queryParameters: {
+          'page': 1,
+          'pageSize': 200,
+          'onlyEnabled': true,
+        },
+      );
+
+      final resultResponse = await resultFuture;
+      final homePlayersResponse = await homePlayersFuture;
+      final awayPlayersResponse = await awayPlayersFuture;
+
+      final result = _MatchCategoryResult.fromJson(resultResponse.data ?? <String, dynamic>{});
+      final homeEntries = _parseEligiblePlayers(homePlayersResponse.data, homeClubId);
+      final awayEntries = _parseEligiblePlayers(awayPlayersResponse.data, awayClubId);
+
+      _applyRecordedGoals(homeEntries, result.playerGoals, homeClubId);
+      _applyRecordedGoals(awayEntries, result.playerGoals, awayClubId);
+
+      final homeOther = _findOtherGoals(result.otherGoals, homeClubId);
+      final awayOther = _findOtherGoals(result.otherGoals, awayClubId);
+
+      setState(() {
+        _homeEntries = homeEntries;
+        _awayEntries = awayEntries;
+        _homeOtherGoals = homeOther;
+        _awayOtherGoals = awayOther;
+        _loading = false;
+      });
+    } on DioException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorMessage = mapDioError(error);
+        _loading = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorMessage = '$error';
+        _loading = false;
+      });
+    }
+  }
+
+  List<_PlayerGoalInput> _parseEligiblePlayers(Map<String, dynamic>? data, int clubId) {
+    final players = <_PlayerGoalInput>[];
+    final rawPlayers = data != null ? data['players'] as List<dynamic>? : null;
+    for (final item in rawPlayers ?? const []) {
+      if (item is! Map<String, dynamic>) {
+        continue;
+      }
+      players.add(_PlayerGoalInput(
+        playerId: item['id'] as int? ?? 0,
+        clubId: clubId,
+        fullName: _formatPlayerName(item),
+      ));
+    }
+    players.sort((a, b) => a.fullName.compareTo(b.fullName));
+    return players;
+  }
+
+  void _applyRecordedGoals(List<_PlayerGoalInput> entries, List<_RecordedPlayerGoal> recorded, int clubId) {
+    for (final goal in recorded.where((item) => item.clubId == clubId)) {
+      final index = entries.indexWhere((entry) => entry.playerId == goal.playerId);
+      if (index >= 0) {
+        entries[index].goals = goal.goals;
+      } else {
+        entries.add(_PlayerGoalInput(
+          playerId: goal.playerId,
+          clubId: clubId,
+          fullName: goal.fullName,
+          goals: goal.goals,
+        ));
+      }
+    }
+    entries.sort((a, b) => a.fullName.compareTo(b.fullName));
+  }
+
+  int _findOtherGoals(List<_RecordedOtherGoal> goals, int clubId) {
+    for (final goal in goals) {
+      if (goal.clubId == clubId) {
+        return goal.goals;
+      }
+    }
+    return 0;
+  }
+
+  String _formatPlayerName(Map<String, dynamic> json) {
+    final lastName = (json['lastName'] as String? ?? '').trim();
+    final firstName = (json['firstName'] as String? ?? '').trim();
+    if (lastName.isEmpty && firstName.isEmpty) {
+      final id = json['id'];
+      return id != null ? 'Jugador $id' : 'Jugador';
+    }
+    if (lastName.isEmpty) {
+      return firstName;
+    }
+    if (firstName.isEmpty) {
+      return lastName.toUpperCase();
+    }
+    return '${lastName.toUpperCase()}, $firstName';
+  }
+
+  void _updateHomeOtherGoals(int value) {
+    setState(() {
+      _homeOtherGoals = value;
+    });
+  }
+
+  void _updateAwayOtherGoals(int value) {
+    setState(() {
+      _awayOtherGoals = value;
+    });
+  }
+
+  Future<void> _onSave() async {
+    final homeClubId = widget.match.homeClub?.id;
+    final awayClubId = widget.match.awayClub?.id;
+    if (homeClubId == null || awayClubId == null) {
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+
+    setState(() {
+      _saving = true;
+    });
+
+    try {
+      final api = ref.read(apiClientProvider);
+      final playerGoals = <Map<String, dynamic>>[
+        for (final entry in _homeEntries)
+          if (entry.goals > 0)
+            {
+              'playerId': entry.playerId,
+              'clubId': homeClubId,
+              'goals': entry.goals,
+            },
+        for (final entry in _awayEntries)
+          if (entry.goals > 0)
+            {
+              'playerId': entry.playerId,
+              'clubId': awayClubId,
+              'goals': entry.goals,
+            },
+      ];
+
+      final otherGoals = <Map<String, dynamic>>[];
+      if (_homeOtherGoals > 0) {
+        otherGoals.add({'clubId': homeClubId, 'goals': _homeOtherGoals});
+      }
+      if (_awayOtherGoals > 0) {
+        otherGoals.add({'clubId': awayClubId, 'goals': _awayOtherGoals});
+      }
+
+      await api.post(
+        '/matches/${widget.match.id}/categories/${widget.category.id}/result',
+        data: {
+          'homeScore': _homeTotal,
+          'awayScore': _awayTotal,
+          'confirm': true,
+          'playerGoals': playerGoals,
+          'otherGoals': otherGoals,
+        },
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.of(context).pop(true);
+    } on DioException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      final message = mapDioError(error);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudieron guardar los goles: $message')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudieron guardar los goles: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
+  }
+
+  Widget _buildGoalsColumn({
+    required String title,
+    required List<_PlayerGoalInput> entries,
+    required int otherGoals,
+    required ValueChanged<int> onOtherGoalsChanged,
+  }) {
+    final theme = Theme.of(context);
+    final listHeight = math.min(280.0, entries.length * 48.0);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(title, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: theme.colorScheme.outlineVariant),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                color: theme.colorScheme.surfaceVariant.withOpacity(0.45),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Row(
+                  children: const [
+                    Expanded(child: Text('Jugador')),
+                    SizedBox(width: 80, child: Text('Goles', textAlign: TextAlign.center)),
+                  ],
+                ),
+              ),
+              if (entries.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
+                  child: Text(
+                    'Sin jugadores disponibles.',
+                    style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                    textAlign: TextAlign.center,
+                  ),
+                )
+              else
+                SizedBox(
+                  height: listHeight,
+                  child: ListView.separated(
+                    padding: EdgeInsets.zero,
+                    itemCount: entries.length,
+                    separatorBuilder: (context, index) => Divider(
+                      height: 1,
+                      thickness: 1,
+                      color: theme.colorScheme.outlineVariant.withOpacity(0.6),
+                    ),
+                    itemBuilder: (context, index) {
+                      final entry = entries[index];
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                entry.fullName,
+                                style: theme.textTheme.bodyMedium,
+                              ),
+                            ),
+                            SizedBox(
+                              width: 80,
+                              child: TextFormField(
+                                key: ValueKey('${entry.clubId}-${entry.playerId}'),
+                                initialValue: entry.goals.toString(),
+                                textAlign: TextAlign.center,
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                decoration: const InputDecoration(
+                                  isDense: true,
+                                  contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                                  border: OutlineInputBorder(),
+                                ),
+                                onChanged: (value) {
+                                  final parsed = int.tryParse(value) ?? 0;
+                                  setState(() {
+                                    entry.goals = parsed;
+                                  });
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              Container(
+                decoration: BoxDecoration(
+                  border: Border(top: BorderSide(color: theme.colorScheme.outlineVariant.withOpacity(0.7))),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Otros goles',
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                    ),
+                    SizedBox(
+                      width: 80,
+                      child: TextFormField(
+                        key: ValueKey('${title}_other_goals'),
+                        initialValue: otherGoals.toString(),
+                        textAlign: TextAlign.center,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (value) {
+                          final parsed = int.tryParse(value) ?? 0;
+                          onOtherGoalsChanged(parsed);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    if (saving) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        child: SizedBox(
-          width: 24,
-          height: 24,
-          child: CircularProgressIndicator(strokeWidth: 2),
+    final content = _loading
+        ? const SizedBox(
+            height: 200,
+            child: Center(child: CircularProgressIndicator()),
+          )
+        : _errorMessage != null
+            ? SizedBox(
+                height: 160,
+                child: Center(
+                  child: Text(
+                    _errorMessage!,
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              )
+            : SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: _buildGoalsColumn(
+                            title: widget.match.homeDisplayName,
+                            entries: _homeEntries,
+                            otherGoals: _homeOtherGoals,
+                            onOtherGoalsChanged: _updateHomeOtherGoals,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _buildGoalsColumn(
+                            title: widget.match.awayDisplayName,
+                            entries: _awayEntries,
+                            otherGoals: _awayOtherGoals,
+                            onOtherGoalsChanged: _updateAwayOtherGoals,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Total local: $_homeTotal', style: Theme.of(context).textTheme.titleMedium),
+                        Text('Total visitante: $_awayTotal', style: Theme.of(context).textTheme.titleMedium),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+
+    return AlertDialog(
+      title: Text('Goles · ${widget.category.categoryName}'),
+      content: SizedBox(width: 720, child: content),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.of(context).pop(false),
+          child: const Text('Cancelar'),
         ),
-      );
-    }
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-      child: IconButton(
-        onPressed: onSave,
-        icon: const Icon(Icons.save_outlined),
-        color: onSave != null ? theme.colorScheme.primary : theme.disabledColor,
-        tooltip: 'Guardar marcador',
-      ),
+        FilledButton(
+          onPressed: _saving || _loading || _errorMessage != null ? null : _onSave,
+          child: _saving
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Guardar'),
+        ),
+      ],
     );
   }
+}
+
+String mapDioError(DioException error) {
+  final responseData = error.response?.data;
+  if (responseData is Map<String, dynamic>) {
+    final message = responseData['message'];
+    if (message is String && message.isNotEmpty) {
+      return message;
+    }
+    if (message is List) {
+      final first = message.cast<Object?>().firstWhere(
+            (item) => item is String && item.isNotEmpty,
+            orElse: () => null,
+          );
+      if (first is String && first.isNotEmpty) {
+        return first;
+      }
+    }
+  }
+  if (error.message != null && error.message!.isNotEmpty) {
+    return error.message!;
+  }
+  return 'Ocurrió un error inesperado. Intenta nuevamente.';
 }
 
 class _TableHeaderCell extends StatelessWidget {
