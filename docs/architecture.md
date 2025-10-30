@@ -1,189 +1,63 @@
-# Arquitectura y Plan de Implementación
+# Arquitectura y componentes
 
-## 1. Objetivo del MVP
-Implementar una plataforma web para gestionar ligas, torneos, fixtures y resultados cumpliendo con todas las reglas de negocio descritas. El alcance del MVP incluye la gestión competitiva completa, autenticación básica con verificación de correo y captcha, generación y carga de fixtures, control de roles/permisos y visualización pública de datos competitivos. Se deja la infraestructura lista para futuras exportaciones, API móviles y autenticación avanzada.
+Este documento describe la arquitectura actual del proyecto **Ligas Deportivas**, los módulos principales de cada capa y los flujos que conectan backend, frontend e infraestructura.
 
-### 1.1 Entregables MVP
-- Frontend Flutter Web desplegable como aplicación SPA.
-- Backend Node.js (TypeScript) con API REST versionada (`/api/v1`).
-- Base de datos PostgreSQL con migraciones y seeds mínimas.
-- Gestión RBAC configurable por UI y persistida en base de datos.
-- Algoritmo de generación de fixture (método del círculo) con rondas ida/vuelta.
-- Carga de resultados por partido/categoría con validaciones y adjunto opcional.
-- Módulo de autenticación con registro, verificación de correo, captcha y política de contraseña.
-- Infraestructura de entornos separados `dev`/`prod` preparada (archivos de configuración, scripts de despliegue y contenedores).
+## 1. Visión general del sistema
 
-## 2. Arquitectura General
+- **Backend**: API REST construida con NestJS, organizada en módulos funcionales (autenticación, usuarios, RBAC, dominio competitivo, métricas) y respaldada por Prisma sobre PostgreSQL. ([backend/src/app.module.ts](backend/src/app.module.ts)) ([backend/prisma/schema.prisma](backend/prisma/schema.prisma))
+- **Frontend**: SPA desarrollada en Flutter Web con Riverpod para estado y `go_router` para navegación, que consume la API y respeta permisos del usuario autenticado. ([frontend/lib/core/router/app_router.dart](frontend/lib/core/router/app_router.dart)) ([frontend/lib/services/auth_controller.dart](frontend/lib/services/auth_controller.dart))
+- **Infraestructura**: Docker Compose levanta PostgreSQL, MinIO, Mailhog y contenedores para backend y frontend, reproduciendo un entorno integrado de desarrollo/demo. ([infra/docker-compose.yml](infra/docker-compose.yml))
 
-| Capa | Tecnología | Descripción |
-| --- | --- | --- |
-| UI | Flutter Web | SPA con rutas protegidas, layout responsivo y tema configurable por liga. |
-| API | Node.js + NestJS/Express (TypeScript) | API REST modular, validaciones con Joi/Zod, control RBAC y manejo de sesiones JWT + refresh tokens. |
-| Base de datos | PostgreSQL 15 | Modelo relacional normalizado, funciones para cálculos de tablas y vistas materializadas opcionales. |
-| Storage | Servidor propio / bucket S3-compatible | Almacenamiento de imágenes de actas (≤ 10 MB) con URLs firmadas. |
-| Autenticación | JWT + verificación por correo | Registro con captcha, email de verificación y recuperación de contraseña. |
-| Observabilidad | Winston + PostgreSQL logging | Logs de auditoría y métricas básicas. |
+## 2. Backend
 
-### 2.1 Diagrama lógico
-1. **Flutter Web** consume `api/v1` mediante HTTPS y gestiona estado con Riverpod/Bloc.
-2. **API Gateway/Backend** (Node) ofrece módulos: autenticación, ligas/torneos, fixtures, resultados, configuración y reportes.
-3. **Base de datos** expone vistas y funciones para cálculos de tablas y goleadores.
-4. **Storage** almacena adjuntos; la API firma URLs para subida/descarga.
+### 2.1 Configuración transversal
+- `ConfigModule` centraliza variables de entorno (base de datos, JWT, SMTP, almacenamiento) cargadas al inicio de la aplicación. ([backend/src/app.module.ts](backend/src/app.module.ts)) ([backend/.env](backend/.env))
+- `main.ts` define prefijo global `api/v1`, CORS hacia el frontend, tuberías de validación y exposición de archivos estáticos desde `storage/uploads`. ([backend/src/main.ts](backend/src/main.ts))
 
-## 3. Backend Node.js
+### 2.2 Autenticación y cuenta
+- `AuthController` ofrece registro, login local, refresco y revocación de tokens, verificación de correo y recuperación de contraseña. La lógica complementa con envío de mails y validación de captcha configurables. ([backend/src/auth/auth.controller.ts](backend/src/auth/auth.controller.ts)) ([backend/src/mail/mail.service.ts](backend/src/mail/mail.service.ts)) ([backend/src/captcha/captcha.service.ts](backend/src/captcha/captcha.service.ts))
+- El módulo `me` expone endpoints para obtener/editar el perfil, solicitar y confirmar cambio de correo, actualizar contraseña y subir un avatar. Los archivos se persisten en disco con `StorageService`, que genera rutas públicas compatibles con despliegues detrás de CDN o reverse proxies. ([backend/src/me/me.controller.ts](backend/src/me/me.controller.ts)) ([backend/src/storage/storage.service.ts](backend/src/storage/storage.service.ts))
 
-### 3.1 Stack recomendado
-- Node.js 20 + TypeScript.
-- Framework NestJS para modularización, inyección de dependencias y validaciones.
-- ORM Prisma o TypeORM para mapeo con PostgreSQL.
-- Zod/Joi para validaciones de DTOs.
-- JWT para autenticación, refresh tokens guardados en tabla `user_tokens`.
-- Nodemailer + servicio SMTP para verificación de correo y recuperación.
-- hCaptcha/Turnstile integrado desde backend para validar el token recibido desde el frontend.
+### 2.3 Control de acceso
+- El guard `PermissionsGuard` evalúa los permisos declarativos en cada handler combinando módulo, acción y alcance antes de ejecutar el controlador. ([backend/src/rbac/permissions.guard.ts](backend/src/rbac/permissions.guard.ts))
+- `RolesController` y `UsersController` permiten listar roles, catálogos de permisos y asignar roles/alcances a usuarios autenticados con privilegios adecuados. ([backend/src/rbac/roles.controller.ts](backend/src/rbac/roles.controller.ts)) ([backend/src/users/users.controller.ts](backend/src/users/users.controller.ts))
+- El seed inicial crea permisos, roles base (Administrador, Colaborador, Delegado, DT, Usuario) y asigna la matriz inicial de scopes, además de asegurar un usuario administrador configurable por variables de entorno. ([backend/src/prisma/base-seed.ts](backend/src/prisma/base-seed.ts))
 
-### 3.2 Módulos API
-1. **Auth**: registro, login, refresh, verificación de email, recuperación de contraseña.
-2. **Usuarios y Roles**: CRUD, asignación múltiple de roles y pertenencias a clubes/ligas/categorías.
-3. **Ligas/Torneos/Zonas**: creación, edición, asignaciones y configuración de reglas de campeones.
-4. **Clubs/Categorías/Planteles**: administración de planteles y fichas de jugadores.
-5. **Fixture**: generación, consulta y bloqueo; incluye algoritmo round-robin con validaciones transaccionales.
-6. **Partidos**: programación, estados, carga de resultados, cierre y auditoría.
-7. **Tablas y estadísticas**: endpoints para tablas, goleadores y próximas fechas.
-8. **Configuración**: colores de liga, parámetros globales, intervalos de auto-actualización.
+### 2.4 Dominio competitivo
+- El módulo `competition` agrupa controladores y servicios especializados para ligas, clubes, torneos, zonas, categorías, planteles, jugadores y equipos. Cada entidad expone endpoints CRUD protegidos por permisos granulares. ([backend/src/competition/controllers/leagues.controller.ts](backend/src/competition/controllers/leagues.controller.ts)) ([backend/src/competition/controllers/clubs.controller.ts](backend/src/competition/controllers/clubs.controller.ts)) ([backend/src/competition/controllers/tournaments.controller.ts](backend/src/competition/controllers/tournaments.controller.ts)) ([backend/src/competition/controllers/zones.controller.ts](backend/src/competition/controllers/zones.controller.ts)) ([backend/src/competition/controllers/players.controller.ts](backend/src/competition/controllers/players.controller.ts))
+- El servicio de fixture genera rondas ida y vuelta aplicando el algoritmo del círculo, valida composición de zonas, crea partidos con sus categorías y bloquea el torneo para evitar duplicaciones. ([backend/src/competition/services/fixture.service.ts](backend/src/competition/services/fixture.service.ts))
+- `MatchesService` administra la edición del partido (estado/fecha), el registro de resultados por categoría, adjuntos opcionales, auditoría y notificaciones al servicio de standings. ([backend/src/competition/services/matches.service.ts](backend/src/competition/services/matches.service.ts))
+- `StandingsService` recalcula tablas zonales, agrega resultados por torneo/ligas y ordena por puntos, diferencia y goles, almacenando resultados materializados en `CategoryStanding`. ([backend/src/standings/standings.service.ts](backend/src/standings/standings.service.ts))
 
-Todos los endpoints se versionan bajo `/api/v1` y se documentan con OpenAPI (Swagger) para facilitar la futura app móvil.
+### 2.5 Modelo de datos
+- El esquema Prisma define entidades para organización (ligas, torneos, zonas, clubes), competitividad (partidos, resultados, fixtures), gestión de personas (jugadores, planteles) y seguridad (usuarios, roles, permisos, tokens, auditoría). ([backend/prisma/schema.prisma](backend/prisma/schema.prisma))
+- Las enum `Module`, `Action` y `Scope` modelan el RBAC, mientras que `MatchStatus`, `Round` y `TournamentChampionMode` estructuran la lógica de negocio deportiva. ([backend/prisma/schema.prisma](backend/prisma/schema.prisma))
 
-### 3.3 Control de Permisos
-- Tabla `permissions` con acciones (view/create/update/delete) por módulo y ámbito (global, liga, club, categoría).
-- Tabla `role_permissions` configurable desde la UI.
-- Middleware que carga permisos de usuario y evalúa scopes antes de ejecutar el handler.
-- Resolución de visibilidad: unión del rol público + roles específicos, filtrando por pertenencias.
+## 3. Frontend
 
-### 3.4 Generación de Fixture (Round-Robin)
-1. Normalizar lista de clubes (sin duplicados, orden original, IDs válidos).
-2. Agregar marcador `None` si la cantidad es impar.
-3. Para cada fecha `i` en `0..total_slots-2`:
-   - Emparejar extremos (`arrangement[j]` con `arrangement[-(j+1)]`).
-   - Determinar localía: si fecha es impar (1-indexada) primer club local; si es par se invierte.
-   - Registrar bye cuando uno sea `None`.
-   - Rotar arreglo manteniendo fijo el primer elemento y moviendo el último a la segunda posición.
-4. Duplicar el calendario para la segunda ronda invirtiendo localías.
-5. Persistir en transacción: verificar ausencia de fixture previo y crear partidos para ambas rondas, agrupados por zona y categoría.
-6. En caso de fallo durante la transacción se lanza `FixtureGenerationError` con sugerencia de correr migraciones.
+### 3.1 Estructura y navegación
+- `createRouter` configura rutas protegidas que redirigen al login si el usuario no está autenticado y agrupa vistas en un `ShellRoute` con navegación lateral persistente. ([frontend/lib/core/router/app_router.dart](frontend/lib/core/router/app_router.dart))
+- `AppShell` provee `NavigationRail` colapsable, persistencia del estado de la barra lateral y encabezado con menú de usuario, adaptándose automáticamente en pantallas estrechas. ([frontend/lib/features/shared/widgets/app_shell.dart](frontend/lib/features/shared/widgets/app_shell.dart))
 
-### 3.5 Gestión de Resultados
-- Endpoints protegidos para Colaborador/Administrador.
-- Validación que la suma de goles y "Otros jugadores" coincida con el marcador.
-- Adjuntos almacenados y referenciados en tabla `match_attachments`.
-- Al cerrar un partido se generan eventos para recalcular tablas (trigger o job asíncrono).
-- Solo Administrador puede reabrir partido.
+### 3.2 Estado y servicios
+- `ApiClient` encapsula `dio`, aplica timeouts, añade el header `Authorization` y reintenta solicitudes tras refrescar tokens cuando recibe un 401. ([frontend/lib/services/api_client.dart](frontend/lib/services/api_client.dart))
+- `AuthController` guarda tokens en `SharedPreferences`, carga el perfil desde `/me`, gestiona refresh, logout, recuperación de contraseña y operaciones de cuenta (cambio de email, contraseña, avatar). ([frontend/lib/services/auth_controller.dart](frontend/lib/services/auth_controller.dart))
 
-### 3.6 Cálculo de Tablas
-- Servicio que recalcula standings por categoría/torneo/liga tras cada cierre de partido.
-- Fórmula 3-1-0 con desempate: puntos, diferencia de gol, goles a favor.
-- Exponer vistas materializadas `tabla_categoria`, `tabla_torneo`, `tabla_liga` para consultas rápidas.
+### 3.3 Funcionalidades destacadas
+- `LeaguesPage` lista ligas, muestra métricas en tarjetas y ofrece formularios adaptativos (modal/bottom sheet) para crear o editar registros según el ancho disponible. ([frontend/lib/features/leagues/presentation/leagues_page.dart](frontend/lib/features/leagues/presentation/leagues_page.dart))
+- `FixturesPage` permite lanzar la generación de fixture ingresando el ID del torneo y refleja mensajes de éxito/error desde la API. ([frontend/lib/features/fixtures/presentation/fixtures_page.dart](frontend/lib/features/fixtures/presentation/fixtures_page.dart))
+- `AccountSettingsPage` concentra pestañas de perfil, seguridad y avatar, reutilizando la lógica del `AuthController` para persistir cambios y mostrar feedback contextual. ([frontend/lib/features/settings/account_settings_page.dart](frontend/lib/features/settings/account_settings_page.dart))
 
-## 4. Frontend Flutter Web
+## 4. Infraestructura y operaciones
 
-### 4.1 Stack y convenciones
-- Flutter 3.22+, proyecto web con `go_router` para rutas y `Riverpod`/`Bloc` para estado.
-- Layout principal con `Scaffold` + `NavigationRail` colapsable.
-- Themado: tema general fijo + color primario por liga (configurable desde backend).
-- Internacionalización: solo español (usando `flutter_localizations`).
+- El archivo `infra/docker-compose.yml` define servicios persistentes (PostgreSQL, MinIO), utilitarios (Mailhog) y aplica variables de entorno alineadas al módulo de configuración del backend, exponiendo los puertos estándares para desarrollo. ([infra/docker-compose.yml](infra/docker-compose.yml))
+- Los scripts de `backend/package.json` proveen tareas de build, linting, pruebas, migraciones y seed, facilitando la integración en pipelines CI/CD. ([backend/package.json](backend/package.json))
 
-### 4.2 Módulos UI
-1. **Autenticación**: login, registro con captcha, verificación de email.
-2. **Home**: placeholder con logo y nombre.
-3. **Gestión**: páginas CRUD para ligas, torneos, zonas, clubes, categorías, jugadores y fixture.
-4. **Resultados**: formularios de carga por partido/categoría con columnas local/visitante.
-5. **Visualización pública**: fixture, resultados, tablas, goleadores, próximas fechas.
-6. **Configuración**: administración de roles/permisos y tema por liga.
+## 5. Flujo de interacción ejemplar
 
-### 4.3 Componentes clave
-- `AppShell` con `NavigationRail` colapsable que recuerda estado (local storage) y autocollapse en pantallas chicas.
-- `PermissionGuard` que oculta rutas/items sin permiso.
-- `DataTable` reutilizable con filtros y paginación.
-- Formularios basados en `ReactiveForms` o `FormBuilder` con validaciones síncronas y asíncronas.
+1. Un administrador accede a `/fixtures` en el frontend; la vista invoca `POST /tournaments/:id/fixture` mediante `ApiClient` con el JWT vigente. ([frontend/lib/features/fixtures/presentation/fixtures_page.dart](frontend/lib/features/fixtures/presentation/fixtures_page.dart)) ([frontend/lib/services/api_client.dart](frontend/lib/services/api_client.dart))
+2. El endpoint en `FixtureService` valida la composición del torneo, genera el round-robin y crea partidos/categorías en una transacción de Prisma. ([backend/src/competition/services/fixture.service.ts](backend/src/competition/services/fixture.service.ts))
+3. Colaboradores registran resultados desde el backend (`MatchesService`), adjuntan actas y desencadenan `StandingsService.recalculateForMatch`, que vuelca tablas normalizadas para consumo público. ([backend/src/competition/services/matches.service.ts](backend/src/competition/services/matches.service.ts)) ([backend/src/standings/standings.service.ts](backend/src/standings/standings.service.ts))
+4. Las tablas actualizadas se consultan mediante los endpoints de standings y pueden mostrarse en futuras vistas públicas del frontend reutilizando el mismo cliente HTTP.
 
-### 4.4 Integración con Backend
-- Cliente REST basado en `dio` con interceptores para tokens y refresh.
-- Manejo de errores y estados offline.
-- Polling/actualización automática cada 10 minutos para pantallas públicas.
-
-## 5. Base de Datos PostgreSQL
-
-### 5.1 Tablas principales
-- `ligas`, `torneos`, `zonas`, `clubes`, `club_zona`, `categorias`, `planteles`, `jugadores`, `fichas`, `partidos`, `partido_categorias`, `goles`, `otros_goleadores`, `usuarios`, `roles`, `usuario_roles`, `permissions`, `role_permissions`, `user_tokens`, `logs_cambios`, `match_attachments`.
-
-### 5.2 Relaciones clave
-- `torneos` referencia `ligas` y define reglamentación (campeón global vs por rondas).
-- `zonas` referencia `torneo`; `club_zona` asegura pertenencia única.
-- `partidos` se agrupan por `zona` y tienen estados `Programado`, `Pendiente`, `Finalizado`.
-- `partido_categorias` representa cada categoría disputada en un partido.
-- `goles` relaciona jugadores y `partido_categorias`; `otros_goleadores` almacena goles no asociados a jugador.
-- `logs_cambios` registra auditorías (usuario, acción, fecha).
-
-### 5.3 Migraciones y seeds
-- Herramienta ORM para generar migraciones versionadas.
-- Seeds iniciales: roles base, permisos, usuario admin, ligas/torneos de ejemplo.
-
-## 6. Infraestructura y DevOps
-
-### 6.1 Entornos
-- `dev`: docker-compose con servicios `web`, `api`, `db`, `storage` (MinIO) y `mailhog` para pruebas de correo.
-- `prod`: contenedores en VPS o servicio cloud (Railway, Render, Fly.io). Certificados SSL gestionados con Traefik/Caddy/NGINX.
-
-### 6.2 CI/CD
-- GitHub Actions con flujos:
-  - Lint + pruebas unitarias (frontend/backend).
-  - Migraciones en Postgres temporal.
-  - Despliegue automatizado a entornos (opcional).
-
-### 6.3 Observabilidad y backup
-- Logs centralizados en archivos rotados o servicio externo.
-- Backups automáticos de PostgreSQL (pg_dump) diarios y almacenamiento externo.
-- Monitoreo básico (uptime, métricas) con Grafana/Prometheus en fases posteriores.
-
-## 7. Roadmap de Implementación
-
-1. **Preparación del repositorio**: configurar monorepo con carpetas `frontend/`, `backend/`, `infra/`, `docs/`.
-2. **Base de datos**: definir esquema inicial y migraciones.
-3. **Backend**:
-   - Configuración de proyecto NestJS.
-   - Módulo Auth con registro, login, verificación y captcha.
-   - Implementar RBAC y asignación de roles.
-   - CRUDs de ligas, torneos, zonas, clubes, categorías y planteles.
-   - Servicio de fixture round-robin con transacciones.
-   - Endpoints de resultados y tablas.
-4. **Frontend**:
-   - Setup Flutter Web, layout base y navegación.
-   - Autenticación y guardas de rutas.
-   - Vistas de gestión y visualización pública.
-   - Formularios de carga de resultados con validaciones.
-5. **Integración y pruebas**:
-   - Pruebas unitarias backend (servicios, fixture, RBAC).
-   - Tests widget/e2e en Flutter para flujos críticos.
-   - Test de integración API ↔ frontend.
-6. **Infraestructura**: docker-compose, pipelines CI/CD, scripts de despliegue.
-7. **Hardening**: logs de auditoría, manejo de errores, pruebas de carga básicas.
-
-## 8. Extensibilidad futura
-- **Exportaciones PDF/Excel**: módulos Node reutilizando servicios actuales.
-- **Notificaciones push y API móvil**: aprovechar versionado actual y ampliar endpoints.
-- **2FA**: añadir tabla `user_mfa` y flujo TOTP cuando se requiera.
-- **Internacionalización**: habilitar soporte multi-idioma en Flutter y backend.
-
-## 9. Riesgos y mitigaciones
-- **Complejidad del fixture**: cubrir con pruebas unitarias y escenarios de N impar/par.
-- **Gestión de permisos granular**: diseñar UI clara con matrices de permisos y scopes.
-- **Integridad de resultados**: usar constraints y triggers para validar sumatorias de goles.
-- **Escalabilidad de almacenamiento**: permitir migrar de storage local a S3-compatible.
-- **Verificación de correo**: considerar colas (BullMQ) si se requiere resiliencia.
-
-## 10. Próximos pasos inmediatos
-1. Crear estructura de monorepo y plantillas de configuración.
-2. Definir esquema inicial en Prisma/TypeORM e implementar migración base.
-3. Generar prototipo de autenticación y layout de Flutter para validar UX.
-4. Preparar docker-compose para entorno de desarrollo.
-5. Establecer políticas de codificación y convenciones en documentación adicional.
-
+Esta arquitectura modular permite evolucionar cada capa (nuevas vistas Flutter, endpoints REST adicionales, almacenamiento S3 administrado, etc.) sin comprometer los contratos existentes.
