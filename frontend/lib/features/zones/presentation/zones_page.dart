@@ -1204,8 +1204,14 @@ class _ZoneDetailsDialogState extends ConsumerState<_ZoneDetailsDialog> {
 
   Future<ZoneDetail> _load() async {
     final api = ref.read(apiClientProvider);
-    final response = await api.get<Map<String, dynamic>>('/zones/${widget.zoneId}');
-    final data = response.data ?? <String, dynamic>{};
+    final response = await api.get<Map<String, dynamic>>(
+      '/zones/${widget.zoneId}',
+      queryParameters: {'_': DateTime.now().millisecondsSinceEpoch},
+    );
+    final data = response.data;
+    if (data == null || data.isEmpty) {
+      throw const FormatException('La respuesta del servidor llegó vacía.');
+    }
     return ZoneDetail.fromJson(data);
   }
 
