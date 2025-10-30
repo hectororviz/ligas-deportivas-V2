@@ -626,42 +626,53 @@ class _FixtureMatchdayCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: ExpansionTile(
-        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        title: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+    return Align(
+      alignment: Alignment.center,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 800),
+        child: Card(
+          margin: const EdgeInsets.only(bottom: 16),
+          child: ExpansionTile(
+            tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            title: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text(
+                        title,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(subtitle, style: theme.textTheme.bodySmall),
-                ],
-              ),
+                ),
+                const SizedBox(width: 12),
+                _FixtureMatchdayStatusIndicator(status: status),
+              ],
             ),
-            const SizedBox(width: 12),
-            _FixtureMatchdayStatusIndicator(status: status),
-          ],
+            children: [
+              const Divider(height: 24),
+              ...matches,
+              if (byeClubName != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Libre: $byeClubName',
+                  style: theme.textTheme.bodyMedium?.copyWith(fontStyle: FontStyle.italic),
+                ),
+              ],
+            ],
+          ),
         ),
-        children: [
-          const Divider(height: 24),
-          ...matches,
-          if (byeClubName != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              'Libre: $byeClubName',
-              style: theme.textTheme.bodyMedium?.copyWith(fontStyle: FontStyle.italic),
-            ),
-          ],
-        ],
       ),
     );
   }
@@ -825,6 +836,7 @@ List<_DecoratedMatchday> _decorateMatchdays(
 
   final effectivePlayed = playedMatchdaysCount.clamp(0, sorted.length).toInt();
   final decorated = <_DecoratedMatchday>[];
+  final seenDisplayIndexes = <int>{};
   for (var index = 0; index < sorted.length; index++) {
     final raw = sorted[index];
     FixtureMatchdayStatus status;
@@ -836,9 +848,15 @@ List<_DecoratedMatchday> _decorateMatchdays(
       status = FixtureMatchdayStatus.pending;
     }
 
+    final sequentialIndex = index + 1;
+    final preferredIndex = raw.matchdayNumber > 0 ? raw.matchdayNumber : sequentialIndex;
+    final displayIndex = seenDisplayIndexes.add(preferredIndex)
+        ? preferredIndex
+        : sequentialIndex;
+    seenDisplayIndexes.add(displayIndex);
     decorated.add(
       _DecoratedMatchday(
-        displayIndex: index + 1,
+        displayIndex: displayIndex,
         round: raw.round,
         matches: raw.matches,
         status: status,
