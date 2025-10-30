@@ -11,7 +11,7 @@ import { AccessControlService } from '../rbac/access-control.service';
 import { CaptchaService } from '../captcha/captcha.service';
 import { MailService } from '../mail/mail.service';
 import { RoleKey } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
+import * as argon2 from 'argon2';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RequestUser } from '../common/interfaces/request-user.interface';
@@ -49,7 +49,9 @@ export class AuthService {
       throw new BadRequestException('El correo ya está registrado.');
     }
 
-    const passwordHash = await bcrypt.hash(dto.password, 12);
+    const passwordHash = await argon2.hash(dto.password, {
+      type: argon2.argon2id
+    });
 
     const user = await this.prisma.user.create({
       data: {
@@ -99,7 +101,7 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
-    if (!(await bcrypt.compare(password, user.passwordHash))) {
+    if (!(await argon2.verify(user.passwordHash, password))) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
@@ -137,7 +139,7 @@ export class AuthService {
       throw new UnauthorizedException('Refresh token expirado');
     }
 
-    const isValid = await bcrypt.compare(rawToken, storedToken.token);
+    const isValid = await argon2.verify(storedToken.token, rawToken);
     if (!isValid) {
       throw new UnauthorizedException('Refresh token inválido');
     }
@@ -212,7 +214,9 @@ export class AuthService {
       throw new BadRequestException('Token inválido o expirado');
     }
 
-    const passwordHash = await bcrypt.hash(dto.password, 12);
+    const passwordHash = await argon2.hash(dto.password, {
+      type: argon2.argon2id
+    });
 
     await this.prisma.$transaction([
       this.prisma.passwordResetToken.update({
@@ -242,7 +246,9 @@ export class AuthService {
 
   private async issueRefreshToken(userId: number): Promise<string> {
     const rawToken = randomBytes(48).toString('hex');
-    const hash = await bcrypt.hash(rawToken, 12);
+    const hash = await argon2.hash(rawToken, {
+      type: argon2.argon2id
+    });
     const expiresAt = new Date(Date.now() + this.refreshTtlSeconds * 1000);
     const record = await this.prisma.userToken.create({
       data: {
@@ -290,6 +296,10 @@ export class AuthService {
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
+      language: user.language,
+      avatarHash: user.avatarHash,
+      avatarUpdatedAt: user.avatarUpdatedAt,
+      avatarMime: user.avatarMime,
       roles,
       permissions
     };

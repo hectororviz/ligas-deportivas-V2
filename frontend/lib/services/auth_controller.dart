@@ -1,5 +1,5 @@
 import 'dart:async';
-
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -44,6 +44,7 @@ class AuthController extends StateNotifier<AuthState> {
       refreshToken: refreshToken,
       user: AuthUser.fromJson(userJson)
     );
+    await loadProfile();
     return true;
   }
 
@@ -74,16 +75,17 @@ class AuthController extends StateNotifier<AuthState> {
       refreshToken: refreshToken,
       user: AuthUser.fromJson(data['user'] as Map<String, dynamic>)
     );
+    await loadProfile();
     return true;
   }
 
   Future<void> loadProfile() async {
     final api = ref.read(apiClientProvider);
     try {
-      final response = await api.get<Map<String, dynamic>>('/auth/profile');
+      final response = await api.get<Map<String, dynamic>>('/me');
       final data = response.data;
-      if (data != null) {
-        state = state.copyWith(user: AuthUser.fromJson(data));
+      if (data != null && state.user != null) {
+        state = state.copyWith(user: state.user!.applyProfile(data));
       }
     } catch (_) {
       // ignore profile errors
@@ -112,6 +114,7 @@ class AuthController extends StateNotifier<AuthState> {
         refreshToken: newRefreshToken,
         user: AuthUser.fromJson(data['user'] as Map<String, dynamic>)
       );
+      await loadProfile();
       return true;
     } catch (_) {
       await logout();
@@ -139,6 +142,60 @@ class AuthController extends StateNotifier<AuthState> {
     if (refreshToken != null) {
       await prefs.setString('refresh_token', refreshToken);
     }
+  }
+
+  Future<void> requestPasswordReset(String email) async {
+    final api = ref.read(apiClientProvider);
+    await api.post('/auth/password/request-reset', data: {'email': email});
+  }
+
+  Future<void> requestEmailChange(String newEmail) async {
+    final api = ref.read(apiClientProvider);
+    await api.post('/me/email/request-change', data: {'newEmail': newEmail});
+  }
+
+  Future<void> confirmEmailChange(String token) async {
+    final api = ref.read(apiClientProvider);
+    await api.post('/me/email/confirm', data: {'token': token});
+    await loadProfile();
+  }
+
+  Future<void> updateProfileSettings({required String name, String? language}) async {
+    final api = ref.read(apiClientProvider);
+    final response = await api.put<Map<String, dynamic>>('/me', data: {
+      'name': name,
+      if (language != null && language.isNotEmpty) 'language': language
+    });
+    final data = response.data;
+    if (data != null && state.user != null) {
+      state = state.copyWith(user: state.user!.applyProfile(data));
+    }
+  }
+
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final api = ref.read(apiClientProvider);
+    await api.post('/me/password', data: {
+      'currentPassword': currentPassword,
+      'newPassword': newPassword
+    });
+  }
+
+  Future<Map<String, String>?> uploadAvatar({required List<int> bytes, required String filename}) async {
+    final api = ref.read(apiClientProvider);
+    final formData = FormData.fromMap({
+      'avatar': MultipartFile.fromBytes(bytes, filename: filename)
+    });
+    final response = await api.post<Map<String, dynamic>>('/me/avatar', data: formData);
+    final data = response.data;
+    if (data != null && data['avatar'] is Map<String, dynamic> && state.user != null) {
+      final avatarMap = (data['avatar'] as Map<String, dynamic>).map((key, value) => MapEntry(key, value as String));
+      state = state.copyWith(user: state.user!.copyWith(avatarUrls: avatarMap));
+      return avatarMap;
+    }
+    return null;
   }
 }
 
@@ -168,18 +225,54 @@ class AuthUser {
     required this.lastName,
     required this.roles,
     required this.permissions,
+    this.language,
+    this.avatarUrls,
   });
 
   factory AuthUser.fromJson(Map<String, dynamic> json) => AuthUser(
         id: json['id'] as int,
         email: json['email'] as String,
-        firstName: json['firstName'] as String,
-        lastName: json['lastName'] as String,
+        firstName: json['firstName'] as String? ?? _splitFullName(json['name'] as String? ?? '').$1,
+        lastName: json['lastName'] as String? ?? _splitFullName(json['name'] as String? ?? '').$2,
         roles: (json['roles'] as List<dynamic>? ?? []).cast<String>(),
         permissions: (json['permissions'] as List<dynamic>? ?? [])
             .map((entry) => PermissionGrant.fromJson(entry as Map<String, dynamic>))
             .toList(),
+        language: json['language'] as String?,
+        avatarUrls: (json['avatar'] as Map<String, dynamic>?)?.map((key, value) => MapEntry(key, value as String)),
       );
+
+  AuthUser copyWith({
+    String? email,
+    String? firstName,
+    String? lastName,
+    String? language,
+    Map<String, String>? avatarUrls,
+  }) {
+    return AuthUser(
+      id: id,
+      email: email ?? this.email,
+      firstName: firstName ?? this.firstName,
+      lastName: lastName ?? this.lastName,
+      roles: roles,
+      permissions: permissions,
+      language: language ?? this.language,
+      avatarUrls: avatarUrls ?? this.avatarUrls,
+    );
+  }
+
+  AuthUser applyProfile(Map<String, dynamic> profile) {
+    final name = profile['name'] as String? ?? fullName;
+    final (first, last) = _splitFullName(name);
+    final avatar = (profile['avatar'] as Map<String, dynamic>?)?.map((key, value) => MapEntry(key, value as String));
+    return copyWith(
+      email: profile['email'] as String? ?? email,
+      firstName: first,
+      lastName: last,
+      language: profile['language'] as String? ?? language,
+      avatarUrls: avatar,
+    );
+  }
 
   final int id;
   final String email;
@@ -187,8 +280,11 @@ class AuthUser {
   final String lastName;
   final List<String> roles;
   final List<PermissionGrant> permissions;
+  final String? language;
+  final Map<String, String>? avatarUrls;
 
-  String get fullName => '$firstName $lastName';
+  String get fullName => '$firstName $lastName'.trim();
+  String get initials => (firstName.isNotEmpty ? firstName[0] : '') + (lastName.isNotEmpty ? lastName[0] : '');
 
   bool hasPermission({
     required String module,
@@ -297,4 +393,18 @@ enum PermissionScope {
         return PermissionScope.global;
     }
   }
+}
+
+(String, String) _splitFullName(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) {
+    return ('', '');
+  }
+  final parts = trimmed.split(RegExp(r'\s+'));
+  if (parts.length == 1) {
+    return (parts.first, '');
+  }
+  final first = parts.first;
+  final last = parts.sublist(1).join(' ');
+  return (first, last);
 }

@@ -1,5 +1,5 @@
 import { PrismaClient, Action, Module, RoleKey, Scope } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
+import * as argon2 from 'argon2';
 
 const baseModules: Module[] = [
   Module.LIGAS,
@@ -171,7 +171,9 @@ export async function seedBaseData(prisma: PrismaClient) {
     admin = await prisma.user.create({
       data: {
         email: adminEmail,
-        passwordHash: await bcrypt.hash(adminPassword, 12),
+        passwordHash: await argon2.hash(adminPassword, {
+          type: argon2.argon2id
+        }),
         firstName: 'Admin',
         lastName: 'General',
         emailVerifiedAt: new Date()
@@ -187,13 +189,15 @@ export async function seedBaseData(prisma: PrismaClient) {
     if (shouldResetAdminPassword) {
       let isSamePassword = false;
       try {
-        isSamePassword = await bcrypt.compare(adminPassword, existingAdmin.passwordHash);
+        isSamePassword = await argon2.verify(existingAdmin.passwordHash, adminPassword);
       } catch {
         isSamePassword = false;
       }
 
       if (!isSamePassword) {
-        updateData.passwordHash = await bcrypt.hash(adminPassword, 12);
+        updateData.passwordHash = await argon2.hash(adminPassword, {
+          type: argon2.argon2id
+        });
       }
     }
 

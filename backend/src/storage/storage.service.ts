@@ -7,10 +7,13 @@ import { randomUUID } from 'crypto';
 @Injectable()
 export class StorageService {
   private readonly uploadDir: string;
+  private readonly avatarDir: string;
   private readonly baseUrl?: string;
 
   constructor(private readonly configService: ConfigService) {
-    this.uploadDir = path.resolve(process.cwd(), 'storage', 'uploads');
+    const storageRoot = path.resolve(process.cwd(), 'storage');
+    this.uploadDir = path.join(storageRoot, 'uploads');
+    this.avatarDir = path.join(storageRoot, 'avatars');
     this.baseUrl = this.configService.get<string>('storage.baseUrl');
   }
 
@@ -20,13 +23,28 @@ export class StorageService {
     const filename = `${randomUUID()}${extension}`;
     const filepath = path.join(this.uploadDir, filename);
     await fs.writeFile(filepath, file.buffer);
-    return filename;
+    return path.join('uploads', filename);
+  }
+
+  async clearAvatarVariants(userId: number) {
+    const dir = path.join(this.avatarDir, String(userId));
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+
+  async saveAvatarVariant(options: { userId: number; hash: string; size: number; buffer: Buffer }): Promise<string> {
+    const dir = path.join(this.avatarDir, String(options.userId));
+    await fs.mkdir(dir, { recursive: true });
+    const filename = `${options.hash}_${options.size}.jpg`;
+    const filepath = path.join(dir, filename);
+    await fs.writeFile(filepath, options.buffer);
+    return path.join('avatars', String(options.userId), filename).replace(/\\/g, '/');
   }
 
   getPublicUrl(key: string) {
+    const normalizedKey = key.replace(/^\/+/, '');
     if (this.baseUrl) {
-      return `${this.baseUrl.replace(/\/$/, '')}/${key}`;
+      return `${this.baseUrl.replace(/\/$/, '')}/${normalizedKey}`;
     }
-    return `/attachments/${key}`;
+    return `/storage/${normalizedKey}`;
   }
 }

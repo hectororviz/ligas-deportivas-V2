@@ -36,6 +36,24 @@ export class MailService {
     });
   }
 
+  async sendEmailChangeConfirmation(currentEmail: string, newEmail: string, token: string, firstName: string) {
+    const frontend = this.configService.get<string>('app.frontendUrl');
+    const confirmUrl = `${frontend}/confirm-email?token=${token}`;
+    await this.sendMail({
+      to: currentEmail,
+      subject: 'Confirmación de cambio de correo',
+      html: `<p>Hola ${firstName},</p><p>Solicitaste cambiar tu correo a <strong>${newEmail}</strong>.</p><p>Confirma la operación con el siguiente enlace:</p><p><a href="${confirmUrl}">${confirmUrl}</a></p>`
+    });
+  }
+
+  async sendPasswordChangeConfirmation(email: string, firstName: string) {
+    await this.sendMail({
+      to: email,
+      subject: 'Cambio de contraseña confirmado',
+      html: `<p>Hola ${firstName},</p><p>Tu contraseña ha sido actualizada correctamente.</p><p>Si no fuiste tú, por favor contacta al soporte inmediatamente.</p>`
+    });
+  }
+
   private async sendMail(options: { to: string; subject: string; html: string }) {
     const from = this.configService.get<string>('mail.from');
     try {
