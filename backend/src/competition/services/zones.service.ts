@@ -44,7 +44,7 @@ export class ZonesService {
           include: { league: true },
         },
         _count: {
-          select: { clubZones: true },
+          select: { clubZones: true, matches: true },
         },
       },
       orderBy: [

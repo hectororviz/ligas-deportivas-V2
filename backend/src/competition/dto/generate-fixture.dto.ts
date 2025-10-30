@@ -24,4 +24,8 @@ export class GenerateFixtureDto {
   @IsOptional()
   @IsBoolean()
   publish?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  seed?: number;
 }

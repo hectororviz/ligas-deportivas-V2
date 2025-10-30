@@ -21,6 +21,7 @@ import '../../features/shared/widgets/app_shell.dart';
 import '../../features/standings/presentation/standings_page.dart';
 import '../../features/tournaments/presentation/tournaments_page.dart';
 import '../../features/zones/presentation/zones_page.dart';
+import '../../features/zones/presentation/zone_fixture_page.dart';
 import '../../services/auth_controller.dart';
 
 class GoRouterRefreshStream extends ChangeNotifier {
@@ -73,6 +74,17 @@ GoRouter createRouter(Ref ref) {
           GoRoute(path: '/players', builder: (context, state) => const PlayersPage()),
           GoRoute(path: '/tournaments', builder: (context, state) => const TournamentsPage()),
           GoRoute(path: '/zones', builder: (context, state) => const ZonesPage()),
+          GoRoute(
+            path: '/zones/:zoneId/fixture',
+            builder: (context, state) {
+              final rawId = state.pathParameters['zoneId'];
+              final zoneId = rawId != null ? int.tryParse(rawId) : null;
+              if (zoneId == null) {
+                return const Center(child: Text('Zona no válida'));
+              }
+              return ZoneFixturePage(zoneId: zoneId);
+            },
+          ),
           GoRoute(path: '/fixtures', builder: (context, state) => const FixturesPage()),
           GoRoute(path: '/results', builder: (context, state) => const ResultsPage()),
           GoRoute(path: '/standings', builder: (context, state) => const StandingsPage()),
