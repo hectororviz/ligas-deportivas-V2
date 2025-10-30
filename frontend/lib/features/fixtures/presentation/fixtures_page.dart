@@ -32,7 +32,10 @@ class _FixturesPageState extends ConsumerState<FixturesPage> {
       _message = null;
     });
     try {
-      await ref.read(apiClientProvider).post('/tournaments/$id/fixture');
+      await ref.read(apiClientProvider).post(
+        '/tournaments/$id/fixtures/generate',
+        data: const {'doubleRound': true, 'publish': true},
+      );
       setState(() => _message = 'Fixture generado correctamente.');
     } catch (error) {
       setState(() => _message = 'Error generando fixture: $error');

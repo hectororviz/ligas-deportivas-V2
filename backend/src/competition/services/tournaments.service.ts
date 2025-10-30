@@ -272,7 +272,7 @@ export class TournamentsService {
       throw new BadRequestException('La categoría ya está asignada al torneo');
     }
 
-    if (dto.enabled && !dto.gameTime) {
+    if (dto.enabled && !dto.kickoffTime) {
       throw new BadRequestException(
         'La hora de juego es obligatoria cuando la categoría está habilitada',
       );
@@ -283,7 +283,8 @@ export class TournamentsService {
         tournamentId,
         categoryId: dto.categoryId,
         enabled: dto.enabled,
-        gameTime: dto.enabled ? dto.gameTime : null,
+        kickoffTime: dto.enabled ? dto.kickoffTime : null,
+        countsForGeneral: dto.countsForGeneral,
       },
     });
   }
@@ -311,7 +312,7 @@ export class TournamentsService {
         throw new BadRequestException('Categoría inexistente');
       }
       if (assignment.enabled) {
-        if (!assignment.gameTime) {
+        if (!assignment.kickoffTime) {
           throw new BadRequestException(
             'La hora de juego es obligatoria cuando la categoría está habilitada',
           );
@@ -353,7 +354,8 @@ export class TournamentsService {
         };
         const data = {
           enabled: assignment.enabled,
-          gameTime: assignment.enabled ? assignment.gameTime : null,
+          kickoffTime: assignment.enabled ? assignment.kickoffTime : null,
+          countsForGeneral: assignment.countsForGeneral,
         };
 
         if (existingById.has(assignment.categoryId)) {
@@ -365,7 +367,8 @@ export class TournamentsService {
               tournamentId: id,
               categoryId: assignment.categoryId,
               enabled: true,
-              gameTime: assignment.gameTime,
+              kickoffTime: assignment.kickoffTime,
+              countsForGeneral: assignment.countsForGeneral,
             },
           });
         }
