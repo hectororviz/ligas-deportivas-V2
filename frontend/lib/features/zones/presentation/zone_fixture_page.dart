@@ -1,9 +1,11 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../services/api_client.dart';
 import '../domain/zone_models.dart';
+import '../domain/zone_match_models.dart';
 import 'zones_page.dart';
 
 final zoneDetailProvider = FutureProvider.autoDispose.family<ZoneDetail, int>((ref, zoneId) async {
@@ -422,12 +424,9 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
                 matches: dayMatches
                     .map(
                       (match) => FixtureMatchRow(
-                        homeName: match.homeClub?.shortName ??
-                            match.homeClub?.name ??
-                            'Por definir',
-                        awayName: match.awayClub?.shortName ??
-                            match.awayClub?.name ??
-                            'Por definir',
+                        homeName: match.homeDisplayName,
+                        awayName: match.awayDisplayName,
+                        onTap: () => _openMatchDetail(zone, match),
                       ),
                     )
                     .toList(),
@@ -457,69 +456,13 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
       ],
     );
   }
-}
 
-class ZoneMatch {
-  ZoneMatch({
-    required this.id,
-    required this.matchday,
-    required this.round,
-    required this.homeClub,
-    required this.awayClub,
-  });
-
-  factory ZoneMatch.fromJson(Map<String, dynamic> json) {
-    return ZoneMatch(
-      id: json['id'] as int? ?? 0,
-      matchday: json['matchday'] as int? ?? 0,
-      round: FixtureRoundX.fromApi(json['round'] as String? ?? 'FIRST'),
-      homeClub: json['homeClub'] != null ? FixtureClub.fromJson(json['homeClub'] as Map<String, dynamic>) : null,
-      awayClub: json['awayClub'] != null ? FixtureClub.fromJson(json['awayClub'] as Map<String, dynamic>) : null,
-    );
-  }
-
-  final int id;
-  final int matchday;
-  final FixtureRound round;
-  final FixtureClub? homeClub;
-  final FixtureClub? awayClub;
-}
-
-class FixtureClub {
-  FixtureClub({required this.id, required this.name, this.shortName});
-
-  factory FixtureClub.fromJson(Map<String, dynamic> json) {
-    return FixtureClub(
-      id: json['id'] as int? ?? 0,
-      name: json['name'] as String? ?? 'Club',
-      shortName: json['shortName'] as String?,
-    );
-  }
-
-  final int id;
-  final String name;
-  final String? shortName;
-}
-
-enum FixtureRound { first, second }
-
-extension FixtureRoundX on FixtureRound {
-  static FixtureRound fromApi(String value) {
-    switch (value.toUpperCase()) {
-      case 'SECOND':
-        return FixtureRound.second;
-      default:
-        return FixtureRound.first;
+  void _openMatchDetail(ZoneDetail zone, ZoneMatch match) {
+    if (!mounted) {
+      return;
     }
-  }
-
-  String get label {
-    switch (this) {
-      case FixtureRound.first:
-        return 'Rueda 1';
-      case FixtureRound.second:
-        return 'Rueda 2';
-    }
+    final route = '/zones/${zone.id}/fixture/matches/${match.id}';
+    GoRouter.of(context).push(route, extra: match);
   }
 }
 
@@ -679,15 +622,21 @@ class _FixtureMatchdayCard extends StatelessWidget {
 }
 
 class FixtureMatchRow extends StatelessWidget {
-  const FixtureMatchRow({super.key, required this.homeName, required this.awayName});
+  const FixtureMatchRow({
+    super.key,
+    required this.homeName,
+    required this.awayName,
+    this.onTap,
+  });
 
   final String homeName;
   final String awayName;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+    final content = Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
       child: Row(
         children: [
           Expanded(child: Text(homeName, style: Theme.of(context).textTheme.bodyLarge)),
@@ -701,6 +650,16 @@ class FixtureMatchRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+
+    if (onTap == null) {
+      return content;
+    }
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: content,
     );
   }
 }
