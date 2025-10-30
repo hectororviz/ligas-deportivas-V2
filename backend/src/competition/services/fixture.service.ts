@@ -18,7 +18,7 @@ interface RoundBye {
   clubId: number;
 }
 
-interface MatchdaySchedule {
+export interface MatchdaySchedule {
   matchday: number;
   round: Round;
   matches: RoundMatch[];
@@ -30,7 +30,7 @@ interface ZoneFixtureContext {
   tournamentId: number;
   categories: Array<{
     id: number;
-    kickoffTime: Date | null;
+    kickoffTime: string;
     countsForGeneral: boolean;
   }>;
   clubs: { id: number; name: string; shortName: string | null }[];
@@ -134,9 +134,11 @@ export class FixtureService {
                 awayClubId: match.awayClubId,
                 categories: {
                   create: categories.map((category) => ({
-                    tournamentCategoryId: category.id,
                     kickoffTime: category.kickoffTime,
                     isPromocional: !category.countsForGeneral,
+                    tournamentCategory: {
+                      connect: { id: category.id },
+                    },
                   })),
                 },
               },
@@ -154,9 +156,11 @@ export class FixtureService {
                 awayClubId: match.awayClubId,
                 categories: {
                   create: categories.map((category) => ({
-                    tournamentCategoryId: category.id,
                     kickoffTime: category.kickoffTime,
                     isPromocional: !category.countsForGeneral,
+                    tournamentCategory: {
+                      connect: { id: category.id },
+                    },
                   })),
                 },
               },
@@ -260,9 +264,11 @@ export class FixtureService {
               awayClubId: match.awayClubId,
               categories: {
                 create: context.categories.map((category) => ({
-                  tournamentCategoryId: category.id,
                   kickoffTime: category.kickoffTime,
                   isPromocional: !category.countsForGeneral,
+                  tournamentCategory: {
+                    connect: { id: category.id },
+                  },
                 })),
               },
             },
@@ -344,19 +350,19 @@ export class FixtureService {
       throw new BadRequestException('La zona debe tener clubes asignados');
     }
 
-    const categories = zone.tournament.categories.map((category) => ({
-      id: category.id,
-      kickoffTime: category.kickoffTime,
-      countsForGeneral: category.countsForGeneral,
-    }));
-    if (!categories.length) {
-      throw new BadRequestException('El torneo debe tener categorías habilitadas');
-    }
-
-    for (const category of categories) {
+    const categories = zone.tournament.categories.map((category) => {
       if (!category.kickoffTime) {
         throw new BadRequestException('Todas las categorías habilitadas deben tener horario definido');
       }
+
+      return {
+        id: category.id,
+        kickoffTime: category.kickoffTime,
+        countsForGeneral: category.countsForGeneral,
+      };
+    });
+    if (!categories.length) {
+      throw new BadRequestException('El torneo debe tener categorías habilitadas');
     }
 
     const clubsMap = new Map<number, { id: number; name: string; shortName: string | null }>();
