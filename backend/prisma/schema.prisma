@@ -63,6 +63,7 @@ enum TournamentChampionMode {
 enum ZoneStatus {
   OPEN
   IN_PROGRESS
+  PLAYING
   FINISHED
 }
 
@@ -127,6 +128,7 @@ model Zone {
   name         String
   status       ZoneStatus         @default(OPEN)
   lockedAt     DateTime?
+  fixtureSeed  Int?
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
   tournament   Tournament         @relation(fields: [tournamentId], references: [id])
