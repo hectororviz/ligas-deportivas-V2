@@ -30,10 +30,17 @@ class ZoneFixturePage extends ConsumerStatefulWidget {
 }
 
 class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
+  final ScrollController _scrollController = ScrollController();
   ZoneFixturePreview? _preview;
   bool _loadingPreview = false;
   bool _submitting = false;
   String? _previewError;
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   Future<void> _requestPreview() async {
     setState(() {
@@ -194,20 +201,32 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
                 ],
               ),
               const SizedBox(height: 16),
-              matchesAsync.when(
-                data: (matches) {
-                  if (matches.isEmpty && !hasPreview) {
-                    return _buildGenerationPrompt(zone);
-                  }
-                  if (hasPreview) {
-                    return _buildPreview(zone, _preview!);
-                  }
-                  return _buildFixtureSchedule(zone, matches);
-                },
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (error, stack) => _ErrorMessage(
-                  message: 'No se pudieron cargar los partidos: $error',
-                  onRetry: () => ref.invalidate(zoneMatchesProvider(widget.zoneId)),
+              Expanded(
+                child: matchesAsync.when(
+                  data: (matches) {
+                    Widget content;
+                    if (matches.isEmpty && !hasPreview) {
+                      content = _buildGenerationPrompt(zone);
+                    } else if (hasPreview) {
+                      content = _buildPreview(zone, _preview!);
+                    } else {
+                      content = _buildFixtureSchedule(zone, matches);
+                    }
+
+                    return Scrollbar(
+                      controller: _scrollController,
+                      thumbVisibility: true,
+                      child: SingleChildScrollView(
+                        controller: _scrollController,
+                        child: content,
+                      ),
+                    );
+                  },
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (error, stack) => _ErrorMessage(
+                    message: 'No se pudieron cargar los partidos: $error',
+                    onRetry: () => ref.invalidate(zoneMatchesProvider(widget.zoneId)),
+                  ),
                 ),
               ),
             ],
@@ -566,22 +585,25 @@ class _FixtureMatchdayCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 4),
-            Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
-            const Divider(height: 24),
-            ...matches,
-            if (byeClubName != null) ...[
-              const SizedBox(height: 8),
-              Text('Libre: $byeClubName', style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontStyle: FontStyle.italic)),
-            ],
-          ],
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        title: Text(
+          title,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
         ),
+        subtitle: Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+        children: [
+          const Divider(height: 24),
+          ...matches,
+          if (byeClubName != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Libre: $byeClubName',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontStyle: FontStyle.italic),
+            ),
+          ],
+        ],
       ),
     );
   }
