@@ -790,8 +790,11 @@ class _ZoneEditorDialogState extends ConsumerState<_ZoneEditorDialog> {
     });
     try {
       final api = ref.read(apiClientProvider);
-      final response =
-          await api.get<List<dynamic>>('/tournaments/$tournamentId/zones/clubs');
+      final zoneId = _zoneId;
+      final response = await api.get<List<dynamic>>(
+        '/tournaments/$tournamentId/zones/clubs',
+        queryParameters: zoneId != null ? {'zoneId': zoneId} : null,
+      );
       final data = response.data ?? [];
       setState(() {
         _clubs = data
