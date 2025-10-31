@@ -1262,7 +1262,8 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
 
     try {
       if (widget.club == null) {
-        final response = await api.post<Map<String, dynamic>>('/clubs', data: payload);
+        final response =
+            await api.post<Map<String, dynamic>>('/clubs', data: payload);
         if (_logoBytes != null) {
           final data = response.data;
           final newClubId = data?['id'] as int?;
@@ -1414,7 +1415,10 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
     }
 
     try {
-      final image = await ui.decodeImageFromList(bytes);
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final image = frame.image;
+      codec.dispose();
       if (image.width != _clubLogoSize || image.height != _clubLogoSize) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1422,6 +1426,7 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
         );
         return;
       }
+      image.dispose();
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1545,7 +1550,7 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
     );
   }
 
-  Future<void> _uploadLogo(Dio api, int clubId) async {
+  Future<void> _uploadLogo(ApiClient api, int clubId) async {
     if (_logoBytes == null) {
       return;
     }
@@ -1564,7 +1569,7 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
     await api.put('/clubs/$clubId/logo', data: formData);
   }
 
-  Future<void> _deleteLogo(Dio api, int clubId) async {
+  Future<void> _deleteLogo(ApiClient api, int clubId) async {
     await api.delete('/clubs/$clubId/logo');
   }
 
