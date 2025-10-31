@@ -168,6 +168,14 @@ model Club {
   teams             Team[]
 }
 
+model SiteIdentity {
+  id        Int      @id @default(1)
+  title     String   @default("Ligas Deportivas")
+  iconKey   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model ClubZone {
   id        Int      @id @default(autoincrement())
   clubId    Int

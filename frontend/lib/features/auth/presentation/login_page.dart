@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../services/auth_controller.dart';
+import '../../settings/site_identity_provider.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
@@ -61,6 +62,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    final siteIdentityAsync = ref.watch(siteIdentityProvider);
+    final siteIdentity = siteIdentityAsync.valueOrNull;
+    final title = siteIdentity?.title ?? 'Ligas Deportivas';
+    final iconUrl = siteIdentity?.iconUrl;
+
     return Scaffold(
       body: Center(
         child: ConstrainedBox(
@@ -75,9 +81,20 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const FlutterLogo(size: 64),
+                    Container(
+                      height: 64,
+                      width: 64,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        color: Theme.of(context).colorScheme.surfaceVariant,
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: iconUrl != null
+                          ? Image.network(iconUrl, fit: BoxFit.cover)
+                          : const FlutterLogo(size: 64),
+                    ),
                     const SizedBox(height: 16),
-                    Text('Ligas Deportivas',
+                    Text(title,
                         textAlign: TextAlign.center,
                         style: Theme.of(context)
                             .textTheme

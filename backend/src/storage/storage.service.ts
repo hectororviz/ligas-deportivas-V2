@@ -6,14 +6,15 @@ import { randomUUID } from 'crypto';
 
 @Injectable()
 export class StorageService {
+  private readonly storageRoot: string;
   private readonly uploadDir: string;
   private readonly avatarDir: string;
   private readonly baseUrl?: string;
 
   constructor(private readonly configService: ConfigService) {
-    const storageRoot = path.resolve(process.cwd(), 'storage');
-    this.uploadDir = path.join(storageRoot, 'uploads');
-    this.avatarDir = path.join(storageRoot, 'avatars');
+    this.storageRoot = path.resolve(process.cwd(), 'storage');
+    this.uploadDir = path.join(this.storageRoot, 'uploads');
+    this.avatarDir = path.join(this.storageRoot, 'avatars');
     this.baseUrl = this.configService.get<string>('storage.baseUrl');
   }
 
@@ -26,12 +27,29 @@ export class StorageService {
     return path.join('uploads', filename);
   }
 
+  async deleteAttachment(key: string) {
+    if (!key) {
+      return;
+    }
+    try {
+      const filePath = this.resolveAttachmentPath(key);
+      await fs.rm(filePath, { force: true });
+    } catch {
+      return;
+    }
+  }
+
   async clearAvatarVariants(userId: number) {
     const dir = path.join(this.avatarDir, String(userId));
     await fs.rm(dir, { recursive: true, force: true });
   }
 
-  async saveAvatarVariant(options: { userId: number; hash: string; size: number; buffer: Buffer }): Promise<string> {
+  async saveAvatarVariant(options: {
+    userId: number;
+    hash: string;
+    size: number;
+    buffer: Buffer;
+  }): Promise<string> {
     const dir = path.join(this.avatarDir, String(options.userId));
     await fs.mkdir(dir, { recursive: true });
     const filename = `${options.hash}_${options.size}.jpg`;
@@ -46,5 +64,15 @@ export class StorageService {
       return `${this.baseUrl.replace(/\/$/, '')}/${normalizedKey}`;
     }
     return `/storage/${normalizedKey}`;
+  }
+
+  resolveAttachmentPath(key: string) {
+    const normalizedKey = key.replace(/^\/+/, '');
+    const filePath = path.join(this.storageRoot, normalizedKey);
+    const relative = path.relative(this.storageRoot, filePath);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+      throw new Error('Invalid storage key');
+    }
+    return filePath;
   }
 }

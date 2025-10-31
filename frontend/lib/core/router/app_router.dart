@@ -17,6 +17,7 @@ import '../../features/settings/league_colors_page.dart';
 import '../../features/settings/role_permissions_page.dart';
 import '../../features/settings/settings_page.dart';
 import '../../features/settings/account_settings_page.dart';
+import '../../features/settings/site_identity_page.dart';
 import '../../features/shared/widgets/app_shell.dart';
 import '../../features/standings/presentation/standings_page.dart';
 import '../../features/tournaments/presentation/tournaments_page.dart';
@@ -118,6 +119,10 @@ GoRouter createRouter(Ref ref) {
             path: '/settings',
             builder: (context, state) => const SettingsPage(),
             routes: [
+              GoRoute(
+                path: 'identity',
+                builder: (context, state) => const SiteIdentityPage(),
+              ),
               GoRoute(
                 path: 'account',
                 builder: (context, state) => const AccountSettingsPage(),
