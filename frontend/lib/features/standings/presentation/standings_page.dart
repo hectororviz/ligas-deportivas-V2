@@ -1,165 +1,296 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../services/api_client.dart';
+import '../../zones/domain/zone_models.dart';
+import '../../zones/presentation/zone_fixture_page.dart';
 
-final standingsProvider = FutureProvider.autoDispose<List<StandingsGroup>>((ref) async {
-  final tournamentId = ref.watch(_tournamentIdProvider);
-  if (tournamentId == null) {
-    return [];
-  }
+final standingsTournamentsProvider = FutureProvider<List<StandingsTournament>>((ref) async {
   final api = ref.read(apiClientProvider);
-  final response = await api.get<List<dynamic>>('/tournaments/$tournamentId/standings');
-  final data = response.data ?? [];
-  return data.map((json) => StandingsGroup.fromJson(json as Map<String, dynamic>)).toList();
-});
+  final response = await api.get<List<dynamic>>('/zones');
+  final data = response.data ?? <dynamic>[];
+  final zones = data
+      .whereType<Map<String, dynamic>>()
+      .map(ZoneSummary.fromJson)
+      .where((zone) => zone.matchCount > 0)
+      .toList();
 
-final _tournamentIdProvider = StateProvider<int?>((ref) => null);
+  final grouped = <int, _StandingsTournamentBuilder>{};
+  for (final zone in zones) {
+    final builder = grouped.putIfAbsent(
+      zone.tournamentId,
+      () => _StandingsTournamentBuilder(
+        id: zone.tournamentId,
+        name: zone.tournamentName,
+        year: zone.tournamentYear,
+        leagueName: zone.leagueName,
+      ),
+    );
+    builder.zones.add(zone);
+  }
+
+  final tournaments = grouped.values
+      .map((builder) => builder.build())
+      .where((tournament) => tournament.zones.isNotEmpty)
+      .toList()
+    ..sort((a, b) {
+      final yearComparison = b.year.compareTo(a.year);
+      if (yearComparison != 0) {
+        return yearComparison;
+      }
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
+
+  for (final tournament in tournaments) {
+    tournament.zones.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  }
+
+  return tournaments;
+});
 
 class StandingsPage extends ConsumerWidget {
   const StandingsPage({super.key});
 
+  void _openZoneStandings(BuildContext context, ZoneSummary zone) {
+    GoRouter.of(context).push('/zones/${zone.id}/standings');
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final standings = ref.watch(standingsProvider);
-    return Padding(
-      padding: const EdgeInsets.all(24.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              SizedBox(
-                width: 200,
-                child: TextField(
-                  decoration: const InputDecoration(labelText: 'ID Torneo'),
-                  keyboardType: TextInputType.number,
-                  onSubmitted: (value) {
-                    final id = int.tryParse(value);
-                    ref.read(_tournamentIdProvider.notifier).state = id;
-                  },
-                ),
+    final tournamentsAsync = ref.watch(standingsTournamentsProvider);
+
+    return tournamentsAsync.when(
+      data: (tournaments) {
+        if (tournaments.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.info_outline, size: 56, color: Theme.of(context).colorScheme.primary),
+                  const SizedBox(height: 12),
+                  Text(
+                    'No hay tablas disponibles por el momento.',
+                    style: Theme.of(context).textTheme.titleMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Cuando haya zonas con partidos disputados podrás revisar sus tablas generales y por categoría desde aquí.',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              ElevatedButton(
-                onPressed: () {
-                  ref.invalidate(standingsProvider);
-                },
-                child: const Text('Actualizar'),
-              )
-            ],
-          ),
-          const SizedBox(height: 24),
-          Expanded(
-            child: standings.when(
-              data: (groups) {
-                if (groups.isEmpty) {
-                  return const Center(child: Text('Ingresa un torneo para consultar sus tablas.'));
-                }
-                return ListView(
-                  children: groups
-                      .map(
-                        (group) => Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  group.categoryName,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleLarge
-                                      ?.copyWith(fontWeight: FontWeight.bold),
-                                ),
-                                const SizedBox(height: 12),
-                                DataTable(
-                                  columns: const [
-                                    DataColumn(label: Text('Club')),
-                                    DataColumn(label: Text('Pts')),
-                                    DataColumn(label: Text('PJ')),
-                                    DataColumn(label: Text('PG')),
-                                    DataColumn(label: Text('PE')),
-                                    DataColumn(label: Text('PP')),
-                                    DataColumn(label: Text('GF')),
-                                    DataColumn(label: Text('GC')),
-                                  ],
-                                  rows: group.standings
-                                      .map(
-                                        (row) => DataRow(cells: [
-                                          DataCell(Text(row.clubName)),
-                                          DataCell(Text(row.points.toString())),
-                                          DataCell(Text(row.played.toString())),
-                                          DataCell(Text(row.wins.toString())),
-                                          DataCell(Text(row.draws.toString())),
-                                          DataCell(Text(row.losses.toString())),
-                                          DataCell(Text(row.goalsFor.toString())),
-                                          DataCell(Text(row.goalsAgainst.toString())),
-                                        ]),
-                                      )
-                                      .toList(),
-                                )
-                              ],
-                            ),
-                          ),
-                        ),
-                      )
-                      .toList(),
-                );
-              },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, stack) => Center(child: Text('Error al obtener tablas: $error')),
             ),
-          )
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(24),
+          itemCount: tournaments.length,
+          itemBuilder: (context, index) {
+            final tournament = tournaments[index];
+            return _StandingsTournamentAccordion(
+              tournament: tournament,
+              onOpenZone: (zone) => _openZoneStandings(context, zone),
+            );
+          },
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, stackTrace) {
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.error_outline, size: 48),
+                const SizedBox(height: 12),
+                Text(
+                  'No pudimos cargar las tablas disponibles.',
+                  style: Theme.of(context).textTheme.titleMedium,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '$error',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                ),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: () => ref.invalidate(standingsTournamentsProvider),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Reintentar'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class StandingsTournament {
+  StandingsTournament({
+    required this.id,
+    required this.name,
+    required this.year,
+    required this.leagueName,
+    required this.zones,
+  });
+
+  final int id;
+  final String name;
+  final int year;
+  final String leagueName;
+  final List<ZoneSummary> zones;
+
+  String get displayName => '$name $year';
+}
+
+class _StandingsTournamentBuilder {
+  _StandingsTournamentBuilder({
+    required this.id,
+    required this.name,
+    required this.year,
+    required this.leagueName,
+  });
+
+  final int id;
+  final String name;
+  final int year;
+  final String leagueName;
+  final List<ZoneSummary> zones = <ZoneSummary>[];
+
+  StandingsTournament build() {
+    return StandingsTournament(
+      id: id,
+      name: name,
+      year: year,
+      leagueName: leagueName,
+      zones: List<ZoneSummary>.from(zones),
+    );
+  }
+}
+
+class _StandingsTournamentAccordion extends StatelessWidget {
+  const _StandingsTournamentAccordion({
+    required this.tournament,
+    required this.onOpenZone,
+  });
+
+  final StandingsTournament tournament;
+  final ValueChanged<ZoneSummary> onOpenZone;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: ExpansionTile(
+        key: PageStorageKey('standings-tournament-${tournament.id}'),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+        title: Text(
+          tournament.displayName,
+          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        subtitle: Text(tournament.leagueName, style: theme.textTheme.bodyMedium),
+        children: [
+          for (final zone in tournament.zones)
+            _StandingsZoneCard(
+              zone: zone,
+              onOpen: () => onOpenZone(zone),
+            ),
         ],
       ),
     );
   }
 }
 
-class StandingsGroup {
-  const StandingsGroup({required this.categoryName, required this.standings});
-
-  factory StandingsGroup.fromJson(Map<String, dynamic> json) => StandingsGroup(
-        categoryName: json['categoryName'] as String? ?? 'Categoría',
-        standings: (json['standings'] as List<dynamic>? ?? [])
-            .map((row) => StandingRow.fromJson(row as Map<String, dynamic>))
-            .toList(),
-      );
-
-  final String categoryName;
-  final List<StandingRow> standings;
-}
-
-class StandingRow {
-  const StandingRow({
-    required this.clubName,
-    required this.points,
-    required this.played,
-    required this.wins,
-    required this.draws,
-    required this.losses,
-    required this.goalsFor,
-    required this.goalsAgainst
+class _StandingsZoneCard extends StatelessWidget {
+  const _StandingsZoneCard({
+    required this.zone,
+    required this.onOpen,
   });
 
-  factory StandingRow.fromJson(Map<String, dynamic> json) => StandingRow(
-        clubName: (json['club']['name'] as String?) ?? 'Club',
-        points: json['points'] as int? ?? 0,
-        played: json['played'] as int? ?? 0,
-        wins: json['wins'] as int? ?? 0,
-        draws: json['draws'] as int? ?? 0,
-        losses: json['losses'] as int? ?? 0,
-        goalsFor: json['goalsFor'] as int? ?? 0,
-        goalsAgainst: json['goalsAgainst'] as int? ?? 0,
-      );
+  final ZoneSummary zone;
+  final VoidCallback onOpen;
 
-  final String clubName;
-  final int points;
-  final int played;
-  final int wins;
-  final int draws;
-  final int losses;
-  final int goalsFor;
-  final int goalsAgainst;
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      color: theme.colorScheme.surfaceVariant.withOpacity(0.35),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isCompact = constraints.maxWidth < 600;
+
+            final header = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  zone.name,
+                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Clubes: ${zone.clubCount} · Partidos: ${zone.matchCount}',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            );
+
+            final actions = Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              alignment: isCompact ? WrapAlignment.start : WrapAlignment.end,
+              children: [
+                ZoneStatusChip(status: zone.status),
+                FilledButton.icon(
+                  onPressed: onOpen,
+                  icon: const Icon(Icons.bar_chart_outlined),
+                  label: const Text('Detalle'),
+                ),
+              ],
+            );
+
+            if (isCompact) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  header,
+                  const SizedBox(height: 12),
+                  actions,
+                ],
+              );
+            }
+
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(child: header),
+                const SizedBox(width: 12),
+                actions,
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
 }
