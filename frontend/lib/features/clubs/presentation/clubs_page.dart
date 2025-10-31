@@ -651,15 +651,46 @@ class _ClubAvatar extends StatelessWidget {
     final primary = club.primaryColor ?? Theme.of(context).colorScheme.primary;
     final secondary =
         club.secondaryColor ?? Theme.of(context).colorScheme.primaryContainer;
-    return CircleAvatar(
-      radius: 24,
-      backgroundColor: secondary.withOpacity(0.3),
+    final fallback = _ClubAvatarInitials(
+      initials: club.initials,
+      color: primary,
+    );
+    final logoUrl = club.logoUrl;
+
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        color: secondary.withOpacity(0.3),
+        shape: BoxShape.circle,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: logoUrl != null && logoUrl.isNotEmpty
+          ? Image.network(
+              logoUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => fallback,
+            )
+          : fallback,
+    );
+  }
+}
+
+class _ClubAvatarInitials extends StatelessWidget {
+  const _ClubAvatarInitials({required this.initials, required this.color});
+
+  final String initials;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
       child: Text(
-        club.initials,
+        initials,
         style: Theme.of(context)
             .textTheme
             .titleMedium
-            ?.copyWith(color: primary, fontWeight: FontWeight.bold),
+            ?.copyWith(color: color, fontWeight: FontWeight.bold),
       ),
     );
   }
