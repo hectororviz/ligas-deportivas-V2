@@ -1,3 +1,15 @@
+const removeTrailingSlash = (value: string) => value.replace(/\/$/, '');
+
+const resolveStorageBaseUrl = () => {
+  const explicitBaseUrl = process.env.STORAGE_BASE_URL;
+  if (explicitBaseUrl && explicitBaseUrl.trim().length > 0) {
+    return removeTrailingSlash(explicitBaseUrl.trim());
+  }
+
+  const appUrl = removeTrailingSlash(process.env.APP_URL ?? 'http://localhost:3000');
+  return `${appUrl}/storage`;
+};
+
 export default () => ({
   app: {
     port: parseInt(process.env.PORT ?? '3000', 10),
@@ -26,7 +38,7 @@ export default () => ({
     from: process.env.SMTP_FROM ?? 'noreply@ligas.local'
   },
   storage: {
-    baseUrl: process.env.STORAGE_BASE_URL ?? '',
+    baseUrl: resolveStorageBaseUrl(),
     bucket: process.env.STORAGE_BUCKET ?? '',
     accessKey: process.env.STORAGE_ACCESS_KEY ?? '',
     secretKey: process.env.STORAGE_SECRET_KEY ?? ''

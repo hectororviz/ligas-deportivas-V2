@@ -7,7 +7,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateMatchDto } from '../dto/update-match.dto';
 import { RecordMatchResultDto } from '../dto/record-match-result.dto';
-import { MatchStatus } from '@prisma/client';
+import { MatchStatus, MatchdayStatus } from '@prisma/client';
 import { StorageService } from '../../storage/storage.service';
 import { StandingsService } from '../../standings/standings.service';
 
@@ -19,22 +19,171 @@ export class MatchesService {
     private readonly standingsService: StandingsService
   ) {}
 
-  listByZone(zoneId: number) {
-    return this.prisma.match.findMany({
-      where: { zoneId },
-      orderBy: [{ matchday: 'asc' }, { round: 'asc' }],
-      include: {
-        homeClub: true,
-        awayClub: true,
-        categories: {
-          include: {
-            tournamentCategory: {
-              include: { category: true }
+  async listByZone(zoneId: number) {
+    const [matches, matchdays] = await this.prisma.$transaction([
+      this.prisma.match.findMany({
+        where: { zoneId },
+        orderBy: [{ matchday: 'asc' }, { round: 'asc' }],
+        include: {
+          homeClub: true,
+          awayClub: true,
+          categories: {
+            include: {
+              tournamentCategory: {
+                include: { category: true }
+              }
             }
           }
         }
+      }),
+      this.prisma.zoneMatchday.findMany({
+        where: { zoneId },
+        orderBy: { matchday: 'asc' }
+      })
+    ]);
+
+    if (matchdays.length === 0 && matches.length > 0) {
+      const uniqueMatchdays = Array.from(new Set(matches.map((match) => match.matchday))).sort((a, b) => a - b);
+      const fallback = uniqueMatchdays.map((matchday, index) => ({
+        zoneId,
+        matchday,
+        status:
+          index === 0
+            ? MatchdayStatus.IN_PROGRESS
+            : MatchdayStatus.PENDING,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        id: 0
+      }));
+      return { matches, matchdays: fallback };
+    }
+
+    return { matches, matchdays };
+  }
+
+  async finalizeMatchday(zoneId: number, matchday: number) {
+    return this.prisma.$transaction(async (tx) => {
+      const entry = await tx.zoneMatchday.findUnique({
+        where: { zoneId_matchday: { zoneId, matchday } }
+      });
+
+      if (!entry) {
+        throw new NotFoundException('Fecha no encontrada para la zona indicada');
+      }
+
+      const matches = await tx.match.findMany({
+        where: { zoneId, matchday },
+        select: { status: true }
+      });
+
+      if (!matches.length) {
+        throw new BadRequestException('No hay partidos asignados a esta fecha');
+      }
+
+      const allFinished = matches.every((match) => match.status === MatchStatus.FINISHED);
+      const newStatus = allFinished ? MatchdayStatus.PLAYED : MatchdayStatus.INCOMPLETE;
+
+      const updates: Promise<unknown>[] = [];
+      updates.push(
+        tx.zoneMatchday.update({
+          where: { zoneId_matchday: { zoneId, matchday } },
+          data: { status: newStatus }
+        })
+      );
+
+      const nextMatchday = await tx.zoneMatchday.findFirst({
+        where: { zoneId, matchday: { gt: matchday } },
+        orderBy: { matchday: 'asc' }
+      });
+
+      if (nextMatchday && nextMatchday.status === MatchdayStatus.PENDING) {
+        updates.push(
+          tx.zoneMatchday.update({
+            where: { zoneId_matchday: { zoneId, matchday: nextMatchday.matchday } },
+            data: { status: MatchdayStatus.IN_PROGRESS }
+          })
+        );
+      }
+
+      await Promise.all(updates);
+
+      return tx.zoneMatchday.findMany({
+        where: { zoneId },
+        orderBy: { matchday: 'asc' }
+      });
+    });
+  }
+
+  async getResult(matchId: number, tournamentCategoryId: number) {
+    const matchCategory = await this.prisma.matchCategory.findFirst({
+      where: { matchId, tournamentCategoryId },
+      include: {
+        match: {
+          select: {
+            homeClubId: true,
+            awayClubId: true
+          }
+        },
+        goals: {
+          include: {
+            player: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true
+              }
+            }
+          }
+        },
+        otherGoals: true
       }
     });
+
+    if (!matchCategory) {
+      throw new NotFoundException('Partido/categoría no encontrado');
+    }
+
+    const groupedGoals = new Map<
+      number,
+      {
+        playerId: number;
+        clubId: number;
+        goals: number;
+        player: { id: number; firstName: string | null; lastName: string | null };
+      }
+    >();
+
+    for (const goal of matchCategory.goals) {
+      const existing = groupedGoals.get(goal.playerId);
+      if (existing) {
+        existing.goals += 1;
+      } else {
+        groupedGoals.set(goal.playerId, {
+          playerId: goal.playerId,
+          clubId: goal.clubId,
+          goals: 1,
+          player: {
+            id: goal.playerId,
+            firstName: goal.player.firstName,
+            lastName: goal.player.lastName
+          }
+        });
+      }
+    }
+
+    return {
+      matchId,
+      tournamentCategoryId,
+      homeClubId: matchCategory.match.homeClubId,
+      awayClubId: matchCategory.match.awayClubId,
+      homeScore: matchCategory.homeScore,
+      awayScore: matchCategory.awayScore,
+      playerGoals: Array.from(groupedGoals.values()),
+      otherGoals: matchCategory.otherGoals.map((goal) => ({
+        clubId: goal.clubId,
+        goals: goal.goals
+      }))
+    };
   }
 
   async updateMatch(matchId: number, dto: UpdateMatchDto) {

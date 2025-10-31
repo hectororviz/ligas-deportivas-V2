@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Gender, Prisma } from '@prisma/client';
+import { Gender, Prisma, ZoneStatus } from '@prisma/client';
+import { Express } from 'express';
 
 import { slugify } from '../../common/utils/slugify';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -10,12 +11,19 @@ import { UpdateClubTeamsDto } from '../dto/update-club-teams.dto';
 import { ListRosterPlayersDto } from '../dto/list-roster-players.dto';
 import { UpdateRosterPlayersDto } from '../dto/update-roster-players.dto';
 import { JoinTournamentDto } from '../dto/join-tournament.dto';
+import { StorageService } from '../../storage/storage.service';
+
+const CLUB_LOGO_SIZE = 200;
+const MAX_LOGO_BYTES = 512 * 1024;
 
 interface FindClubsInput extends ListClubsDto {}
 
 @Injectable()
 export class ClubsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storageService: StorageService,
+  ) {}
 
   private readonly defaultInclude: Prisma.ClubInclude = {
     league: true,
@@ -42,7 +50,7 @@ export class ClubsService {
           primaryColor: dto.primaryColor?.toUpperCase(),
           secondaryColor: dto.secondaryColor?.toUpperCase(),
           active: dto.active ?? true,
-          logoUrl: dto.logoUrl?.trim(),
+          logoUrl: this.normalizeLogoUrl(dto.logoUrl),
           instagramUrl: this.normalizeSocial(dto.instagram, 'instagram'),
           facebookUrl: this.normalizeSocial(dto.facebook, 'facebook'),
           latitude: dto.latitude,
@@ -146,6 +154,40 @@ export class ClubsService {
       });
     });
 
+    const clubZones = await this.prisma.clubZone.findMany({
+      where: { clubId: club.id },
+      include: {
+        zone: {
+          select: {
+            id: true,
+            name: true,
+            status: true,
+            tournamentId: true,
+          },
+        },
+      },
+    });
+
+    const zoneAssignments = new Map<
+      number,
+      {
+        id: number;
+        name: string;
+        status: ZoneStatus;
+      }
+    >();
+
+    for (const assignment of clubZones) {
+      if (!assignment.zone) {
+        continue;
+      }
+      zoneAssignments.set(assignment.zone.tournamentId, {
+        id: assignment.zone.id,
+        name: assignment.zone.name,
+        status: assignment.zone.status,
+      });
+    }
+
     const processedCategories = new Set<number>();
     const tournamentsMap = new Map<
       number,
@@ -212,17 +254,32 @@ export class ClubsService {
       });
     }
 
-    const tournaments = Array.from(tournamentsMap.values()).map((tournament) => ({
-      ...tournament,
-      categories: tournament.categories.sort((a, b) => a.categoryName.localeCompare(b.categoryName)),
-    }));
-
-    tournaments.sort((a, b) => {
-      if (a.year !== b.year) {
-        return b.year - a.year;
-      }
-      return a.name.localeCompare(b.name);
-    });
+    const tournaments = Array.from(tournamentsMap.values())
+      .map((tournament) => ({
+        ...tournament,
+        categories: tournament.categories
+          .sort((a, b) => a.categoryName.localeCompare(b.categoryName)),
+      }))
+      .map((tournament) => {
+        const zone = zoneAssignments.get(tournament.id);
+        return {
+          ...tournament,
+          zone: zone
+            ? {
+                id: zone.id,
+                name: zone.name,
+                status: zone.status,
+              }
+            : null,
+          canLeave: !zone || zone.status === ZoneStatus.OPEN,
+        };
+      })
+      .sort((a, b) => {
+        if (a.year !== b.year) {
+          return b.year - a.year;
+        }
+        return a.name.localeCompare(b.name);
+      });
 
     return {
       club: {
@@ -287,8 +344,8 @@ export class ClubsService {
     const skip = (page - 1) * pageSize;
 
     const category = tournamentCategory.category;
-    const startDate = new Date(category.birthYearMin, 0, 1);
-    const endDate = new Date(category.birthYearMax, 11, 31, 23, 59, 59, 999);
+    const startDate = new Date(Date.UTC(category.birthYearMin, 0, 1));
+    const endDate = new Date(Date.UTC(category.birthYearMax, 11, 31, 23, 59, 59, 999));
 
     const where: Prisma.PlayerWhereInput = {
       clubId,
@@ -376,8 +433,8 @@ export class ClubsService {
     }
 
     const category = tournamentCategory.category;
-    const startDate = new Date(category.birthYearMin, 0, 1);
-    const endDate = new Date(category.birthYearMax, 11, 31, 23, 59, 59, 999);
+    const startDate = new Date(Date.UTC(category.birthYearMin, 0, 1));
+    const endDate = new Date(Date.UTC(category.birthYearMax, 11, 31, 23, 59, 59, 999));
 
     const uniquePlayerIds = Array.from(new Set(dto.playerIds ?? []));
 
@@ -566,6 +623,110 @@ export class ClubsService {
     };
   }
 
+  async leaveTournament(clubId: number, tournamentId: number) {
+    const club = await this.prisma.club.findUnique({ where: { id: clubId } });
+    if (!club) {
+      throw new NotFoundException('Club no encontrado');
+    }
+
+    const tournament = await this.prisma.tournament.findUnique({ where: { id: tournamentId } });
+    if (!tournament) {
+      throw new NotFoundException('Torneo no encontrado');
+    }
+
+    const teams = await this.prisma.team.findMany({
+      where: {
+        clubId,
+        tournamentCategory: { tournamentId },
+      },
+      select: {
+        id: true,
+        tournamentCategoryId: true,
+      },
+    });
+
+    if (!teams.length) {
+      throw new BadRequestException('El club no participa en este torneo.');
+    }
+
+    const tournamentCategoryIds = teams.map((team) => team.tournamentCategoryId);
+
+    const zoneAssignments = await this.prisma.clubZone.findMany({
+      where: {
+        clubId,
+        zone: { tournamentId },
+      },
+      include: {
+        zone: {
+          select: {
+            id: true,
+            status: true,
+          },
+        },
+      },
+    });
+
+    const blockedZone = zoneAssignments.find(
+      (assignment) => assignment.zone?.status && assignment.zone.status !== ZoneStatus.OPEN,
+    );
+    if (blockedZone) {
+      throw new BadRequestException(
+        'No se puede eliminar al club del torneo porque su zona no está abierta.',
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      if (zoneAssignments.length) {
+        const zoneIds = zoneAssignments
+          .map((assignment) => assignment.zone?.id)
+          .filter((id): id is number => typeof id === 'number');
+
+        if (zoneIds.length) {
+          await tx.categoryStanding.deleteMany({
+            where: {
+              zoneId: { in: zoneIds },
+              tournamentCategoryId: { in: tournamentCategoryIds },
+              clubId,
+            },
+          });
+
+          await tx.clubZone.deleteMany({
+            where: {
+              clubId,
+              zoneId: { in: zoneIds },
+            },
+          });
+        }
+      }
+
+      const rosters = await tx.roster.findMany({
+        where: {
+          clubId,
+          tournamentCategoryId: { in: tournamentCategoryIds },
+        },
+        select: { id: true },
+      });
+
+      if (rosters.length) {
+        const rosterIds = rosters.map((roster) => roster.id);
+        await tx.rosterPlayer.deleteMany({ where: { rosterId: { in: rosterIds } } });
+        await tx.roster.deleteMany({ where: { id: { in: rosterIds } } });
+      }
+
+      await tx.team.deleteMany({
+        where: {
+          clubId,
+          tournamentCategory: { tournamentId },
+        },
+      });
+    });
+
+    return {
+      tournamentId,
+      removedCategories: tournamentCategoryIds,
+    };
+  }
+
   async update(id: number, dto: UpdateClubDto) {
     const existing = await this.prisma.club.findUnique({ where: { id } });
     if (!existing) {
@@ -605,7 +766,11 @@ export class ClubsService {
         data.active = dto.active;
       }
       if (Object.prototype.hasOwnProperty.call(dto, 'logoUrl')) {
-        data.logoUrl = dto.logoUrl?.trim() ?? null;
+        if (existing.logoKey) {
+          await this.storageService.deleteAttachment(existing.logoKey);
+        }
+        data.logoKey = null;
+        data.logoUrl = this.normalizeLogoUrl(dto.logoUrl);
       }
       if (Object.prototype.hasOwnProperty.call(dto, 'instagram')) {
         data.instagramUrl = this.normalizeSocial(dto.instagram, 'instagram');
@@ -699,6 +864,91 @@ export class ClubsService {
         { publicName: 'asc' },
       ],
     });
+  }
+
+  async updateLogo(clubId: number, file?: Express.Multer.File) {
+    const club = await this.prisma.club.findUnique({ where: { id: clubId } });
+    if (!club) {
+      throw new NotFoundException('Club no encontrado');
+    }
+
+    if (!file) {
+      throw new BadRequestException('No se recibió un archivo de escudo.');
+    }
+
+    this.validateLogoFile(file);
+
+    if (club.logoKey) {
+      await this.storageService.deleteAttachment(club.logoKey);
+    }
+
+    const key = await this.storageService.saveAttachment(file);
+    const logoUrl = this.storageService.getPublicUrl(key);
+
+    return this.prisma.club.update({
+      where: { id: clubId },
+      data: {
+        logoKey: key,
+        logoUrl,
+      },
+      include: this.defaultInclude,
+    });
+  }
+
+  async removeLogo(clubId: number) {
+    const club = await this.prisma.club.findUnique({ where: { id: clubId } });
+    if (!club) {
+      throw new NotFoundException('Club no encontrado');
+    }
+
+    if (club.logoKey) {
+      await this.storageService.deleteAttachment(club.logoKey);
+    }
+
+    return this.prisma.club.update({
+      where: { id: clubId },
+      data: {
+        logoKey: null,
+        logoUrl: null,
+      },
+      include: this.defaultInclude,
+    });
+  }
+
+  private validateLogoFile(file: Express.Multer.File) {
+    if (file.mimetype !== 'image/png') {
+      throw new BadRequestException('El escudo debe estar en formato PNG.');
+    }
+
+    if (file.size > MAX_LOGO_BYTES) {
+      throw new BadRequestException('El escudo supera el tamaño máximo permitido de 512 KB.');
+    }
+
+    const buffer = file.buffer;
+    if (!buffer || buffer.length < 24) {
+      throw new BadRequestException('El archivo de escudo es inválido.');
+    }
+
+    const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    if (!buffer.subarray(0, 8).equals(signature)) {
+      throw new BadRequestException('El escudo debe ser un archivo PNG válido.');
+    }
+
+    const width = buffer.readUInt32BE(16);
+    const height = buffer.readUInt32BE(20);
+
+    if (width !== height) {
+      throw new BadRequestException('El escudo debe ser una imagen cuadrada de 200x200 píxeles.');
+    }
+
+    if (width !== CLUB_LOGO_SIZE || height !== CLUB_LOGO_SIZE) {
+      throw new BadRequestException(`El escudo debe medir exactamente ${CLUB_LOGO_SIZE}x${CLUB_LOGO_SIZE} píxeles.`);
+    }
+  }
+
+  private normalizeLogoUrl(value?: string | null) {
+    const trimmed = value?.trim();
+    return trimmed && trimmed.length > 0 ? trimmed : null;
   }
 
   private async ensureUniqueName(name: string, leagueId?: number | null, excludeId?: number) {

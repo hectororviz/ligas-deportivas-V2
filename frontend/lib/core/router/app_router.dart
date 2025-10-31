@@ -17,11 +17,14 @@ import '../../features/settings/league_colors_page.dart';
 import '../../features/settings/role_permissions_page.dart';
 import '../../features/settings/settings_page.dart';
 import '../../features/settings/account_settings_page.dart';
+import '../../features/settings/site_identity_page.dart';
 import '../../features/shared/widgets/app_shell.dart';
 import '../../features/standings/presentation/standings_page.dart';
 import '../../features/tournaments/presentation/tournaments_page.dart';
 import '../../features/zones/presentation/zones_page.dart';
+import '../../features/zones/domain/zone_match_models.dart';
 import '../../features/zones/presentation/zone_fixture_page.dart';
+import '../../features/zones/presentation/zone_match_detail_page.dart';
 import '../../services/auth_controller.dart';
 
 class GoRouterRefreshStream extends ChangeNotifier {
@@ -84,6 +87,30 @@ GoRouter createRouter(Ref ref) {
               }
               return ZoneFixturePage(zoneId: zoneId);
             },
+            routes: [
+              GoRoute(
+                path: 'matches/:matchId',
+                builder: (context, state) {
+                  final zoneParam = state.pathParameters['zoneId'];
+                  final matchParam = state.pathParameters['matchId'];
+                  final zoneId = zoneParam != null ? int.tryParse(zoneParam) : null;
+                  final matchId = matchParam != null ? int.tryParse(matchParam) : null;
+                  if (zoneId == null || matchId == null) {
+                    return const Center(child: Text('Partido no válido'));
+                  }
+                  final extra = state.extra;
+                  ZoneMatch? initialMatch;
+                  if (extra is ZoneMatch) {
+                    initialMatch = extra;
+                  }
+                  return ZoneMatchDetailPage(
+                    zoneId: zoneId,
+                    matchId: matchId,
+                    initialMatch: initialMatch,
+                  );
+                },
+              ),
+            ],
           ),
           GoRoute(path: '/fixtures', builder: (context, state) => const FixturesPage()),
           GoRoute(path: '/results', builder: (context, state) => const ResultsPage()),
@@ -92,6 +119,10 @@ GoRouter createRouter(Ref ref) {
             path: '/settings',
             builder: (context, state) => const SettingsPage(),
             routes: [
+              GoRoute(
+                path: 'identity',
+                builder: (context, state) => const SiteIdentityPage(),
+              ),
               GoRoute(
                 path: 'account',
                 builder: (context, state) => const AccountSettingsPage(),

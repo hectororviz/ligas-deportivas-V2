@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
@@ -8,7 +9,9 @@ import {
   Post,
   Put,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { ClubsService } from '../services/clubs.service';
 import { CreateClubDto } from '../dto/create-club.dto';
@@ -22,6 +25,8 @@ import { UpdateClubDto } from '../dto/update-club.dto';
 import { ListRosterPlayersDto } from '../dto/list-roster-players.dto';
 import { UpdateRosterPlayersDto } from '../dto/update-roster-players.dto';
 import { JoinTournamentDto } from '../dto/join-tournament.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Express } from 'express';
 
 @Controller()
 export class ClubsController {
@@ -77,6 +82,16 @@ export class ClubsController {
     return this.clubsService.joinTournament(clubId, dto);
   }
 
+  @Delete('clubs/:clubId/tournaments/:tournamentId')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @Permissions({ module: Module.CLUBES, action: Action.UPDATE })
+  leaveTournament(
+    @Param('clubId', ParseIntPipe) clubId: number,
+    @Param('tournamentId', ParseIntPipe) tournamentId: number,
+  ) {
+    return this.clubsService.leaveTournament(clubId, tournamentId);
+  }
+
   @Post('clubs')
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @Permissions({ module: Module.CLUBES, action: Action.CREATE })
@@ -96,5 +111,23 @@ export class ClubsController {
   @Permissions({ module: Module.CLUBES, action: Action.UPDATE })
   updateTeams(@Param('id', ParseIntPipe) clubId: number, @Body() dto: UpdateClubTeamsDto) {
     return this.clubsService.updateTeams(clubId, dto);
+  }
+
+  @Put('clubs/:id/logo')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @Permissions({ module: Module.CLUBES, action: Action.UPDATE })
+  @UseInterceptors(FileInterceptor('logo'))
+  uploadLogo(
+    @Param('id', ParseIntPipe) clubId: number,
+    @UploadedFile() logo?: Express.Multer.File,
+  ) {
+    return this.clubsService.updateLogo(clubId, logo);
+  }
+
+  @Delete('clubs/:id/logo')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @Permissions({ module: Module.CLUBES, action: Action.UPDATE })
+  removeLogo(@Param('id', ParseIntPipe) clubId: number) {
+    return this.clubsService.removeLogo(clubId);
   }
 }

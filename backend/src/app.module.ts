@@ -11,13 +11,14 @@ import { StorageModule } from './storage/storage.module';
 import { MailModule } from './mail/mail.module';
 import { CaptchaModule } from './captcha/captcha.module';
 import { MeModule } from './me/me.module';
+import { SiteIdentityModule } from './site-identity/site-identity.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       load: [configuration],
-      validationSchema
+      validationSchema,
     }),
     PrismaModule,
     MailModule,
@@ -27,7 +28,8 @@ import { MeModule } from './me/me.module';
     AuthModule,
     UsersModule,
     CompetitionModule,
-    MeModule
-  ]
+    MeModule,
+    SiteIdentityModule,
+  ],
 })
 export class AppModule {}
