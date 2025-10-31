@@ -856,13 +856,14 @@ class _ClubsErrorState extends StatelessWidget {
   }
 }
 
-class _ClubDetailsView extends StatelessWidget {
+class _ClubDetailsView extends ConsumerWidget {
   const _ClubDetailsView({required this.club});
 
   final Club club;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final headers = _buildImageHeaders(ref);
     return SizedBox(
       width: 640,
       child: Column(

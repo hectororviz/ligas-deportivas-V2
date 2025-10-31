@@ -352,6 +352,9 @@ class _ClubLogo extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final token = ref.read(authControllerProvider).accessToken;
+    final headers =
+        token == null || token.isEmpty ? null : {'Authorization': 'Bearer $token'};
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: Container(
