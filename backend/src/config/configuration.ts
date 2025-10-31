@@ -26,7 +26,7 @@ export default () => ({
     from: process.env.SMTP_FROM ?? 'noreply@ligas.local'
   },
   storage: {
-    baseUrl: process.env.STORAGE_BASE_URL ?? '',
+    baseUrl: process.env.STORAGE_BASE_URL || process.env.APP_URL || 'http://localhost:3000',
     bucket: process.env.STORAGE_BUCKET ?? '',
     accessKey: process.env.STORAGE_ACCESS_KEY ?? '',
     secretKey: process.env.STORAGE_SECRET_KEY ?? ''
