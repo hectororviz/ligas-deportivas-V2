@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Put,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -14,6 +15,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard } from '../rbac/permissions.guard';
 import { Permissions } from '../common/decorators/permissions.decorator';
 import { Action, Module } from '@prisma/client';
+import { Response } from 'express';
 
 @Controller('site-identity')
 export class SiteIdentityController {
@@ -22,6 +24,14 @@ export class SiteIdentityController {
   @Get()
   getIdentity() {
     return this.siteIdentityService.getIdentity();
+  }
+
+  @Get('icon')
+  async getIcon(@Res() res: Response) {
+    const file = await this.siteIdentityService.getIconFile();
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.type(file.mimeType);
+    return res.sendFile(file.path);
   }
 
   @Put()

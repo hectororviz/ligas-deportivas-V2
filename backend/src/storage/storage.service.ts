@@ -6,14 +6,15 @@ import { randomUUID } from 'crypto';
 
 @Injectable()
 export class StorageService {
+  private readonly storageRoot: string;
   private readonly uploadDir: string;
   private readonly avatarDir: string;
   private readonly baseUrl?: string;
 
   constructor(private readonly configService: ConfigService) {
-    const storageRoot = path.resolve(process.cwd(), 'storage');
-    this.uploadDir = path.join(storageRoot, 'uploads');
-    this.avatarDir = path.join(storageRoot, 'avatars');
+    this.storageRoot = path.resolve(process.cwd(), 'storage');
+    this.uploadDir = path.join(this.storageRoot, 'uploads');
+    this.avatarDir = path.join(this.storageRoot, 'avatars');
     this.baseUrl = this.configService.get<string>('storage.baseUrl');
   }
 
@@ -30,9 +31,12 @@ export class StorageService {
     if (!key) {
       return;
     }
-    const normalizedKey = key.replace(/^\/+/, '');
-    const filePath = path.join(process.cwd(), 'storage', normalizedKey);
-    await fs.rm(filePath, { force: true });
+    try {
+      const filePath = this.resolveAttachmentPath(key);
+      await fs.rm(filePath, { force: true });
+    } catch {
+      return;
+    }
   }
 
   async clearAvatarVariants(userId: number) {
@@ -60,5 +64,15 @@ export class StorageService {
       return `${this.baseUrl.replace(/\/$/, '')}/${normalizedKey}`;
     }
     return `/storage/${normalizedKey}`;
+  }
+
+  resolveAttachmentPath(key: string) {
+    const normalizedKey = key.replace(/^\/+/, '');
+    const filePath = path.join(this.storageRoot, normalizedKey);
+    const relative = path.relative(this.storageRoot, filePath);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+      throw new Error('Invalid storage key');
+    }
+    return filePath;
   }
 }
