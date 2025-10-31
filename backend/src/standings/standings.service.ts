@@ -389,8 +389,8 @@ export class StandingsService {
       return group;
     });
 
-    categoryRows.sort(
-      (a, b) => a.categoryName.toLowerCase().compareTo(b.categoryName.toLowerCase()),
+    categoryRows.sort((a, b) =>
+      a.categoryName.toLowerCase().localeCompare(b.categoryName.toLowerCase()),
     );
 
     return {
