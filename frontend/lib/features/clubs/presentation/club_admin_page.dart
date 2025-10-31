@@ -34,6 +34,8 @@ class ClubAdminPage extends ConsumerStatefulWidget {
 }
 
 class _ClubAdminPageState extends ConsumerState<ClubAdminPage> {
+  int? _leavingTournamentId;
+
   Future<void> _openJoinTournamentDialog(ClubAdminOverview overview) async {
     final result = await showDialog<bool>(
       context: context,
@@ -95,6 +97,75 @@ class _ClubAdminPageState extends ConsumerState<ClubAdminPage> {
     );
   }
 
+  Future<void> _confirmLeaveTournament(
+    ClubAdminOverview overview,
+    ClubAdminTournament tournament,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Eliminar del torneo'),
+        content: Text(
+          '¿Estás seguro de eliminar al club del torneo ${tournament.name}? Esta acción quitará todas las categorías asociadas.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
+            ),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    setState(() {
+      _leavingTournamentId = tournament.id;
+    });
+
+    try {
+      final api = ref.read(apiClientProvider);
+      await api.delete(
+        '/clubs/${overview.club.id}/tournaments/${tournament.id}',
+      );
+      ref.invalidate(clubAdminOverviewProvider(widget.slug));
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('El club fue eliminado del torneo ${tournament.name}.'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo eliminar el club del torneo: $error'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _leavingTournamentId = null;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authControllerProvider);
@@ -121,10 +192,13 @@ class _ClubAdminPageState extends ConsumerState<ClubAdminPage> {
             return _ClubAdminContent(
               overview: overview,
               isAdmin: isAdmin,
+              leavingTournamentId: _leavingTournamentId,
               onEditCategory: (tournament, category) =>
                   _openRosterEditor(overview, tournament, category),
               onViewCategory: (tournament, category) =>
                   _openRosterViewer(overview, tournament, category),
+              onRemoveTournament: (tournament) =>
+                  _confirmLeaveTournament(overview, tournament),
             );
           },
           loading: () => const Center(child: CircularProgressIndicator()),
@@ -142,16 +216,20 @@ class _ClubAdminContent extends StatelessWidget {
   const _ClubAdminContent({
     required this.overview,
     required this.isAdmin,
+    required this.leavingTournamentId,
     required this.onEditCategory,
     required this.onViewCategory,
+    required this.onRemoveTournament,
   });
 
   final ClubAdminOverview overview;
   final bool isAdmin;
+  final int? leavingTournamentId;
   final void Function(ClubAdminTournament tournament, ClubAdminCategory category)
       onEditCategory;
   final void Function(ClubAdminTournament tournament, ClubAdminCategory category)
       onViewCategory;
+  final void Function(ClubAdminTournament tournament) onRemoveTournament;
 
   @override
   Widget build(BuildContext context) {
@@ -180,8 +258,10 @@ class _ClubAdminContent extends StatelessWidget {
             _ClubTournamentsAccordion(
               tournaments: overview.tournaments,
               isAdmin: isAdmin,
+              leavingTournamentId: leavingTournamentId,
               onEditCategory: onEditCategory,
               onViewCategory: onViewCategory,
+              onRemoveTournament: onRemoveTournament,
             ),
         ],
       ),
@@ -504,16 +584,20 @@ class _ClubTournamentsAccordion extends StatefulWidget {
   const _ClubTournamentsAccordion({
     required this.tournaments,
     required this.isAdmin,
+    required this.leavingTournamentId,
     required this.onEditCategory,
     required this.onViewCategory,
+    required this.onRemoveTournament,
   });
 
   final List<ClubAdminTournament> tournaments;
   final bool isAdmin;
+  final int? leavingTournamentId;
   final void Function(ClubAdminTournament tournament, ClubAdminCategory category)
       onEditCategory;
   final void Function(ClubAdminTournament tournament, ClubAdminCategory category)
       onViewCategory;
+  final void Function(ClubAdminTournament tournament) onRemoveTournament;
 
   @override
   State<_ClubTournamentsAccordion> createState() => _ClubTournamentsAccordionState();
@@ -557,8 +641,10 @@ class _ClubTournamentsAccordionState extends State<_ClubTournamentsAccordion> {
               body: _TournamentCategoriesList(
                 tournament: widget.tournaments[i],
                 isAdmin: widget.isAdmin,
+                isRemoving: widget.leavingTournamentId == widget.tournaments[i].id,
                 onEditCategory: widget.onEditCategory,
                 onViewCategory: widget.onViewCategory,
+                onRemoveTournament: widget.onRemoveTournament,
               ),
             ),
         ],
@@ -571,41 +657,101 @@ class _TournamentCategoriesList extends StatelessWidget {
   const _TournamentCategoriesList({
     required this.tournament,
     required this.isAdmin,
+    required this.isRemoving,
     required this.onEditCategory,
     required this.onViewCategory,
+    required this.onRemoveTournament,
   });
 
   final ClubAdminTournament tournament;
   final bool isAdmin;
+  final bool isRemoving;
   final void Function(ClubAdminTournament tournament, ClubAdminCategory category)
       onEditCategory;
   final void Function(ClubAdminTournament tournament, ClubAdminCategory category)
       onViewCategory;
+  final void Function(ClubAdminTournament tournament) onRemoveTournament;
 
   @override
   Widget build(BuildContext context) {
-    if (tournament.categories.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-        child: Text(
-          'Este club aún no tiene categorías asignadas en este torneo.',
-          style: Theme.of(context).textTheme.bodyMedium,
-        ),
-      );
-    }
+    final theme = Theme.of(context);
+    final zone = tournament.zone;
+    final showHeader = zone != null || isAdmin;
+    final hasCategories = tournament.categories.isNotEmpty;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (final category in tournament.categories)
-            _CategoryRow(
-              tournament: tournament,
-              category: category,
-              isAdmin: isAdmin,
-              onEditCategory: onEditCategory,
-              onViewCategory: onViewCategory,
+          if (showHeader)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 16, 8, 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          zone != null ? 'Zona asignada' : 'Sin zona asignada',
+                          style: theme.textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          zone != null
+                              ? '${zone.name} · ${zone.statusLabel}'
+                              : 'El club no está asignado a ninguna zona en este torneo.',
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (isAdmin && tournament.canLeave)
+                    FilledButton.tonalIcon(
+                      onPressed:
+                          isRemoving ? null : () => onRemoveTournament(tournament),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: theme.colorScheme.errorContainer,
+                        foregroundColor: theme.colorScheme.onErrorContainer,
+                      ),
+                      icon: isRemoving
+                          ? SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation(
+                                  theme.colorScheme.onErrorContainer,
+                                ),
+                              ),
+                            )
+                          : const Icon(Icons.delete_outline),
+                      label: Text(isRemoving ? 'Eliminando…' : 'Eliminar del torneo'),
+                    ),
+                ],
+              ),
             ),
+          if (!showHeader) const SizedBox(height: 16),
+          if (!hasCategories)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Text(
+                'Este club aún no tiene categorías asignadas en este torneo.',
+                style: theme.textTheme.bodyMedium,
+              ),
+            )
+          else
+            for (final category in tournament.categories)
+              _CategoryRow(
+                tournament: tournament,
+                category: category,
+                isAdmin: isAdmin,
+                onEditCategory: onEditCategory,
+                onViewCategory: onViewCategory,
+              ),
         ],
       ),
     );
@@ -762,6 +908,8 @@ class ClubAdminTournament {
     required this.leagueId,
     required this.leagueName,
     required this.categories,
+    this.zone,
+    required this.canLeave,
   });
 
   factory ClubAdminTournament.fromJson(Map<String, dynamic> json) {
@@ -774,6 +922,10 @@ class ClubAdminTournament {
       categories: (json['categories'] as List<dynamic>? ?? [])
           .map((item) => ClubAdminCategory.fromJson(item as Map<String, dynamic>))
           .toList(),
+      zone: json['zone'] is Map<String, dynamic>
+          ? ClubAdminZone.fromJson(json['zone'] as Map<String, dynamic>)
+          : null,
+      canLeave: json['canLeave'] as bool? ?? false,
     );
   }
 
@@ -783,12 +935,50 @@ class ClubAdminTournament {
   final int leagueId;
   final String leagueName;
   final List<ClubAdminCategory> categories;
+  final ClubAdminZone? zone;
+  final bool canLeave;
 
   bool get isCompliant => categories.every((category) => category.isCompliant);
 
   int get mandatoryCount => categories.where((category) => category.mandatory).length;
   int get mandatoryReadyCount =>
       categories.where((category) => category.mandatory && category.isCompliant).length;
+}
+
+class ClubAdminZone {
+  ClubAdminZone({
+    required this.id,
+    required this.name,
+    required this.status,
+  });
+
+  factory ClubAdminZone.fromJson(Map<String, dynamic> json) {
+    return ClubAdminZone(
+      id: json['id'] as int,
+      name: json['name'] as String? ?? '—',
+      status: json['status'] as String? ?? 'OPEN',
+    );
+  }
+
+  final int id;
+  final String name;
+  final String status;
+
+  bool get isOpen => status == 'OPEN';
+
+  String get statusLabel {
+    switch (status) {
+      case 'IN_PROGRESS':
+        return 'En progreso';
+      case 'PLAYING':
+        return 'En juego';
+      case 'FINISHED':
+        return 'Finalizada';
+      case 'OPEN':
+      default:
+        return 'Abierta';
+    }
+  }
 }
 
 class ClubAdminCategory {
