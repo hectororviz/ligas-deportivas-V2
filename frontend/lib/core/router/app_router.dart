@@ -85,7 +85,9 @@ GoRouter createRouter(Ref ref) {
               if (zoneId == null) {
                 return const Center(child: Text('Zona no válida'));
               }
-              return ZoneFixturePage(zoneId: zoneId);
+              final extra = state.extra;
+              final viewOnly = extra is ZoneFixturePageArgs ? extra.viewOnly : false;
+              return ZoneFixturePage(zoneId: zoneId, viewOnly: viewOnly);
             },
             routes: [
               GoRoute(
