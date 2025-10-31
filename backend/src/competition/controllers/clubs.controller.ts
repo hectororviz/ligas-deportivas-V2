@@ -82,6 +82,16 @@ export class ClubsController {
     return this.clubsService.joinTournament(clubId, dto);
   }
 
+  @Delete('clubs/:clubId/tournaments/:tournamentId')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @Permissions({ module: Module.CLUBES, action: Action.UPDATE })
+  leaveTournament(
+    @Param('clubId', ParseIntPipe) clubId: number,
+    @Param('tournamentId', ParseIntPipe) tournamentId: number,
+  ) {
+    return this.clubsService.leaveTournament(clubId, tournamentId);
+  }
+
   @Post('clubs')
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @Permissions({ module: Module.CLUBES, action: Action.CREATE })

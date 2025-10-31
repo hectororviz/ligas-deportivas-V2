@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Gender, Prisma } from '@prisma/client';
+import { Gender, Prisma, ZoneStatus } from '@prisma/client';
 import { Express } from 'express';
 
 import { slugify } from '../../common/utils/slugify';
@@ -154,6 +154,40 @@ export class ClubsService {
       });
     });
 
+    const clubZones = await this.prisma.clubZone.findMany({
+      where: { clubId: club.id },
+      include: {
+        zone: {
+          select: {
+            id: true,
+            name: true,
+            status: true,
+            tournamentId: true,
+          },
+        },
+      },
+    });
+
+    const zoneAssignments = new Map<
+      number,
+      {
+        id: number;
+        name: string;
+        status: ZoneStatus;
+      }
+    >();
+
+    for (const assignment of clubZones) {
+      if (!assignment.zone) {
+        continue;
+      }
+      zoneAssignments.set(assignment.zone.tournamentId, {
+        id: assignment.zone.id,
+        name: assignment.zone.name,
+        status: assignment.zone.status,
+      });
+    }
+
     const processedCategories = new Set<number>();
     const tournamentsMap = new Map<
       number,
@@ -220,17 +254,32 @@ export class ClubsService {
       });
     }
 
-    const tournaments = Array.from(tournamentsMap.values()).map((tournament) => ({
-      ...tournament,
-      categories: tournament.categories.sort((a, b) => a.categoryName.localeCompare(b.categoryName)),
-    }));
-
-    tournaments.sort((a, b) => {
-      if (a.year !== b.year) {
-        return b.year - a.year;
-      }
-      return a.name.localeCompare(b.name);
-    });
+    const tournaments = Array.from(tournamentsMap.values())
+      .map((tournament) => ({
+        ...tournament,
+        categories: tournament.categories
+          .sort((a, b) => a.categoryName.localeCompare(b.categoryName)),
+      }))
+      .map((tournament) => {
+        const zone = zoneAssignments.get(tournament.id);
+        return {
+          ...tournament,
+          zone: zone
+            ? {
+                id: zone.id,
+                name: zone.name,
+                status: zone.status,
+              }
+            : null,
+          canLeave: !zone || zone.status === ZoneStatus.OPEN,
+        };
+      })
+      .sort((a, b) => {
+        if (a.year !== b.year) {
+          return b.year - a.year;
+        }
+        return a.name.localeCompare(b.name);
+      });
 
     return {
       club: {
@@ -571,6 +620,110 @@ export class ClubsService {
     return {
       tournamentId: tournament.id,
       categories: assignments.map((assignment) => assignment.id),
+    };
+  }
+
+  async leaveTournament(clubId: number, tournamentId: number) {
+    const club = await this.prisma.club.findUnique({ where: { id: clubId } });
+    if (!club) {
+      throw new NotFoundException('Club no encontrado');
+    }
+
+    const tournament = await this.prisma.tournament.findUnique({ where: { id: tournamentId } });
+    if (!tournament) {
+      throw new NotFoundException('Torneo no encontrado');
+    }
+
+    const teams = await this.prisma.team.findMany({
+      where: {
+        clubId,
+        tournamentCategory: { tournamentId },
+      },
+      select: {
+        id: true,
+        tournamentCategoryId: true,
+      },
+    });
+
+    if (!teams.length) {
+      throw new BadRequestException('El club no participa en este torneo.');
+    }
+
+    const tournamentCategoryIds = teams.map((team) => team.tournamentCategoryId);
+
+    const zoneAssignments = await this.prisma.clubZone.findMany({
+      where: {
+        clubId,
+        zone: { tournamentId },
+      },
+      include: {
+        zone: {
+          select: {
+            id: true,
+            status: true,
+          },
+        },
+      },
+    });
+
+    const blockedZone = zoneAssignments.find(
+      (assignment) => assignment.zone?.status && assignment.zone.status !== ZoneStatus.OPEN,
+    );
+    if (blockedZone) {
+      throw new BadRequestException(
+        'No se puede eliminar al club del torneo porque su zona no está abierta.',
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      if (zoneAssignments.length) {
+        const zoneIds = zoneAssignments
+          .map((assignment) => assignment.zone?.id)
+          .filter((id): id is number => typeof id === 'number');
+
+        if (zoneIds.length) {
+          await tx.categoryStanding.deleteMany({
+            where: {
+              zoneId: { in: zoneIds },
+              tournamentCategoryId: { in: tournamentCategoryIds },
+              clubId,
+            },
+          });
+
+          await tx.clubZone.deleteMany({
+            where: {
+              clubId,
+              zoneId: { in: zoneIds },
+            },
+          });
+        }
+      }
+
+      const rosters = await tx.roster.findMany({
+        where: {
+          clubId,
+          tournamentCategoryId: { in: tournamentCategoryIds },
+        },
+        select: { id: true },
+      });
+
+      if (rosters.length) {
+        const rosterIds = rosters.map((roster) => roster.id);
+        await tx.rosterPlayer.deleteMany({ where: { rosterId: { in: rosterIds } } });
+        await tx.roster.deleteMany({ where: { id: { in: rosterIds } } });
+      }
+
+      await tx.team.deleteMany({
+        where: {
+          clubId,
+          tournamentCategory: { tournamentId },
+        },
+      });
+    });
+
+    return {
+      tournamentId,
+      removedCategories: tournamentCategoryIds,
     };
   }
 
