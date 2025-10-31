@@ -1397,13 +1397,13 @@ class _CategorySelectionTableState extends State<_CategorySelectionTable> {
               DataCell(
                 Align(
                   alignment: Alignment.center,
-                  child: selection.category.promotional
-                      ? Icon(
+                  child: selection.countsForGeneral
+                      ? const SizedBox.shrink()
+                      : Icon(
                           Icons.check,
                           size: 18,
                           color: Theme.of(context).colorScheme.primary,
-                        )
-                      : const SizedBox.shrink(),
+                        ),
                 ),
               ),
               DataCell(
@@ -1477,6 +1477,18 @@ class _CategorySelectionTableState extends State<_CategorySelectionTable> {
       child: table,
     );
 
+    final decoratedTable = DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: Theme.of(context).dividerColor,
+            width: 1,
+          ),
+        ),
+      ),
+      child: constrainedTable,
+    );
+
     return Scrollbar(
       controller: _horizontalController,
       thumbVisibility: true,
@@ -1486,7 +1498,7 @@ class _CategorySelectionTableState extends State<_CategorySelectionTable> {
       child: SingleChildScrollView(
         controller: _horizontalController,
         scrollDirection: Axis.horizontal,
-        child: constrainedTable,
+        child: decoratedTable,
       ),
     );
   }
