@@ -11,6 +11,16 @@ class SettingsPage extends StatelessWidget {
       children: [
         Card(
           child: ListTile(
+            leading: const Icon(Icons.web_asset_outlined),
+            title: const Text('Identidad del sitio'),
+            subtitle: const Text('Personaliza el ícono y el título visibles en la plataforma.'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/settings/identity'),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          child: ListTile(
             leading: const Icon(Icons.person_outline),
             title: const Text('Perfil de usuario'),
             subtitle: const Text('Actualiza tus datos personales, idioma y avatar.'),
