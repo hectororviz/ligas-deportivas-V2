@@ -48,4 +48,36 @@ async function bootstrap() {
   await app.listen(port);
 }
 
-bootstrap();
+bootstrap().catch((error) => {
+  if (isPrismaConnectionError(error)) {
+    const databaseLocation = describeDatabaseLocation(process.env.DATABASE_URL);
+    const locationMessage = databaseLocation ? ` at ${databaseLocation}` : '';
+    console.error(
+      `Failed to connect to the database${locationMessage}. Ensure your database is running and that the DATABASE_URL environment variable matches your local setup.`
+    );
+  } else {
+    console.error(error);
+  }
+  process.exit(1);
+});
+
+function isPrismaConnectionError(error: unknown): error is { code?: string } {
+  if (typeof error === 'object' && error !== null && 'code' in error) {
+    const code = (error as { code?: unknown }).code;
+    return typeof code === 'string' && code.startsWith('P1');
+  }
+  return false;
+}
+
+function describeDatabaseLocation(databaseUrl?: string): string | undefined {
+  if (!databaseUrl) {
+    return undefined;
+  }
+
+  try {
+    const { hostname, port } = new URL(databaseUrl);
+    return port ? `${hostname}:${port}` : hostname;
+  } catch {
+    return undefined;
+  }
+}
