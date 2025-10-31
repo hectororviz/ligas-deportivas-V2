@@ -15,6 +15,7 @@ import 'package:latlong2/latlong.dart';
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
 import '../../shared/widgets/table_filters_bar.dart';
+import 'widgets/authenticated_image.dart';
 
 const _moduleClubes = 'CLUBES';
 const _actionCreate = 'CREATE';
@@ -641,25 +642,57 @@ class _ClubsPaginationFooter extends StatelessWidget {
   }
 }
 
-class _ClubAvatar extends StatelessWidget {
+class _ClubAvatar extends ConsumerWidget {
   const _ClubAvatar({required this.club});
 
   final Club club;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final primary = club.primaryColor ?? Theme.of(context).colorScheme.primary;
     final secondary =
         club.secondaryColor ?? Theme.of(context).colorScheme.primaryContainer;
-    return CircleAvatar(
-      radius: 24,
-      backgroundColor: secondary.withOpacity(0.3),
+    final fallback = _ClubAvatarInitials(
+      initials: club.initials,
+      color: primary,
+    );
+    final logoUrl = club.logoUrl;
+
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        color: secondary.withOpacity(0.3),
+        shape: BoxShape.circle,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: logoUrl != null && logoUrl.isNotEmpty
+          ? AuthenticatedImage(
+              imageUrl: logoUrl,
+              fit: BoxFit.cover,
+              placeholder: fallback,
+              error: fallback,
+            )
+          : fallback,
+    );
+  }
+}
+
+class _ClubAvatarInitials extends StatelessWidget {
+  const _ClubAvatarInitials({required this.initials, required this.color});
+
+  final String initials;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
       child: Text(
-        club.initials,
+        initials,
         style: Theme.of(context)
             .textTheme
             .titleMedium
-            ?.copyWith(color: primary, fontWeight: FontWeight.bold),
+            ?.copyWith(color: color, fontWeight: FontWeight.bold),
       ),
     );
   }
@@ -867,11 +900,29 @@ class _ClubDetailsView extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(20),
-                child: Image.network(
-                  club.logoUrl!,
+                child: AuthenticatedImage(
+                  imageUrl: club.logoUrl!,
                   width: _clubLogoSize,
                   height: _clubLogoSize,
                   fit: BoxFit.cover,
+                  placeholder: Container(
+                    width: _clubLogoSize,
+                    height: _clubLogoSize,
+                    color: Theme.of(context).colorScheme.surfaceVariant,
+                    alignment: Alignment.center,
+                    child: const CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  error: Container(
+                    width: _clubLogoSize,
+                    height: _clubLogoSize,
+                    color: Theme.of(context).colorScheme.surfaceVariant,
+                    alignment: Alignment.center,
+                    child: Icon(
+                      Icons.shield_outlined,
+                      size: 64,
+                      color: Theme.of(context).colorScheme.outlineVariant,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -1530,7 +1581,21 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
     if (_logoBytes != null) {
       child = Image.memory(_logoBytes!, fit: BoxFit.cover);
     } else if (_logoUrl != null && _logoUrl!.isNotEmpty && !_removeLogo) {
-      child = Image.network(_logoUrl!, fit: BoxFit.cover);
+      child = AuthenticatedImage(
+        imageUrl: _logoUrl!,
+        fit: BoxFit.cover,
+        placeholder: Center(
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ),
+        error: Icon(
+          Icons.shield_outlined,
+          size: 64,
+          color: Theme.of(context).colorScheme.outlineVariant,
+        ),
+      );
     } else {
       child = Icon(Icons.shield_outlined,
           size: 64, color: Theme.of(context).colorScheme.outlineVariant);
