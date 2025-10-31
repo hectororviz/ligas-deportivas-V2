@@ -15,6 +15,7 @@ import 'package:latlong2/latlong.dart';
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
 import '../../shared/widgets/table_filters_bar.dart';
+import 'widgets/authenticated_image.dart';
 
 const _moduleClubes = 'CLUBES';
 const _actionCreate = 'CREATE';
@@ -641,14 +642,6 @@ class _ClubsPaginationFooter extends StatelessWidget {
   }
 }
 
-Map<String, String>? _buildImageHeaders(WidgetRef ref) {
-  final token = ref.read(authControllerProvider).accessToken;
-  if (token == null || token.isEmpty) {
-    return null;
-  }
-  return {'Authorization': 'Bearer $token'};
-}
-
 class _ClubAvatar extends ConsumerWidget {
   const _ClubAvatar({required this.club});
 
@@ -664,7 +657,6 @@ class _ClubAvatar extends ConsumerWidget {
       color: primary,
     );
     final logoUrl = club.logoUrl;
-    final headers = _buildImageHeaders(ref);
 
     return Container(
       width: 48,
@@ -675,11 +667,11 @@ class _ClubAvatar extends ConsumerWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: logoUrl != null && logoUrl.isNotEmpty
-          ? Image.network(
-              logoUrl,
+          ? AuthenticatedImage(
+              imageUrl: logoUrl,
               fit: BoxFit.cover,
-              headers: headers,
-              errorBuilder: (context, error, stackTrace) => fallback,
+              placeholder: fallback,
+              error: fallback,
             )
           : fallback,
     );
@@ -909,13 +901,19 @@ class _ClubDetailsView extends ConsumerWidget {
               alignment: Alignment.centerLeft,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(20),
-                child: Image.network(
-                  club.logoUrl!,
+                child: AuthenticatedImage(
+                  imageUrl: club.logoUrl!,
                   width: _clubLogoSize,
                   height: _clubLogoSize,
                   fit: BoxFit.cover,
-                  headers: headers,
-                  errorBuilder: (context, error, stackTrace) => Container(
+                  placeholder: Container(
+                    width: _clubLogoSize,
+                    height: _clubLogoSize,
+                    color: Theme.of(context).colorScheme.surfaceVariant,
+                    alignment: Alignment.center,
+                    child: const CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  error: Container(
                     width: _clubLogoSize,
                     height: _clubLogoSize,
                     color: Theme.of(context).colorScheme.surfaceVariant,
@@ -1584,11 +1582,16 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
     if (_logoBytes != null) {
       child = Image.memory(_logoBytes!, fit: BoxFit.cover);
     } else if (_logoUrl != null && _logoUrl!.isNotEmpty && !_removeLogo) {
-      child = Image.network(
-        _logoUrl!,
+      child = AuthenticatedImage(
+        imageUrl: _logoUrl!,
         fit: BoxFit.cover,
-        headers: _buildImageHeaders(ref),
-        errorBuilder: (context, error, stackTrace) => Icon(
+        placeholder: Center(
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ),
+        error: Icon(
           Icons.shield_outlined,
           size: 64,
           color: Theme.of(context).colorScheme.outlineVariant,

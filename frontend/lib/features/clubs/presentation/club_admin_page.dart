@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
+import 'widgets/authenticated_image.dart';
 
 final clubAdminOverviewProvider =
     FutureProvider.autoDispose.family<ClubAdminOverview, String>((ref, slug) async {
@@ -361,11 +362,16 @@ class _ClubLogo extends ConsumerWidget {
         height: 88,
         color: theme.colorScheme.surfaceVariant,
         child: logoUrl != null && logoUrl!.isNotEmpty
-            ? Image.network(
-                logoUrl!,
+            ? AuthenticatedImage(
+                imageUrl: logoUrl!,
                 fit: BoxFit.cover,
-                headers: headers,
-                errorBuilder: (context, error, stackTrace) => _LogoFallback(name: name),
+                placeholder: Center(
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+                error: _LogoFallback(name: name),
               )
             : _LogoFallback(name: name),
       ),
