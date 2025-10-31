@@ -15,11 +15,11 @@ final zoneDetailProvider = FutureProvider.autoDispose.family<ZoneDetail, int>((r
   return ZoneDetail.fromJson(data);
 });
 
-final zoneMatchesProvider = FutureProvider.autoDispose.family<List<ZoneMatch>, int>((ref, zoneId) async {
+final zoneMatchesProvider = FutureProvider.autoDispose.family<ZoneMatchesData, int>((ref, zoneId) async {
   final api = ref.read(apiClientProvider);
-  final response = await api.get<List<dynamic>>('/zones/$zoneId/matches');
-  final data = response.data ?? [];
-  return data.map((json) => ZoneMatch.fromJson(json as Map<String, dynamic>)).toList();
+  final response = await api.get<Map<String, dynamic>>('/zones/$zoneId/matches');
+  final data = response.data ?? <String, dynamic>{};
+  return ZoneMatchesData.fromJson(data);
 });
 
 class ZoneFixturePage extends ConsumerStatefulWidget {
@@ -37,11 +37,98 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
   bool _loadingPreview = false;
   bool _submitting = false;
   String? _previewError;
+  final Set<int> _finalizingMatchdays = <int>{};
 
   @override
   void dispose() {
     _scrollController.dispose();
     super.dispose();
+  }
+
+  bool _isFinalizing(int matchday) => _finalizingMatchdays.contains(matchday);
+
+  FixtureMatchdayStatus _mapFixtureStatus(ZoneMatchdayStatus status) {
+    switch (status) {
+      case ZoneMatchdayStatus.inProgress:
+        return FixtureMatchdayStatus.inProgress;
+      case ZoneMatchdayStatus.incomplete:
+        return FixtureMatchdayStatus.incomplete;
+      case ZoneMatchdayStatus.played:
+        return FixtureMatchdayStatus.played;
+      case ZoneMatchdayStatus.pending:
+      default:
+        return FixtureMatchdayStatus.pending;
+    }
+  }
+
+  bool _shouldShowFinalize(FixtureMatchdayStatus status) {
+    return status == FixtureMatchdayStatus.inProgress || status == FixtureMatchdayStatus.incomplete;
+  }
+
+  VoidCallback? _buildFinalizeCallback(_DecoratedMatchday matchday) {
+    if (!_shouldShowFinalize(matchday.status)) {
+      return null;
+    }
+    return () => _finalizeMatchday(matchday.matchdayNumber);
+  }
+
+  Future<void> _finalizeMatchday(int matchday) async {
+    if (_isFinalizing(matchday)) {
+      return;
+    }
+
+    setState(() {
+      _finalizingMatchdays.add(matchday);
+    });
+
+    try {
+      final api = ref.read(apiClientProvider);
+      final response = await api.post<List<dynamic>>(
+        '/zones/${widget.zoneId}/matchdays/$matchday/finalize',
+      );
+      final entries = response.data ?? <dynamic>[];
+      ZoneMatchdayStatus? status;
+      for (final entry in entries) {
+        if (entry is Map<String, dynamic> && (entry['matchday'] as int?) == matchday) {
+          status = ZoneMatchdayStatusX.fromApi(entry['status'] as String? ?? 'PENDING');
+          break;
+        }
+      }
+
+      ref.invalidate(zoneMatchesProvider(widget.zoneId));
+      ref.invalidate(zoneDetailProvider(widget.zoneId));
+      ref.invalidate(zonesProvider);
+
+      if (mounted) {
+        String label;
+        if (status == ZoneMatchdayStatus.played) {
+          label = 'Fecha marcada como jugada.';
+        } else if (status == ZoneMatchdayStatus.incomplete) {
+          label = 'Fecha marcada como incompleta. Revisa los resultados pendientes.';
+        } else {
+          label = 'Estado de la fecha actualizado.';
+        }
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(label)));
+      }
+    } on DioException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo finalizar la fecha: ${_mapError(error)}')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo finalizar la fecha: $error')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _finalizingMatchdays.remove(matchday);
+        });
+      }
+    }
   }
 
   Future<void> _requestPreview() async {
@@ -172,7 +259,7 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
 
     return detailAsync.when(
       data: (zone) {
-        final matchesAsync = ref.watch(zoneMatchesProvider(widget.zoneId));
+        final fixtureAsync = ref.watch(zoneMatchesProvider(widget.zoneId));
         final hasPreview = _preview != null;
         return Padding(
           padding: const EdgeInsets.all(24),
@@ -204,15 +291,16 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
               ),
               const SizedBox(height: 16),
               Expanded(
-                child: matchesAsync.when(
-                  data: (matches) {
+                child: fixtureAsync.when(
+                  data: (fixtureData) {
                     Widget content;
+                    final matches = fixtureData.matches;
                     if (matches.isEmpty && !hasPreview) {
                       content = _buildGenerationPrompt(zone);
                     } else if (hasPreview) {
                       content = _buildPreview(zone, _preview!);
                     } else {
-                      content = _buildFixtureSchedule(zone, matches);
+                      content = _buildFixtureSchedule(zone, fixtureData);
                     }
 
                     return Scrollbar(
@@ -379,11 +467,17 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
     );
   }
 
-  Widget _buildFixtureSchedule(ZoneDetail zone, List<ZoneMatch> matches) {
+  Widget _buildFixtureSchedule(ZoneDetail zone, ZoneMatchesData data) {
+    final matches = data.matches;
     final clubs = {for (final club in zone.clubs) club.id: club};
     if (matches.isEmpty) {
       return const SizedBox.shrink();
     }
+
+    final statusMap = {
+      for (final entry in data.matchdays)
+        entry.matchday: _mapFixtureStatus(entry.status),
+    };
 
     final grouped = <_MatchdayKey, List<ZoneMatch>>{};
     for (final match in matches) {
@@ -437,6 +531,7 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
             },
           )
           .toList(),
+      statusByMatchday: statusMap.isEmpty ? null : statusMap,
     );
 
     return Column(
@@ -453,6 +548,11 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
             matches: matchday.matches,
             byeClubName: matchday.byeClubName,
             status: matchday.status,
+            showFinalizeButton:
+                statusMap.isNotEmpty && _shouldShowFinalize(matchday.status),
+            isFinalizing:
+                statusMap.isNotEmpty && _isFinalizing(matchday.matchdayNumber),
+            onFinalize: statusMap.isNotEmpty ? _buildFinalizeCallback(matchday) : null,
           ),
         ),
       ],
@@ -559,6 +659,9 @@ class _FixtureMatchdayCard extends StatelessWidget {
     required this.subtitle,
     required this.matches,
     required this.status,
+    this.onFinalize,
+    this.isFinalizing = false,
+    this.showFinalizeButton = false,
     this.byeClubName,
   });
 
@@ -566,6 +669,9 @@ class _FixtureMatchdayCard extends StatelessWidget {
   final String subtitle;
   final List<FixtureMatchRow> matches;
   final FixtureMatchdayStatus status;
+  final VoidCallback? onFinalize;
+  final bool isFinalizing;
+  final bool showFinalizeButton;
   final String? byeClubName;
 
   @override
@@ -603,6 +709,20 @@ class _FixtureMatchdayCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 12),
                 _FixtureMatchdayStatusIndicator(status: status),
+                if (showFinalizeButton) ...[
+                  const SizedBox(width: 12),
+                  TextButton.icon(
+                    onPressed: isFinalizing ? null : onFinalize,
+                    icon: isFinalizing
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.flag_outlined),
+                    label: const Text('Finalizar fecha'),
+                  ),
+                ],
               ],
             ),
             children: [
@@ -717,7 +837,7 @@ class _FixtureMatchdayStatusIndicator extends StatelessWidget {
   }
 }
 
-enum FixtureMatchdayStatus { pending, inProgress, played }
+enum FixtureMatchdayStatus { pending, inProgress, incomplete, played }
 
 extension FixtureMatchdayStatusX on FixtureMatchdayStatus {
   String get label {
@@ -726,8 +846,10 @@ extension FixtureMatchdayStatusX on FixtureMatchdayStatus {
         return 'Pendiente';
       case FixtureMatchdayStatus.inProgress:
         return 'En juego';
+      case FixtureMatchdayStatus.incomplete:
+        return 'Incompleta';
       case FixtureMatchdayStatus.played:
-        return 'Jugado';
+        return 'Jugada';
     }
   }
 
@@ -737,6 +859,8 @@ extension FixtureMatchdayStatusX on FixtureMatchdayStatus {
         return const Color(0xFFC62828);
       case FixtureMatchdayStatus.inProgress:
         return const Color(0xFFF9A825);
+      case FixtureMatchdayStatus.incomplete:
+        return const Color(0xFF6D4C41);
       case FixtureMatchdayStatus.played:
         return const Color(0xFF009688);
     }
@@ -748,6 +872,8 @@ extension FixtureMatchdayStatusX on FixtureMatchdayStatus {
         return const Color(0xFFFDEDED);
       case FixtureMatchdayStatus.inProgress:
         return const Color(0xFFFFF4CF);
+      case FixtureMatchdayStatus.incomplete:
+        return const Color(0xFFF1E0D6);
       case FixtureMatchdayStatus.played:
         return const Color(0xFFDBEDF1);
     }
@@ -771,6 +897,7 @@ class _MatchdayContent {
 class _DecoratedMatchday {
   _DecoratedMatchday({
     required this.displayIndex,
+    required this.matchdayNumber,
     required this.round,
     required this.matches,
     required this.status,
@@ -778,6 +905,7 @@ class _DecoratedMatchday {
   });
 
   final int displayIndex;
+  final int matchdayNumber;
   final FixtureRound round;
   final List<FixtureMatchRow> matches;
   final FixtureMatchdayStatus status;
@@ -803,6 +931,7 @@ class _MatchdayKey {
 List<_DecoratedMatchday> _decorateMatchdays(
   List<_MatchdayContent> matchdays, {
   int playedMatchdaysCount = 0,
+  Map<int, FixtureMatchdayStatus>? statusByMatchday,
 }) {
   if (matchdays.isEmpty) {
     return const <_DecoratedMatchday>[];
@@ -823,7 +952,10 @@ List<_DecoratedMatchday> _decorateMatchdays(
   for (var index = 0; index < sorted.length; index++) {
     final raw = sorted[index];
     FixtureMatchdayStatus status;
-    if (index < effectivePlayed) {
+    final overrideStatus = statusByMatchday?[raw.matchdayNumber];
+    if (overrideStatus != null) {
+      status = overrideStatus;
+    } else if (index < effectivePlayed) {
       status = FixtureMatchdayStatus.played;
     } else if (index == effectivePlayed && effectivePlayed < sorted.length) {
       status = FixtureMatchdayStatus.inProgress;
@@ -845,6 +977,7 @@ List<_DecoratedMatchday> _decorateMatchdays(
     decorated.add(
       _DecoratedMatchday(
         displayIndex: displayIndex,
+        matchdayNumber: raw.matchdayNumber,
         round: raw.round,
         matches: sortedMatches,
         status: status,

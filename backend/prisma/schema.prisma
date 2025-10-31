@@ -83,6 +83,13 @@ enum MatchStatus {
   FINISHED
 }
 
+enum MatchdayStatus {
+  PENDING
+  IN_PROGRESS
+  INCOMPLETE
+  PLAYED
+}
+
 enum Round {
   FIRST
   SECOND
@@ -135,6 +142,7 @@ model Zone {
   clubZones    ClubZone[]
   matches      Match[]
   standings    CategoryStanding[]
+  matchdays    ZoneMatchday[]
 
   @@unique([tournamentId, name])
 }
@@ -306,6 +314,19 @@ model Match {
   categories   MatchCategory[]
   attachments  MatchAttachment[]
   logs         MatchLog[]
+}
+
+model ZoneMatchday {
+  id        Int             @id @default(autoincrement())
+  zoneId    Int
+  matchday  Int
+  status    MatchdayStatus  @default(PENDING)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  zone Zone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+
+  @@unique([zoneId, matchday])
 }
 
 model MatchCategory {

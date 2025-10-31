@@ -27,7 +27,7 @@ class ZoneMatchDetailPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final matchesAsync = ref.watch(zoneMatchesProvider(zoneId));
+    final fixtureAsync = ref.watch(zoneMatchesProvider(zoneId));
     final authState = ref.watch(authControllerProvider);
     final user = authState.user;
     final canEditScores =
@@ -35,10 +35,10 @@ class ZoneMatchDetailPage extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Detalle del partido')),
-      body: matchesAsync.when(
-        data: (matches) {
+      body: fixtureAsync.when(
+        data: (fixtureData) {
           ZoneMatch? match = initialMatch;
-          for (final item in matches) {
+          for (final item in fixtureData.matches) {
             if (item.id == matchId) {
               match = item;
               break;

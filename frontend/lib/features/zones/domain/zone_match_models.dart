@@ -183,3 +183,65 @@ class ZoneMatch {
     return 0;
   }
 }
+
+enum ZoneMatchdayStatus { pending, inProgress, incomplete, played }
+
+extension ZoneMatchdayStatusX on ZoneMatchdayStatus {
+  static ZoneMatchdayStatus fromApi(String value) {
+    switch (value.toUpperCase()) {
+      case 'IN_PROGRESS':
+        return ZoneMatchdayStatus.inProgress;
+      case 'INCOMPLETE':
+        return ZoneMatchdayStatus.incomplete;
+      case 'PLAYED':
+        return ZoneMatchdayStatus.played;
+      default:
+        return ZoneMatchdayStatus.pending;
+    }
+  }
+
+  String get label {
+    switch (this) {
+      case ZoneMatchdayStatus.pending:
+        return 'PENDIENTE';
+      case ZoneMatchdayStatus.inProgress:
+        return 'EN_PROGRESO';
+      case ZoneMatchdayStatus.incomplete:
+        return 'INCOMPLETA';
+      case ZoneMatchdayStatus.played:
+        return 'JUGADA';
+    }
+  }
+}
+
+class ZoneMatchdayState {
+  ZoneMatchdayState({required this.matchday, required this.status});
+
+  factory ZoneMatchdayState.fromJson(Map<String, dynamic> json) {
+    final statusValue = json['status'] as String? ?? 'PENDING';
+    return ZoneMatchdayState(
+      matchday: json['matchday'] as int? ?? 0,
+      status: ZoneMatchdayStatusX.fromApi(statusValue),
+    );
+  }
+
+  final int matchday;
+  final ZoneMatchdayStatus status;
+}
+
+class ZoneMatchesData {
+  ZoneMatchesData({required this.matches, required this.matchdays});
+
+  factory ZoneMatchesData.fromJson(Map<String, dynamic> json) {
+    final matches = (json['matches'] as List<dynamic>? ?? <dynamic>[]) // ignore: implicit_dynamic_parameter
+        .map((entry) => ZoneMatch.fromJson(entry as Map<String, dynamic>))
+        .toList();
+    final matchdays = (json['matchdays'] as List<dynamic>? ?? <dynamic>[]) // ignore: implicit_dynamic_parameter
+        .map((entry) => ZoneMatchdayState.fromJson(entry as Map<String, dynamic>))
+        .toList();
+    return ZoneMatchesData(matches: matches, matchdays: matchdays);
+  }
+
+  final List<ZoneMatch> matches;
+  final List<ZoneMatchdayState> matchdays;
+}
