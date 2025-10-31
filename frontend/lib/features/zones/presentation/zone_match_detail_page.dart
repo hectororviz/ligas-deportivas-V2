@@ -318,19 +318,16 @@ class _CategoriesTable extends ConsumerStatefulWidget {
 
 class _CategoriesTableState extends ConsumerState<_CategoriesTable> {
   Future<void> _openGoalsDialog(ZoneMatchCategory category) async {
-    if (!widget.canEditScores) {
-      return;
-    }
-
     final saved = await showDialog<bool>(
       context: context,
       builder: (context) => _MatchCategoryGoalsDialog(
         match: widget.match,
         category: category,
+        canEdit: widget.canEditScores,
       ),
     );
 
-    if (saved == true && mounted) {
+    if (widget.canEditScores && saved == true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Goles de "${category.categoryName}" actualizados.')),
       );
@@ -349,10 +346,8 @@ class _CategoriesTableState extends ConsumerState<_CategoriesTable> {
       0: const FlexColumnWidth(2),
       1: const FlexColumnWidth(),
       2: const FlexColumnWidth(),
+      3: const IntrinsicColumnWidth(),
     };
-    if (widget.canEditScores) {
-      columnWidths[3] = const IntrinsicColumnWidth();
-    }
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
@@ -374,8 +369,7 @@ class _CategoriesTableState extends ConsumerState<_CategoriesTable> {
               const _TableHeaderCell(label: 'Categoría', textAlign: TextAlign.left),
               const _TableHeaderCell(label: 'Goles Local'),
               const _TableHeaderCell(label: 'Goles Visitante'),
-              if (widget.canEditScores)
-                const _TableHeaderCell(label: 'Acciones'),
+              const _TableHeaderCell(label: 'Goles'),
             ],
           ),
           for (final category in categories)
@@ -390,10 +384,9 @@ class _CategoriesTableState extends ConsumerState<_CategoriesTable> {
                   score: category.awayScore,
                   outcome: _scoreOutcome(category.awayScore, category.homeScore),
                 ),
-                if (widget.canEditScores)
-                  _ActionCell(
-                    onTap: () => _openGoalsDialog(category),
-                  ),
+                _ActionCell(
+                  onTap: () => _openGoalsDialog(category),
+                ),
               ],
             ),
         ],
@@ -417,7 +410,7 @@ class _ActionCell extends StatelessWidget {
       child: FilledButton.icon(
         onPressed: onTap,
         icon: const Icon(Icons.sports_soccer_outlined),
-        label: const Text('Cargar goles'),
+        label: const Text('Goles'),
         style: FilledButton.styleFrom(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           textStyle: theme.textTheme.labelLarge,
@@ -530,10 +523,12 @@ class _MatchCategoryGoalsDialog extends ConsumerStatefulWidget {
   const _MatchCategoryGoalsDialog({
     required this.match,
     required this.category,
+    required this.canEdit,
   });
 
   final ZoneMatch match;
   final ZoneMatchCategory category;
+  final bool canEdit;
 
   @override
   ConsumerState<_MatchCategoryGoalsDialog> createState() => _MatchCategoryGoalsDialogState();
@@ -703,6 +698,10 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
   }
 
   Future<void> _onSave() async {
+    if (!widget.canEdit) {
+      Navigator.of(context).pop(false);
+      return;
+    }
     final homeClubId = widget.match.homeClub?.id;
     final awayClubId = widget.match.awayClub?.id;
     if (homeClubId == null || awayClubId == null) {
@@ -787,6 +786,7 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
     required List<_PlayerGoalInput> entries,
     required int otherGoals,
     required ValueChanged<int> onOtherGoalsChanged,
+    required bool enableEditing,
   }) {
     final theme = Theme.of(context);
     final listHeight = math.min(280.0, entries.length * 48.0);
@@ -854,17 +854,20 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
                                 textAlign: TextAlign.center,
                                 keyboardType: TextInputType.number,
                                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                enabled: enableEditing,
                                 decoration: const InputDecoration(
                                   isDense: true,
                                   contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 8),
                                   border: OutlineInputBorder(),
                                 ),
-                                onChanged: (value) {
-                                  final parsed = int.tryParse(value) ?? 0;
-                                  setState(() {
-                                    entry.goals = parsed;
-                                  });
-                                },
+                                onChanged: !enableEditing
+                                    ? null
+                                    : (value) {
+                                        final parsed = int.tryParse(value) ?? 0;
+                                        setState(() {
+                                          entry.goals = parsed;
+                                        });
+                                      },
                               ),
                             ),
                           ],
@@ -894,15 +897,18 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
                         textAlign: TextAlign.center,
                         keyboardType: TextInputType.number,
                         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        enabled: enableEditing,
                         decoration: const InputDecoration(
                           isDense: true,
                           contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 8),
                           border: OutlineInputBorder(),
                         ),
-                        onChanged: (value) {
-                          final parsed = int.tryParse(value) ?? 0;
-                          onOtherGoalsChanged(parsed);
-                        },
+                        onChanged: !enableEditing
+                            ? null
+                            : (value) {
+                                final parsed = int.tryParse(value) ?? 0;
+                                onOtherGoalsChanged(parsed);
+                              },
                       ),
                     ),
                   ],
@@ -945,6 +951,7 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
                             entries: _homeEntries,
                             otherGoals: _homeOtherGoals,
                             onOtherGoalsChanged: _updateHomeOtherGoals,
+                            enableEditing: widget.canEdit,
                           ),
                         ),
                         const SizedBox(width: 16),
@@ -954,6 +961,7 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
                             entries: _awayEntries,
                             otherGoals: _awayOtherGoals,
                             onOtherGoalsChanged: _updateAwayOtherGoals,
+                            enableEditing: widget.canEdit,
                           ),
                         ),
                       ],
@@ -976,18 +984,19 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
       actions: [
         TextButton(
           onPressed: _saving ? null : () => Navigator.of(context).pop(false),
-          child: const Text('Cancelar'),
+          child: Text(widget.canEdit ? 'Cancelar' : 'Cerrar'),
         ),
-        FilledButton(
-          onPressed: _saving || _loading || _errorMessage != null ? null : _onSave,
-          child: _saving
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Guardar'),
-        ),
+        if (widget.canEdit)
+          FilledButton(
+            onPressed: _saving || _loading || _errorMessage != null ? null : _onSave,
+            child: _saving
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Guardar'),
+          ),
       ],
     );
   }
