@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -58,5 +60,25 @@ class ApiClient {
 
   Future<Response<T>> delete<T>(String path, {dynamic data}) {
     return _dio.delete<T>(path, data: data);
+  }
+
+  Future<Uint8List> getBytes(
+    String path, {
+    CancelToken? cancelToken,
+    Map<String, String>? headers,
+  }) async {
+    final response = await _dio.get<List<int>>(
+      path,
+      options: Options(
+        responseType: ResponseType.bytes,
+        headers: headers,
+      ),
+      cancelToken: cancelToken,
+    );
+    final data = response.data;
+    if (data == null) {
+      throw StateError('No se recibieron datos para la imagen solicitada.');
+    }
+    return Uint8List.fromList(data);
   }
 }

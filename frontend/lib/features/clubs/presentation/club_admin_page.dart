@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
+import 'widgets/authenticated_image.dart';
 
 final clubAdminOverviewProvider =
     FutureProvider.autoDispose.family<ClubAdminOverview, String>((ref, slug) async {
@@ -14,6 +15,14 @@ final clubAdminOverviewProvider =
   final data = response.data ?? <String, dynamic>{};
   return ClubAdminOverview.fromJson(data);
 });
+
+Map<String, String> _buildImageHeaders(WidgetRef ref) {
+  final token = ref.read(authControllerProvider).accessToken;
+  if (token == null || token.isEmpty) {
+    return const {};
+  }
+  return {'Authorization': 'Bearer $token'};
+}
 
 class ClubAdminPage extends ConsumerStatefulWidget {
   const ClubAdminPage({required this.slug, super.key});
@@ -342,14 +351,14 @@ class _ClubSummaryCard extends StatelessWidget {
   }
 }
 
-class _ClubLogo extends StatelessWidget {
+class _ClubLogo extends ConsumerWidget {
   const _ClubLogo({required this.logoUrl, required this.name});
 
   final String? logoUrl;
   final String name;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
@@ -358,10 +367,17 @@ class _ClubLogo extends StatelessWidget {
         height: 88,
         color: theme.colorScheme.surfaceVariant,
         child: logoUrl != null && logoUrl!.isNotEmpty
-            ? Image.network(
-                logoUrl!,
+            ? AuthenticatedImage(
+                imageUrl: logoUrl!,
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => _LogoFallback(name: name),
+                headers: _buildImageHeaders(ref),
+                placeholder: Center(
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+                error: _LogoFallback(name: name),
               )
             : _LogoFallback(name: name),
       ),
