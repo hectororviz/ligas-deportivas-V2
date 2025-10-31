@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, Round, ZoneStatus } from '@prisma/client';
+import { MatchdayStatus, Prisma, Round, ZoneStatus } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { FixtureAlreadyExistsException } from '../../common/exceptions/fixture-already-exists.exception';
@@ -123,6 +123,8 @@ export class FixtureService {
           const totalGenerated = doubleRound ? totalMatchdays * 2 : totalMatchdays;
           totalRoundsPerZone.push(totalGenerated);
 
+          await tx.zoneMatchday.deleteMany({ where: { zoneId: zone.id } });
+
           for (const match of firstRound) {
             await tx.match.create({
               data: {
@@ -165,6 +167,15 @@ export class FixtureService {
                 },
               },
             });
+          }
+
+          if (totalGenerated > 0) {
+            const matchdayEntries = Array.from({ length: totalGenerated }, (_, index) => ({
+              zoneId: zone.id,
+              matchday: index + 1,
+              status: index === 0 ? MatchdayStatus.IN_PROGRESS : MatchdayStatus.PENDING,
+            }));
+            await tx.zoneMatchday.createMany({ data: matchdayEntries });
           }
         }
 
@@ -295,6 +306,19 @@ export class FixtureService {
           });
         }
 
+        const totalGenerated = doubleRound ? totalMatchdays * 2 : totalMatchdays;
+
+        await tx.zoneMatchday.deleteMany({ where: { zoneId } });
+
+        if (totalGenerated > 0) {
+          const matchdayEntries = Array.from({ length: totalGenerated }, (_, index) => ({
+            zoneId,
+            matchday: index + 1,
+            status: index === 0 ? MatchdayStatus.IN_PROGRESS : MatchdayStatus.PENDING,
+          }));
+          await tx.zoneMatchday.createMany({ data: matchdayEntries });
+        }
+
         await tx.zone.update({
           where: { id: zoneId },
           data: {
@@ -403,13 +427,17 @@ export class FixtureService {
 
   private buildRoundRobin(
     clubIds: number[],
-    options: { doubleRound: boolean; shuffle: boolean; seed?: number | null }
+    options: { doubleRound: boolean; shuffle: boolean; seed?: number | null } | boolean
   ) {
+    const normalizedOptions =
+      typeof options === 'boolean'
+        ? { doubleRound: options, shuffle: false, seed: null }
+        : options;
     const normalized = Array.from(new Set(clubIds));
     let working = [...normalized];
 
-    let seed = options.seed ?? null;
-    if (options.shuffle) {
+    let seed = normalizedOptions.seed ?? null;
+    if (normalizedOptions.shuffle) {
       seed = seed ?? this.generateSeed();
       const random = this.createSeededRandom(seed);
       this.shuffleClubIds(working, random);
@@ -451,7 +479,7 @@ export class FixtureService {
       }
     }
 
-    const secondRound: RoundMatch[] = options.doubleRound
+    const secondRound: RoundMatch[] = normalizedOptions.doubleRound
       ? firstRound.map((match) => ({
           matchday: match.matchday + totalMatchdays,
           homeClubId: match.awayClubId,
@@ -459,7 +487,7 @@ export class FixtureService {
         }))
       : [];
 
-    const secondRoundByes: RoundBye[] = options.doubleRound
+    const secondRoundByes: RoundBye[] = normalizedOptions.doubleRound
       ? byes.map((bye) => ({
           matchday: bye.matchday + totalMatchdays,
           clubId: bye.clubId,
