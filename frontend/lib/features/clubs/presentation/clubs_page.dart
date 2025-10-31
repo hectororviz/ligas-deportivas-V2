@@ -641,25 +641,66 @@ class _ClubsPaginationFooter extends StatelessWidget {
   }
 }
 
-class _ClubAvatar extends StatelessWidget {
+Map<String, String>? _buildImageHeaders(WidgetRef ref) {
+  final token = ref.read(authControllerProvider).accessToken;
+  if (token == null || token.isEmpty) {
+    return null;
+  }
+  return {'Authorization': 'Bearer $token'};
+}
+
+class _ClubAvatar extends ConsumerWidget {
   const _ClubAvatar({required this.club});
 
   final Club club;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final primary = club.primaryColor ?? Theme.of(context).colorScheme.primary;
     final secondary =
         club.secondaryColor ?? Theme.of(context).colorScheme.primaryContainer;
-    return CircleAvatar(
-      radius: 24,
-      backgroundColor: secondary.withOpacity(0.3),
+    final fallback = _ClubAvatarInitials(
+      initials: club.initials,
+      color: primary,
+    );
+    final logoUrl = club.logoUrl;
+    final headers = _buildImageHeaders(ref);
+
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        color: secondary.withOpacity(0.3),
+        shape: BoxShape.circle,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: logoUrl != null && logoUrl.isNotEmpty
+          ? Image.network(
+              logoUrl,
+              fit: BoxFit.cover,
+              headers: headers,
+              errorBuilder: (context, error, stackTrace) => fallback,
+            )
+          : fallback,
+    );
+  }
+}
+
+class _ClubAvatarInitials extends StatelessWidget {
+  const _ClubAvatarInitials({required this.initials, required this.color});
+
+  final String initials;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
       child: Text(
-        club.initials,
+        initials,
         style: Theme.of(context)
             .textTheme
             .titleMedium
-            ?.copyWith(color: primary, fontWeight: FontWeight.bold),
+            ?.copyWith(color: color, fontWeight: FontWeight.bold),
       ),
     );
   }
@@ -823,13 +864,14 @@ class _ClubsErrorState extends StatelessWidget {
   }
 }
 
-class _ClubDetailsView extends StatelessWidget {
+class _ClubDetailsView extends ConsumerWidget {
   const _ClubDetailsView({required this.club});
 
   final Club club;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final headers = _buildImageHeaders(ref);
     return SizedBox(
       width: 640,
       child: Column(
@@ -872,6 +914,18 @@ class _ClubDetailsView extends StatelessWidget {
                   width: _clubLogoSize,
                   height: _clubLogoSize,
                   fit: BoxFit.cover,
+                  headers: headers,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    width: _clubLogoSize,
+                    height: _clubLogoSize,
+                    color: Theme.of(context).colorScheme.surfaceVariant,
+                    alignment: Alignment.center,
+                    child: Icon(
+                      Icons.shield_outlined,
+                      size: 64,
+                      color: Theme.of(context).colorScheme.outlineVariant,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -1530,7 +1584,16 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
     if (_logoBytes != null) {
       child = Image.memory(_logoBytes!, fit: BoxFit.cover);
     } else if (_logoUrl != null && _logoUrl!.isNotEmpty && !_removeLogo) {
-      child = Image.network(_logoUrl!, fit: BoxFit.cover);
+      child = Image.network(
+        _logoUrl!,
+        fit: BoxFit.cover,
+        headers: _buildImageHeaders(ref),
+        errorBuilder: (context, error, stackTrace) => Icon(
+          Icons.shield_outlined,
+          size: 64,
+          color: Theme.of(context).colorScheme.outlineVariant,
+        ),
+      );
     } else {
       child = Icon(Icons.shield_outlined,
           size: 64, color: Theme.of(context).colorScheme.outlineVariant);

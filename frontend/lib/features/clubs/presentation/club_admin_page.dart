@@ -342,15 +342,18 @@ class _ClubSummaryCard extends StatelessWidget {
   }
 }
 
-class _ClubLogo extends StatelessWidget {
+class _ClubLogo extends ConsumerWidget {
   const _ClubLogo({required this.logoUrl, required this.name});
 
   final String? logoUrl;
   final String name;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final token = ref.read(authControllerProvider).accessToken;
+    final headers =
+        token == null || token.isEmpty ? null : {'Authorization': 'Bearer $token'};
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: Container(
@@ -361,6 +364,7 @@ class _ClubLogo extends StatelessWidget {
             ? Image.network(
                 logoUrl!,
                 fit: BoxFit.cover,
+                headers: headers,
                 errorBuilder: (context, error, stackTrace) => _LogoFallback(name: name),
               )
             : _LogoFallback(name: name),
