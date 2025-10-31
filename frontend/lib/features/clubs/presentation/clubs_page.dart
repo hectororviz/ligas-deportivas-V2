@@ -22,6 +22,14 @@ const _actionCreate = 'CREATE';
 const _actionUpdate = 'UPDATE';
 const double _clubLogoSize = 200;
 
+Map<String, String> _buildImageHeaders(WidgetRef ref) {
+  final token = ref.read(authControllerProvider).accessToken;
+  if (token == null || token.isEmpty) {
+    return const {};
+  }
+  return {'Authorization': 'Bearer $token'};
+}
+
 final clubsFiltersProvider =
     StateNotifierProvider<ClubsFiltersController, ClubsFilters>((ref) {
   return ClubsFiltersController();
@@ -670,6 +678,7 @@ class _ClubAvatar extends ConsumerWidget {
           ? AuthenticatedImage(
               imageUrl: logoUrl,
               fit: BoxFit.cover,
+              headers: _buildImageHeaders(ref),
               placeholder: fallback,
               error: fallback,
             )
@@ -863,7 +872,6 @@ class _ClubDetailsView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final headers = _buildImageHeaders(ref);
     return SizedBox(
       width: 640,
       child: Column(
@@ -906,6 +914,7 @@ class _ClubDetailsView extends ConsumerWidget {
                   width: _clubLogoSize,
                   height: _clubLogoSize,
                   fit: BoxFit.cover,
+                  headers: _buildImageHeaders(ref),
                   placeholder: Container(
                     width: _clubLogoSize,
                     height: _clubLogoSize,
@@ -1585,6 +1594,7 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
       child = AuthenticatedImage(
         imageUrl: _logoUrl!,
         fit: BoxFit.cover,
+        headers: _buildImageHeaders(ref),
         placeholder: Center(
           child: CircularProgressIndicator(
             strokeWidth: 2,

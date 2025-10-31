@@ -16,6 +16,14 @@ final clubAdminOverviewProvider =
   return ClubAdminOverview.fromJson(data);
 });
 
+Map<String, String> _buildImageHeaders(WidgetRef ref) {
+  final token = ref.read(authControllerProvider).accessToken;
+  if (token == null || token.isEmpty) {
+    return const {};
+  }
+  return {'Authorization': 'Bearer $token'};
+}
+
 class ClubAdminPage extends ConsumerStatefulWidget {
   const ClubAdminPage({required this.slug, super.key});
 
@@ -365,6 +373,7 @@ class _ClubLogo extends ConsumerWidget {
             ? AuthenticatedImage(
                 imageUrl: logoUrl!,
                 fit: BoxFit.cover,
+                headers: _buildImageHeaders(ref),
                 placeholder: Center(
                   child: CircularProgressIndicator(
                     strokeWidth: 2,

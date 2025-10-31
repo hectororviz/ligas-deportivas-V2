@@ -65,10 +65,14 @@ class ApiClient {
   Future<Uint8List> getBytes(
     String path, {
     CancelToken? cancelToken,
+    Map<String, String>? headers,
   }) async {
     final response = await _dio.get<List<int>>(
       path,
-      options: Options(responseType: ResponseType.bytes),
+      options: Options(
+        responseType: ResponseType.bytes,
+        headers: headers,
+      ),
       cancelToken: cancelToken,
     );
     final data = response.data;

@@ -15,6 +15,7 @@ class AuthenticatedImage extends ConsumerStatefulWidget {
     this.fit = BoxFit.cover,
     this.placeholder,
     this.error,
+    this.headers,
   });
 
   final String imageUrl;
@@ -23,6 +24,7 @@ class AuthenticatedImage extends ConsumerStatefulWidget {
   final BoxFit fit;
   final Widget? placeholder;
   final Widget? error;
+  final Map<String, String>? headers;
 
   @override
   ConsumerState<AuthenticatedImage> createState() => _AuthenticatedImageState();
@@ -70,7 +72,11 @@ class _AuthenticatedImageState extends ConsumerState<AuthenticatedImage> {
       final api = ref.read(apiClientProvider);
       final cancelToken = CancelToken();
       _cancelToken = cancelToken;
-      final bytes = await api.getBytes(url, cancelToken: cancelToken);
+      final bytes = await api.getBytes(
+        url,
+        cancelToken: cancelToken,
+        headers: widget.headers,
+      );
       if (!mounted) {
         return;
       }
