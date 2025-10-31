@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../settings/site_identity_provider.dart';
 import 'user_menu_button.dart';
 
 class NavigationItem {
@@ -62,6 +63,7 @@ class AppShell extends ConsumerWidget {
     final location = GoRouterState.of(context).uri.toString();
     final currentIndex = _navigationItems
         .indexWhere((item) => location == item.route || location.startsWith('${item.route}/'));
+    final siteIdentity = ref.watch(siteIdentityProvider).valueOrNull;
     final width = MediaQuery.sizeOf(context).width;
     final autoCollapsed = width < 1024;
     final showCollapsed = autoCollapsed ? true : isCollapsed;
@@ -79,7 +81,18 @@ class AppShell extends ConsumerWidget {
                 padding: const EdgeInsets.only(top: 16.0),
                 child: Column(
                   children: [
-                    const FlutterLogo(size: 36),
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        color: Theme.of(context).colorScheme.surfaceVariant,
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: siteIdentity?.iconUrl != null
+                          ? Image.network(siteIdentity!.iconUrl!, fit: BoxFit.cover)
+                          : const FlutterLogo(size: 36),
+                    ),
                     const SizedBox(height: 16),
                     IconButton(
                       onPressed: () => ref.read(sidebarControllerProvider.notifier).toggle(),

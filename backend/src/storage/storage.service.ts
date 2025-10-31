@@ -26,12 +26,26 @@ export class StorageService {
     return path.join('uploads', filename);
   }
 
+  async deleteAttachment(key: string) {
+    if (!key) {
+      return;
+    }
+    const normalizedKey = key.replace(/^\/+/, '');
+    const filePath = path.join(process.cwd(), 'storage', normalizedKey);
+    await fs.rm(filePath, { force: true });
+  }
+
   async clearAvatarVariants(userId: number) {
     const dir = path.join(this.avatarDir, String(userId));
     await fs.rm(dir, { recursive: true, force: true });
   }
 
-  async saveAvatarVariant(options: { userId: number; hash: string; size: number; buffer: Buffer }): Promise<string> {
+  async saveAvatarVariant(options: {
+    userId: number;
+    hash: string;
+    size: number;
+    buffer: Buffer;
+  }): Promise<string> {
     const dir = path.join(this.avatarDir, String(options.userId));
     await fs.mkdir(dir, { recursive: true });
     const filename = `${options.hash}_${options.size}.jpg`;
