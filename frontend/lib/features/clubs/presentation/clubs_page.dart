@@ -641,13 +641,21 @@ class _ClubsPaginationFooter extends StatelessWidget {
   }
 }
 
-class _ClubAvatar extends StatelessWidget {
+Map<String, String>? _buildImageHeaders(WidgetRef ref) {
+  final token = ref.read(authControllerProvider).accessToken;
+  if (token == null || token.isEmpty) {
+    return null;
+  }
+  return {'Authorization': 'Bearer $token'};
+}
+
+class _ClubAvatar extends ConsumerWidget {
   const _ClubAvatar({required this.club});
 
   final Club club;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final primary = club.primaryColor ?? Theme.of(context).colorScheme.primary;
     final secondary =
         club.secondaryColor ?? Theme.of(context).colorScheme.primaryContainer;
@@ -656,6 +664,7 @@ class _ClubAvatar extends StatelessWidget {
       color: primary,
     );
     final logoUrl = club.logoUrl;
+    final headers = _buildImageHeaders(ref);
 
     return Container(
       width: 48,
@@ -669,6 +678,7 @@ class _ClubAvatar extends StatelessWidget {
           ? Image.network(
               logoUrl,
               fit: BoxFit.cover,
+              headers: headers,
               errorBuilder: (context, error, stackTrace) => fallback,
             )
           : fallback,
@@ -854,13 +864,14 @@ class _ClubsErrorState extends StatelessWidget {
   }
 }
 
-class _ClubDetailsView extends StatelessWidget {
+class _ClubDetailsView extends ConsumerWidget {
   const _ClubDetailsView({required this.club});
 
   final Club club;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final headers = _buildImageHeaders(ref);
     return SizedBox(
       width: 640,
       child: Column(
@@ -903,6 +914,18 @@ class _ClubDetailsView extends StatelessWidget {
                   width: _clubLogoSize,
                   height: _clubLogoSize,
                   fit: BoxFit.cover,
+                  headers: headers,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    width: _clubLogoSize,
+                    height: _clubLogoSize,
+                    color: Theme.of(context).colorScheme.surfaceVariant,
+                    alignment: Alignment.center,
+                    child: Icon(
+                      Icons.shield_outlined,
+                      size: 64,
+                      color: Theme.of(context).colorScheme.outlineVariant,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -1561,7 +1584,16 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
     if (_logoBytes != null) {
       child = Image.memory(_logoBytes!, fit: BoxFit.cover);
     } else if (_logoUrl != null && _logoUrl!.isNotEmpty && !_removeLogo) {
-      child = Image.network(_logoUrl!, fit: BoxFit.cover);
+      child = Image.network(
+        _logoUrl!,
+        fit: BoxFit.cover,
+        headers: _buildImageHeaders(ref),
+        errorBuilder: (context, error, stackTrace) => Icon(
+          Icons.shield_outlined,
+          size: 64,
+          color: Theme.of(context).colorScheme.outlineVariant,
+        ),
+      );
     } else {
       child = Icon(Icons.shield_outlined,
           size: 64, color: Theme.of(context).colorScheme.outlineVariant);
