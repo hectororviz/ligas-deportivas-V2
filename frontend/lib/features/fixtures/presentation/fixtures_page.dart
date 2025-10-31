@@ -234,39 +234,65 @@ class _ZoneAccordion extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8),
       color: theme.colorScheme.surfaceVariant.withOpacity(0.35),
-      child: ExpansionTile(
-        key: PageStorageKey('zone-${zone.id}'),
-        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        title: Text(
-          zone.name,
-          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isCompact = constraints.maxWidth < 600;
+
+            final header = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  zone.name,
+                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Clubes: ${zone.clubCount} · Partidos: ${zone.matchCount}',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            );
+
+            final actions = Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              alignment: isCompact ? WrapAlignment.start : WrapAlignment.end,
+              children: [
+                ZoneStatusChip(status: zone.status),
+                FilledButton.icon(
+                  onPressed: onOpen,
+                  icon: const Icon(Icons.visibility_outlined),
+                  label: const Text('Ver fixture'),
+                ),
+              ],
+            );
+
+            if (isCompact) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  header,
+                  const SizedBox(height: 12),
+                  actions,
+                ],
+              );
+            }
+
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(child: header),
+                const SizedBox(width: 12),
+                actions,
+              ],
+            );
+          },
         ),
-        subtitle: Text(
-          'Clubes: ${zone.clubCount} · Partidos: ${zone.matchCount}',
-          style: theme.textTheme.bodySmall,
-        ),
-        trailing: const Icon(Icons.keyboard_arrow_down_rounded),
-        children: [
-          Wrap(
-            spacing: 12,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              ZoneStatusChip(status: zone.status),
-              Text('Liga: ${zone.leagueName}', style: theme.textTheme.bodyMedium),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerRight,
-            child: FilledButton.icon(
-              onPressed: onOpen,
-              icon: const Icon(Icons.visibility_outlined),
-              label: const Text('Ver fixture'),
-            ),
-          ),
-        ],
       ),
     );
   }
