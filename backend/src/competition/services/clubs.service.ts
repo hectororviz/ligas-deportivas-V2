@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Gender, Prisma } from '@prisma/client';
+import { Express } from 'express';
 
 import { slugify } from '../../common/utils/slugify';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -10,12 +11,19 @@ import { UpdateClubTeamsDto } from '../dto/update-club-teams.dto';
 import { ListRosterPlayersDto } from '../dto/list-roster-players.dto';
 import { UpdateRosterPlayersDto } from '../dto/update-roster-players.dto';
 import { JoinTournamentDto } from '../dto/join-tournament.dto';
+import { StorageService } from '../../storage/storage.service';
+
+const CLUB_LOGO_SIZE = 200;
+const MAX_LOGO_BYTES = 512 * 1024;
 
 interface FindClubsInput extends ListClubsDto {}
 
 @Injectable()
 export class ClubsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storageService: StorageService,
+  ) {}
 
   private readonly defaultInclude: Prisma.ClubInclude = {
     league: true,
@@ -42,7 +50,7 @@ export class ClubsService {
           primaryColor: dto.primaryColor?.toUpperCase(),
           secondaryColor: dto.secondaryColor?.toUpperCase(),
           active: dto.active ?? true,
-          logoUrl: dto.logoUrl?.trim(),
+          logoUrl: this.normalizeLogoUrl(dto.logoUrl),
           instagramUrl: this.normalizeSocial(dto.instagram, 'instagram'),
           facebookUrl: this.normalizeSocial(dto.facebook, 'facebook'),
           latitude: dto.latitude,
@@ -605,7 +613,11 @@ export class ClubsService {
         data.active = dto.active;
       }
       if (Object.prototype.hasOwnProperty.call(dto, 'logoUrl')) {
-        data.logoUrl = dto.logoUrl?.trim() ?? null;
+        if (existing.logoKey) {
+          await this.storageService.deleteAttachment(existing.logoKey);
+        }
+        data.logoKey = null;
+        data.logoUrl = this.normalizeLogoUrl(dto.logoUrl);
       }
       if (Object.prototype.hasOwnProperty.call(dto, 'instagram')) {
         data.instagramUrl = this.normalizeSocial(dto.instagram, 'instagram');
@@ -699,6 +711,91 @@ export class ClubsService {
         { publicName: 'asc' },
       ],
     });
+  }
+
+  async updateLogo(clubId: number, file?: Express.Multer.File) {
+    const club = await this.prisma.club.findUnique({ where: { id: clubId } });
+    if (!club) {
+      throw new NotFoundException('Club no encontrado');
+    }
+
+    if (!file) {
+      throw new BadRequestException('No se recibió un archivo de escudo.');
+    }
+
+    this.validateLogoFile(file);
+
+    if (club.logoKey) {
+      await this.storageService.deleteAttachment(club.logoKey);
+    }
+
+    const key = await this.storageService.saveAttachment(file);
+    const logoUrl = this.storageService.getPublicUrl(key);
+
+    return this.prisma.club.update({
+      where: { id: clubId },
+      data: {
+        logoKey: key,
+        logoUrl,
+      },
+      include: this.defaultInclude,
+    });
+  }
+
+  async removeLogo(clubId: number) {
+    const club = await this.prisma.club.findUnique({ where: { id: clubId } });
+    if (!club) {
+      throw new NotFoundException('Club no encontrado');
+    }
+
+    if (club.logoKey) {
+      await this.storageService.deleteAttachment(club.logoKey);
+    }
+
+    return this.prisma.club.update({
+      where: { id: clubId },
+      data: {
+        logoKey: null,
+        logoUrl: null,
+      },
+      include: this.defaultInclude,
+    });
+  }
+
+  private validateLogoFile(file: Express.Multer.File) {
+    if (file.mimetype !== 'image/png') {
+      throw new BadRequestException('El escudo debe estar en formato PNG.');
+    }
+
+    if (file.size > MAX_LOGO_BYTES) {
+      throw new BadRequestException('El escudo supera el tamaño máximo permitido de 512 KB.');
+    }
+
+    const buffer = file.buffer;
+    if (!buffer || buffer.length < 24) {
+      throw new BadRequestException('El archivo de escudo es inválido.');
+    }
+
+    const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    if (!buffer.subarray(0, 8).equals(signature)) {
+      throw new BadRequestException('El escudo debe ser un archivo PNG válido.');
+    }
+
+    const width = buffer.readUInt32BE(16);
+    const height = buffer.readUInt32BE(20);
+
+    if (width !== height) {
+      throw new BadRequestException('El escudo debe ser una imagen cuadrada de 200x200 píxeles.');
+    }
+
+    if (width !== CLUB_LOGO_SIZE || height !== CLUB_LOGO_SIZE) {
+      throw new BadRequestException(`El escudo debe medir exactamente ${CLUB_LOGO_SIZE}x${CLUB_LOGO_SIZE} píxeles.`);
+    }
+  }
+
+  private normalizeLogoUrl(value?: string | null) {
+    const trimmed = value?.trim();
+    return trimmed && trimmed.length > 0 ? trimmed : null;
   }
 
   private async ensureUniqueName(name: string, leagueId?: number | null, excludeId?: number) {

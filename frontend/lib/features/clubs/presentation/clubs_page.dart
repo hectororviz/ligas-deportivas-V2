@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:dio/dio.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -16,6 +19,7 @@ import '../../shared/widgets/table_filters_bar.dart';
 const _moduleClubes = 'CLUBES';
 const _actionCreate = 'CREATE';
 const _actionUpdate = 'UPDATE';
+const double _clubLogoSize = 200;
 
 final clubsFiltersProvider =
     StateNotifierProvider<ClubsFiltersController, ClubsFilters>((ref) {
@@ -857,6 +861,21 @@ class _ClubDetailsView extends StatelessWidget {
                 _DetailLink(label: 'Facebook', url: club.facebookUrl!),
             ],
           ),
+          if (club.logoUrl != null && club.logoUrl!.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: Image.network(
+                  club.logoUrl!,
+                  width: _clubLogoSize,
+                  height: _clubLogoSize,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           Row(
             children: [
@@ -1053,6 +1072,11 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
   bool _shortNameManuallyEdited = false;
   bool _updatingSlug = false;
   bool _updatingShortName = false;
+  Uint8List? _logoBytes;
+  String? _logoFileName;
+  String? _logoUrl;
+  String? _originalLogoUrl;
+  bool _removeLogo = false;
   String? _errorMessage;
   LatLng? _selectedLocation;
   late final _ClubFormSnapshot _initialSnapshot;
@@ -1083,6 +1107,8 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
     );
     _addressController = TextEditingController();
     _active = club?.active ?? true;
+    _logoUrl = club?.logoUrl;
+    _originalLogoUrl = club?.logoUrl;
     if (club?.latitude != null && club?.longitude != null) {
       _selectedLocation = LatLng(club!.latitude!, club.longitude!);
     }
@@ -1099,6 +1125,9 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
       longitude: _longitudeController.text,
       active: _active,
       location: _selectedLocation,
+      logoUrl: _logoUrl,
+      hasLogoFile: false,
+      removeLogo: false,
     );
 
     _nameController.addListener(_handleNameChanged);
@@ -1181,6 +1210,9 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
       longitude: _longitudeController.text,
       active: _active,
       location: _selectedLocation,
+      logoUrl: _logoUrl,
+      hasLogoFile: _logoBytes != null,
+      removeLogo: _removeLogo,
     );
     _hasChanges = current != _initialSnapshot;
   }
@@ -1230,9 +1262,23 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
 
     try {
       if (widget.club == null) {
-        await api.post('/clubs', data: payload);
+        final response = await api.post<Map<String, dynamic>>('/clubs', data: payload);
+        if (_logoBytes != null) {
+          final data = response.data;
+          final newClubId = data?['id'] as int?;
+          if (newClubId == null) {
+            throw Exception('La respuesta no incluyó el identificador del club.');
+          }
+          await _uploadLogo(api, newClubId);
+        }
       } else {
-        await api.patch('/clubs/${widget.club!.id}', data: payload);
+        final clubId = widget.club!.id;
+        await api.patch('/clubs/$clubId', data: payload);
+        if (_logoBytes != null) {
+          await _uploadLogo(api, clubId);
+        } else if (_removeLogo) {
+          await _deleteLogo(api, clubId);
+        }
       }
       if (!mounted) {
         return;
@@ -1345,6 +1391,181 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
       _longitudeController.text = value.longitude.toStringAsFixed(6);
     });
     _checkDirtyState();
+  }
+
+  Future<void> _pickLogo() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['png'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) {
+      return;
+    }
+
+    final file = result.files.first;
+    final bytes = file.bytes;
+    if (bytes == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo leer el archivo seleccionado.')),
+      );
+      return;
+    }
+
+    try {
+      final image = await ui.decodeImageFromList(bytes);
+      if (image.width != _clubLogoSize || image.height != _clubLogoSize) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('El escudo debe medir 200x200 píxeles.')),
+        );
+        return;
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo procesar la imagen seleccionada.')),
+      );
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _logoBytes = bytes;
+      final name = file.name;
+      _logoFileName = name.toLowerCase().endsWith('.png') ? name : '$name.png';
+      _logoUrl = null;
+      _removeLogo = false;
+    });
+    _checkDirtyState();
+  }
+
+  void _markLogoForRemoval() {
+    setState(() {
+      _logoBytes = null;
+      _logoFileName = null;
+      _logoUrl = null;
+      _removeLogo = true;
+    });
+    _checkDirtyState();
+  }
+
+  void _restoreOriginalLogo() {
+    setState(() {
+      _logoBytes = null;
+      _logoFileName = null;
+      _logoUrl = _originalLogoUrl;
+      _removeLogo = false;
+    });
+    _checkDirtyState();
+  }
+
+  Widget _buildLogoSection(bool readOnly) {
+    final theme = Theme.of(context);
+    final hasExistingLogo = (_logoUrl?.isNotEmpty ?? false) && !_removeLogo;
+    final hasOriginalLogo = _originalLogoUrl?.isNotEmpty ?? false;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Escudo del club',
+          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 20,
+          runSpacing: 12,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            _buildLogoPreview(),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (!readOnly)
+                  FilledButton.tonal(
+                    onPressed: _isSaving ? null : _pickLogo,
+                    child: const Text('Seleccionar archivo PNG'),
+                  ),
+                if (!readOnly && _logoBytes != null)
+                  TextButton(
+                    onPressed: _isSaving ? null : _restoreOriginalLogo,
+                    child: Text(hasOriginalLogo ? 'Descartar selección' : 'Borrar selección'),
+                  )
+                else if (!readOnly && hasExistingLogo)
+                  TextButton(
+                    onPressed: _isSaving ? null : _markLogoForRemoval,
+                    child: const Text('Quitar escudo'),
+                  )
+                else if (!readOnly && _removeLogo && hasOriginalLogo)
+                  TextButton(
+                    onPressed: _isSaving ? null : _restoreOriginalLogo,
+                    child: const Text('Restaurar escudo original'),
+                  ),
+                SizedBox(
+                  width: 260,
+                  child: Text(
+                    'Formato PNG cuadrado de ${_clubLogoSize.toInt()}×${_clubLogoSize.toInt()} píxeles.',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLogoPreview() {
+    Widget child;
+    if (_logoBytes != null) {
+      child = Image.memory(_logoBytes!, fit: BoxFit.cover);
+    } else if (_logoUrl != null && _logoUrl!.isNotEmpty && !_removeLogo) {
+      child = Image.network(_logoUrl!, fit: BoxFit.cover);
+    } else {
+      child = Icon(Icons.shield_outlined,
+          size: 64, color: Theme.of(context).colorScheme.outlineVariant);
+    }
+
+    return Container(
+      width: _clubLogoSize,
+      height: _clubLogoSize,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        color: Theme.of(context).colorScheme.surfaceVariant,
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+      ),
+      clipBehavior: Clip.antiAlias,
+      alignment: Alignment.center,
+      child: child,
+    );
+  }
+
+  Future<void> _uploadLogo(Dio api, int clubId) async {
+    if (_logoBytes == null) {
+      return;
+    }
+    final filename = _logoFileName?.isNotEmpty == true ? _logoFileName! : 'club-logo.png';
+    final normalizedName = filename.toLowerCase().endsWith('.png') ? filename : '$filename.png';
+    final formData = FormData();
+    formData.files.add(
+      MapEntry(
+        'logo',
+        MultipartFile.fromBytes(
+          _logoBytes!,
+          filename: normalizedName,
+        ),
+      ),
+    );
+    await api.put('/clubs/$clubId/logo', data: formData);
+  }
+
+  Future<void> _deleteLogo(Dio api, int clubId) async {
+    await api.delete('/clubs/$clubId/logo');
   }
 
   Future<bool> _onWillPop() async {
@@ -1493,6 +1714,8 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
               ),
             ],
           ),
+          const SizedBox(height: 16),
+          _buildLogoSection(readOnly),
           const SizedBox(height: 16),
           Wrap(
             spacing: 16,
@@ -1820,6 +2043,9 @@ class _ClubFormSnapshot {
     required this.longitude,
     required this.active,
     required this.location,
+    this.logoUrl,
+    required this.hasLogoFile,
+    required this.removeLogo,
   });
 
   final String name;
@@ -1833,6 +2059,9 @@ class _ClubFormSnapshot {
   final String longitude;
   final bool active;
   final LatLng? location;
+  final String? logoUrl;
+  final bool hasLogoFile;
+  final bool removeLogo;
 
   @override
   bool operator ==(Object other) {
@@ -1847,6 +2076,9 @@ class _ClubFormSnapshot {
         other.latitude == latitude &&
         other.longitude == longitude &&
         other.active == active &&
+        other.logoUrl == logoUrl &&
+        other.hasLogoFile == hasLogoFile &&
+        other.removeLogo == removeLogo &&
         ((other.location == null && location == null) ||
             (other.location?.latitude == location?.latitude &&
                 other.location?.longitude == location?.longitude));
@@ -1865,7 +2097,10 @@ class _ClubFormSnapshot {
       longitude,
       active,
       location?.latitude,
-      location?.longitude);
+      location?.longitude,
+      logoUrl,
+      hasLogoFile,
+      removeLogo);
 }
 
 class PaginatedClubs {
@@ -1907,6 +2142,7 @@ class Club {
     this.facebookUrl,
     this.latitude,
     this.longitude,
+    this.logoUrl,
   });
 
   factory Club.fromJson(Map<String, dynamic> json) {
@@ -1924,6 +2160,7 @@ class Club {
       facebookUrl: json['facebookUrl'] as String?,
       latitude: _parseCoordinate(json['latitude']),
       longitude: _parseCoordinate(json['longitude']),
+      logoUrl: json['logoUrl'] as String?,
     );
   }
 
@@ -1938,6 +2175,7 @@ class Club {
   final String? facebookUrl;
   final double? latitude;
   final double? longitude;
+  final String? logoUrl;
 
   Color? get primaryColor => _parseHexColor(primaryHex);
   Color? get secondaryColor => _parseHexColor(secondaryHex);
