@@ -1394,7 +1394,18 @@ class _CategorySelectionTableState extends State<_CategorySelectionTable> {
               DataCell(Text(selection.category.name)),
               DataCell(Text(selection.category.birthYearRangeLabel)),
               DataCell(Text(selection.category.genderLabel)),
-              DataCell(Text(selection.category.promotional ? 'Sí' : 'No')),
+              DataCell(
+                Align(
+                  alignment: Alignment.center,
+                  child: selection.category.promotional
+                      ? Icon(
+                          Icons.check,
+                          size: 18,
+                          color: Theme.of(context).colorScheme.primary,
+                        )
+                      : const SizedBox.shrink(),
+                ),
+              ),
               DataCell(
                 Checkbox(
                   value: selection.include,
