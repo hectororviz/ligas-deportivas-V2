@@ -148,6 +148,7 @@ model Club {
   primaryColor      String?
   secondaryColor    String?
   active            Boolean            @default(true)
+  logoKey           String?
   logoUrl           String?
   instagramUrl      String?
   facebookUrl       String?
