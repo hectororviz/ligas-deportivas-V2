@@ -295,8 +295,8 @@ export class ClubsService {
     const skip = (page - 1) * pageSize;
 
     const category = tournamentCategory.category;
-    const startDate = new Date(category.birthYearMin, 0, 1);
-    const endDate = new Date(category.birthYearMax, 11, 31, 23, 59, 59, 999);
+    const startDate = new Date(Date.UTC(category.birthYearMin, 0, 1));
+    const endDate = new Date(Date.UTC(category.birthYearMax, 11, 31, 23, 59, 59, 999));
 
     const where: Prisma.PlayerWhereInput = {
       clubId,
@@ -384,8 +384,8 @@ export class ClubsService {
     }
 
     const category = tournamentCategory.category;
-    const startDate = new Date(category.birthYearMin, 0, 1);
-    const endDate = new Date(category.birthYearMax, 11, 31, 23, 59, 59, 999);
+    const startDate = new Date(Date.UTC(category.birthYearMin, 0, 1));
+    const endDate = new Date(Date.UTC(category.birthYearMax, 11, 31, 23, 59, 59, 999));
 
     const uniquePlayerIds = Array.from(new Set(dto.playerIds ?? []));
 
