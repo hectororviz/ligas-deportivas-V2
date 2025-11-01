@@ -665,29 +665,33 @@ class _ClubAvatar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final primary = club.primaryColor ?? Theme.of(context).colorScheme.primary;
-    final secondary =
-        club.secondaryColor ?? Theme.of(context).colorScheme.primaryContainer;
     final fallback = _ClubAvatarInitials(
       initials: club.initials,
       color: primary,
     );
     final logoUrl = club.logoUrl;
 
-    return Container(
+    return SizedBox(
       width: 48,
       height: 48,
-      decoration: BoxDecoration(
-        color: secondary.withOpacity(0.3),
-        shape: BoxShape.circle,
-      ),
-      clipBehavior: Clip.antiAlias,
       child: logoUrl != null && logoUrl.isNotEmpty
-          ? AuthenticatedImage(
-              imageUrl: logoUrl,
-              fit: BoxFit.cover,
-              headers: _buildImageHeaders(ref),
-              placeholder: fallback,
-              error: fallback,
+          ? ClipRRect(
+              borderRadius: BorderRadius.zero,
+              child: AuthenticatedImage(
+                imageUrl: logoUrl,
+                fit: BoxFit.contain,
+                headers: _buildImageHeaders(ref),
+                placeholder: Center(
+                  child: SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(primary),
+                    ),
+                  ),
+                ),
+                error: fallback,
+              ),
             )
           : fallback,
     );
