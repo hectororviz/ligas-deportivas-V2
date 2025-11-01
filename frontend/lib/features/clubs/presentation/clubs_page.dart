@@ -14,6 +14,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
+import '../../shared/widgets/page_scaffold.dart';
 import '../../shared/widgets/table_filters_bar.dart';
 import 'widgets/authenticated_image.dart';
 
@@ -203,7 +204,7 @@ class _ClubsPageState extends ConsumerState<ClubsPage> {
     final clubsAsync = ref.watch(clubsProvider);
     final filters = ref.watch(clubsFiltersProvider);
 
-    return Scaffold(
+    return PageScaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: canCreate
           ? FloatingActionButton.extended(
@@ -212,10 +213,10 @@ class _ClubsPageState extends ConsumerState<ClubsPage> {
               label: const Text('Agregar club'),
             )
           : null,
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      builder: (context, scrollController) {
+        return ListView(
+          controller: scrollController,
+          padding: const EdgeInsets.all(24.0),
           children: [
             Text(
               'Clubes',
@@ -289,9 +290,8 @@ class _ClubsPageState extends ConsumerState<ClubsPage> {
               ),
             ),
             const SizedBox(height: 16),
-            Expanded(
-              child: clubsAsync.when(
-                data: (paginated) {
+            clubsAsync.when(
+              data: (paginated) {
                   if (paginated.clubs.isEmpty) {
                     if (filters.query.isNotEmpty ||
                         filters.status != ClubStatusFilter.all) {
@@ -334,7 +334,9 @@ class _ClubsPageState extends ConsumerState<ClubsPage> {
                           ),
                         ),
                         const Divider(height: 1),
-                        Expanded(
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 8),
                           child: _ClubsDataTable(
                             data: paginated,
                             canEdit: canEdit,
@@ -342,6 +344,7 @@ class _ClubsPageState extends ConsumerState<ClubsPage> {
                             onView: _openClubDetails,
                           ),
                         ),
+                        const Divider(height: 1),
                         _ClubsPaginationFooter(
                           page: paginated.page,
                           pageSize: paginated.pageSize,
@@ -361,11 +364,10 @@ class _ClubsPageState extends ConsumerState<ClubsPage> {
                   error: error,
                   onRetry: () => ref.invalidate(clubsProvider),
                 ),
-              ),
             ),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -467,9 +469,9 @@ class _ClubsDataTable extends StatelessWidget {
         DataColumn(label: Text('Estado')),
         DataColumn(label: Text('Acciones')),
       ],
-      dataRowMinHeight: 68,
-      dataRowMaxHeight: 80,
-      headingRowHeight: 52,
+      dataRowMinHeight: 44,
+      dataRowMaxHeight: 60,
+      headingRowHeight: 48,
       rows: clubs
           .map(
             (club) => DataRow(
@@ -550,16 +552,21 @@ class _ClubsDataTable extends StatelessWidget {
           .toList(),
     );
 
-    return Scrollbar(
-      thumbVisibility: true,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.only(bottom: 12),
-        scrollDirection: Axis.vertical,
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: table,
-        ),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Scrollbar(
+          thumbVisibility: true,
+          notificationPredicate: (notification) =>
+              notification.metrics.axis == Axis.horizontal,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+              child: table,
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -712,6 +719,8 @@ class _ClubsTableSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final shimmerColor = Theme.of(context).colorScheme.surfaceVariant;
+
     return Card(
       child: Column(
         children: [
@@ -722,20 +731,19 @@ class _ClubsTableSkeleton extends StatelessWidget {
             subtitle: SizedBox(height: 16),
           ),
           const Divider(height: 1),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(24),
-              itemCount: 5,
-              itemBuilder: (context, index) {
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: List.generate(5, (index) {
                 return Padding(
-                  padding: const EdgeInsets.only(bottom: 16.0),
+                  padding: EdgeInsets.only(bottom: index == 4 ? 0 : 16),
                   child: Row(
                     children: [
                       Container(
                         width: 48,
                         height: 48,
                         decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.surfaceVariant,
+                          color: shimmerColor,
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -747,7 +755,7 @@ class _ClubsTableSkeleton extends StatelessWidget {
                             Container(
                               height: 12,
                               decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.surfaceVariant,
+                                color: shimmerColor,
                                 borderRadius: BorderRadius.circular(4),
                               ),
                             ),
@@ -756,7 +764,7 @@ class _ClubsTableSkeleton extends StatelessWidget {
                               height: 12,
                               width: 120,
                               decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.surfaceVariant,
+                                color: shimmerColor,
                                 borderRadius: BorderRadius.circular(4),
                               ),
                             ),
@@ -766,7 +774,7 @@ class _ClubsTableSkeleton extends StatelessWidget {
                     ],
                   ),
                 );
-              },
+              }),
             ),
           ),
         ],

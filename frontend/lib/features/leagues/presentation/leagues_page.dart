@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
+import '../../shared/widgets/page_scaffold.dart';
 
 final leaguesProvider = FutureProvider<List<League>>((ref) async {
   final api = ref.read(apiClientProvider);
@@ -109,90 +110,96 @@ class _LeaguesPageState extends ConsumerState<LeaguesPage> {
     final authState = ref.watch(authControllerProvider);
     final isAdmin = authState.user?.roles.contains('ADMIN') ?? false;
 
-    return Scaffold(
+    return PageScaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openCreateLeague,
         icon: const Icon(Icons.add),
         label: const Text('Agregar liga'),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      builder: (context, scrollController) {
+        return ListView(
+          controller: scrollController,
+          padding: const EdgeInsets.all(24.0),
           children: [
             Text(
               'Ligas',
               style: Theme.of(context)
-                    .textTheme
-                    .headlineMedium
-                    ?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Crea nuevas ligas en segundos y mantenlas organizadas con la configuración básica.',
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
-              const SizedBox(height: 24),
-              Expanded(
-                child: leaguesAsync.when(
-                  data: (leagues) {
-                    if (leagues.isEmpty) {
-                      return _EmptyLeaguesState(onCreate: _openCreateLeague);
-                    }
-                    return Card(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                  .textTheme
+                  .headlineMedium
+                  ?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Crea nuevas ligas en segundos y mantenlas organizadas con la configuración básica.',
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
+            const SizedBox(height: 24),
+            leaguesAsync.when(
+              data: (leagues) {
+                if (leagues.isEmpty) {
+                  return _EmptyLeaguesState(onCreate: _openCreateLeague);
+                }
+                return Card(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        child: Row(
                           children: [
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.table_view_outlined,
-                                    color: Theme.of(context).colorScheme.primary,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Text(
-                                    'Ligas registradas',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(fontWeight: FontWeight.w600),
-                                  ),
-                                  const Spacer(),
-                                  Text(
-                                    '${leagues.length} registradas',
-                                    style: Theme.of(context).textTheme.bodyMedium,
-                                  ),
-                                ],
-                              ),
+                            Icon(
+                              Icons.table_view_outlined,
+                              color: Theme.of(context).colorScheme.primary,
                             ),
-                            const Divider(height: 1),
-                            Expanded(
-                              child: _LeaguesDataTable(
-                                leagues: leagues,
-                                isAdmin: isAdmin,
-                                onEdit: _openEditLeague,
-                              ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Ligas registradas',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w600),
+                            ),
+                            const Spacer(),
+                            Text(
+                              '${leagues.length} registradas',
+                              style: Theme.of(context).textTheme.bodyMedium,
                             ),
                           ],
                         ),
                       ),
-                    );
-                  },
-                  loading: () => const Center(child: CircularProgressIndicator()),
-                  error: (error, stackTrace) => _LeaguesErrorState(
+                      const Divider(height: 1),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: _LeaguesDataTable(
+                          leagues: leagues,
+                          isAdmin: isAdmin,
+                          onEdit: _openEditLeague,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+              loading: () => const Card(
+                child: SizedBox(
+                  height: 200,
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              ),
+              error: (error, stackTrace) => Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: _LeaguesErrorState(
                     error: error,
                     onRetry: () => ref.invalidate(leaguesProvider),
                   ),
                 ),
               ),
-            ],
-          ),
-        ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -211,9 +218,9 @@ class _LeaguesDataTable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final table = DataTable(
-      headingRowHeight: 52,
-      dataRowMinHeight: 64,
-      dataRowMaxHeight: 80,
+      headingRowHeight: 48,
+      dataRowMinHeight: 44,
+      dataRowMaxHeight: 60,
       columns: const [
         DataColumn(label: Text('Liga')),
         DataColumn(label: Text('Identificador')),
@@ -268,16 +275,13 @@ class _LeaguesDataTable extends StatelessWidget {
       builder: (context, constraints) {
         return Scrollbar(
           thumbVisibility: true,
-          controller: PrimaryScrollController.maybeOf(context),
+          notificationPredicate: (notification) =>
+              notification.metrics.axis == Axis.horizontal,
           child: SingleChildScrollView(
-            padding: const EdgeInsets.only(bottom: 12),
-            scrollDirection: Axis.vertical,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                child: table,
-              ),
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+              child: table,
             ),
           ),
         );

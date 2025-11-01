@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
+import '../../shared/widgets/page_scaffold.dart';
 import '../../shared/widgets/table_filters_bar.dart';
 
 const _modulePlayers = 'JUGADORES';
@@ -227,7 +228,7 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
     final currentYear = DateTime.now().year;
     final birthYearOptions = List<int>.generate(60, (index) => currentYear - index);
 
-    return Scaffold(
+    return PageScaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: canCreate
           ? FloatingActionButton.extended(
@@ -236,10 +237,10 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
               label: const Text('Agregar jugador'),
             )
           : null,
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      builder: (context, scrollController) {
+        return ListView(
+          controller: scrollController,
+          padding: const EdgeInsets.all(24.0),
           children: [
             Text(
               'Jugadores',
@@ -415,9 +416,8 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
               ),
             ),
             const SizedBox(height: 16),
-            Expanded(
-              child: playersAsync.when(
-                data: (paginated) {
+            playersAsync.when(
+              data: (paginated) {
                   if (paginated.players.isEmpty) {
                     if (filters.hasActiveFilters) {
                       return _PlayersEmptyFilterState(onClear: () {
@@ -460,7 +460,9 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
                           ),
                         ),
                         const Divider(height: 1),
-                        Expanded(
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 8),
                           child: _PlayersDataTable(
                             data: paginated,
                             canEdit: canEdit,
@@ -468,6 +470,7 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
                             onView: _openPlayerDetails,
                           ),
                         ),
+                        const Divider(height: 1),
                         _PlayersPaginationFooter(
                           page: paginated.page,
                           pageSize: paginated.pageSize,
@@ -487,11 +490,10 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
                   error: error,
                   onRetry: () => ref.invalidate(playersProvider),
                 ),
-              ),
             ),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -668,9 +670,9 @@ class _PlayersDataTable extends StatelessWidget {
         DataColumn(label: Text('Estado')),
         DataColumn(label: Text('Acciones')),
       ],
-      dataRowMinHeight: 64,
-      dataRowMaxHeight: 80,
-      headingRowHeight: 52,
+      dataRowMinHeight: 44,
+      dataRowMaxHeight: 60,
+      headingRowHeight: 48,
       rows: players
           .map(
             (player) => DataRow(
@@ -736,16 +738,13 @@ class _PlayersDataTable extends StatelessWidget {
       builder: (context, constraints) {
         return Scrollbar(
           thumbVisibility: true,
-          controller: PrimaryScrollController.maybeOf(context),
+          notificationPredicate: (notification) =>
+              notification.metrics.axis == Axis.horizontal,
           child: SingleChildScrollView(
-            padding: const EdgeInsets.only(bottom: 12),
-            scrollDirection: Axis.vertical,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                child: table,
-              ),
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+              child: table,
             ),
           ),
         );
@@ -939,50 +938,46 @@ class _PlayersTableSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final shimmerColor = Theme.of(context).colorScheme.surfaceVariant;
+
     return Card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const SizedBox(height: 16),
-          Expanded(
-            child: ListView.separated(
-              padding: const EdgeInsets.all(24),
-              itemBuilder: (context, index) {
-                return Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            height: 16,
-                            decoration: BoxDecoration(
-                              color:
-                                  Theme.of(context).colorScheme.surfaceVariant,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: List.generate(6, (index) {
+            return Padding(
+              padding: EdgeInsets.only(bottom: index == 5 ? 0 : 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          height: 16,
+                          decoration: BoxDecoration(
+                            color: shimmerColor,
+                            borderRadius: BorderRadius.circular(4),
                           ),
-                          const SizedBox(height: 8),
-                          Container(
-                            height: 12,
-                            width: 120,
-                            decoration: BoxDecoration(
-                              color:
-                                  Theme.of(context).colorScheme.surfaceVariant,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          height: 12,
+                          width: 120,
+                          decoration: BoxDecoration(
+                            color: shimmerColor,
+                            borderRadius: BorderRadius.circular(4),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  ],
-                );
-              },
-              separatorBuilder: (context, index) => const SizedBox(height: 16),
-              itemCount: 6,
-            ),
-          ),
-        ],
+                  ),
+                ],
+              ),
+            );
+          }),
+        ),
       ),
     );
   }
