@@ -359,77 +359,108 @@ class _ClubSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final primary = club.primaryColor;
     final secondary = club.secondaryColor;
+    final theme = Theme.of(context);
+    final surfaceVariant =
+        theme.colorScheme.surfaceVariant.withOpacity(theme.brightness == Brightness.dark ? 0.35 : 0.6);
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _ClubLogo(logoUrl: club.logoUrl, name: club.name),
-                const SizedBox(width: 20),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+    return Container(
+      decoration: BoxDecoration(
+        color: surfaceVariant,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.1)),
+      ),
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Align(
+            alignment: Alignment.centerRight,
+            child: Chip(
+              shape: StadiumBorder(
+                side: BorderSide(color: theme.colorScheme.outline.withOpacity(0.12)),
+              ),
+              backgroundColor: club.active
+                  ? Colors.green.withOpacity(0.12)
+                  : Colors.orange.withOpacity(0.12),
+              label: Text(
+                club.active ? 'Activo' : 'Inactivo',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: club.active ? Colors.green.shade800 : Colors.orange.shade800,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              avatar: Icon(
+                club.active ? Icons.check_circle : Icons.pause_circle_filled,
+                color: club.active ? Colors.green : Colors.orange,
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              _ClubLogo(logoUrl: club.logoUrl, name: club.name),
+              const SizedBox(width: 24),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      club.name,
+                      style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surface,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Expanded(
-                            child: Text(
-                              club.name,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .headlineSmall
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Chip(
-                            label: Text(club.active ? 'Activo' : 'Inactivo'),
-                            avatar: Icon(
-                              club.active ? Icons.check_circle : Icons.pause_circle_filled,
-                              color: club.active ? Colors.green : Colors.orange,
-                            ),
+                          Icon(Icons.link_rounded, size: 18, color: theme.colorScheme.onSurfaceVariant),
+                          const SizedBox(width: 8),
+                          Text(
+                            club.slug != null
+                                ? 'Slug: ${club.slug}'
+                                : 'Sin identificador público',
+                            style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        club.slug != null ? 'Slug: ${club.slug}' : 'Sin identificador público',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            Wrap(
-              spacing: 24,
-              runSpacing: 16,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                _ColorBadge(
-                  title: 'Color primario',
-                  color: primary,
-                  hex: club.primaryHex,
-                ),
-                _ColorBadge(
-                  title: 'Color secundario',
-                  color: secondary,
-                  hex: club.secondaryHex,
-                ),
-                if ((club.facebookUrl?.isNotEmpty ?? false) ||
-                    (club.instagramUrl?.isNotEmpty ?? false) ||
-                    club.mapsUrl != null)
-                  _ClubContactLinks(club: club),
-              ],
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Divider(color: theme.colorScheme.outline.withOpacity(0.1)),
+          const SizedBox(height: 24),
+          Wrap(
+            spacing: 24,
+            runSpacing: 16,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              _ColorBadge(
+                color: primary,
+                hex: club.primaryHex,
+              ),
+              _ColorBadge(
+                color: secondary,
+                hex: club.secondaryHex,
+              ),
+              if ((club.facebookUrl?.isNotEmpty ?? false) ||
+                  (club.instagramUrl?.isNotEmpty ?? false) ||
+                  club.mapsUrl != null)
+                _ClubContactLinks(club: club),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -531,7 +562,7 @@ class _ClubContactLinks extends StatelessWidget {
     }
 
     return Wrap(
-      spacing: 12,
+      spacing: 16,
       children: links,
     );
   }
@@ -554,7 +585,10 @@ class _IconLinkButton extends StatelessWidget {
       message: tooltip,
       child: IconButton(
         onPressed: () => _launchExternalUrl(context, url),
-        icon: Icon(icon, size: 28, color: Theme.of(context).colorScheme.primary),
+        icon: Icon(icon, color: Theme.of(context).colorScheme.primary),
+        iconSize: 32,
+        padding: const EdgeInsets.all(10),
+        constraints: const BoxConstraints(minHeight: 52, minWidth: 52),
       ),
     );
   }
@@ -588,42 +622,47 @@ class _LogoFallback extends StatelessWidget {
 }
 
 class _ColorBadge extends StatelessWidget {
-  const _ColorBadge({required this.title, required this.color, required this.hex});
+  const _ColorBadge({required this.color, required this.hex});
 
-  final String title;
   final Color? color;
   final String? hex;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 220,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    final theme = Theme.of(context);
+    final displayColor = color ?? theme.colorScheme.surfaceVariant;
+    return Container(
+      constraints: const BoxConstraints(minWidth: 200),
+      height: 52,
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Row(
         children: [
-          Text(title, style: Theme.of(context).textTheme.labelMedium),
-          const SizedBox(height: 6),
           Container(
-            height: 44,
+            width: 32,
+            height: 32,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Theme.of(context).dividerColor),
+              color: displayColor,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
             ),
-            padding: const EdgeInsets.all(8),
-            child: Row(
-              children: [
-                Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: color ?? Theme.of(context).colorScheme.surfaceVariant,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Theme.of(context).dividerColor),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Text(hex ?? '—', style: Theme.of(context).textTheme.titleMedium),
-              ],
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: SelectableText(
+              hex ?? '—',
+              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
           ),
         ],
