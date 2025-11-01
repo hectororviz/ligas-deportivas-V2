@@ -1,17 +1,17 @@
 import { PrismaClient } from '@prisma/client';
-import { seedBaseData } from '../src/prisma/base-seed';
+
 import { seedPlayers } from '../src/prisma/seed-players';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  await seedBaseData(prisma);
-  await seedPlayers(prisma);
+  const inserted = await seedPlayers(prisma);
+  console.log(`Jugadores insertados: ${inserted}`);
 }
 
 main()
-  .catch((e) => {
-    console.error(e);
+  .catch((error) => {
+    console.error('Error al sembrar jugadores:', error);
     process.exit(1);
   })
   .finally(async () => {

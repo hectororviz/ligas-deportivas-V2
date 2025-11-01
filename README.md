@@ -104,9 +104,11 @@ Las variables de entorno del contenedor `backend` se basan en los mismos nombres
 
 ## Datos de ejemplo
 
-Si necesitas poblar rápidamente la tabla de jugadores con datos de prueba, puedes ejecutar el script SQL disponible en `backend/prisma/seed_players.sql`. El archivo inserta 60 jugadores con la distribución de edades y géneros solicitada y sin asociación a clubes.
+Si necesitas poblar rápidamente la tabla de jugadores con datos de prueba, puedes ejecutar el comando `npm run seed:players` dentro del directorio `backend`. El script utiliza Prisma y la misma conexión configurada en `DATABASE_URL`, por lo que siempre apuntará a la base correcta. Inserta 66 jugadores con la distribución de edades y géneros solicitada y sin asociación a clubes.
 
 Antes de correrlo, asegúrate de haber aplicado las migraciones de Prisma para que la tabla `Player` exista (por ejemplo con `npx prisma migrate deploy` o `npx prisma migrate dev`).
+
+Si prefieres interactuar directamente con PostgreSQL, el archivo SQL original sigue disponible en `backend/prisma/seed_players.sql`.
 
 Ejecuta el script con `psql`, reemplazando las variables de conexión por las de tu entorno:
 
