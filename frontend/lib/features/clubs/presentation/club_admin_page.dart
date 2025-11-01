@@ -466,6 +466,31 @@ class _ClubSummaryCard extends StatelessWidget {
   }
 }
 
+class _SummaryIconBadge extends StatelessWidget {
+  const _SummaryIconBadge({
+    required this.icon,
+    required this.background,
+    required this.foreground,
+  });
+
+  final IconData icon;
+  final Color background;
+  final Color foreground;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(icon, color: foreground, size: 24),
+    );
+  }
+}
+
 class _ClubLogo extends ConsumerWidget {
   const _ClubLogo({required this.logoUrl, required this.name});
 
