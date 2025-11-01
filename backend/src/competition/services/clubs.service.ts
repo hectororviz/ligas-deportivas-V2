@@ -292,6 +292,8 @@ export class ClubsService {
         logoUrl: club.logoUrl,
         instagramUrl: club.instagramUrl,
         facebookUrl: club.facebookUrl,
+        latitude: club.latitude,
+        longitude: club.longitude,
       },
       tournaments,
     };
