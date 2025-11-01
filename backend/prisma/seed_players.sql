@@ -1,5 +1,8 @@
 -- Script to insert 60 players matching requested demographics
-INSERT INTO "Player" ("firstName", "lastName", "birthDate", "dni", "gender", "clubId", "addressCity") VALUES
+-- Ensures compatibility with default Prisma schema (public."Player") and can be re-run safely.
+BEGIN;
+
+INSERT INTO public."Player" ("firstName", "lastName", "birthDate", "dni", "gender", "clubId", "addressCity") VALUES
   ('Mateo', 'Gómez', '2017-01-05', '90000001', 'MASCULINO', NULL, 'Rosario'),
   ('Santiago', 'Fernández', '2017-02-14', '90000002', 'MASCULINO', NULL, 'Santa Fe'),
   ('Benjamín', 'Rodríguez', '2017-03-22', '90000003', 'MASCULINO', NULL, 'Córdoba'),
@@ -65,4 +68,7 @@ INSERT INTO "Player" ("firstName", "lastName", "birthDate", "dni", "gender", "cl
   ('Tamara', 'Pizarro', '2004-04-12', '90000063', 'FEMENINO', NULL, 'Río Cuarto'),
   ('Victoria', 'Quiñones', '2000-07-01', '90000064', 'FEMENINO', NULL, 'Paraná'),
   ('Natalia', 'Roldán', '1999-09-20', '90000065', 'FEMENINO', NULL, 'Corrientes'),
-  ('Gabriela', 'Sosa', '1996-11-09', '90000066', 'FEMENINO', NULL, 'Formosa');
+  ('Gabriela', 'Sosa', '1996-11-09', '90000066', 'FEMENINO', NULL, 'Formosa')
+ON CONFLICT ("dni") DO NOTHING;
+
+COMMIT;

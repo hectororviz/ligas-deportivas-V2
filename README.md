@@ -106,6 +106,8 @@ Las variables de entorno del contenedor `backend` se basan en los mismos nombres
 
 Si necesitas poblar rápidamente la tabla de jugadores con datos de prueba, puedes ejecutar el script SQL disponible en `backend/prisma/seed_players.sql`. El archivo inserta 60 jugadores con la distribución de edades y géneros solicitada y sin asociación a clubes.
 
+Antes de correrlo, asegúrate de haber aplicado las migraciones de Prisma para que la tabla `Player` exista (por ejemplo con `npx prisma migrate deploy` o `npx prisma migrate dev`).
+
 Ejecuta el script con `psql`, reemplazando las variables de conexión por las de tu entorno:
 
 ```bash
@@ -126,7 +128,7 @@ docker compose exec -T db \
   < ../backend/prisma/seed_players.sql
 ```
 
-Adapta el nombre de la base, usuario o ruta del archivo según tu configuración (por ejemplo, si cambiaste `POSTGRES_DB`, `POSTGRES_USER` o ejecutas el comando desde otro directorio).
+El script apunta explícitamente a `public."Player"` y utiliza `ON CONFLICT ("dni") DO NOTHING`, por lo que puedes ejecutarlo varias veces sin duplicar registros. Adapta el nombre de la base, usuario o ruta del archivo según tu configuración (por ejemplo, si cambiaste `POSTGRES_DB`, `POSTGRES_USER` o ejecutas el comando desde otro directorio).
 
 ## Documentación adicional
 
