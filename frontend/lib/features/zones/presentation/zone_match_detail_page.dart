@@ -340,56 +340,167 @@ class _CategoriesTableState extends ConsumerState<_CategoriesTable> {
     final theme = Theme.of(context);
     final categories = widget.match.categories;
 
-    final borderColor = theme.colorScheme.outlineVariant.withOpacity(0.6);
-
-    final columnWidths = <int, TableColumnWidth>{
-      0: const FlexColumnWidth(2),
-      1: const FlexColumnWidth(),
-      2: const FlexColumnWidth(),
-      3: const IntrinsicColumnWidth(),
-    };
+    final outerBorderColor = theme.colorScheme.outlineVariant.withOpacity(0.6);
+    final innerBorderColor = theme.colorScheme.outlineVariant.withOpacity(0.7);
+    final headerBackground =
+        theme.colorScheme.surfaceVariant.withOpacity(0.45);
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
-      child: Table(
-        columnWidths: columnWidths,
-        border: TableBorder(
-          top: BorderSide(color: borderColor),
-          bottom: BorderSide(color: borderColor),
-          left: BorderSide(color: borderColor),
-          right: BorderSide(color: borderColor),
-          horizontalInside: BorderSide(color: borderColor.withOpacity(0.7)),
-          verticalInside: BorderSide(color: borderColor.withOpacity(0.7)),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          border: Border.all(color: outerBorderColor),
+          borderRadius: BorderRadius.circular(12),
         ),
-        defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-        children: [
-          TableRow(
-            decoration: BoxDecoration(color: theme.colorScheme.surfaceVariant.withOpacity(0.45)),
-            children: [
-              const _TableHeaderCell(label: 'Categoría', textAlign: TextAlign.left),
-              const _TableHeaderCell(label: 'Goles Local'),
-              const _TableHeaderCell(label: 'Goles Visitante'),
-              const _TableHeaderCell(label: 'Goles'),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildHeaderRow(theme, headerBackground, innerBorderColor),
+            Divider(height: 1, thickness: 1, color: innerBorderColor),
+            for (var i = 0; i < categories.length; i++) ...[
+              if (i > 0)
+                Divider(height: 1, thickness: 1, color: innerBorderColor),
+              _buildCategoryRow(
+                theme,
+                innerBorderColor,
+                categories[i],
+              ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderRow(
+    ThemeData theme,
+    Color headerBackground,
+    Color innerBorderColor,
+  ) {
+    return Row(
+      children: [
+        _headerCell(
+          theme,
+          headerBackground,
+          innerBorderColor,
+          label: 'Categoría',
+          flex: 2,
+          textAlign: TextAlign.left,
+        ),
+        _headerCell(
+          theme,
+          headerBackground,
+          innerBorderColor,
+          label: 'Goles Local',
+        ),
+        _headerCell(
+          theme,
+          headerBackground,
+          innerBorderColor,
+          label: 'Goles Visitante',
+        ),
+        _headerCell(
+          theme,
+          headerBackground,
+          innerBorderColor,
+          label: 'Goles',
+          showRightBorder: false,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCategoryRow(
+    ThemeData theme,
+    Color innerBorderColor,
+    ZoneMatchCategory category,
+  ) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _dataCell(
+          innerBorderColor,
+          flex: 2,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            child: Text(category.categoryName, style: theme.textTheme.bodyMedium),
           ),
-          for (final category in categories)
-            TableRow(
-              children: [
-                _TableTextCell(label: category.categoryName),
-                _ScoreCell(
-                  score: category.homeScore,
-                  outcome: _scoreOutcome(category.homeScore, category.awayScore),
-                ),
-                _ScoreCell(
-                  score: category.awayScore,
-                  outcome: _scoreOutcome(category.awayScore, category.homeScore),
-                ),
-                _ActionCell(
-                  onTap: () => _openGoalsDialog(category),
-                ),
-              ],
-            ),
-        ],
+        ),
+        _dataCell(
+          innerBorderColor,
+          child: _ScoreCell(
+            score: category.homeScore,
+            outcome: _scoreOutcome(category.homeScore, category.awayScore),
+          ),
+        ),
+        _dataCell(
+          innerBorderColor,
+          child: _ScoreCell(
+            score: category.awayScore,
+            outcome: _scoreOutcome(category.awayScore, category.homeScore),
+          ),
+        ),
+        _dataCell(
+          innerBorderColor,
+          showRightBorder: false,
+          child: _ActionCell(
+            onTap: () => _openGoalsDialog(category),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _headerCell(
+    ThemeData theme,
+    Color backgroundColor,
+    Color innerBorderColor, {
+    required String label,
+    int flex = 1,
+    TextAlign textAlign = TextAlign.center,
+    bool showRightBorder = true,
+  }) {
+    return Expanded(
+      flex: flex,
+      child: Container(
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          border: Border(
+            right: showRightBorder
+                ? BorderSide(color: innerBorderColor)
+                : BorderSide.none,
+          ),
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        child: Text(
+          label,
+          textAlign: textAlign,
+          style:
+              theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+        ),
+      ),
+    );
+  }
+
+  Widget _dataCell(
+    Color innerBorderColor, {
+    required Widget child,
+    int flex = 1,
+    bool showRightBorder = true,
+  }) {
+    return Expanded(
+      flex: flex,
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(
+            right: showRightBorder
+                ? BorderSide(color: innerBorderColor)
+                : BorderSide.none,
+          ),
+        ),
+        child: child,
       ),
     );
   }
@@ -1023,44 +1134,6 @@ String mapDioError(DioException error) {
     return error.message!;
   }
   return 'Ocurrió un error inesperado. Intenta nuevamente.';
-}
-
-class _TableHeaderCell extends StatelessWidget {
-  const _TableHeaderCell({required this.label, this.textAlign = TextAlign.center});
-
-  final String label;
-  final TextAlign textAlign;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-      child: Text(
-        label,
-        textAlign: textAlign,
-        style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-      ),
-    );
-  }
-}
-
-class _TableTextCell extends StatelessWidget {
-  const _TableTextCell({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-      child: Text(
-        label,
-        style: theme.textTheme.bodyMedium,
-      ),
-    );
-  }
 }
 
 enum _ScoreOutcome { win, draw, loss }
