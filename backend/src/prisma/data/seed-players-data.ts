@@ -6,6 +6,8 @@ export const seedPlayersData = [
     dni: '90000001',
     gender: 'MASCULINO',
     clubId: null,
+    addressStreet: 'Av. San Martín',
+    addressNumber: '101',
     addressCity: 'Rosario',
   },
   {
@@ -15,6 +17,8 @@ export const seedPlayersData = [
     dni: '90000002',
     gender: 'MASCULINO',
     clubId: null,
+    addressStreet: 'Calle Belgrano',
+    addressNumber: '214',
     addressCity: 'Santa Fe',
   },
   {
@@ -24,6 +28,8 @@ export const seedPlayersData = [
     dni: '90000003',
     gender: 'MASCULINO',
     clubId: null,
+    addressStreet: 'Pasaje Mitre',
+    addressNumber: '087',
     addressCity: 'Córdoba',
   },
   {
@@ -33,6 +39,8 @@ export const seedPlayersData = [
     dni: '90000004',
     gender: 'MASCULINO',
     clubId: null,
+    addressStreet: 'Boulevard Rivadavia',
+    addressNumber: '320',
     addressCity: 'Mendoza',
   },
   {
@@ -42,6 +50,8 @@ export const seedPlayersData = [
     dni: '90000005',
     gender: 'MASCULINO',
     clubId: null,
+    addressStreet: 'Calle Lavalle',
+    addressNumber: '045',
     addressCity: 'La Plata',
   },
   {
@@ -51,6 +61,8 @@ export const seedPlayersData = [
     dni: '90000006',
     gender: 'MASCULINO',
     clubId: null,
+    addressStreet: 'Av. Libertad',
+    addressNumber: '560',
     addressCity: 'Bahía Blanca',
   },
   {
@@ -60,6 +72,8 @@ export const seedPlayersData = [
     dni: '90000007',
     gender: 'MASCULINO',
     clubId: null,
+    addressStreet: 'Calle Moreno',
+    addressNumber: '233',
     addressCity: 'Mar del Plata',
   },
   {
@@ -69,6 +83,8 @@ export const seedPlayersData = [
     dni: '90000008',
     gender: 'MASCULINO',
     clubId: null,
+    addressStreet: 'Calle Sarmiento',
+    addressNumber: '178',
     addressCity: 'Posadas',
   },
   {
@@ -78,6 +94,8 @@ export const seedPlayersData = [
     dni: '90000009',
     gender: 'MASCULINO',
     clubId: null,
+    addressStreet: 'Av. Independencia',
+    addressNumber: '402',
     addressCity: 'Resistencia',
   },
   {
@@ -87,6 +105,8 @@ export const seedPlayersData = [
     dni: '90000010',
     gender: 'MASCULINO',
     clubId: null,
+    addressStreet: 'Calle Italia',
+    addressNumber: '096',
     addressCity: 'Salta',
   },
   {
@@ -96,6 +116,8 @@ export const seedPlayersData = [
     dni: '90000011',
     gender: 'MASCULINO',
     clubId: null,
+    addressStreet: 'Calle España',
+    addressNumber: '275',
     addressCity: 'Neuquén',
   },
   {
@@ -105,6 +127,8 @@ export const seedPlayersData = [
     dni: '90000012',
     gender: 'MASCULINO',
     clubId: null,
+    addressStreet: 'Av. Alem',
+    addressNumber: '510',
     addressCity: 'San Juan',
   },
   {
@@ -114,6 +138,8 @@ export const seedPlayersData = [
     dni: '90000013',
     gender: 'MASCULINO',
     clubId: null,
+    addressStreet: 'Calle Güemes',
+    addressNumber: '134',
     addressCity: 'San Luis',
   },
   {
@@ -123,6 +149,8 @@ export const seedPlayersData = [
     dni: '90000014',
     gender: 'MASCULINO',
     clubId: null,
+    addressStreet: 'Calle Dorrego',
+    addressNumber: '222',
     addressCity: 'Bariloche',
   },
   {
@@ -132,6 +160,8 @@ export const seedPlayersData = [
     dni: '90000015',
     gender: 'MASCULINO',
     clubId: null,
+    addressStreet: 'Calle 25 de Mayo',
+    addressNumber: '389',
     addressCity: 'Río Cuarto',
   },
   {
@@ -141,6 +171,8 @@ export const seedPlayersData = [
     dni: '90000016',
     gender: 'MASCULINO',
     clubId: null,
+    addressStreet: 'Calle 9 de Julio',
+    addressNumber: '157',
     addressCity: 'Rosario',
   },
   {
@@ -150,6 +182,8 @@ export const seedPlayersData = [
     dni: '90000017',
     gender: 'MASCULINO',
     clubId: null,
+    addressStreet: 'Calle Tucumán',
+    addressNumber: '446',
     addressCity: 'Santa Fe',
   },
   {
@@ -159,6 +193,8 @@ export const seedPlayersData = [
     dni: '90000018',
     gender: 'MASCULINO',
     clubId: null,
+    addressStreet: 'Calle Entre Ríos',
+    addressNumber: '118',
     addressCity: 'Córdoba',
   },
   {
@@ -168,6 +204,8 @@ export const seedPlayersData = [
     dni: '90000019',
     gender: 'MASCULINO',
     clubId: null,
+    addressStreet: 'Calle Santiago del Estero',
+    addressNumber: '361',
     addressCity: 'Mendoza',
   },
   {
@@ -177,6 +215,8 @@ export const seedPlayersData = [
     dni: '90000020',
     gender: 'MASCULINO',
     clubId: null,
+    addressStreet: 'Calle Catamarca',
+    addressNumber: '205',
     addressCity: 'La Plata',
   },
   {
@@ -186,6 +226,8 @@ export const seedPlayersData = [
     dni: '90000021',
     gender: 'MASCULINO',
     clubId: null,
+    addressStreet: 'Calle Salta',
+    addressNumber: '492',
     addressCity: 'Bahía Blanca',
   },
   {
@@ -195,6 +237,8 @@ export const seedPlayersData = [
     dni: '90000022',
     gender: 'MASCULINO',
     clubId: null,
+    addressStreet: 'Calle Jujuy',
+    addressNumber: '163',
     addressCity: 'Mar del Plata',
   },
   {
@@ -204,6 +248,8 @@ export const seedPlayersData = [
     dni: '90000023',
     gender: 'MASCULINO',
     clubId: null,
+    addressStreet: 'Calle Chacabuco',
+    addressNumber: '307',
     addressCity: 'Posadas',
   },
   {
@@ -213,6 +259,8 @@ export const seedPlayersData = [
     dni: '90000024',
     gender: 'MASCULINO',
     clubId: null,
+    addressStreet: 'Calle Bolívar',
+    addressNumber: '521',
     addressCity: 'Resistencia',
   },
   {
@@ -222,6 +270,8 @@ export const seedPlayersData = [
     dni: '90000025',
     gender: 'MASCULINO',
     clubId: null,
+    addressStreet: 'Calle French',
+    addressNumber: '189',
     addressCity: 'Salta',
   },
   {
@@ -231,6 +281,8 @@ export const seedPlayersData = [
     dni: '90000026',
     gender: 'MASCULINO',
     clubId: null,
+    addressStreet: 'Calle Saavedra',
+    addressNumber: '340',
     addressCity: 'Neuquén',
   },
   {
@@ -240,6 +292,8 @@ export const seedPlayersData = [
     dni: '90000027',
     gender: 'MASCULINO',
     clubId: null,
+    addressStreet: 'Pasaje Rawson',
+    addressNumber: '077',
     addressCity: 'San Juan',
   },
   {
@@ -249,6 +303,8 @@ export const seedPlayersData = [
     dni: '90000028',
     gender: 'MASCULINO',
     clubId: null,
+    addressStreet: 'Calle Liniers',
+    addressNumber: '268',
     addressCity: 'San Luis',
   },
   {
@@ -258,6 +314,8 @@ export const seedPlayersData = [
     dni: '90000029',
     gender: 'MASCULINO',
     clubId: null,
+    addressStreet: 'Calle Urquiza',
+    addressNumber: '415',
     addressCity: 'Bariloche',
   },
   {
@@ -267,6 +325,8 @@ export const seedPlayersData = [
     dni: '90000030',
     gender: 'MASCULINO',
     clubId: null,
+    addressStreet: 'Calle Mitre',
+    addressNumber: '502',
     addressCity: 'Río Cuarto',
   },
   {
@@ -276,6 +336,8 @@ export const seedPlayersData = [
     dni: '90000031',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Azcuénaga',
+    addressNumber: '243',
     addressCity: 'Rosario',
   },
   {
@@ -285,6 +347,8 @@ export const seedPlayersData = [
     dni: '90000032',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle San Lorenzo',
+    addressNumber: '384',
     addressCity: 'Santa Fe',
   },
   {
@@ -294,6 +358,8 @@ export const seedPlayersData = [
     dni: '90000033',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Ituzaingó',
+    addressNumber: '159',
     addressCity: 'Córdoba',
   },
   {
@@ -303,6 +369,8 @@ export const seedPlayersData = [
     dni: '90000034',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Güiraldes',
+    addressNumber: '276',
     addressCity: 'Mendoza',
   },
   {
@@ -312,6 +380,8 @@ export const seedPlayersData = [
     dni: '90000035',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Alsina',
+    addressNumber: '347',
     addressCity: 'La Plata',
   },
   {
@@ -321,6 +391,8 @@ export const seedPlayersData = [
     dni: '90000036',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Arenales',
+    addressNumber: '098',
     addressCity: 'Bahía Blanca',
   },
   {
@@ -330,6 +402,8 @@ export const seedPlayersData = [
     dni: '90000037',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Caseros',
+    addressNumber: '431',
     addressCity: 'Mar del Plata',
   },
   {
@@ -339,6 +413,8 @@ export const seedPlayersData = [
     dni: '90000038',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Perón',
+    addressNumber: '214',
     addressCity: 'Posadas',
   },
   {
@@ -348,6 +424,8 @@ export const seedPlayersData = [
     dni: '90000039',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Pueyrredón',
+    addressNumber: '365',
     addressCity: 'Resistencia',
   },
   {
@@ -357,6 +435,8 @@ export const seedPlayersData = [
     dni: '90000040',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Laprida',
+    addressNumber: '142',
     addressCity: 'Salta',
   },
   {
@@ -366,6 +446,8 @@ export const seedPlayersData = [
     dni: '90000041',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Vélez Sarsfield',
+    addressNumber: '508',
     addressCity: 'Neuquén',
   },
   {
@@ -375,6 +457,8 @@ export const seedPlayersData = [
     dni: '90000042',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Olazábal',
+    addressNumber: '121',
     addressCity: 'San Juan',
   },
   {
@@ -384,6 +468,8 @@ export const seedPlayersData = [
     dni: '90000043',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Arístides Villanueva',
+    addressNumber: '396',
     addressCity: 'San Luis',
   },
   {
@@ -393,6 +479,8 @@ export const seedPlayersData = [
     dni: '90000044',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Maipú',
+    addressNumber: '287',
     addressCity: 'Bariloche',
   },
   {
@@ -402,6 +490,8 @@ export const seedPlayersData = [
     dni: '90000045',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Rioja',
+    addressNumber: '178',
     addressCity: 'Río Cuarto',
   },
   {
@@ -411,6 +501,8 @@ export const seedPlayersData = [
     dni: '90000046',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle San Juan',
+    addressNumber: '333',
     addressCity: 'Paraná',
   },
   {
@@ -420,6 +512,8 @@ export const seedPlayersData = [
     dni: '90000047',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Santa Fe',
+    addressNumber: '254',
     addressCity: 'Corrientes',
   },
   {
@@ -429,6 +523,8 @@ export const seedPlayersData = [
     dni: '90000048',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Belgrano Sur',
+    addressNumber: '489',
     addressCity: 'Formosa',
   },
   {
@@ -438,6 +534,8 @@ export const seedPlayersData = [
     dni: '90000049',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Lavalleja',
+    addressNumber: '312',
     addressCity: 'Rosario',
   },
   {
@@ -447,6 +545,8 @@ export const seedPlayersData = [
     dni: '90000050',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Junín',
+    addressNumber: '205',
     addressCity: 'Santa Fe',
   },
   {
@@ -456,6 +556,8 @@ export const seedPlayersData = [
     dni: '90000051',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Ayacucho',
+    addressNumber: '427',
     addressCity: 'Córdoba',
   },
   {
@@ -465,6 +567,8 @@ export const seedPlayersData = [
     dni: '90000052',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle French Norte',
+    addressNumber: '168',
     addressCity: 'Mendoza',
   },
   {
@@ -474,6 +578,8 @@ export const seedPlayersData = [
     dni: '90000053',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Brandsen',
+    addressNumber: '351',
     addressCity: 'La Plata',
   },
   {
@@ -483,6 +589,8 @@ export const seedPlayersData = [
     dni: '90000054',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Catamarca Norte',
+    addressNumber: '219',
     addressCity: 'Bahía Blanca',
   },
   {
@@ -492,6 +600,8 @@ export const seedPlayersData = [
     dni: '90000055',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Moreno Sur',
+    addressNumber: '402',
     addressCity: 'Mar del Plata',
   },
   {
@@ -501,6 +611,8 @@ export const seedPlayersData = [
     dni: '90000056',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Sarmiento Norte',
+    addressNumber: '143',
     addressCity: 'Posadas',
   },
   {
@@ -510,6 +622,8 @@ export const seedPlayersData = [
     dni: '90000057',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Tucumán Sur',
+    addressNumber: '286',
     addressCity: 'Resistencia',
   },
   {
@@ -519,6 +633,8 @@ export const seedPlayersData = [
     dni: '90000058',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Entre Ríos Norte',
+    addressNumber: '319',
     addressCity: 'Salta',
   },
   {
@@ -528,6 +644,8 @@ export const seedPlayersData = [
     dni: '90000059',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Salta Norte',
+    addressNumber: '264',
     addressCity: 'Neuquén',
   },
   {
@@ -537,6 +655,8 @@ export const seedPlayersData = [
     dni: '90000060',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Jujuy Norte',
+    addressNumber: '197',
     addressCity: 'San Juan',
   },
   {
@@ -546,6 +666,8 @@ export const seedPlayersData = [
     dni: '90000061',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Balcarce',
+    addressNumber: '308',
     addressCity: 'San Luis',
   },
   {
@@ -555,6 +677,8 @@ export const seedPlayersData = [
     dni: '90000062',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Dorrego Norte',
+    addressNumber: '251',
     addressCity: 'Bariloche',
   },
   {
@@ -564,6 +688,8 @@ export const seedPlayersData = [
     dni: '90000063',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Libertad Norte',
+    addressNumber: '472',
     addressCity: 'Río Cuarto',
   },
   {
@@ -573,6 +699,8 @@ export const seedPlayersData = [
     dni: '90000064',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Anchorena',
+    addressNumber: '195',
     addressCity: 'Paraná',
   },
   {
@@ -582,6 +710,8 @@ export const seedPlayersData = [
     dni: '90000065',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle San Martín Oeste',
+    addressNumber: '388',
     addressCity: 'Corrientes',
   },
   {
@@ -591,6 +721,8 @@ export const seedPlayersData = [
     dni: '90000066',
     gender: 'FEMENINO',
     clubId: null,
+    addressStreet: 'Calle Rivadavia Sur',
+    addressNumber: '266',
     addressCity: 'Formosa',
   },
 ] as const;

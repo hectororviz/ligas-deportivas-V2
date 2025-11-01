@@ -11,6 +11,8 @@ type PreparedPlayer = {
   dni: string;
   gender: Gender;
   clubId: number | null;
+  addressStreet: string | null;
+  addressNumber: string | null;
   addressCity: string | null;
 };
 
@@ -30,6 +32,8 @@ function preparePlayer(raw: RawPlayer): PreparedPlayer {
     dni: raw.dni,
     gender: parseGender(raw.gender),
     clubId: raw.clubId,
+    addressStreet: raw.addressStreet ?? null,
+    addressNumber: raw.addressNumber ?? null,
     addressCity: raw.addressCity ?? null,
   };
 }
