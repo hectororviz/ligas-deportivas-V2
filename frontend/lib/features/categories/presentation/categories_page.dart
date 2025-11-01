@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
+import '../../shared/widgets/page_scaffold.dart';
 import '../../shared/widgets/table_filters_bar.dart';
 import '../providers/categories_catalog_provider.dart';
 
@@ -331,7 +332,7 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage> {
       orElse: () => null,
     );
 
-    return Scaffold(
+    return PageScaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: canCreate
           ? FloatingActionButton.extended(
@@ -340,10 +341,10 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage> {
               label: const Text('Agregar categoría'),
             )
           : null,
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      builder: (context, scrollController) {
+        return ListView(
+          controller: scrollController,
+          padding: const EdgeInsets.all(24.0),
           children: [
             Text(
               'Categorias',
@@ -537,9 +538,8 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage> {
               ),
             ),
             const SizedBox(height: 16),
-            Expanded(
-              child: categoriesAsync.when(
-                data: (categories) {
+            categoriesAsync.when(
+              data: (categories) {
                   if (categories.isEmpty) {
                     if (!filters.isEmpty) {
                       return _CategoriesEmptyFiltersState(
@@ -581,7 +581,9 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage> {
                           ),
                         ),
                         const Divider(height: 1),
-                        Expanded(
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 8),
                           child: _CategoriesDataTable(
                             categories: categories,
                             canEdit: canEdit,
@@ -593,38 +595,45 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage> {
                     ),
                   );
                 },
-                loading: () => const Center(child: CircularProgressIndicator()),
+                loading: () => const Card(
+                  child: SizedBox(
+                    height: 200,
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                ),
                 error: (error, stackTrace) {
-                  return Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.error_outline, size: 64),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No se pudieron cargar las categorías.',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '$error',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 16),
-                        FilledButton.tonal(
-                          onPressed: () => ref.invalidate(categoriesProvider),
-                          child: const Text('Reintentar'),
-                        ),
-                      ],
+                  return Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.error_outline, size: 64),
+                          const SizedBox(height: 16),
+                          Text(
+                            'No se pudieron cargar las categorías.',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '$error',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          FilledButton.tonal(
+                            onPressed: () => ref.invalidate(categoriesProvider),
+                            child: const Text('Reintentar'),
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 },
-              ),
             ),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -645,9 +654,9 @@ class _CategoriesDataTable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final table = DataTable(
-      headingRowHeight: 52,
-      dataRowMinHeight: 64,
-      dataRowMaxHeight: 80,
+      headingRowHeight: 48,
+      dataRowMinHeight: 44,
+      dataRowMaxHeight: 60,
       columns: const [
         DataColumn(label: Text('Nombre')),
         DataColumn(label: Text('Años de nacimiento')),
@@ -695,16 +704,13 @@ class _CategoriesDataTable extends StatelessWidget {
       builder: (context, constraints) {
         return Scrollbar(
           thumbVisibility: true,
-          controller: PrimaryScrollController.maybeOf(context),
+          notificationPredicate: (notification) =>
+              notification.metrics.axis == Axis.horizontal,
           child: SingleChildScrollView(
-            padding: const EdgeInsets.only(bottom: 12),
-            scrollDirection: Axis.vertical,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                child: table,
-              ),
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+              child: table,
             ),
           ),
         );
