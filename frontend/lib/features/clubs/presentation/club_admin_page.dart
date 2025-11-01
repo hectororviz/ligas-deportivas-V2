@@ -373,48 +373,39 @@ class _ClubSummaryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              _SummaryIconBadge(
-                icon: Icons.star_rounded,
-                background: Colors.amber.shade100,
-                foreground: Colors.amber.shade700,
+          Align(
+            alignment: Alignment.centerRight,
+            child: Chip(
+              shape: StadiumBorder(
+                side: BorderSide(color: theme.colorScheme.outline.withOpacity(0.12)),
               ),
-              const SizedBox(width: 12),
-              _SummaryIconBadge(
-                icon: Icons.info_rounded,
-                background: theme.colorScheme.primary.withOpacity(0.12),
-                foreground: theme.colorScheme.primary,
-              ),
-              const Spacer(),
-              Chip(
-                shape: StadiumBorder(side: BorderSide(color: theme.colorScheme.outline.withOpacity(0.12))),
-                backgroundColor: club.active
-                    ? Colors.green.withOpacity(0.12)
-                    : Colors.orange.withOpacity(0.12),
-                label: Text(
-                  club.active ? 'Activo' : 'Inactivo',
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    color: club.active ? Colors.green.shade800 : Colors.orange.shade800,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                avatar: Icon(
-                  club.active ? Icons.check_circle : Icons.pause_circle_filled,
-                  color: club.active ? Colors.green : Colors.orange,
+              backgroundColor: club.active
+                  ? Colors.green.withOpacity(0.12)
+                  : Colors.orange.withOpacity(0.12),
+              label: Text(
+                club.active ? 'Activo' : 'Inactivo',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: club.active ? Colors.green.shade800 : Colors.orange.shade800,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-            ],
+              avatar: Icon(
+                club.active ? Icons.check_circle : Icons.pause_circle_filled,
+                color: club.active ? Colors.green : Colors.orange,
+              ),
+            ),
           ),
           const SizedBox(height: 20),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               _ClubLogo(logoUrl: club.logoUrl, name: club.name),
               const SizedBox(width: 24),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
                       club.name,
@@ -422,22 +413,22 @@ class _ClubSummaryCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
                         color: theme.colorScheme.surface,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.link_rounded, size: 20, color: theme.colorScheme.onSurfaceVariant),
+                          Icon(Icons.link_rounded, size: 18, color: theme.colorScheme.onSurfaceVariant),
                           const SizedBox(width: 8),
                           Text(
                             club.slug != null
                                 ? 'Slug: ${club.slug}'
                                 : 'Sin identificador público',
-                            style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+                            style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
                           ),
                         ],
                       ),
@@ -456,12 +447,10 @@ class _ClubSummaryCard extends StatelessWidget {
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               _ColorBadge(
-                title: 'Color primario',
                 color: primary,
                 hex: club.primaryHex,
               ),
               _ColorBadge(
-                title: 'Color secundario',
                 color: secondary,
                 hex: club.secondaryHex,
               ),
@@ -598,7 +587,7 @@ class _ClubContactLinks extends StatelessWidget {
     }
 
     return Wrap(
-      spacing: 12,
+      spacing: 16,
       children: links,
     );
   }
@@ -621,7 +610,10 @@ class _IconLinkButton extends StatelessWidget {
       message: tooltip,
       child: IconButton(
         onPressed: () => _launchExternalUrl(context, url),
-        icon: Icon(icon, size: 28, color: Theme.of(context).colorScheme.primary),
+        icon: Icon(icon, color: Theme.of(context).colorScheme.primary),
+        iconSize: 32,
+        padding: const EdgeInsets.all(10),
+        constraints: const BoxConstraints(minHeight: 52, minWidth: 52),
       ),
     );
   }
@@ -655,9 +647,8 @@ class _LogoFallback extends StatelessWidget {
 }
 
 class _ColorBadge extends StatelessWidget {
-  const _ColorBadge({required this.title, required this.color, required this.hex});
+  const _ColorBadge({required this.color, required this.hex});
 
-  final String title;
   final Color? color;
   final String? hex;
 
@@ -665,45 +656,38 @@ class _ColorBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final displayColor = color ?? theme.colorScheme.surfaceVariant;
-    return SizedBox(
-      width: 220,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      constraints: const BoxConstraints(minWidth: 200),
+      height: 52,
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Row(
         children: [
-          Text(title, style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
           Container(
-            height: 52,
+            width: 32,
+            height: 32,
             decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 12,
-                  offset: const Offset(0, 6),
-                ),
-              ],
+              color: displayColor,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            child: Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: displayColor,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  hex ?? '—',
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-                ),
-              ],
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: SelectableText(
+              hex ?? '—',
+              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
           ),
         ],
