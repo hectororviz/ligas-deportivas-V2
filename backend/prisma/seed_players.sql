@@ -1,8 +1,27 @@
--- Script to insert 60 players matching requested demographics
--- Ensures compatibility with default Prisma schema (public."Player") and can be re-run safely.
+-- Script to insert 60 players matching requested demographics.
+-- Automatically resolves the schema containing the "Player" table so it can be re-run safely.
 BEGIN;
 
-INSERT INTO public."Player" ("firstName", "lastName", "birthDate", "dni", "gender", "clubId", "addressCity") VALUES
+DO $$
+DECLARE
+  target_schema text;
+BEGIN
+  SELECT table_schema
+    INTO target_schema
+    FROM information_schema.tables
+   WHERE table_name = 'Player'
+   ORDER BY CASE WHEN table_schema = 'public' THEN 0 ELSE 1 END, table_schema
+   LIMIT 1;
+
+  IF target_schema IS NULL THEN
+    RAISE EXCEPTION 'No se encontró la tabla "Player". ¿Ejecutaste las migraciones de Prisma?';
+  END IF;
+
+  PERFORM set_config('search_path', target_schema, true);
+END;
+$$;
+
+INSERT INTO "Player" ("firstName", "lastName", "birthDate", "dni", "gender", "clubId", "addressCity") VALUES
   ('Mateo', 'Gómez', '2017-01-05', '90000001', 'MASCULINO', NULL, 'Rosario'),
   ('Santiago', 'Fernández', '2017-02-14', '90000002', 'MASCULINO', NULL, 'Santa Fe'),
   ('Benjamín', 'Rodríguez', '2017-03-22', '90000003', 'MASCULINO', NULL, 'Córdoba'),

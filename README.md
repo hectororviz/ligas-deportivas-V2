@@ -128,7 +128,7 @@ docker compose exec -T db \
   < ../backend/prisma/seed_players.sql
 ```
 
-El script apunta explícitamente a `public."Player"` y utiliza `ON CONFLICT ("dni") DO NOTHING`, por lo que puedes ejecutarlo varias veces sin duplicar registros. Adapta el nombre de la base, usuario o ruta del archivo según tu configuración (por ejemplo, si cambiaste `POSTGRES_DB`, `POSTGRES_USER` o ejecutas el comando desde otro directorio).
+El script detecta automáticamente en qué esquema existe la tabla `Player`, ajusta el `search_path` y utiliza `ON CONFLICT ("dni") DO NOTHING`, por lo que puedes ejecutarlo varias veces sin duplicar registros. Si la tabla no está presente recibirás un mensaje indicando que debes aplicar las migraciones primero. Adapta el nombre de la base, usuario o ruta del archivo según tu configuración (por ejemplo, si cambiaste `POSTGRES_DB`, `POSTGRES_USER` o ejecutas el comando desde otro directorio).
 
 ## Documentación adicional
 
