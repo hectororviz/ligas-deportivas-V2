@@ -102,6 +102,32 @@ Los servicios quedarán disponibles en:
 
 Las variables de entorno del contenedor `backend` se basan en los mismos nombres definidos en `backend/.env`, por lo que puedes adaptarlas para entornos de staging o producción. ([infra/docker-compose.yml](infra/docker-compose.yml))
 
+## Datos de ejemplo
+
+Si necesitas poblar rápidamente la tabla de jugadores con datos de prueba, puedes ejecutar el script SQL disponible en `backend/prisma/seed_players.sql`. El archivo inserta 60 jugadores con la distribución de edades y géneros solicitada y sin asociación a clubes.
+
+Ejecuta el script con `psql`, reemplazando las variables de conexión por las de tu entorno:
+
+```bash
+psql \
+  --host=<HOST> \
+  --port=<PUERTO> \
+  --username=<USUARIO> \
+  --dbname=<BASE_DE_DATOS> \
+  --file=backend/prisma/seed_players.sql
+```
+
+Si estás usando Docker Compose, puedes aprovechar el contenedor de PostgreSQL directamente:
+
+```bash
+cd infra
+docker compose exec -T db \
+  psql --username=postgres --dbname=ligas \
+  < ../backend/prisma/seed_players.sql
+```
+
+Adapta el nombre de la base, usuario o ruta del archivo según tu configuración (por ejemplo, si cambiaste `POSTGRES_DB`, `POSTGRES_USER` o ejecutas el comando desde otro directorio).
+
 ## Documentación adicional
 
 - [Arquitectura y componentes](docs/architecture.md)
