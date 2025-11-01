@@ -77,4 +77,34 @@ export class ListPlayersDto {
   @IsInt()
   @Min(1900)
   birthYear?: number;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+    if (typeof value === 'number') {
+      return value;
+    }
+    const parsed = Number.parseInt(String(value), 10);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  })
+  @IsInt()
+  @Min(1900)
+  birthYearMin?: number;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+    if (typeof value === 'number') {
+      return value;
+    }
+    const parsed = Number.parseInt(String(value), 10);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  })
+  @IsInt()
+  @Min(1900)
+  birthYearMax?: number;
 }
