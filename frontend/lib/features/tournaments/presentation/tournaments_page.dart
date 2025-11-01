@@ -1065,6 +1065,9 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
   }
 
   bool _matchesSelectedGender(CategoryModel category) {
+    if (_selectedGender == 'MIXTO') {
+      return true;
+    }
     return category.gender == _selectedGender;
   }
 
