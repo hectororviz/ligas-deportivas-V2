@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
+import '../../categories/providers/categories_catalog_provider.dart';
 import '../../shared/widgets/page_scaffold.dart';
 import '../../shared/widgets/table_filters_bar.dart';
 
@@ -35,6 +36,8 @@ final playersProvider = FutureProvider<PaginatedPlayers>((ref) async {
             filters.clubId == _noClubFilterValue ? '' : filters.clubId,
       if (filters.gender.apiValue != null) 'gender': filters.gender.apiValue,
       if (filters.birthYear != null) 'birthYear': filters.birthYear,
+      if (filters.birthYearMin != null) 'birthYearMin': filters.birthYearMin,
+      if (filters.birthYearMax != null) 'birthYearMax': filters.birthYearMax,
       'page': filters.page,
       'pageSize': filters.pageSize,
     });
@@ -225,8 +228,47 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
     final playersAsync = ref.watch(playersProvider);
     final filters = ref.watch(playersFiltersProvider);
     final clubsAsync = ref.watch(clubsCatalogProvider);
+    final categoriesAsync = ref.watch(categoriesCatalogProvider);
     final currentYear = DateTime.now().year;
     final birthYearOptions = List<int>.generate(60, (index) => currentYear - index);
+
+    Widget buildBirthYearDropdown(List<_BirthYearFilterOption> options) {
+      if (options.isEmpty) {
+        return const SizedBox.shrink();
+      }
+      final selectedOption = options.firstWhere(
+        (option) => option.matches(filters),
+        orElse: () => options.first,
+      );
+
+      return DropdownButtonHideUnderline(
+        child: DropdownButton<_BirthYearFilterOption>(
+          value: selectedOption,
+          isExpanded: true,
+          items: options
+              .map(
+                (option) => DropdownMenuItem<_BirthYearFilterOption>(
+                  value: option,
+                  child: Text(option.label),
+                ),
+              )
+              .toList(),
+          onChanged: (option) {
+            if (option == null) {
+              return;
+            }
+            final notifier = ref.read(playersFiltersProvider.notifier);
+            if (option.isAll) {
+              notifier.clearBirthYearFilters();
+            } else if (option.isYear) {
+              notifier.setBirthYear(option.year);
+            } else if (option.isRange) {
+              notifier.setBirthYearRange(option.min!, option.max!);
+            }
+          },
+        ),
+      );
+    }
 
     return PageScaffold(
       backgroundColor: Colors.transparent,
@@ -352,28 +394,38 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
                     TableFilterField(
                       label: 'Categoría (año)',
                       width: 200,
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<int?>(
-                          value: filters.birthYear,
-                          isExpanded: true,
-                          items: [
-                            const DropdownMenuItem<int?>(
-                              value: null,
-                              child: Text('Todas'),
-                            ),
+                      child: categoriesAsync.when(
+                        data: (categories) {
+                          final options = [
+                            const _BirthYearFilterOption.all(),
+                            ...categories
+                                .where((category) =>
+                                    category.birthYearMin != category.birthYearMax)
+                                .map(
+                                  (category) => _BirthYearFilterOption.range(
+                                    label: category.name,
+                                    min: category.birthYearMin,
+                                    max: category.birthYearMax,
+                                  ),
+                                ),
                             ...birthYearOptions.map(
-                              (year) => DropdownMenuItem<int?>(
-                                value: year,
-                                child: Text('$year'),
-                              ),
+                              (year) => _BirthYearFilterOption.year(year),
                             ),
-                          ],
-                          onChanged: (value) {
-                            ref
-                                .read(playersFiltersProvider.notifier)
-                                .setBirthYear(value);
-                          },
-                        ),
+                          ];
+                          return buildBirthYearDropdown(options);
+                        },
+                        loading: () => buildBirthYearDropdown([
+                          const _BirthYearFilterOption.all(),
+                          ...birthYearOptions.map(
+                            (year) => _BirthYearFilterOption.year(year),
+                          ),
+                        ]),
+                        error: (_, __) => buildBirthYearDropdown([
+                          const _BirthYearFilterOption.all(),
+                          ...birthYearOptions.map(
+                            (year) => _BirthYearFilterOption.year(year),
+                          ),
+                        ]),
                       ),
                     ),
                     TableFilterField(
@@ -498,6 +550,70 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
   }
 }
 
+class _BirthYearFilterOption {
+  const _BirthYearFilterOption._({
+    required this.label,
+    this.year,
+    this.min,
+    this.max,
+  });
+
+  const _BirthYearFilterOption.all() : this._(label: 'Todas');
+
+  _BirthYearFilterOption.year(int year) : this._(label: '$year', year: year);
+
+  _BirthYearFilterOption.range({
+    required String label,
+    required int min,
+    required int max,
+  }) : this._(label: label, min: min, max: max);
+
+  final String label;
+  final int? year;
+  final int? min;
+  final int? max;
+
+  bool get isAll => year == null && min == null && max == null;
+
+  bool get isYear => year != null;
+
+  bool get isRange => min != null && max != null;
+
+  bool matches(_PlayersFilters filters) {
+    if (isAll) {
+      return filters.birthYear == null &&
+          filters.birthYearMin == null &&
+          filters.birthYearMax == null;
+    }
+    if (isYear) {
+      return filters.birthYear == year &&
+          filters.birthYearMin == null &&
+          filters.birthYearMax == null;
+    }
+    if (isRange) {
+      return filters.birthYear == null &&
+          filters.birthYearMin == min &&
+          filters.birthYearMax == max;
+    }
+    return false;
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) {
+      return true;
+    }
+    return other is _BirthYearFilterOption &&
+        other.label == label &&
+        other.year == year &&
+        other.min == min &&
+        other.max == max;
+  }
+
+  @override
+  int get hashCode => Object.hash(label, year, min, max);
+}
+
 const _playersFilterUnset = Object();
 
 class _PlayersFilters {
@@ -507,6 +623,8 @@ class _PlayersFilters {
     this.clubId,
     this.gender = PlayerGenderFilter.all,
     this.birthYear,
+    this.birthYearMin,
+    this.birthYearMax,
     this.page = 1,
     this.pageSize = 25,
   });
@@ -516,6 +634,8 @@ class _PlayersFilters {
   final int? clubId;
   final PlayerGenderFilter gender;
   final int? birthYear;
+  final int? birthYearMin;
+  final int? birthYearMax;
   final int page;
   final int pageSize;
 
@@ -524,7 +644,9 @@ class _PlayersFilters {
       status != PlayerStatusFilter.all ||
       clubId != null ||
       gender != PlayerGenderFilter.all ||
-      birthYear != null;
+      birthYear != null ||
+      birthYearMin != null ||
+      birthYearMax != null;
 
   _PlayersFilters copyWith({
     String? query,
@@ -534,13 +656,22 @@ class _PlayersFilters {
     Object? clubId = _playersFilterUnset,
     PlayerGenderFilter? gender,
     Object? birthYear = _playersFilterUnset,
+    Object? birthYearMin = _playersFilterUnset,
+    Object? birthYearMax = _playersFilterUnset,
   }) {
     return _PlayersFilters(
       query: query ?? this.query,
       status: status ?? this.status,
       clubId: clubId == _playersFilterUnset ? this.clubId : clubId as int?,
       gender: gender ?? this.gender,
-      birthYear: birthYear == _playersFilterUnset ? this.birthYear : birthYear as int?,
+      birthYear:
+          birthYear == _playersFilterUnset ? this.birthYear : birthYear as int?,
+      birthYearMin: birthYearMin == _playersFilterUnset
+          ? this.birthYearMin
+          : birthYearMin as int?,
+      birthYearMax: birthYearMax == _playersFilterUnset
+          ? this.birthYearMax
+          : birthYearMax as int?,
       page: page ?? this.page,
       pageSize: pageSize ?? this.pageSize,
     );
@@ -567,7 +698,30 @@ class _PlayersFiltersController extends StateNotifier<_PlayersFilters> {
   }
 
   void setBirthYear(int? birthYear) {
-    state = state.copyWith(birthYear: birthYear, page: 1);
+    state = state.copyWith(
+      birthYear: birthYear,
+      birthYearMin: null,
+      birthYearMax: null,
+      page: 1,
+    );
+  }
+
+  void setBirthYearRange(int min, int max) {
+    state = state.copyWith(
+      birthYear: null,
+      birthYearMin: min,
+      birthYearMax: max,
+      page: 1,
+    );
+  }
+
+  void clearBirthYearFilters() {
+    state = state.copyWith(
+      birthYear: null,
+      birthYearMin: null,
+      birthYearMax: null,
+      page: 1,
+    );
   }
 
   void setPage(int page) {
