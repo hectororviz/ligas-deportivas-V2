@@ -88,12 +88,16 @@ class ZoneMatchCategory {
     required this.awayScore,
     required this.isPromocional,
     this.kickoffTime,
+    this.birthYearMin,
+    this.birthYearMax,
   });
 
   factory ZoneMatchCategory.fromJson(Map<String, dynamic> json) {
     final tournamentCategory = json['tournamentCategory'] as Map<String, dynamic>? ?? <String, dynamic>{};
     final category = tournamentCategory['category'] as Map<String, dynamic>? ?? <String, dynamic>{};
     final name = category['name'] as String? ?? tournamentCategory['name'] as String? ?? 'Categoría';
+    final birthYearMin = category['birthYearMin'] as int?;
+    final birthYearMax = category['birthYearMax'] as int?;
     final homeScoreValue = json['homeScore'];
     final awayScoreValue = json['awayScore'];
     return ZoneMatchCategory(
@@ -104,6 +108,8 @@ class ZoneMatchCategory {
       awayScore: awayScoreValue is num ? awayScoreValue.toInt() : null,
       isPromocional: json['isPromocional'] as bool? ?? false,
       kickoffTime: json['kickoffTime'] as String?,
+      birthYearMin: birthYearMin,
+      birthYearMax: birthYearMax,
     );
   }
 
@@ -114,6 +120,15 @@ class ZoneMatchCategory {
   final int? awayScore;
   final bool isPromocional;
   final String? kickoffTime;
+  final int? birthYearMin;
+  final int? birthYearMax;
+
+  int? get sortYear {
+    if (birthYearMin != null && birthYearMax != null) {
+      return birthYearMin! <= birthYearMax! ? birthYearMin : birthYearMax;
+    }
+    return birthYearMin ?? birthYearMax;
+  }
 }
 
 class ZoneMatch {
@@ -132,6 +147,20 @@ class ZoneMatch {
     final categories = (json['categories'] as List<dynamic>? ?? <dynamic>[])
         .map((entry) => ZoneMatchCategory.fromJson(entry as Map<String, dynamic>))
         .toList();
+    categories.sort((a, b) {
+      final aYear = a.sortYear;
+      final bYear = b.sortYear;
+      if (aYear != null && bYear != null && aYear != bYear) {
+        return aYear.compareTo(bYear);
+      }
+      if (aYear != null && bYear == null) {
+        return -1;
+      }
+      if (aYear == null && bYear != null) {
+        return 1;
+      }
+      return a.categoryName.compareTo(b.categoryName);
+    });
     return ZoneMatch(
       id: json['id'] as int? ?? 0,
       matchday: json['matchday'] as int? ?? 0,
@@ -172,6 +201,8 @@ class ZoneMatch {
     }
     return false;
   }
+
+  bool get hasRecordedScores => _hasRecordedScores;
 
   int get homePoints {
     if (!_hasRecordedScores) {
