@@ -136,5 +136,6 @@ El script detecta automáticamente en qué esquema existe la tabla `Player`, aju
 
 - [Arquitectura y componentes](docs/architecture.md)
 - [Guía de desarrollo y entornos](docs/desarrollo-entornos.md)
+- [Respaldo y restauración de la base de datos](docs/postgres-backup-restore.md)
 
 Ambos documentos detallan la estructura modular, flujos de datos, recomendaciones de entornos y procedimientos de trabajo colaborativo.
