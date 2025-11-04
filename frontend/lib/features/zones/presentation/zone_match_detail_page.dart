@@ -254,9 +254,7 @@ class _ZoneMatchDetailContent extends ConsumerWidget {
   }
 
   String _formatPoints(ZoneMatch match, {required bool isHome}) {
-    final status = match.status?.toUpperCase();
-    final finished = status == 'FINISHED';
-    if (!finished) {
+    if (!match.hasRecordedScores) {
       return '—';
     }
     final points = isHome ? match.homePoints : match.awayPoints;
