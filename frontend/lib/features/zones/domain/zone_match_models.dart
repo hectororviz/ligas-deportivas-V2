@@ -204,30 +204,27 @@ class ZoneMatch {
 
   bool get hasRecordedScores => _hasRecordedScores;
 
-  int get homePoints {
-    if (!_hasRecordedScores) {
-      return 0;
-    }
-    if (totalHomeGoals > totalAwayGoals) {
-      return 3;
-    }
-    if (totalHomeGoals == totalAwayGoals) {
-      return 1;
-    }
-    return 0;
-  }
+  int get homePoints => _calculatePoints(isHome: true);
 
-  int get awayPoints {
-    if (!_hasRecordedScores) {
-      return 0;
+  int get awayPoints => _calculatePoints(isHome: false);
+
+  int _calculatePoints({required bool isHome}) {
+    var total = 0;
+    for (final category in categories) {
+      final homeScore = category.homeScore;
+      final awayScore = category.awayScore;
+      if (homeScore == null || awayScore == null) {
+        continue;
+      }
+      if (homeScore == awayScore) {
+        total += 1;
+      } else if (isHome && homeScore > awayScore) {
+        total += 3;
+      } else if (!isHome && awayScore > homeScore) {
+        total += 3;
+      }
     }
-    if (totalAwayGoals > totalHomeGoals) {
-      return 3;
-    }
-    if (totalAwayGoals == totalHomeGoals) {
-      return 1;
-    }
-    return 0;
+    return total;
   }
 }
 
