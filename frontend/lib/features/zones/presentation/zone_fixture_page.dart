@@ -39,18 +39,11 @@ class ZoneFixturePage extends ConsumerStatefulWidget {
 }
 
 class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
-  final ScrollController _scrollController = ScrollController();
   ZoneFixturePreview? _preview;
   bool _loadingPreview = false;
   bool _submitting = false;
   String? _previewError;
   final Set<int> _finalizingMatchdays = <int>{};
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
 
   bool _isFinalizing(int matchday) => _finalizingMatchdays.contains(matchday);
 
@@ -311,10 +304,8 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
                     }
 
                     return Scrollbar(
-                      controller: _scrollController,
                       thumbVisibility: true,
                       child: SingleChildScrollView(
-                        controller: _scrollController,
                         child: content,
                       ),
                     );

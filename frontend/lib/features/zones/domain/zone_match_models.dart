@@ -94,12 +94,14 @@ class ZoneMatchCategory {
     final tournamentCategory = json['tournamentCategory'] as Map<String, dynamic>? ?? <String, dynamic>{};
     final category = tournamentCategory['category'] as Map<String, dynamic>? ?? <String, dynamic>{};
     final name = category['name'] as String? ?? tournamentCategory['name'] as String? ?? 'Categoría';
+    final homeScoreValue = json['homeScore'];
+    final awayScoreValue = json['awayScore'];
     return ZoneMatchCategory(
       id: json['id'] as int? ?? 0,
       tournamentCategoryId: json['tournamentCategoryId'] as int? ?? json['id'] as int? ?? 0,
       categoryName: name,
-      homeScore: json['homeScore'] as int? ?? 0,
-      awayScore: json['awayScore'] as int? ?? 0,
+      homeScore: homeScoreValue is num ? homeScoreValue.toInt() : null,
+      awayScore: awayScoreValue is num ? awayScoreValue.toInt() : null,
       isPromocional: json['isPromocional'] as bool? ?? false,
       kickoffTime: json['kickoffTime'] as String?,
     );
@@ -108,8 +110,8 @@ class ZoneMatchCategory {
   final int id;
   final int tournamentCategoryId;
   final String categoryName;
-  final int homeScore;
-  final int awayScore;
+  final int? homeScore;
+  final int? awayScore;
   final bool isPromocional;
   final String? kickoffTime;
 }
@@ -154,11 +156,25 @@ class ZoneMatch {
   String get homeDisplayName => homeClub?.displayName ?? 'Por definir';
   String get awayDisplayName => awayClub?.displayName ?? 'Por definir';
 
-  int get totalHomeGoals => categories.fold(0, (total, category) => total + category.homeScore);
-  int get totalAwayGoals => categories.fold(0, (total, category) => total + category.awayScore);
+  int get totalHomeGoals =>
+      categories.fold(0, (total, category) => total + (category.homeScore ?? 0));
+  int get totalAwayGoals =>
+      categories.fold(0, (total, category) => total + (category.awayScore ?? 0));
+
+  bool get _hasRecordedScores {
+    if (categories.isEmpty) {
+      return false;
+    }
+    for (final category in categories) {
+      if (category.homeScore != null && category.awayScore != null) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   int get homePoints {
-    if (categories.isEmpty) {
+    if (!_hasRecordedScores) {
       return 0;
     }
     if (totalHomeGoals > totalAwayGoals) {
@@ -171,7 +187,7 @@ class ZoneMatch {
   }
 
   int get awayPoints {
-    if (categories.isEmpty) {
+    if (!_hasRecordedScores) {
       return 0;
     }
     if (totalAwayGoals > totalHomeGoals) {
