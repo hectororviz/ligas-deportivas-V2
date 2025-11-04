@@ -214,14 +214,14 @@ class ZoneStandingsData {
   });
 
   factory ZoneStandingsData.fromJson(Map<String, dynamic> json) {
-    final generalRows = _asList(json['general'])
-        .whereType<Map<String, dynamic>>()
-        .map(StandingsRow.fromJson)
-        .toList();
-    final categoryRows = _asList(json['categories'])
-        .whereType<Map<String, dynamic>>()
-        .map(ZoneCategoryStandings.fromJson)
-        .toList();
+    final generalRows = _parseStandingsList(json['general']);
+    final categoryRows = <ZoneCategoryStandings>[];
+    for (final category in _asList(json['categories'])) {
+      final parsed = _tryParseCategoryStandings(_asMap(category));
+      if (parsed != null) {
+        categoryRows.add(parsed);
+      }
+    }
 
     return ZoneStandingsData(
       zone: ZoneStandingsInfo.fromJson(_asMap(json['zone'])),
@@ -282,10 +282,7 @@ class ZoneCategoryStandings {
       categoryId: _parseInt(json['categoryId']),
       categoryName: _parseString(json['categoryName'], fallback: 'Categoría'),
       countsForGeneral: _parseBool(json['countsForGeneral'], fallback: true),
-      standings: _asList(json['standings'])
-          .whereType<Map<String, dynamic>>()
-          .map(StandingsRow.fromJson)
-          .toList(),
+      standings: _parseStandingsList(json['standings']),
     );
   }
 
@@ -294,6 +291,27 @@ class ZoneCategoryStandings {
   final String categoryName;
   final bool countsForGeneral;
   final List<StandingsRow> standings;
+}
+
+ZoneCategoryStandings? _tryParseCategoryStandings(Map<String, dynamic> json) {
+  if (json.isEmpty) {
+    return null;
+  }
+  try {
+    return ZoneCategoryStandings.fromJson(json);
+  } catch (_) {
+    try {
+      return ZoneCategoryStandings(
+        tournamentCategoryId: _parseInt(json['tournamentCategoryId']),
+        categoryId: _parseInt(json['categoryId']),
+        categoryName: _parseString(json['categoryName'], fallback: 'Categoría'),
+        countsForGeneral: _parseBool(json['countsForGeneral'], fallback: true),
+        standings: _parseStandingsList(json['standings']),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
 }
 
 class StandingsRow {
@@ -340,6 +358,17 @@ class StandingsRow {
   final int points;
 }
 
+List<StandingsRow> _parseStandingsList(dynamic value) {
+  final rows = <StandingsRow>[];
+  for (final entry in _asList(value)) {
+    final parsed = _tryParseStandingsRow(_asMap(entry));
+    if (parsed != null) {
+      rows.add(parsed);
+    }
+  }
+  return rows;
+}
+
 int _parseGoalDifference(dynamic value, {required int goalsFor, required int goalsAgainst}) {
   final parsed = _tryParseInt(value);
   if (parsed != null) {
@@ -353,6 +382,9 @@ int _parseInt(dynamic value, {int fallback = 0}) {
 }
 
 int? _tryParseInt(dynamic value) {
+  if (value is bool) {
+    return value ? 1 : 0;
+  }
   if (value is int) {
     return value;
   }
@@ -373,6 +405,38 @@ int? _tryParseInt(dynamic value) {
     }
   }
   return null;
+}
+
+StandingsRow? _tryParseStandingsRow(Map<String, dynamic> json) {
+  if (json.isEmpty) {
+    return null;
+  }
+  try {
+    return StandingsRow.fromJson(json);
+  } catch (_) {
+    try {
+      final goalsFor = _parseInt(json['goalsFor']);
+      final goalsAgainst = _parseInt(json['goalsAgainst']);
+      return StandingsRow(
+        clubId: _parseInt(json['clubId']),
+        clubName: _parseString(json['clubName'], fallback: 'Club'),
+        played: _parseInt(json['played']),
+        wins: _parseInt(json['wins']),
+        draws: _parseInt(json['draws']),
+        losses: _parseInt(json['losses']),
+        goalsFor: goalsFor,
+        goalsAgainst: goalsAgainst,
+        goalDifference: _parseGoalDifference(
+          json['goalDifference'],
+          goalsFor: goalsFor,
+          goalsAgainst: goalsAgainst,
+        ),
+        points: _parseInt(json['points']),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
 }
 
 String _parseString(dynamic value, {String fallback = ''}) {
