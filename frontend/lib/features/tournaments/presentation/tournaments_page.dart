@@ -786,10 +786,12 @@ class _TournamentsDataTable extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
+        final scrollController = PrimaryScrollController.maybeOf(context);
         return Scrollbar(
           thumbVisibility: true,
-          controller: PrimaryScrollController.maybeOf(context),
+          controller: scrollController,
           child: SingleChildScrollView(
+            controller: scrollController,
             padding: const EdgeInsets.only(bottom: 12),
             scrollDirection: Axis.vertical,
             child: SingleChildScrollView(
