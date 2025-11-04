@@ -431,14 +431,14 @@ class _CategoriesTableState extends ConsumerState<_CategoriesTable> {
         _dataCell(
           innerBorderColor,
           child: _ScoreCell(
-            score: category.homeScore,
+            score: category.homeScore ?? 0,
             outcome: _scoreOutcome(category.homeScore, category.awayScore),
           ),
         ),
         _dataCell(
           innerBorderColor,
           child: _ScoreCell(
-            score: category.awayScore,
+            score: category.awayScore ?? 0,
             outcome: _scoreOutcome(category.awayScore, category.homeScore),
           ),
         ),
@@ -1136,9 +1136,12 @@ String mapDioError(DioException error) {
   return 'Ocurrió un error inesperado. Intenta nuevamente.';
 }
 
-enum _ScoreOutcome { win, draw, loss }
+enum _ScoreOutcome { win, draw, loss, pending }
 
-_ScoreOutcome _scoreOutcome(int score, int opponentScore) {
+_ScoreOutcome _scoreOutcome(int? score, int? opponentScore) {
+  if (score == null || opponentScore == null) {
+    return _ScoreOutcome.pending;
+  }
   if (score > opponentScore) {
     return _ScoreOutcome.win;
   }
@@ -1149,6 +1152,9 @@ _ScoreOutcome _scoreOutcome(int score, int opponentScore) {
 }
 
 Color _scoreBackgroundColor(_ScoreOutcome outcome) {
+  if (outcome == _ScoreOutcome.pending) {
+    return Colors.transparent;
+  }
   if (outcome == _ScoreOutcome.win) {
     return const Color(0xFFE8F5E9);
   }
@@ -1159,6 +1165,9 @@ Color _scoreBackgroundColor(_ScoreOutcome outcome) {
 }
 
 Color _scoreForegroundColor(_ScoreOutcome outcome) {
+  if (outcome == _ScoreOutcome.pending) {
+    return const Color(0xFF424242);
+  }
   if (outcome == _ScoreOutcome.win) {
     return const Color(0xFF2E7D32);
   }
@@ -1177,8 +1186,12 @@ class _ScoreCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final background = _scoreBackgroundColor(outcome);
-    final foreground = _scoreForegroundColor(outcome);
+    final bool pending = outcome == _ScoreOutcome.pending;
+    final background =
+        pending ? Colors.transparent : _scoreBackgroundColor(outcome);
+    final foreground = pending
+        ? theme.textTheme.bodyMedium?.color ?? theme.colorScheme.onSurface
+        : _scoreForegroundColor(outcome);
     return Container(
       alignment: Alignment.center,
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
