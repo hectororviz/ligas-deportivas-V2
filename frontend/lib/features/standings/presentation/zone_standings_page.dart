@@ -214,17 +214,17 @@ class ZoneStandingsData {
   });
 
   factory ZoneStandingsData.fromJson(Map<String, dynamic> json) {
-    final generalRows = (json['general'] as List<dynamic>? ?? [])
+    final generalRows = _asList(json['general'])
         .whereType<Map<String, dynamic>>()
         .map(StandingsRow.fromJson)
         .toList();
-    final categoryRows = (json['categories'] as List<dynamic>? ?? [])
+    final categoryRows = _asList(json['categories'])
         .whereType<Map<String, dynamic>>()
         .map(ZoneCategoryStandings.fromJson)
         .toList();
 
     return ZoneStandingsData(
-      zone: ZoneStandingsInfo.fromJson(json['zone'] as Map<String, dynamic>? ?? <String, dynamic>{}),
+      zone: ZoneStandingsInfo.fromJson(_asMap(json['zone'])),
       general: generalRows,
       categories: categoryRows,
     );
@@ -248,13 +248,13 @@ class ZoneStandingsInfo {
 
   factory ZoneStandingsInfo.fromJson(Map<String, dynamic> json) {
     return ZoneStandingsInfo(
-      id: json['id'] as int? ?? 0,
-      name: json['name'] as String? ?? 'Zona',
-      tournamentId: json['tournamentId'] as int? ?? 0,
-      tournamentName: json['tournamentName'] as String? ?? 'Torneo',
-      tournamentYear: json['tournamentYear'] as int? ?? 0,
-      leagueId: json['leagueId'] as int? ?? 0,
-      leagueName: json['leagueName'] as String? ?? 'Liga',
+      id: _parseInt(json['id']),
+      name: _parseString(json['name'], fallback: 'Zona'),
+      tournamentId: _parseInt(json['tournamentId']),
+      tournamentName: _parseString(json['tournamentName'], fallback: 'Torneo'),
+      tournamentYear: _parseInt(json['tournamentYear']),
+      leagueId: _parseInt(json['leagueId']),
+      leagueName: _parseString(json['leagueName'], fallback: 'Liga'),
     );
   }
 
@@ -278,11 +278,11 @@ class ZoneCategoryStandings {
 
   factory ZoneCategoryStandings.fromJson(Map<String, dynamic> json) {
     return ZoneCategoryStandings(
-      tournamentCategoryId: json['tournamentCategoryId'] as int? ?? 0,
-      categoryId: json['categoryId'] as int? ?? 0,
-      categoryName: json['categoryName'] as String? ?? 'Categoría',
-      countsForGeneral: json['countsForGeneral'] as bool? ?? true,
-      standings: (json['standings'] as List<dynamic>? ?? [])
+      tournamentCategoryId: _parseInt(json['tournamentCategoryId']),
+      categoryId: _parseInt(json['categoryId']),
+      categoryName: _parseString(json['categoryName'], fallback: 'Categoría'),
+      countsForGeneral: _parseBool(json['countsForGeneral'], fallback: true),
+      standings: _asList(json['standings'])
           .whereType<Map<String, dynamic>>()
           .map(StandingsRow.fromJson)
           .toList(),
@@ -311,12 +311,12 @@ class StandingsRow {
   });
 
   factory StandingsRow.fromJson(Map<String, dynamic> json) {
-    final club = json['club'] as Map<String, dynamic>?;
+    final club = _asMap(json['club']);
     final goalsFor = _parseInt(json['goalsFor']);
     final goalsAgainst = _parseInt(json['goalsAgainst']);
     return StandingsRow(
-      clubId: json['clubId'] as int? ?? club?['id'] as int? ?? 0,
-      clubName: json['clubName'] as String? ?? club?['name'] as String? ?? 'Club',
+      clubId: _parseInt(json['clubId'], fallback: _parseInt(club['id'])),
+      clubName: _parseString(json['clubName'], fallback: _parseString(club['name'], fallback: 'Club')),
       played: _parseInt(json['played']),
       wins: _parseInt(json['wins']),
       draws: _parseInt(json['draws']),
@@ -348,8 +348,8 @@ int _parseGoalDifference(dynamic value, {required int goalsFor, required int goa
   return goalsFor - goalsAgainst;
 }
 
-int _parseInt(dynamic value) {
-  return _tryParseInt(value) ?? 0;
+int _parseInt(dynamic value, {int fallback = 0}) {
+  return _tryParseInt(value) ?? fallback;
 }
 
 int? _tryParseInt(dynamic value) {
@@ -373,4 +373,61 @@ int? _tryParseInt(dynamic value) {
     }
   }
   return null;
+}
+
+String _parseString(dynamic value, {String fallback = ''}) {
+  if (value == null) {
+    return fallback;
+  }
+  if (value is String) {
+    if (value.trim().isEmpty) {
+      return fallback;
+    }
+    return value;
+  }
+  if (value is num || value is bool) {
+    return value.toString();
+  }
+  return fallback;
+}
+
+bool _parseBool(dynamic value, {bool fallback = false}) {
+  if (value is bool) {
+    return value;
+  }
+  if (value is num) {
+    if (value == 1) {
+      return true;
+    }
+    if (value == 0) {
+      return false;
+    }
+  }
+  if (value is String) {
+    final normalized = value.trim().toLowerCase();
+    if (normalized == 'true' || normalized == '1' || normalized == 'si' || normalized == 'sí') {
+      return true;
+    }
+    if (normalized == 'false' || normalized == '0' || normalized == 'no') {
+      return false;
+    }
+  }
+  return fallback;
+}
+
+Map<String, dynamic> _asMap(dynamic value) {
+  if (value is Map<String, dynamic>) {
+    return value;
+  }
+  if (value is Map) {
+    return value.map((key, dynamic v) => MapEntry('$key', v));
+  }
+  return <String, dynamic>{};
+}
+
+List<dynamic> _asList(dynamic value) {
+  if (value is List) {
+    return value;
+  }
+  return const <dynamic>[];
 }
