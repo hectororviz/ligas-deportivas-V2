@@ -8,6 +8,7 @@ Este instructivo describe cómo generar y restaurar respaldos de la base de dato
 - Los ejemplos utilizan variables de entorno para evitar exponer contraseñas en texto plano. Ajusta los comandos según corresponda.
 - `pg_dump` crea copias de seguridad lógicas y `psql` o `pg_restore` permiten restaurarlas.
 - Los comandos se ejecutan con PostgreSQL 18; versiones anteriores podrían requerir ajustes menores.
+- Todos los procedimientos usan `pg_dump --format custom` y generan archivos con extensión `.backup`, lo que garantiza que los respaldos sean portables entre Ubuntu, Arch Linux, Windows (SQL Shell) y PowerShell.
 
 ## Ubuntu
 
@@ -60,12 +61,12 @@ export PGPASSWORD="<tu_contraseña>"
   --host <host> \
   --port 5432 \
   --username <usuario> \
-  --format tar \
-  --file ~/respaldos/$(date +"%Y%m%d_%H%M")_basededatos.tar \
+  --format custom \
+  --file ~/respaldos/$(date +"%Y%m%d_%H%M")_basededatos.backup \
   <nombre_base>
 ```
 
-- El formato `tar` es útil si deseas inspeccionar el contenido con herramientas estándar.
+- El formato `custom` mantiene la compresión y metadatos necesarios para restaurar el respaldo en cualquier sistema operativo compatible con PostgreSQL 18.
 
 ### Restauración
 
@@ -77,7 +78,8 @@ export PGPASSWORD="<tu_contraseña>"
   --username <usuario> \
   --dbname <nombre_base> \
   --clean \
-  ~/respaldos/<archivo.tar>
+  --create \
+  ~/respaldos/<archivo.backup>
 ```
 
 - Omite `--create` si prefieres crear manualmente la base antes de restaurar.
@@ -129,6 +131,45 @@ La instalación oficial de PostgreSQL para Windows incluye la *SQL Shell (psql)*
     --dbname <nombre_base> \
     --file "C:\\respaldos\\<archivo.sql>"
 ```
+
+- Si necesitas transferir el archivo generado a otro sistema operativo, copia el `.backup` a un medio compartido (directorio de red, almacenamiento externo o servicio en la nube). Podrás restaurarlo siguiendo las instrucciones del sistema destino.
+
+## Windows (PowerShell)
+
+Además de la *SQL Shell*, puedes ejecutar las utilidades directamente desde PowerShell, lo que facilita la automatización con scripts `.ps1`.
+
+### Respaldo
+
+```powershell
+$Env:PGPASSWORD = "<tu_contraseña>"
+& "C:\Program Files\PostgreSQL\18\bin\pg_dump.exe" \
+  --host <host> \
+  --port 5432 \
+  --username <usuario> \
+  --format custom \
+  --file "C:\respaldos\$(Get-Date -Format 'yyyyMMdd_HHmm')_basededatos.backup" \
+  <nombre_base>
+```
+
+- `$(Get-Date -Format 'yyyyMMdd_HHmm')` genera la marca temporal de forma consistente independientemente de la configuración regional.
+- Puedes incluir los comandos en un script y programarlo con el Programador de tareas.
+
+### Restauración
+
+```powershell
+$Env:PGPASSWORD = "<tu_contraseña>"
+& "C:\Program Files\PostgreSQL\18\bin\pg_restore.exe" \
+  --host <host> \
+  --port 5432 \
+  --username <usuario> \
+  --dbname <nombre_base> \
+  --clean \
+  --create \
+  "C:\respaldos\<archivo.backup>"
+```
+
+- Asegúrate de abrir PowerShell con permisos que permitan acceder a la carpeta de respaldos.
+- Si el archivo `.backup` proviene de Linux, cópialo a `C:\respaldos\` o a la ruta que utilices antes de ejecutar la restauración.
 
 ## Verificación posterior a la restauración
 
