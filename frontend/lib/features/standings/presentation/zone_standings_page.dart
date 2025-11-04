@@ -312,19 +312,19 @@ class StandingsRow {
 
   factory StandingsRow.fromJson(Map<String, dynamic> json) {
     final club = json['club'] as Map<String, dynamic>?;
-    final goalsFor = json['goalsFor'] as int? ?? 0;
-    final goalsAgainst = json['goalsAgainst'] as int? ?? 0;
+    final goalsFor = _parseInt(json['goalsFor']);
+    final goalsAgainst = _parseInt(json['goalsAgainst']);
     return StandingsRow(
       clubId: json['clubId'] as int? ?? club?['id'] as int? ?? 0,
       clubName: json['clubName'] as String? ?? club?['name'] as String? ?? 'Club',
-      played: json['played'] as int? ?? 0,
-      wins: json['wins'] as int? ?? 0,
-      draws: json['draws'] as int? ?? 0,
-      losses: json['losses'] as int? ?? 0,
+      played: _parseInt(json['played']),
+      wins: _parseInt(json['wins']),
+      draws: _parseInt(json['draws']),
+      losses: _parseInt(json['losses']),
       goalsFor: goalsFor,
       goalsAgainst: goalsAgainst,
-      goalDifference: json['goalDifference'] as int? ?? goalsFor - goalsAgainst,
-      points: json['points'] as int? ?? 0,
+      goalDifference: _parseGoalDifference(json['goalDifference'], goalsFor: goalsFor, goalsAgainst: goalsAgainst),
+      points: _parseInt(json['points']),
     );
   }
 
@@ -338,4 +338,39 @@ class StandingsRow {
   final int goalsAgainst;
   final int goalDifference;
   final int points;
+}
+
+int _parseGoalDifference(dynamic value, {required int goalsFor, required int goalsAgainst}) {
+  final parsed = _tryParseInt(value);
+  if (parsed != null) {
+    return parsed;
+  }
+  return goalsFor - goalsAgainst;
+}
+
+int _parseInt(dynamic value) {
+  return _tryParseInt(value) ?? 0;
+}
+
+int? _tryParseInt(dynamic value) {
+  if (value is int) {
+    return value;
+  }
+  if (value is double) {
+    return value.round();
+  }
+  if (value is num) {
+    return value.toInt();
+  }
+  if (value is String) {
+    final parsedInt = int.tryParse(value);
+    if (parsedInt != null) {
+      return parsedInt;
+    }
+    final parsedDouble = double.tryParse(value);
+    if (parsedDouble != null) {
+      return parsedDouble.round();
+    }
+  }
+  return null;
 }
