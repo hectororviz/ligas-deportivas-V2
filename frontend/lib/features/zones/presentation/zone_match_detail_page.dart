@@ -756,7 +756,7 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
     try {
       final api = ref.read(apiClientProvider);
       final resultFuture = api.get<Map<String, dynamic>>(
-        '/matches/${widget.match.id}/categories/${widget.category.id}/result',
+        '/matches/${widget.match.id}/categories/${widget.category.tournamentCategoryId}/result',
       );
       final homePlayersFuture = api.get<Map<String, dynamic>>(
         '/clubs/$homeClubId/tournament-categories/${widget.category.tournamentCategoryId}/eligible-players',
@@ -931,7 +931,7 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
       }
 
       await api.post(
-        '/matches/${widget.match.id}/categories/${widget.category.id}/result',
+        '/matches/${widget.match.id}/categories/${widget.category.tournamentCategoryId}/result',
         data: {
           'homeScore': _homeTotal,
           'awayScore': _awayTotal,
