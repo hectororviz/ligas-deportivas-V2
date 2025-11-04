@@ -39,6 +39,7 @@ class ZoneFixturePage extends ConsumerStatefulWidget {
 }
 
 class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
+  late final ScrollController _contentScrollController;
   ZoneFixturePreview? _preview;
   bool _loadingPreview = false;
   bool _submitting = false;
@@ -70,6 +71,18 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
       return null;
     }
     return () => _finalizeMatchday(matchday.matchdayNumber);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _contentScrollController = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _contentScrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _finalizeMatchday(int matchday) async {
@@ -305,7 +318,9 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
 
                     return Scrollbar(
                       thumbVisibility: true,
+                      controller: _contentScrollController,
                       child: SingleChildScrollView(
+                        controller: _contentScrollController,
                         child: content,
                       ),
                     );

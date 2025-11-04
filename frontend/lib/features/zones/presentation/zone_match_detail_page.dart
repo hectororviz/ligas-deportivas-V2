@@ -496,7 +496,7 @@ class _CategoriesTableState extends ConsumerState<_CategoriesTable> {
     ZoneMatchCategory category,
   ) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         _dataCell(
           innerBorderColor,
