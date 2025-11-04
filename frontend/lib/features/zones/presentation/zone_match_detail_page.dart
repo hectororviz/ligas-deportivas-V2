@@ -33,56 +33,134 @@ class ZoneMatchDetailPage extends ConsumerWidget {
     final canEditScores =
         (user?.roles.contains('ADMIN') ?? false) || (user?.hasPermission(module: _moduleMatches, action: _actionUpdate) ?? false);
 
+    ZoneMatch? match = initialMatch;
+    final fixtureData = fixtureAsync.valueOrNull;
+    if (fixtureData != null) {
+      for (final item in fixtureData.matches) {
+        if (item.id == matchId) {
+          match = item;
+          break;
+        }
+      }
+    }
+
+    if (match == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Detalle del partido')),
+        body: fixtureAsync.when(
+          data: (fixtureData) {
+            for (final item in fixtureData.matches) {
+              if (item.id == matchId) {
+                match = item;
+                break;
+              }
+            }
+
+            if (match == null) {
+              return const Center(child: Text('Partido no encontrado.'));
+            }
+
+            return _ZoneMatchDetailContent(
+              match: match!,
+              zoneId: zoneId,
+              canEditScores: canEditScores,
+            );
+          },
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, stackTrace) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.error_outline, size: 48),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Ocurrió un error al cargar el partido.',
+                      style: Theme.of(context).textTheme.titleMedium,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '$error',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      );
+    }
+
+    final error = fixtureAsync.maybeWhen<Object?>(
+      error: (error, _) => error,
+      orElse: () => null,
+    );
+
     return Scaffold(
       appBar: AppBar(title: const Text('Detalle del partido')),
-      body: fixtureAsync.when(
-        data: (fixtureData) {
-          ZoneMatch? match = initialMatch;
-          for (final item in fixtureData.matches) {
-            if (item.id == matchId) {
-              match = item;
-              break;
-            }
-          }
-
-          if (match == null) {
-            return const Center(child: Text('Partido no encontrado.'));
-          }
-
-          return _ZoneMatchDetailContent(
-            match: match,
+      body: Stack(
+        children: [
+          _ZoneMatchDetailContent(
+            match: match!,
             zoneId: zoneId,
             canEditScores: canEditScores,
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.error_outline, size: 48),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Ocurrió un error al cargar el partido.',
-                    style: Theme.of(context).textTheme.titleMedium,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '$error',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                  ),
-                ],
+          ),
+          if (fixtureAsync.isLoading)
+            const Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: LinearProgressIndicator(),
+            ),
+          if (error != null)
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: SafeArea(
+                minimum: const EdgeInsets.all(16),
+                child: _ErrorBanner(message: 'No se pudo actualizar el partido: $error'),
               ),
             ),
-          );
-        },
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      elevation: 4,
+      borderRadius: BorderRadius.circular(12),
+      color: theme.colorScheme.errorContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Icon(Icons.error_outline, color: theme.colorScheme.onErrorContainer),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onErrorContainer,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
