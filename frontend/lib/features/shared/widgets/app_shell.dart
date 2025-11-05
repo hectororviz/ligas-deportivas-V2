@@ -1,3 +1,5 @@
+import 'dart:math' show max;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -151,7 +153,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                             ? constraints.maxWidth
                             : MediaQuery.sizeOf(context).width;
                         final overflowAllowance = maxViewportWidth.isFinite
-                            ? math.max(640.0, maxViewportWidth)
+                            ? max(640.0, maxViewportWidth)
                             : 640.0;
                         final maxContentWidth = maxViewportWidth.isFinite
                             ? maxViewportWidth + overflowAllowance
