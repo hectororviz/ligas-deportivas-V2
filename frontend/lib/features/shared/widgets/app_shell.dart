@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -149,20 +151,27 @@ class _AppShellState extends ConsumerState<AppShell> {
                       child: LayoutBuilder(
                         key: ValueKey(location),
                         builder: (context, constraints) {
-                          final extraWidthAllowance =
-                              constraints.maxWidth.isFinite ? constraints.maxWidth + 1600.0 : 2400.0;
+                          final maxViewportWidth = constraints.maxWidth.isFinite
+                              ? constraints.maxWidth
+                              : MediaQuery.sizeOf(context).width;
+                          final overflowAllowance = maxViewportWidth.isFinite
+                              ? math.min(400.0, maxViewportWidth * 0.25)
+                              : 400.0;
+                          final maxContentWidth = maxViewportWidth + overflowAllowance;
 
                           return Scrollbar(
                             controller: _horizontalScrollController,
-                            notificationPredicate: (notification) =>
-                                notification.metrics.axis == Axis.horizontal,
+                            thumbVisibility: true,
+                            trackVisibility: true,
+                            interactive: true,
+                            scrollbarOrientation: ScrollbarOrientation.bottom,
                             child: SingleChildScrollView(
                               controller: _horizontalScrollController,
                               scrollDirection: Axis.horizontal,
                               child: ConstrainedBox(
                                 constraints: BoxConstraints(
                                   minWidth: constraints.maxWidth,
-                                  maxWidth: extraWidthAllowance,
+                                  maxWidth: maxContentWidth,
                                 ),
                                 child: widget.child,
                               ),
