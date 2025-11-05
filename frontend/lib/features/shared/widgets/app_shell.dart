@@ -27,7 +27,6 @@ const _navigationItems = <NavigationItem>[
   NavigationItem(label: 'Torneos', icon: Icons.calendar_today_outlined, route: '/tournaments'),
   NavigationItem(label: 'Zonas', icon: Icons.grid_view_outlined, route: '/zones'),
   NavigationItem(label: 'Fixture', icon: Icons.sports_soccer_outlined, route: '/fixtures'),
-  NavigationItem(label: 'Resultados', icon: Icons.scoreboard_outlined, route: '/results'),
   NavigationItem(label: 'Tablas', icon: Icons.leaderboard_outlined, route: '/standings'),
   NavigationItem(label: 'Configuración', icon: Icons.settings_outlined, route: '/settings'),
 ];
@@ -128,7 +127,18 @@ class AppShell extends ConsumerWidget {
                   Expanded(
                     child: AnimatedSwitcher(
                       duration: const Duration(milliseconds: 250),
-                      child: child,
+                      child: LayoutBuilder(
+                        key: ValueKey(location),
+                        builder: (context, constraints) {
+                          return SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                              child: child,
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   ),
                 ],
