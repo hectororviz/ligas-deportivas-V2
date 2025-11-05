@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../../services/api_client.dart';
+import '../../shared/widgets/app_data_table_style.dart';
 
 final zoneStandingsProvider = FutureProvider.autoDispose.family<ZoneStandingsData, int>((ref, zoneId) async {
   final api = ref.read(apiClientProvider);
@@ -59,14 +61,17 @@ class ZoneStandingsPage extends ConsumerWidget {
   }
 }
 
-class _ZoneStandingsView extends StatelessWidget {
+class _ZoneStandingsView extends ConsumerWidget {
   const _ZoneStandingsView({required this.data});
 
   final ZoneStandingsData data;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final leagueColors = ref.watch(leagueColorsProvider);
+    final leagueColor =
+        leagueColors[data.zone.leagueId] ?? theme.colorScheme.primary;
     final subtitle = '${data.zone.tournamentName} ${data.zone.tournamentYear} · ${data.zone.leagueName}';
 
     return ListView(
@@ -99,6 +104,7 @@ class _ZoneStandingsView extends StatelessWidget {
                   storageKey: 'zone-${data.zone.id}-general-table',
                   rows: data.general,
                   emptyMessage: 'Todavía no hay datos para la tabla general.',
+                  leagueColor: leagueColor,
                 ),
               ],
             ),
@@ -144,6 +150,7 @@ class _ZoneStandingsView extends StatelessWidget {
                         'zone-${data.zone.id}-category-${category.tournamentCategoryId}-table',
                     rows: category.standings,
                     emptyMessage: 'No hay datos para esta categoría.',
+                    leagueColor: leagueColor,
                   ),
                 ],
               ),
@@ -159,11 +166,13 @@ class _StandingsTable extends StatelessWidget {
     required this.storageKey,
     required this.rows,
     required this.emptyMessage,
+    required this.leagueColor,
   });
 
   final String storageKey;
   final List<StandingsRow> rows;
   final String emptyMessage;
+  final Color leagueColor;
 
   @override
   Widget build(BuildContext context) {
@@ -177,10 +186,17 @@ class _StandingsTable extends StatelessWidget {
       );
     }
 
+    final theme = Theme.of(context);
+    final colors = AppDataTableColors.score(theme, leagueColor);
+    final headerStyle =
+        theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: colors.headerText);
+
     return SingleChildScrollView(
       key: PageStorageKey<String>(storageKey),
       scrollDirection: Axis.horizontal,
       child: DataTable(
+        headingRowColor: buildHeaderColor(colors.headerBackground),
+        headingTextStyle: headerStyle,
         columns: const [
           DataColumn(label: Text('Posición')),
           DataColumn(label: Text('Club')),
@@ -196,6 +212,7 @@ class _StandingsTable extends StatelessWidget {
         rows: [
           for (var index = 0; index < rows.length; index++)
             DataRow(
+              color: buildStripedRowColor(index: index, colors: colors),
               cells: [
                 DataCell(Text('${index + 1}')),
                 DataCell(Text(rows[index].clubName)),

@@ -10,6 +10,7 @@ import 'package:intl/intl.dart';
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
 import '../../categories/providers/categories_catalog_provider.dart';
+import '../../shared/widgets/app_data_table_style.dart';
 import '../../shared/widgets/page_scaffold.dart';
 import '../../shared/widgets/table_filters_bar.dart';
 
@@ -814,6 +815,11 @@ class _PlayersDataTable extends StatelessWidget {
             .compareTo(_normalizeForSort(b.firstName));
       });
 
+    final theme = Theme.of(context);
+    final colors = AppDataTableColors.standard(theme);
+    final headerStyle =
+        theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: colors.headerText);
+
     final table = DataTable(
       columns: const [
         DataColumn(label: Text('Apellido')),
@@ -827,65 +833,63 @@ class _PlayersDataTable extends StatelessWidget {
       dataRowMinHeight: 44,
       dataRowMaxHeight: 60,
       headingRowHeight: 48,
-      rows: players
-          .map(
-            (player) => DataRow(
-              cells: [
-                DataCell(Text(player.lastName)),
-                DataCell(Text(player.firstName)),
-                DataCell(Text(player.club?.name ?? 'Sin club asignado')),
-                DataCell(Text(player.genderLabel)),
-                DataCell(Text(player.formattedBirthDateWithAge)),
-                DataCell(
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Chip(
-                      avatar: Icon(
-                        player.active
-                            ? Icons.check_circle
-                            : Icons.pause_circle,
-                        size: 18,
-                        color: player.active
-                            ? Theme.of(context).colorScheme.onPrimary
-                            : Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                      backgroundColor: player.active
-                          ? Theme.of(context).colorScheme.primary
-                          : Theme.of(context).colorScheme.surfaceVariant,
-                      label: Text(
-                        player.active ? 'Activo' : 'Inactivo',
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                              color: player.active
-                                  ? Theme.of(context).colorScheme.onPrimary
-                                  : Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
-                            ),
+      headingRowColor: buildHeaderColor(colors.headerBackground),
+      headingTextStyle: headerStyle,
+      rows: [
+        for (var index = 0; index < players.length; index++)
+          DataRow(
+            color: buildStripedRowColor(index: index, colors: colors),
+            cells: [
+              DataCell(Text(players[index].lastName)),
+              DataCell(Text(players[index].firstName)),
+              DataCell(Text(players[index].club?.name ?? 'Sin club asignado')),
+              DataCell(Text(players[index].genderLabel)),
+              DataCell(Text(players[index].formattedBirthDateWithAge)),
+              DataCell(
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Chip(
+                    avatar: Icon(
+                      players[index].active ? Icons.check_circle : Icons.pause_circle,
+                      size: 18,
+                      color: players[index].active
+                          ? theme.colorScheme.onPrimary
+                          : theme.colorScheme.onSurfaceVariant,
+                    ),
+                    backgroundColor: players[index].active
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.surfaceVariant,
+                    label: Text(
+                      players[index].active ? 'Activo' : 'Inactivo',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: players[index].active
+                            ? theme.colorScheme.onPrimary
+                            : theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ),
                 ),
-                DataCell(
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      OutlinedButton.icon(
-                        onPressed: () => onView(player),
-                        icon: const Icon(Icons.visibility_outlined),
-                        label: const Text('Detalle'),
-                      ),
-                      FilledButton.tonalIcon(
-                        onPressed: canEdit ? () => onEdit(player) : null,
-                        icon: const Icon(Icons.edit_outlined),
-                        label: const Text('Editar'),
-                      ),
-                    ],
-                  ),
+              ),
+              DataCell(
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () => onView(players[index]),
+                      icon: const Icon(Icons.visibility_outlined),
+                      label: const Text('Detalle'),
+                    ),
+                    FilledButton.tonalIcon(
+                      onPressed: canEdit ? () => onEdit(players[index]) : null,
+                      icon: const Icon(Icons.edit_outlined),
+                      label: const Text('Editar'),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          )
-          .toList(),
+              ),
+            ],
+          ),
+      ],
     );
 
     return LayoutBuilder(

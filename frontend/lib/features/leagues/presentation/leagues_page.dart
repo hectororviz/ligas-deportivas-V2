@@ -2,15 +2,25 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
+import '../../shared/widgets/app_data_table_style.dart';
 import '../../shared/widgets/page_scaffold.dart';
 
 final leaguesProvider = FutureProvider<List<League>>((ref) async {
   final api = ref.read(apiClientProvider);
   final response = await api.get<List<dynamic>>('/leagues');
   final data = response.data ?? [];
-  return data.map((json) => League.fromJson(json as Map<String, dynamic>)).toList();
+  final leagues =
+      data.map((json) => League.fromJson(json as Map<String, dynamic>)).toList();
+
+  final colorsNotifier = ref.read(leagueColorsProvider.notifier);
+  for (final league in leagues) {
+    colorsNotifier.setColor(league.id, league.color);
+  }
+
+  return leagues;
 });
 
 class LeaguesPage extends ConsumerStatefulWidget {
@@ -217,10 +227,17 @@ class _LeaguesDataTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = AppDataTableColors.standard(theme);
+    final headerStyle =
+        theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: colors.headerText);
+
     final table = DataTable(
       headingRowHeight: 48,
       dataRowMinHeight: 44,
       dataRowMaxHeight: 60,
+      headingRowColor: buildHeaderColor(colors.headerBackground),
+      headingTextStyle: headerStyle,
       columns: const [
         DataColumn(label: Text('Liga')),
         DataColumn(label: Text('Identificador')),
@@ -228,47 +245,44 @@ class _LeaguesDataTable extends StatelessWidget {
         DataColumn(label: Text('Color distintivo')),
         DataColumn(label: Text('Acciones')),
       ],
-      rows: leagues
-          .map(
-            (league) => DataRow(
-              cells: [
-                DataCell(Row(
-                  children: [
-                    _LeagueAvatar(league: league),
-                    const SizedBox(width: 12),
-                    Flexible(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            league.name,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w600),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          Text('ID ${league.id}', style: Theme.of(context).textTheme.bodySmall),
-                        ],
-                      ),
+      rows: [
+        for (var index = 0; index < leagues.length; index++)
+          DataRow(
+            color: buildStripedRowColor(index: index, colors: colors),
+            cells: [
+              DataCell(Row(
+                children: [
+                  _LeagueAvatar(league: leagues[index]),
+                  const SizedBox(width: 12),
+                  Flexible(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          leagues[index].name,
+                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text('ID ${leagues[index].id}', style: theme.textTheme.bodySmall),
+                      ],
                     ),
-                  ],
-                )),
-                DataCell(Text(league.slug ?? '—')),
-                DataCell(Text(league.gameDay.label)),
-                DataCell(_ColorPreview(color: league.color, colorHex: league.colorHex)),
-                DataCell(
-                  FilledButton.tonalIcon(
-                    onPressed: isAdmin ? () => onEdit(league) : null,
-                    icon: const Icon(Icons.edit_outlined),
-                    label: const Text('Editar'),
                   ),
+                ],
+              )),
+              DataCell(Text(leagues[index].slug ?? '—')),
+              DataCell(Text(leagues[index].gameDay.label)),
+              DataCell(_ColorPreview(color: leagues[index].color, colorHex: leagues[index].colorHex)),
+              DataCell(
+                FilledButton.tonalIcon(
+                  onPressed: isAdmin ? () => onEdit(leagues[index]) : null,
+                  icon: const Icon(Icons.edit_outlined),
+                  label: const Text('Editar'),
                 ),
-              ],
-            ),
-          )
-          .toList(),
+              ),
+            ],
+          ),
+      ],
     );
 
     return LayoutBuilder(
