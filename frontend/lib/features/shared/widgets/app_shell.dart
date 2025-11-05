@@ -1,5 +1,3 @@
-import 'dart:math' show max;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -152,12 +150,11 @@ class _AppShellState extends ConsumerState<AppShell> {
                         final maxViewportWidth = constraints.maxWidth.isFinite
                             ? constraints.maxWidth
                             : MediaQuery.sizeOf(context).width;
-                        final overflowAllowance = maxViewportWidth.isFinite
-                            ? max(640.0, maxViewportWidth)
-                            : 640.0;
-                        final maxContentWidth = maxViewportWidth.isFinite
-                            ? maxViewportWidth + overflowAllowance
-                            : MediaQuery.sizeOf(context).width + overflowAllowance;
+                        final viewportWidth = maxViewportWidth.isFinite
+                            ? maxViewportWidth
+                            : MediaQuery.sizeOf(context).width;
+                        final overflowAllowance = viewportWidth >= 1280.0 ? 0.0 : 640.0;
+                        final maxContentWidth = viewportWidth + overflowAllowance;
 
                         return Scrollbar(
                           controller: _horizontalScrollController,

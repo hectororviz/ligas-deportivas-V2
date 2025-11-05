@@ -63,6 +63,12 @@ class AppTheme {
         elevation: 0,
         margin: const EdgeInsets.all(12),
       ),
+      dataTableTheme: const DataTableThemeData(
+        horizontalMargin: 12,
+        columnSpacing: 20,
+        dataRowMinHeight: 44,
+        dataRowMaxHeight: 56,
+      ),
     );
   }
 
