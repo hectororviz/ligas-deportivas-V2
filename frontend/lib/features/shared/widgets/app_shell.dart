@@ -51,13 +51,32 @@ class SidebarController extends StateNotifier<bool> {
   }
 }
 
-class AppShell extends ConsumerWidget {
+class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key, required this.child});
 
   final Widget child;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends ConsumerState<AppShell> {
+  late final ScrollController _horizontalScrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _horizontalScrollController = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _horizontalScrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final isCollapsed = ref.watch(sidebarControllerProvider);
     final location = GoRouterState.of(context).uri.toString();
     final currentIndex = _navigationItems
@@ -130,11 +149,23 @@ class AppShell extends ConsumerWidget {
                       child: LayoutBuilder(
                         key: ValueKey(location),
                         builder: (context, constraints) {
-                          return SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                              child: child,
+                          final extraWidthAllowance =
+                              constraints.maxWidth.isFinite ? constraints.maxWidth + 1600 : 2400;
+
+                          return Scrollbar(
+                            controller: _horizontalScrollController,
+                            notificationPredicate: (notification) =>
+                                notification.metrics.axis == Axis.horizontal,
+                            child: SingleChildScrollView(
+                              controller: _horizontalScrollController,
+                              scrollDirection: Axis.horizontal,
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  minWidth: constraints.maxWidth,
+                                  maxWidth: extraWidthAllowance,
+                                ),
+                                child: widget.child,
+                              ),
                             ),
                           );
                         },
