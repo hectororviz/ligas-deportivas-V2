@@ -10,6 +10,11 @@ const resolveStorageBaseUrl = () => {
   return `${appUrl}/storage`;
 };
 
+const resolveCaptchaProvider = () => {
+  const provider = (process.env.CAPTCHA_PROVIDER ?? 'turnstile').trim();
+  return provider.length > 0 ? provider : 'turnstile';
+};
+
 export default () => ({
   app: {
     port: parseInt(process.env.PORT ?? '3000', 10),
@@ -27,8 +32,8 @@ export default () => ({
     refreshTtl: parseInt(process.env.JWT_REFRESH_TTL ?? '604800', 10)
   },
   captcha: {
-    provider: process.env.CAPTCHA_PROVIDER ?? 'turnstile',
-    secret: process.env.CAPTCHA_SECRET ?? ''
+    provider: resolveCaptchaProvider(),
+    secret: process.env.CAPTCHA_SECRET?.trim() ?? ''
   },
   mail: {
     host: process.env.SMTP_HOST ?? 'localhost',
