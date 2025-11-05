@@ -18,6 +18,28 @@ const normalizeOptionalString = (value?: string) => {
   return trimmed;
 };
 
+const normalizeString = (value?: string, fallback = '') => {
+  if (value === undefined || value === null) {
+    return fallback;
+  }
+
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return fallback;
+  }
+
+  return trimmed;
+};
+
+const removeInlineComment = (value: string) => {
+  const commentIndex = value.indexOf('#');
+  if (commentIndex === -1) {
+    return value;
+  }
+
+  return value.slice(0, commentIndex).trim();
+};
+
 const resolveStorageBaseUrl = () => {
   const explicitBaseUrl = process.env.STORAGE_BASE_URL;
   if (explicitBaseUrl && explicitBaseUrl.trim().length > 0) {
@@ -29,13 +51,54 @@ const resolveStorageBaseUrl = () => {
 };
 
 const resolveCaptchaProvider = () => {
-  const provider = (process.env.CAPTCHA_PROVIDER ?? 'turnstile').trim();
+  const provider = normalizeString(process.env.CAPTCHA_PROVIDER, 'turnstile');
   return provider.length > 0 ? provider : 'turnstile';
 };
 
 const resolveCaptchaSecret = () => normalizeOptionalString(process.env.CAPTCHA_SECRET);
 
 const captchaSecret = resolveCaptchaSecret();
+
+const resolveMailHost = () => {
+  const host = process.env.SMTP_HOST;
+  if (!host) {
+    return 'localhost';
+  }
+
+  const normalized = removeInlineComment(host).trim();
+  return normalized.length > 0 ? normalized : 'localhost';
+};
+
+const resolveMailPort = () => {
+  const port = normalizeString(process.env.SMTP_PORT);
+  if (port.length === 0) {
+    return 1025;
+  }
+
+  const parsed = parseInt(port, 10);
+  return Number.isFinite(parsed) ? parsed : 1025;
+};
+
+const resolveOptionalBoolean = (value?: string) => {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized.length === 0) {
+    return undefined;
+  }
+
+  if (['true', '1', 'yes', 'on'].includes(normalized)) {
+    return true;
+  }
+
+  if (['false', '0', 'no', 'off'].includes(normalized)) {
+    return false;
+  }
+
+  return undefined;
+};
 
 export default () => ({
   app: {
@@ -59,11 +122,15 @@ export default () => ({
     enabled: captchaSecret.length > 0
   },
   mail: {
-    host: process.env.SMTP_HOST ?? 'localhost',
-    port: parseInt(process.env.SMTP_PORT ?? '1025', 10),
+    host: resolveMailHost(),
+    port: resolveMailPort(),
     user: process.env.SMTP_USER ?? '',
     pass: process.env.SMTP_PASS ?? '',
-    from: process.env.SMTP_FROM ?? 'noreply@ligas.local'
+    from: process.env.SMTP_FROM ?? 'noreply@ligas.local',
+    secure: resolveOptionalBoolean(process.env.SMTP_SECURE),
+    requireTls: resolveOptionalBoolean(process.env.SMTP_REQUIRE_TLS),
+    ignoreTls: resolveOptionalBoolean(process.env.SMTP_IGNORE_TLS),
+    rejectUnauthorized: resolveOptionalBoolean(process.env.SMTP_TLS_REJECT_UNAUTHORIZED)
   },
   storage: {
     baseUrl: resolveStorageBaseUrl(),
