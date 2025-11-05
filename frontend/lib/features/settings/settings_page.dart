@@ -31,6 +31,16 @@ class SettingsPage extends StatelessWidget {
         const SizedBox(height: 12),
         Card(
           child: ListTile(
+            leading: const Icon(Icons.group_outlined),
+            title: const Text('Administración de usuarios'),
+            subtitle: const Text('Consulta y gestiona los usuarios registrados en la plataforma.'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/settings/users'),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          child: ListTile(
             leading: const Icon(Icons.palette_outlined),
             title: const Text('Colores por liga'),
             subtitle:

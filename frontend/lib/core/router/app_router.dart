@@ -14,9 +14,10 @@ import '../../features/categories/presentation/categories_page.dart';
 import '../../features/players/presentation/players_page.dart';
 import '../../features/settings/league_colors_page.dart';
 import '../../features/settings/role_permissions_page.dart';
-import '../../features/settings/settings_page.dart';
 import '../../features/settings/account_settings_page.dart';
 import '../../features/settings/site_identity_page.dart';
+import '../../features/settings/settings_page.dart';
+import '../../features/settings/user_management_page.dart';
 import '../../features/shared/widgets/app_shell.dart';
 import '../../features/standings/presentation/standings_page.dart';
 import '../../features/standings/presentation/zone_standings_page.dart';
@@ -138,6 +139,10 @@ GoRouter createRouter(Ref ref) {
               GoRoute(
                 path: 'account',
                 builder: (context, state) => const AccountSettingsPage(),
+              ),
+              GoRoute(
+                path: 'users',
+                builder: (context, state) => const UserManagementPage(),
               ),
               GoRoute(
                 path: 'colors',
