@@ -13,9 +13,15 @@ export class CaptchaService {
       throw new BadRequestException('Captcha requerido');
     }
 
+    const captchaEnabled = this.configService.get<boolean>('captcha.enabled');
+    if (!captchaEnabled) {
+      this.logger.warn('Captcha deshabilitado por falta de secret, solo válido en entornos de desarrollo.');
+      return;
+    }
+
     const secret = this.configService.get<string>('captcha.secret');
     if (!secret) {
-      this.logger.warn('Captcha deshabilitado por falta de secret, solo válido en entornos de desarrollo.');
+      this.logger.warn('Captcha deshabilitado debido a configuración incompleta.');
       return;
     }
 
