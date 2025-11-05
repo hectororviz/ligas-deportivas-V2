@@ -144,41 +144,42 @@ class _AppShellState extends ConsumerState<AppShell> {
                   ),
                   const Divider(height: 1),
                   Expanded(
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 250),
-                      child: LayoutBuilder(
-                        key: ValueKey(location),
-                        builder: (context, constraints) {
-                          final maxViewportWidth = constraints.maxWidth.isFinite
-                              ? constraints.maxWidth
-                              : MediaQuery.sizeOf(context).width;
-                          final minContentWidth = maxViewportWidth.isFinite
-                              ? maxViewportWidth
-                              : MediaQuery.sizeOf(context).width;
-                          final maxContentWidth = maxViewportWidth;
+                    child: LayoutBuilder(
+                      key: ValueKey(location),
+                      builder: (context, constraints) {
+                        final maxViewportWidth = constraints.maxWidth.isFinite
+                            ? constraints.maxWidth
+                            : MediaQuery.sizeOf(context).width;
+                        final minContentWidth = maxViewportWidth.isFinite
+                            ? maxViewportWidth
+                            : MediaQuery.sizeOf(context).width;
 
-                          return Scrollbar(
+                        return Scrollbar(
+                          controller: _horizontalScrollController,
+                          thumbVisibility: true,
+                          trackVisibility: true,
+                          interactive: true,
+                          scrollbarOrientation: ScrollbarOrientation.bottom,
+                          thickness: 12,
+                          radius: const Radius.circular(999),
+                          child: SingleChildScrollView(
                             controller: _horizontalScrollController,
-                            thumbVisibility: true,
-                            trackVisibility: true,
-                            interactive: true,
-                            scrollbarOrientation: ScrollbarOrientation.bottom,
-                            thickness: 12,
-                            radius: const Radius.circular(999),
-                            child: SingleChildScrollView(
-                              controller: _horizontalScrollController,
-                              scrollDirection: Axis.horizontal,
-                              child: ConstrainedBox(
-                                constraints: BoxConstraints(
-                                  minWidth: minContentWidth,
-                                  maxWidth: maxContentWidth,
+                            scrollDirection: Axis.horizontal,
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                minWidth: minContentWidth,
+                              ),
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 250),
+                                child: KeyedSubtree(
+                                  key: ValueKey(location),
+                                  child: widget.child,
                                 ),
-                                child: widget.child,
                               ),
                             ),
-                          );
-                        },
-                      ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ],
