@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createTransport, Transporter } from 'nodemailer';
+import SMTPTransport from 'nodemailer/lib/smtp-transport';
 
 @Injectable()
 export class MailService {
@@ -8,12 +9,7 @@ export class MailService {
   private readonly logger = new Logger(MailService.name);
 
   constructor(private readonly configService: ConfigService) {
-    this.transporter = createTransport({
-      host: this.configService.get<string>('mail.host'),
-      port: this.configService.get<number>('mail.port') ?? 1025,
-      secure: false,
-      auth: this.resolveAuth()
-    });
+    this.transporter = createTransport(this.resolveTransportOptions());
   }
 
   async sendEmailVerification(email: string, token: string, firstName: string) {
@@ -62,8 +58,51 @@ export class MailService {
         ...options
       });
     } catch (error) {
-      this.logger.error('Error enviando correo', error as Error);
+      const host = this.configService.get<string>('mail.host');
+      const port = this.configService.get<number>('mail.port');
+      const normalizedError =
+        error instanceof Error ? error : new Error(String(error));
+
+      this.logger.error(
+        `Error enviando correo (SMTP ${host ?? 'desconocido'}:${port ?? 'desconocido'})`,
+        normalizedError
+      );
+
+      throw normalizedError;
     }
+  }
+
+  private resolveTransportOptions(): SMTPTransport.Options {
+    const host = this.configService.get<string>('mail.host');
+    const port = this.configService.get<number>('mail.port') ?? 1025;
+    const secureConfig = this.configService.get<boolean | undefined>('mail.secure');
+    const requireTls = this.configService.get<boolean | undefined>('mail.requireTls');
+    const ignoreTls = this.configService.get<boolean | undefined>('mail.ignoreTls');
+    const rejectUnauthorized = this.configService.get<boolean | undefined>('mail.rejectUnauthorized');
+
+    const options: SMTPTransport.Options = {
+      host,
+      port,
+      secure: secureConfig ?? port === 465,
+      auth: this.resolveAuth()
+    };
+
+    if (requireTls !== undefined) {
+      options.requireTLS = requireTls;
+    }
+
+    if (ignoreTls !== undefined) {
+      options.ignoreTLS = ignoreTls;
+    }
+
+    if (rejectUnauthorized !== undefined) {
+      options.tls = {
+        ...(options.tls ?? {}),
+        rejectUnauthorized
+      };
+    }
+
+    return options;
   }
 
   private resolveAuth() {
