@@ -8,6 +8,12 @@ import '../domain/zone_models.dart';
 import '../domain/zone_match_models.dart';
 import 'zones_page.dart';
 
+class ZoneFixturePageArgs {
+  const ZoneFixturePageArgs({this.viewOnly = false});
+
+  final bool viewOnly;
+}
+
 final zoneDetailProvider = FutureProvider.autoDispose.family<ZoneDetail, int>((ref, zoneId) async {
   final api = ref.read(apiClientProvider);
   final response = await api.get<Map<String, dynamic>>('/zones/$zoneId');
@@ -23,27 +29,22 @@ final zoneMatchesProvider = FutureProvider.autoDispose.family<ZoneMatchesData, i
 });
 
 class ZoneFixturePage extends ConsumerStatefulWidget {
-  const ZoneFixturePage({super.key, required this.zoneId});
+  const ZoneFixturePage({super.key, required this.zoneId, this.viewOnly = false});
 
   final int zoneId;
+  final bool viewOnly;
 
   @override
   ConsumerState<ZoneFixturePage> createState() => _ZoneFixturePageState();
 }
 
 class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
-  final ScrollController _scrollController = ScrollController();
+  late final ScrollController _contentScrollController;
   ZoneFixturePreview? _preview;
   bool _loadingPreview = false;
   bool _submitting = false;
   String? _previewError;
   final Set<int> _finalizingMatchdays = <int>{};
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
 
   bool _isFinalizing(int matchday) => _finalizingMatchdays.contains(matchday);
 
@@ -70,6 +71,18 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
       return null;
     }
     return () => _finalizeMatchday(matchday.matchdayNumber);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _contentScrollController = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _contentScrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _finalizeMatchday(int matchday) async {
@@ -304,10 +317,10 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
                     }
 
                     return Scrollbar(
-                      controller: _scrollController,
                       thumbVisibility: true,
+                      controller: _contentScrollController,
                       child: SingleChildScrollView(
-                        controller: _scrollController,
+                        controller: _contentScrollController,
                         child: content,
                       ),
                     );
@@ -350,6 +363,29 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
   }
 
   Widget _buildGenerationPrompt(ZoneDetail zone) {
+    if (widget.viewOnly) {
+      return Card(
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Aún no hay partidos programados para esta zona.',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Cuando el fixture esté disponible podrás consultarlo desde esta pantalla.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     final canGenerate = zone.status == ZoneStatus.inProgress;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -452,17 +488,19 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
             status: matchday.status,
           ),
         ),
-        const SizedBox(height: 24),
-        Align(
-          alignment: Alignment.centerRight,
-          child: FilledButton.icon(
-            onPressed: _submitting ? null : () => _confirmGeneration(zone),
-            icon: _submitting
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.check_circle_outline),
-            label: Text(_submitting ? 'Confirmando...' : 'Confirmar'),
+        if (!widget.viewOnly) ...[
+          const SizedBox(height: 24),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              onPressed: _submitting ? null : () => _confirmGeneration(zone),
+              icon: _submitting
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.check_circle_outline),
+              label: Text(_submitting ? 'Confirmando...' : 'Confirmar'),
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
@@ -548,11 +586,15 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
             matches: matchday.matches,
             byeClubName: matchday.byeClubName,
             status: matchday.status,
-            showFinalizeButton:
-                statusMap.isNotEmpty && _shouldShowFinalize(matchday.status),
-            isFinalizing:
-                statusMap.isNotEmpty && _isFinalizing(matchday.matchdayNumber),
-            onFinalize: statusMap.isNotEmpty ? _buildFinalizeCallback(matchday) : null,
+            showFinalizeButton: !widget.viewOnly &&
+                statusMap.isNotEmpty &&
+                _shouldShowFinalize(matchday.status),
+            isFinalizing: !widget.viewOnly &&
+                statusMap.isNotEmpty &&
+                _isFinalizing(matchday.matchdayNumber),
+            onFinalize: !widget.viewOnly && statusMap.isNotEmpty
+                ? _buildFinalizeCallback(matchday)
+                : null,
           ),
         ),
       ],

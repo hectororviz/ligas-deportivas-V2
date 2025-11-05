@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 interface StandingAccumulator {
@@ -138,7 +138,12 @@ export class StandingsService {
   async getZoneStandings(zoneId: number, tournamentCategoryId: number) {
     return this.prisma.categoryStanding.findMany({
       where: { zoneId, tournamentCategoryId },
-      orderBy: [{ points: 'desc' }, { goalDifference: 'desc' }, { goalsFor: 'desc' }],
+      orderBy: [
+        { points: 'desc' },
+        { goalDifference: 'desc' },
+        { goalsFor: 'desc' },
+        { goalsAgainst: 'asc' },
+      ],
       include: {
         club: true,
       },
@@ -174,15 +179,7 @@ export class StandingsService {
     }
 
     for (const [, group] of grouped) {
-      group.standings.sort((a, b) => {
-        if (b.points !== a.points) {
-          return b.points - a.points;
-        }
-        if (b.goalDifference !== a.goalDifference) {
-          return b.goalDifference - a.goalDifference;
-        }
-        return b.goalsFor - a.goalsFor;
-      });
+      this.sortStandings(group.standings);
     }
 
     return Array.from(grouped.entries()).map(([tournamentCategoryId, data]) => ({
@@ -262,15 +259,7 @@ export class StandingsService {
     }
 
     for (const [, standings] of result) {
-      standings.sort((a, b) => {
-        if (b.points !== a.points) {
-          return b.points - a.points;
-        }
-        if (b.goalDifference !== a.goalDifference) {
-          return b.goalDifference - a.goalDifference;
-        }
-        return b.goalsFor - a.goalsFor;
-      });
+      this.sortStandings(standings);
     }
 
     return Array.from(result.entries()).map(([categoryId, standings]) => ({
@@ -278,6 +267,145 @@ export class StandingsService {
       categoryName: standings[0]?.categoryName ?? '',
       standings,
     }));
+  }
+
+  async getZoneStandingsSummary(zoneId: number) {
+    const zone = await this.prisma.zone.findUnique({
+      where: { id: zoneId },
+      include: {
+        tournament: {
+          include: {
+            league: true,
+          },
+        },
+      },
+    });
+
+    if (!zone) {
+      throw new NotFoundException('Zona no encontrada');
+    }
+
+    const entries = await this.prisma.categoryStanding.findMany({
+      where: { zoneId },
+      include: {
+        club: true,
+        tournamentCategory: {
+          include: {
+            category: true,
+          },
+        },
+      },
+    });
+
+    const general = new Map<
+      number,
+      {
+        clubId: number;
+        clubName: string;
+        played: number;
+        wins: number;
+        draws: number;
+        losses: number;
+        goalsFor: number;
+        goalsAgainst: number;
+        goalDifference: number;
+        points: number;
+      }
+    >();
+
+    const categories = new Map<
+      number,
+      {
+        tournamentCategoryId: number;
+        categoryId: number;
+        categoryName: string;
+        countsForGeneral: boolean;
+        standings: any[];
+      }
+    >();
+
+    for (const entry of entries) {
+      const category = entry.tournamentCategory;
+      const clubName = entry.club.name;
+
+      if (!categories.has(entry.tournamentCategoryId)) {
+        categories.set(entry.tournamentCategoryId, {
+          tournamentCategoryId: entry.tournamentCategoryId,
+          categoryId: category.categoryId,
+          categoryName: category.category.name,
+          countsForGeneral: category.countsForGeneral,
+          standings: [],
+        });
+      }
+
+      categories.get(entry.tournamentCategoryId)?.standings.push({
+        clubId: entry.clubId,
+        clubName,
+        played: entry.played,
+        wins: entry.wins,
+        draws: entry.draws,
+        losses: entry.losses,
+        goalsFor: entry.goalsFor,
+        goalsAgainst: entry.goalsAgainst,
+        goalDifference: entry.goalDifference,
+        points: entry.points,
+      });
+
+      if (!general.has(entry.clubId)) {
+        general.set(entry.clubId, {
+          clubId: entry.clubId,
+          clubName,
+          played: 0,
+          wins: 0,
+          draws: 0,
+          losses: 0,
+          goalsFor: 0,
+          goalsAgainst: 0,
+          goalDifference: 0,
+          points: 0,
+        });
+      }
+
+      if (!category.countsForGeneral) {
+        continue;
+      }
+
+      const row = general.get(entry.clubId)!;
+      row.played += entry.played;
+      row.wins += entry.wins;
+      row.draws += entry.draws;
+      row.losses += entry.losses;
+      row.goalsFor += entry.goalsFor;
+      row.goalsAgainst += entry.goalsAgainst;
+      row.points += entry.points;
+      row.goalDifference = row.goalsFor - row.goalsAgainst;
+    }
+
+    const generalRows = Array.from(general.values());
+    this.sortStandings(generalRows);
+
+    const categoryRows = Array.from(categories.values()).map((group) => {
+      this.sortStandings(group.standings);
+      return group;
+    });
+
+    categoryRows.sort((a, b) =>
+      a.categoryName.toLowerCase().localeCompare(b.categoryName.toLowerCase()),
+    );
+
+    return {
+      zone: {
+        id: zone.id,
+        name: zone.name,
+        tournamentId: zone.tournamentId,
+        tournamentName: zone.tournament.name,
+        tournamentYear: zone.tournament.year,
+        leagueId: zone.tournament.leagueId,
+        leagueName: zone.tournament.league?.name ?? '',
+      },
+      general: generalRows,
+      categories: categoryRows,
+    };
   }
 
   private createAccumulator(
@@ -295,5 +423,27 @@ export class StandingsService {
     };
     accumulator.set(clubId, row);
     return row;
+  }
+
+  private sortStandings<
+    T extends {
+      points: number;
+      goalDifference: number;
+      goalsFor: number;
+      goalsAgainst: number;
+    }
+  >(rows: T[]) {
+    rows.sort((a, b) => {
+      if (b.points !== a.points) {
+        return b.points - a.points;
+      }
+      if (b.goalDifference !== a.goalDifference) {
+        return b.goalDifference - a.goalDifference;
+      }
+      if (b.goalsFor !== a.goalsFor) {
+        return b.goalsFor - a.goalsFor;
+      }
+      return a.goalsAgainst - b.goalsAgainst;
+    });
   }
 }

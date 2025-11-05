@@ -5,6 +5,11 @@ import { StandingsService } from '../../standings/standings.service';
 export class StandingsController {
   constructor(private readonly standingsService: StandingsService) {}
 
+  @Get('zones/:zoneId/standings')
+  zoneSummary(@Param('zoneId', ParseIntPipe) zoneId: number) {
+    return this.standingsService.getZoneStandingsSummary(zoneId);
+  }
+
   @Get('zones/:zoneId/categories/:categoryId/standings')
   zoneStandings(
     @Param('zoneId', ParseIntPipe) zoneId: number,

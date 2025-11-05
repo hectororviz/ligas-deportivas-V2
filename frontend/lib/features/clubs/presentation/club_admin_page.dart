@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:characters/characters.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
@@ -23,6 +27,9 @@ Map<String, String> _buildImageHeaders(WidgetRef ref) {
   }
   return {'Authorization': 'Bearer $token'};
 }
+
+const double _clubAdminLogoDisplaySize = 160;
+const LatLng _defaultClubLocation = LatLng(-36.5, -59.0);
 
 class ClubAdminPage extends ConsumerStatefulWidget {
   const ClubAdminPage({required this.slug, super.key});
@@ -354,79 +361,280 @@ class _ClubSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final surfaceVariant =
+        theme.colorScheme.surfaceVariant.withOpacity(theme.brightness == Brightness.dark ? 0.35 : 0.6);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: surfaceVariant,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.1)),
+      ),
+      padding: const EdgeInsets.all(24),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isCompact = constraints.maxWidth < 860;
+          final mapPanel = _ClubLocationCard(club: club);
+          final infoPanel = _ClubInformationPanel(club: club);
+
+          if (isCompact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                infoPanel,
+                const SizedBox(height: 24),
+                mapPanel,
+              ],
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: infoPanel),
+              const SizedBox(width: 24),
+              Flexible(
+                fit: FlexFit.loose,
+                child: LayoutBuilder(
+                  builder: (context, mapConstraints) {
+                    final availableWidth = mapConstraints.maxWidth;
+                    final width = availableWidth.isFinite
+                        ? math.min(availableWidth, 420.0)
+                        : 420.0;
+                    return Align(
+                      alignment: Alignment.topLeft,
+                      child: SizedBox(width: width, child: mapPanel),
+                    );
+                  },
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ClubInformationPanel extends StatelessWidget {
+  const _ClubInformationPanel({required this.club});
+
+  final ClubAdminSummary club;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final primary = club.primaryColor;
     final secondary = club.secondaryColor;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                _ClubLogo(logoUrl: club.logoUrl, name: club.name),
-                const SizedBox(width: 20),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              club.name,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleLarge
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Chip(
-                            label: Text(club.active ? 'Activo' : 'Inactivo'),
-                            avatar: Icon(
-                              club.active ? Icons.check_circle : Icons.pause_circle_filled,
-                              color: club.active ? Colors.green : Colors.orange,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        club.slug != null ? 'Slug: ${club.slug}' : 'Sin identificador público',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: Chip(
+            shape: StadiumBorder(
+              side: BorderSide(color: theme.colorScheme.outline.withOpacity(0.12)),
             ),
-            const SizedBox(height: 20),
-            Wrap(
-              spacing: 24,
-              runSpacing: 16,
-              children: [
-                _ColorBadge(
-                  title: 'Color primario',
-                  color: primary,
-                  hex: club.primaryHex,
-                ),
-                _ColorBadge(
-                  title: 'Color secundario',
-                  color: secondary,
-                  hex: club.secondaryHex,
-                ),
-                if (club.instagramUrl != null)
-                  _SocialLink(label: 'Instagram', url: club.instagramUrl!, icon: Icons.photo_camera),
-                if (club.facebookUrl != null)
-                  _SocialLink(label: 'Facebook', url: club.facebookUrl!, icon: Icons.facebook),
-              ],
+            backgroundColor:
+                club.active ? Colors.green.withOpacity(0.12) : Colors.orange.withOpacity(0.12),
+            label: Text(
+              club.active ? 'Activo' : 'Inactivo',
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: club.active ? Colors.green.shade800 : Colors.orange.shade800,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            avatar: Icon(
+              club.active ? Icons.check_circle : Icons.pause_circle_filled,
+              color: club.active ? Colors.green : Colors.orange,
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            _ClubLogo(logoUrl: club.logoUrl, name: club.name),
+            const SizedBox(width: 24),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    club.name,
+                    style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surface,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.link_rounded, size: 18, color: theme.colorScheme.onSurfaceVariant),
+                        const SizedBox(width: 8),
+                        Text(
+                          club.slug != null
+                              ? 'Slug: ${club.slug}'
+                              : 'Sin identificador público',
+                          style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
+        const SizedBox(height: 24),
+        Divider(color: theme.colorScheme.outline.withOpacity(0.1)),
+        const SizedBox(height: 24),
+        Wrap(
+          spacing: 16,
+          runSpacing: 16,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            _ColorBadge(
+              color: primary,
+              hex: club.primaryHex,
+            ),
+            _ColorBadge(
+              color: secondary,
+              hex: club.secondaryHex,
+            ),
+            if ((club.facebookUrl?.isNotEmpty ?? false) ||
+                (club.instagramUrl?.isNotEmpty ?? false) ||
+                club.mapsUrl != null)
+              _ClubContactLinks(club: club),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _ClubLocationCard extends StatelessWidget {
+  const _ClubLocationCard({required this.club});
+
+  final ClubAdminSummary club;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasLocation = club.latitude != null && club.longitude != null;
+    final center = hasLocation
+        ? LatLng(club.latitude!, club.longitude!)
+        : _defaultClubLocation;
+    final zoom = hasLocation ? 13.0 : 6.3;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.4)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Text(
+                  'Ubicación',
+                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
+              if (club.mapsUrl != null)
+                TextButton.icon(
+                  onPressed: () => _launchExternalUrl(context, club.mapsUrl!),
+                  icon: const Icon(Icons.open_in_new),
+                  label: const Text('Abrir en Maps'),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: SizedBox(
+              height: 220,
+              child: FlutterMap(
+                options: MapOptions(
+                  initialCenter: center,
+                  initialZoom: zoom,
+                  interactionOptions: const InteractionOptions(enableMultiFingerGestureRace: true),
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'ligas_app',
+                  ),
+                  if (hasLocation)
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: LatLng(club.latitude!, club.longitude!),
+                          width: 40,
+                          height: 40,
+                          child: const Icon(Icons.location_on, color: Colors.red, size: 36),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+          ),
+          if (!hasLocation) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Este club aún no tiene ubicación asignada. Se muestra la provincia de Buenos Aires como referencia.',
+              style: theme.textTheme.bodySmall,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryIconBadge extends StatelessWidget {
+  const _SummaryIconBadge({
+    required this.icon,
+    required this.background,
+    required this.foreground,
+  });
+
+  final IconData icon;
+  final Color background;
+  final Color foreground;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(icon, color: foreground, size: 24),
     );
   }
 }
@@ -440,19 +648,15 @@ class _ClubLogo extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final token = ref.read(authControllerProvider).accessToken;
-    final headers =
-        token == null || token.isEmpty ? null : {'Authorization': 'Bearer $token'};
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        width: 88,
-        height: 88,
-        color: theme.colorScheme.surfaceVariant,
+    return SizedBox(
+      width: _clubAdminLogoDisplaySize,
+      height: _clubAdminLogoDisplaySize,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
         child: logoUrl != null && logoUrl!.isNotEmpty
             ? AuthenticatedImage(
                 imageUrl: logoUrl!,
-                fit: BoxFit.cover,
+                fit: BoxFit.contain,
                 headers: _buildImageHeaders(ref),
                 placeholder: Center(
                   child: CircularProgressIndicator(
@@ -460,9 +664,104 @@ class _ClubLogo extends ConsumerWidget {
                     color: theme.colorScheme.primary,
                   ),
                 ),
-                error: _LogoFallback(name: name),
+                error: DecoratedBox(
+                  decoration: BoxDecoration(color: theme.colorScheme.surfaceVariant),
+                  child: _LogoFallback(name: name),
+                ),
               )
-            : _LogoFallback(name: name),
+            : DecoratedBox(
+                decoration: BoxDecoration(color: theme.colorScheme.surfaceVariant),
+                child: _LogoFallback(name: name),
+              ),
+      ),
+    );
+  }
+}
+
+Future<void> _launchExternalUrl(BuildContext context, String url) async {
+  final uri = Uri.tryParse(url);
+  if (uri == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('No se pudo abrir el enlace.')),
+    );
+    return;
+  }
+  final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  if (!launched) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('No se pudo abrir el enlace.')),
+    );
+  }
+}
+
+class _ClubContactLinks extends StatelessWidget {
+  const _ClubContactLinks({required this.club});
+
+  final ClubAdminSummary club;
+
+  @override
+  Widget build(BuildContext context) {
+    final links = <Widget>[];
+    if (club.facebookUrl?.isNotEmpty ?? false) {
+      links.add(
+        _IconLinkButton(
+          icon: Icons.facebook,
+          tooltip: 'Abrir Facebook',
+          url: club.facebookUrl!,
+        ),
+      );
+    }
+    if (club.instagramUrl?.isNotEmpty ?? false) {
+      links.add(
+        _IconLinkButton(
+          icon: Icons.photo_camera,
+          tooltip: 'Abrir Instagram',
+          url: club.instagramUrl!,
+        ),
+      );
+    }
+    if (club.mapsUrl != null) {
+      links.add(
+        _IconLinkButton(
+          icon: Icons.location_on_outlined,
+          tooltip: 'Ver ubicación en Google Maps',
+          url: club.mapsUrl!,
+        ),
+      );
+    }
+
+    if (links.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Wrap(
+      spacing: 16,
+      children: links,
+    );
+  }
+}
+
+class _IconLinkButton extends StatelessWidget {
+  const _IconLinkButton({
+    required this.icon,
+    required this.tooltip,
+    required this.url,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: IconButton(
+        onPressed: () => _launchExternalUrl(context, url),
+        icon: Icon(icon, color: Theme.of(context).colorScheme.primary),
+        iconSize: 32,
+        padding: const EdgeInsets.all(10),
+        constraints: const BoxConstraints(minHeight: 52, minWidth: 52),
       ),
     );
   }
@@ -496,83 +795,45 @@ class _LogoFallback extends StatelessWidget {
 }
 
 class _ColorBadge extends StatelessWidget {
-  const _ColorBadge({required this.title, required this.color, required this.hex});
+  const _ColorBadge({required this.color, required this.hex});
 
-  final String title;
   final Color? color;
   final String? hex;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 220,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: Theme.of(context).textTheme.labelMedium),
-          const SizedBox(height: 6),
-          Container(
-            height: 44,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Theme.of(context).dividerColor),
-            ),
-            padding: const EdgeInsets.all(8),
-            child: Row(
-              children: [
-                Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: color ?? Theme.of(context).colorScheme.surfaceVariant,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Theme.of(context).dividerColor),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Text(hex ?? '—', style: Theme.of(context).textTheme.titleMedium),
-              ],
-            ),
+    final theme = Theme.of(context);
+    final displayColor = color ?? theme.colorScheme.surfaceVariant;
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
-    );
-  }
-}
-
-class _SocialLink extends StatelessWidget {
-  const _SocialLink({required this.label, required this.url, required this.icon});
-
-  final String label;
-  final String url;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 220,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(label, style: Theme.of(context).textTheme.labelMedium),
-          const SizedBox(height: 6),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  url,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodyMedium
-                      ?.copyWith(color: Theme.of(context).colorScheme.primary),
-                ),
-              ),
-            ],
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: displayColor,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
+            ),
+          ),
+          const SizedBox(width: 10),
+          SelectableText(
+            hex ?? '—',
+            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -870,6 +1131,8 @@ class ClubAdminSummary {
     this.logoUrl,
     this.instagramUrl,
     this.facebookUrl,
+    this.latitude,
+    this.longitude,
   });
 
   factory ClubAdminSummary.fromJson(Map<String, dynamic> json) {
@@ -883,6 +1146,8 @@ class ClubAdminSummary {
       logoUrl: json['logoUrl'] as String?,
       instagramUrl: json['instagramUrl'] as String?,
       facebookUrl: json['facebookUrl'] as String?,
+      latitude: _parseCoordinate(json['latitude']),
+      longitude: _parseCoordinate(json['longitude']),
     );
   }
 
@@ -895,9 +1160,19 @@ class ClubAdminSummary {
   final String? logoUrl;
   final String? instagramUrl;
   final String? facebookUrl;
+  final double? latitude;
+  final double? longitude;
 
   Color? get primaryColor => _parseHexColor(primaryHex);
   Color? get secondaryColor => _parseHexColor(secondaryHex);
+  String? get mapsUrl {
+    if (latitude == null || longitude == null) {
+      return null;
+    }
+    final lat = latitude!.toStringAsFixed(6);
+    final lng = longitude!.toStringAsFixed(6);
+    return 'https://www.google.com/maps/search/?api=1&query=$lat,$lng';
+  }
 }
 
 class ClubAdminTournament {
@@ -1052,6 +1327,19 @@ Color? _parseHexColor(String? value) {
     return null;
   }
   return Color(int.parse('0xff$hex'));
+}
+
+double? _parseCoordinate(dynamic value) {
+  if (value == null) {
+    return null;
+  }
+  if (value is num) {
+    return value.toDouble();
+  }
+  if (value is String) {
+    return double.tryParse(value);
+  }
+  return null;
 }
 
 class ClubRosterEditorDialog extends ConsumerStatefulWidget {

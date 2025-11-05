@@ -53,7 +53,18 @@ export class PlayersService {
   }
 
   async findAll(query: ListPlayersDto) {
-    const { search, status, dni, page, pageSize, clubId, gender, birthYear } = query;
+    const {
+      search,
+      status,
+      dni,
+      page,
+      pageSize,
+      clubId,
+      gender,
+      birthYear,
+      birthYearMin,
+      birthYearMax,
+    } = query;
 
     const where: Prisma.PlayerWhereInput = {};
 
@@ -83,6 +94,25 @@ export class PlayersService {
       where.gender = gender;
     }
 
+    if (
+      birthYear !== undefined &&
+      (birthYearMin !== undefined || birthYearMax !== undefined)
+    ) {
+      throw new BadRequestException(
+        'No se puede combinar el filtro por año de nacimiento único con un rango.',
+      );
+    }
+
+    if (
+      birthYearMin !== undefined &&
+      birthYearMax !== undefined &&
+      birthYearMin > birthYearMax
+    ) {
+      throw new BadRequestException(
+        'El año mínimo no puede ser mayor al año máximo.',
+      );
+    }
+
     if (birthYear !== undefined) {
       const start = new Date(Date.UTC(birthYear, 0, 1));
       const end = new Date(Date.UTC(birthYear + 1, 0, 1));
@@ -97,6 +127,25 @@ export class PlayersService {
         gte: start,
         lt: end,
       };
+    }
+
+    if (birthYearMin !== undefined || birthYearMax !== undefined) {
+      const existingBirthDateFilter =
+        where.birthDate &&
+        typeof where.birthDate === 'object' &&
+        !(where.birthDate instanceof Date)
+          ? (where.birthDate as Prisma.DateTimeFilter)
+          : undefined;
+      const filter: Prisma.DateTimeFilter = {
+        ...(existingBirthDateFilter ?? {}),
+      };
+      if (birthYearMin !== undefined) {
+        filter.gte = new Date(Date.UTC(birthYearMin, 0, 1));
+      }
+      if (birthYearMax !== undefined) {
+        filter.lt = new Date(Date.UTC(birthYearMax + 1, 0, 1));
+      }
+      where.birthDate = filter;
     }
 
     const skip = (page - 1) * pageSize;

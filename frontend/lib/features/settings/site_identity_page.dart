@@ -4,7 +4,6 @@ import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:riverpod/riverpod.dart' show ProviderSubscription;
 
 import '../../services/api_client.dart';
 import 'site_identity.dart';
@@ -20,7 +19,8 @@ class SiteIdentityPage extends ConsumerStatefulWidget {
 class _SiteIdentityPageState extends ConsumerState<SiteIdentityPage> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _titleController;
-  late final ProviderSubscription<AsyncValue<SiteIdentity>> _identitySubscription;
+  late final ProviderSubscription<AsyncValue<SiteIdentity>>
+      _identitySubscription;
 
   bool _saving = false;
   Uint8List? _iconBytes;
@@ -31,7 +31,8 @@ class _SiteIdentityPageState extends ConsumerState<SiteIdentityPage> {
   void initState() {
     super.initState();
     _titleController = TextEditingController();
-    _identitySubscription = ref.listenManual(siteIdentityProvider, (previous, next) {
+    _identitySubscription =
+        ref.listenManual(siteIdentityProvider, (previous, next) {
       next.whenData((identity) {
         if (!mounted) {
           return;
@@ -39,7 +40,8 @@ class _SiteIdentityPageState extends ConsumerState<SiteIdentityPage> {
         if (_titleController.text != identity.title) {
           _titleController
             ..text = identity.title
-            ..selection = TextSelection.collapsed(offset: identity.title.length);
+            ..selection =
+                TextSelection.collapsed(offset: identity.title.length);
         }
       });
     });
@@ -87,7 +89,8 @@ class _SiteIdentityPageState extends ConsumerState<SiteIdentityPage> {
       children: [
         Text(
           'Identidad del sitio',
-          style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+          style: theme.textTheme.headlineMedium
+              ?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
         Text(
@@ -130,7 +133,9 @@ class _SiteIdentityPageState extends ConsumerState<SiteIdentityPage> {
                                   icon: const Icon(Icons.upload_file_outlined),
                                   label: const Text('Seleccionar archivo'),
                                 ),
-                                if ((identity?.iconUrl != null || _iconBytes != null) && !_removeIcon)
+                                if ((identity?.iconUrl != null ||
+                                        _iconBytes != null) &&
+                                    !_removeIcon)
                                   TextButton(
                                     onPressed: _saving
                                         ? null
@@ -169,7 +174,8 @@ class _SiteIdentityPageState extends ConsumerState<SiteIdentityPage> {
                                 padding: const EdgeInsets.only(top: 8.0),
                                 child: Text(
                                   'El ícono actual se eliminará.',
-                                  style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                      color: theme.colorScheme.error),
                                 ),
                               ),
                           ],
@@ -228,7 +234,7 @@ class _SiteIdentityPageState extends ConsumerState<SiteIdentityPage> {
       height: 96,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        color: Theme.of(context).colorScheme.surfaceVariant,
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
       ),
       clipBehavior: Clip.antiAlias,
       alignment: Alignment.center,
@@ -237,7 +243,8 @@ class _SiteIdentityPageState extends ConsumerState<SiteIdentityPage> {
   }
 
   Future<void> _pickIcon() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.image, withData: true);
+    final result = await FilePicker.platform
+        .pickFiles(type: FileType.image, withData: true);
     if (result == null || result.files.isEmpty) {
       return;
     }

@@ -102,9 +102,40 @@ Los servicios quedarán disponibles en:
 
 Las variables de entorno del contenedor `backend` se basan en los mismos nombres definidos en `backend/.env`, por lo que puedes adaptarlas para entornos de staging o producción. ([infra/docker-compose.yml](infra/docker-compose.yml))
 
+## Datos de ejemplo
+
+Si necesitas poblar rápidamente la tabla de jugadores con datos de prueba, puedes ejecutar el comando `npm run seed:players` dentro del directorio `backend`. El script utiliza Prisma y la misma conexión configurada en `DATABASE_URL`, por lo que siempre apuntará a la base correcta. Inserta 66 jugadores con la distribución de edades y géneros solicitada y sin asociación a clubes.
+
+Antes de correrlo, asegúrate de haber aplicado las migraciones de Prisma para que la tabla `Player` exista (por ejemplo con `npx prisma migrate deploy` o `npx prisma migrate dev`).
+
+Si prefieres interactuar directamente con PostgreSQL, el archivo SQL original sigue disponible en `backend/prisma/seed_players.sql`.
+
+Ejecuta el script con `psql`, reemplazando las variables de conexión por las de tu entorno:
+
+```bash
+psql \
+  --host=<HOST> \
+  --port=<PUERTO> \
+  --username=<USUARIO> \
+  --dbname=<BASE_DE_DATOS> \
+  --file=backend/prisma/seed_players.sql
+```
+
+Si estás usando Docker Compose, puedes aprovechar el contenedor de PostgreSQL directamente:
+
+```bash
+cd infra
+docker compose exec -T db \
+  psql --username=postgres --dbname=ligas \
+  < ../backend/prisma/seed_players.sql
+```
+
+El script detecta automáticamente en qué esquema existe la tabla `Player`, ajusta el `search_path` y utiliza `ON CONFLICT ("dni") DO NOTHING`, por lo que puedes ejecutarlo varias veces sin duplicar registros. Si la tabla no está presente recibirás un mensaje indicando que debes aplicar las migraciones primero. Adapta el nombre de la base, usuario o ruta del archivo según tu configuración (por ejemplo, si cambiaste `POSTGRES_DB`, `POSTGRES_USER` o ejecutas el comando desde otro directorio).
+
 ## Documentación adicional
 
 - [Arquitectura y componentes](docs/architecture.md)
 - [Guía de desarrollo y entornos](docs/desarrollo-entornos.md)
+- [Respaldo y restauración de la base de datos](docs/postgres-backup-restore.md)
 
 Ambos documentos detallan la estructura modular, flujos de datos, recomendaciones de entornos y procedimientos de trabajo colaborativo.

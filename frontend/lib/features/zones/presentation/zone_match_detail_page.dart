@@ -33,56 +33,134 @@ class ZoneMatchDetailPage extends ConsumerWidget {
     final canEditScores =
         (user?.roles.contains('ADMIN') ?? false) || (user?.hasPermission(module: _moduleMatches, action: _actionUpdate) ?? false);
 
+    ZoneMatch? match = initialMatch;
+    final fixtureData = fixtureAsync.valueOrNull;
+    if (fixtureData != null) {
+      for (final item in fixtureData.matches) {
+        if (item.id == matchId) {
+          match = item;
+          break;
+        }
+      }
+    }
+
+    if (match == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Detalle del partido')),
+        body: fixtureAsync.when(
+          data: (fixtureData) {
+            for (final item in fixtureData.matches) {
+              if (item.id == matchId) {
+                match = item;
+                break;
+              }
+            }
+
+            if (match == null) {
+              return const Center(child: Text('Partido no encontrado.'));
+            }
+
+            return _ZoneMatchDetailContent(
+              match: match!,
+              zoneId: zoneId,
+              canEditScores: canEditScores,
+            );
+          },
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, stackTrace) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.error_outline, size: 48),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Ocurrió un error al cargar el partido.',
+                      style: Theme.of(context).textTheme.titleMedium,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '$error',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      );
+    }
+
+    final error = fixtureAsync.maybeWhen<Object?>(
+      error: (error, _) => error,
+      orElse: () => null,
+    );
+
     return Scaffold(
       appBar: AppBar(title: const Text('Detalle del partido')),
-      body: fixtureAsync.when(
-        data: (fixtureData) {
-          ZoneMatch? match = initialMatch;
-          for (final item in fixtureData.matches) {
-            if (item.id == matchId) {
-              match = item;
-              break;
-            }
-          }
-
-          if (match == null) {
-            return const Center(child: Text('Partido no encontrado.'));
-          }
-
-          return _ZoneMatchDetailContent(
-            match: match,
+      body: Stack(
+        children: [
+          _ZoneMatchDetailContent(
+            match: match!,
             zoneId: zoneId,
             canEditScores: canEditScores,
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.error_outline, size: 48),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Ocurrió un error al cargar el partido.',
-                    style: Theme.of(context).textTheme.titleMedium,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '$error',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                  ),
-                ],
+          ),
+          if (fixtureAsync.isLoading)
+            const Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: LinearProgressIndicator(),
+            ),
+          if (error != null)
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: SafeArea(
+                minimum: const EdgeInsets.all(16),
+                child: _ErrorBanner(message: 'No se pudo actualizar el partido: $error'),
               ),
             ),
-          );
-        },
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      elevation: 4,
+      borderRadius: BorderRadius.circular(12),
+      color: theme.colorScheme.errorContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Icon(Icons.error_outline, color: theme.colorScheme.onErrorContainer),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onErrorContainer,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -176,9 +254,7 @@ class _ZoneMatchDetailContent extends ConsumerWidget {
   }
 
   String _formatPoints(ZoneMatch match, {required bool isHome}) {
-    final status = match.status?.toUpperCase();
-    final finished = status == 'FINISHED';
-    if (!finished) {
+    if (!match.hasRecordedScores) {
       return '—';
     }
     final points = isHome ? match.homePoints : match.awayPoints;
@@ -318,19 +394,16 @@ class _CategoriesTable extends ConsumerStatefulWidget {
 
 class _CategoriesTableState extends ConsumerState<_CategoriesTable> {
   Future<void> _openGoalsDialog(ZoneMatchCategory category) async {
-    if (!widget.canEditScores) {
-      return;
-    }
-
     final saved = await showDialog<bool>(
       context: context,
       builder: (context) => _MatchCategoryGoalsDialog(
         match: widget.match,
         category: category,
+        canEdit: widget.canEditScores,
       ),
     );
 
-    if (saved == true && mounted) {
+    if (widget.canEditScores && saved == true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Goles de "${category.categoryName}" actualizados.')),
       );
@@ -343,60 +416,167 @@ class _CategoriesTableState extends ConsumerState<_CategoriesTable> {
     final theme = Theme.of(context);
     final categories = widget.match.categories;
 
-    final borderColor = theme.colorScheme.outlineVariant.withOpacity(0.6);
-
-    final columnWidths = <int, TableColumnWidth>{
-      0: const FlexColumnWidth(2),
-      1: const FlexColumnWidth(),
-      2: const FlexColumnWidth(),
-    };
-    if (widget.canEditScores) {
-      columnWidths[3] = const IntrinsicColumnWidth();
-    }
+    final outerBorderColor = theme.colorScheme.outlineVariant.withOpacity(0.6);
+    final innerBorderColor = theme.colorScheme.outlineVariant.withOpacity(0.7);
+    final headerBackground =
+        theme.colorScheme.surfaceVariant.withOpacity(0.45);
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
-      child: Table(
-        columnWidths: columnWidths,
-        border: TableBorder(
-          top: BorderSide(color: borderColor),
-          bottom: BorderSide(color: borderColor),
-          left: BorderSide(color: borderColor),
-          right: BorderSide(color: borderColor),
-          horizontalInside: BorderSide(color: borderColor.withOpacity(0.7)),
-          verticalInside: BorderSide(color: borderColor.withOpacity(0.7)),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          border: Border.all(color: outerBorderColor),
+          borderRadius: BorderRadius.circular(12),
         ),
-        defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-        children: [
-          TableRow(
-            decoration: BoxDecoration(color: theme.colorScheme.surfaceVariant.withOpacity(0.45)),
-            children: [
-              const _TableHeaderCell(label: 'Categoría', textAlign: TextAlign.left),
-              const _TableHeaderCell(label: 'Goles Local'),
-              const _TableHeaderCell(label: 'Goles Visitante'),
-              if (widget.canEditScores)
-                const _TableHeaderCell(label: 'Acciones'),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildHeaderRow(theme, headerBackground, innerBorderColor),
+            Divider(height: 1, thickness: 1, color: innerBorderColor),
+            for (var i = 0; i < categories.length; i++) ...[
+              if (i > 0)
+                Divider(height: 1, thickness: 1, color: innerBorderColor),
+              _buildCategoryRow(
+                theme,
+                innerBorderColor,
+                categories[i],
+              ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderRow(
+    ThemeData theme,
+    Color headerBackground,
+    Color innerBorderColor,
+  ) {
+    return Row(
+      children: [
+        _headerCell(
+          theme,
+          headerBackground,
+          innerBorderColor,
+          label: 'Categoría',
+          flex: 2,
+          textAlign: TextAlign.left,
+        ),
+        _headerCell(
+          theme,
+          headerBackground,
+          innerBorderColor,
+          label: 'Goles Local',
+        ),
+        _headerCell(
+          theme,
+          headerBackground,
+          innerBorderColor,
+          label: 'Goles Visitante',
+        ),
+        _headerCell(
+          theme,
+          headerBackground,
+          innerBorderColor,
+          label: 'Goles',
+          showRightBorder: false,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCategoryRow(
+    ThemeData theme,
+    Color innerBorderColor,
+    ZoneMatchCategory category,
+  ) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        _dataCell(
+          innerBorderColor,
+          flex: 2,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            child: Text(category.categoryName, style: theme.textTheme.bodyMedium),
           ),
-          for (final category in categories)
-            TableRow(
-              children: [
-                _TableTextCell(label: category.categoryName),
-                _ScoreCell(
-                  score: category.homeScore,
-                  outcome: _scoreOutcome(category.homeScore, category.awayScore),
-                ),
-                _ScoreCell(
-                  score: category.awayScore,
-                  outcome: _scoreOutcome(category.awayScore, category.homeScore),
-                ),
-                if (widget.canEditScores)
-                  _ActionCell(
-                    onTap: () => _openGoalsDialog(category),
-                  ),
-              ],
-            ),
-        ],
+        ),
+        _dataCell(
+          innerBorderColor,
+          child: _ScoreCell(
+            score: category.homeScore ?? 0,
+            outcome: _scoreOutcome(category.homeScore, category.awayScore),
+          ),
+        ),
+        _dataCell(
+          innerBorderColor,
+          child: _ScoreCell(
+            score: category.awayScore ?? 0,
+            outcome: _scoreOutcome(category.awayScore, category.homeScore),
+          ),
+        ),
+        _dataCell(
+          innerBorderColor,
+          showRightBorder: false,
+          child: _ActionCell(
+            onTap: () => _openGoalsDialog(category),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _headerCell(
+    ThemeData theme,
+    Color backgroundColor,
+    Color innerBorderColor, {
+    required String label,
+    int flex = 1,
+    TextAlign textAlign = TextAlign.center,
+    bool showRightBorder = true,
+  }) {
+    return Expanded(
+      flex: flex,
+      child: Container(
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          border: Border(
+            right: showRightBorder
+                ? BorderSide(color: innerBorderColor)
+                : BorderSide.none,
+          ),
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        child: Text(
+          label,
+          textAlign: textAlign,
+          style:
+              theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+        ),
+      ),
+    );
+  }
+
+  Widget _dataCell(
+    Color innerBorderColor, {
+    required Widget child,
+    int flex = 1,
+    bool showRightBorder = true,
+  }) {
+    return Expanded(
+      flex: flex,
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(
+            right: showRightBorder
+                ? BorderSide(color: innerBorderColor)
+                : BorderSide.none,
+          ),
+        ),
+        child: child,
       ),
     );
   }
@@ -417,7 +597,7 @@ class _ActionCell extends StatelessWidget {
       child: FilledButton.icon(
         onPressed: onTap,
         icon: const Icon(Icons.sports_soccer_outlined),
-        label: const Text('Cargar goles'),
+        label: const Text('Goles'),
         style: FilledButton.styleFrom(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           textStyle: theme.textTheme.labelLarge,
@@ -530,10 +710,12 @@ class _MatchCategoryGoalsDialog extends ConsumerStatefulWidget {
   const _MatchCategoryGoalsDialog({
     required this.match,
     required this.category,
+    required this.canEdit,
   });
 
   final ZoneMatch match;
   final ZoneMatchCategory category;
+  final bool canEdit;
 
   @override
   ConsumerState<_MatchCategoryGoalsDialog> createState() => _MatchCategoryGoalsDialogState();
@@ -572,7 +754,7 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
     try {
       final api = ref.read(apiClientProvider);
       final resultFuture = api.get<Map<String, dynamic>>(
-        '/matches/${widget.match.id}/categories/${widget.category.id}/result',
+        '/matches/${widget.match.id}/categories/${widget.category.tournamentCategoryId}/result',
       );
       final homePlayersFuture = api.get<Map<String, dynamic>>(
         '/clubs/$homeClubId/tournament-categories/${widget.category.tournamentCategoryId}/eligible-players',
@@ -703,6 +885,10 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
   }
 
   Future<void> _onSave() async {
+    if (!widget.canEdit) {
+      Navigator.of(context).pop(false);
+      return;
+    }
     final homeClubId = widget.match.homeClub?.id;
     final awayClubId = widget.match.awayClub?.id;
     if (homeClubId == null || awayClubId == null) {
@@ -743,7 +929,7 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
       }
 
       await api.post(
-        '/matches/${widget.match.id}/categories/${widget.category.id}/result',
+        '/matches/${widget.match.id}/categories/${widget.category.tournamentCategoryId}/result',
         data: {
           'homeScore': _homeTotal,
           'awayScore': _awayTotal,
@@ -787,6 +973,7 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
     required List<_PlayerGoalInput> entries,
     required int otherGoals,
     required ValueChanged<int> onOtherGoalsChanged,
+    required bool enableEditing,
   }) {
     final theme = Theme.of(context);
     final listHeight = math.min(280.0, entries.length * 48.0);
@@ -854,17 +1041,20 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
                                 textAlign: TextAlign.center,
                                 keyboardType: TextInputType.number,
                                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                enabled: enableEditing,
                                 decoration: const InputDecoration(
                                   isDense: true,
                                   contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 8),
                                   border: OutlineInputBorder(),
                                 ),
-                                onChanged: (value) {
-                                  final parsed = int.tryParse(value) ?? 0;
-                                  setState(() {
-                                    entry.goals = parsed;
-                                  });
-                                },
+                                onChanged: !enableEditing
+                                    ? null
+                                    : (value) {
+                                        final parsed = int.tryParse(value) ?? 0;
+                                        setState(() {
+                                          entry.goals = parsed;
+                                        });
+                                      },
                               ),
                             ),
                           ],
@@ -894,15 +1084,18 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
                         textAlign: TextAlign.center,
                         keyboardType: TextInputType.number,
                         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        enabled: enableEditing,
                         decoration: const InputDecoration(
                           isDense: true,
                           contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 8),
                           border: OutlineInputBorder(),
                         ),
-                        onChanged: (value) {
-                          final parsed = int.tryParse(value) ?? 0;
-                          onOtherGoalsChanged(parsed);
-                        },
+                        onChanged: !enableEditing
+                            ? null
+                            : (value) {
+                                final parsed = int.tryParse(value) ?? 0;
+                                onOtherGoalsChanged(parsed);
+                              },
                       ),
                     ),
                   ],
@@ -945,6 +1138,7 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
                             entries: _homeEntries,
                             otherGoals: _homeOtherGoals,
                             onOtherGoalsChanged: _updateHomeOtherGoals,
+                            enableEditing: widget.canEdit,
                           ),
                         ),
                         const SizedBox(width: 16),
@@ -954,6 +1148,7 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
                             entries: _awayEntries,
                             otherGoals: _awayOtherGoals,
                             onOtherGoalsChanged: _updateAwayOtherGoals,
+                            enableEditing: widget.canEdit,
                           ),
                         ),
                       ],
@@ -976,18 +1171,19 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
       actions: [
         TextButton(
           onPressed: _saving ? null : () => Navigator.of(context).pop(false),
-          child: const Text('Cancelar'),
+          child: Text(widget.canEdit ? 'Cancelar' : 'Cerrar'),
         ),
-        FilledButton(
-          onPressed: _saving || _loading || _errorMessage != null ? null : _onSave,
-          child: _saving
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Guardar'),
-        ),
+        if (widget.canEdit)
+          FilledButton(
+            onPressed: _saving || _loading || _errorMessage != null ? null : _onSave,
+            child: _saving
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Guardar'),
+          ),
       ],
     );
   }
@@ -1016,47 +1212,12 @@ String mapDioError(DioException error) {
   return 'Ocurrió un error inesperado. Intenta nuevamente.';
 }
 
-class _TableHeaderCell extends StatelessWidget {
-  const _TableHeaderCell({required this.label, this.textAlign = TextAlign.center});
+enum _ScoreOutcome { win, draw, loss, pending }
 
-  final String label;
-  final TextAlign textAlign;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-      child: Text(
-        label,
-        textAlign: textAlign,
-        style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-      ),
-    );
+_ScoreOutcome _scoreOutcome(int? score, int? opponentScore) {
+  if (score == null || opponentScore == null) {
+    return _ScoreOutcome.pending;
   }
-}
-
-class _TableTextCell extends StatelessWidget {
-  const _TableTextCell({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-      child: Text(
-        label,
-        style: theme.textTheme.bodyMedium,
-      ),
-    );
-  }
-}
-
-enum _ScoreOutcome { win, draw, loss }
-
-_ScoreOutcome _scoreOutcome(int score, int opponentScore) {
   if (score > opponentScore) {
     return _ScoreOutcome.win;
   }
@@ -1067,6 +1228,9 @@ _ScoreOutcome _scoreOutcome(int score, int opponentScore) {
 }
 
 Color _scoreBackgroundColor(_ScoreOutcome outcome) {
+  if (outcome == _ScoreOutcome.pending) {
+    return Colors.transparent;
+  }
   if (outcome == _ScoreOutcome.win) {
     return const Color(0xFFE8F5E9);
   }
@@ -1077,6 +1241,9 @@ Color _scoreBackgroundColor(_ScoreOutcome outcome) {
 }
 
 Color _scoreForegroundColor(_ScoreOutcome outcome) {
+  if (outcome == _ScoreOutcome.pending) {
+    return const Color(0xFF424242);
+  }
   if (outcome == _ScoreOutcome.win) {
     return const Color(0xFF2E7D32);
   }
@@ -1095,8 +1262,12 @@ class _ScoreCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final background = _scoreBackgroundColor(outcome);
-    final foreground = _scoreForegroundColor(outcome);
+    final bool pending = outcome == _ScoreOutcome.pending;
+    final background =
+        pending ? Colors.transparent : _scoreBackgroundColor(outcome);
+    final foreground = pending
+        ? theme.textTheme.bodyMedium?.color ?? theme.colorScheme.onSurface
+        : _scoreForegroundColor(outcome);
     return Container(
       alignment: Alignment.center,
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),

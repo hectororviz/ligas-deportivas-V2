@@ -88,30 +88,47 @@ class ZoneMatchCategory {
     required this.awayScore,
     required this.isPromocional,
     this.kickoffTime,
+    this.birthYearMin,
+    this.birthYearMax,
   });
 
   factory ZoneMatchCategory.fromJson(Map<String, dynamic> json) {
     final tournamentCategory = json['tournamentCategory'] as Map<String, dynamic>? ?? <String, dynamic>{};
     final category = tournamentCategory['category'] as Map<String, dynamic>? ?? <String, dynamic>{};
     final name = category['name'] as String? ?? tournamentCategory['name'] as String? ?? 'Categoría';
+    final birthYearMin = category['birthYearMin'] as int?;
+    final birthYearMax = category['birthYearMax'] as int?;
+    final homeScoreValue = json['homeScore'];
+    final awayScoreValue = json['awayScore'];
     return ZoneMatchCategory(
       id: json['id'] as int? ?? 0,
       tournamentCategoryId: json['tournamentCategoryId'] as int? ?? json['id'] as int? ?? 0,
       categoryName: name,
-      homeScore: json['homeScore'] as int? ?? 0,
-      awayScore: json['awayScore'] as int? ?? 0,
+      homeScore: homeScoreValue is num ? homeScoreValue.toInt() : null,
+      awayScore: awayScoreValue is num ? awayScoreValue.toInt() : null,
       isPromocional: json['isPromocional'] as bool? ?? false,
       kickoffTime: json['kickoffTime'] as String?,
+      birthYearMin: birthYearMin,
+      birthYearMax: birthYearMax,
     );
   }
 
   final int id;
   final int tournamentCategoryId;
   final String categoryName;
-  final int homeScore;
-  final int awayScore;
+  final int? homeScore;
+  final int? awayScore;
   final bool isPromocional;
   final String? kickoffTime;
+  final int? birthYearMin;
+  final int? birthYearMax;
+
+  int? get sortYear {
+    if (birthYearMin != null && birthYearMax != null) {
+      return birthYearMin! <= birthYearMax! ? birthYearMin : birthYearMax;
+    }
+    return birthYearMin ?? birthYearMax;
+  }
 }
 
 class ZoneMatch {
@@ -130,6 +147,20 @@ class ZoneMatch {
     final categories = (json['categories'] as List<dynamic>? ?? <dynamic>[])
         .map((entry) => ZoneMatchCategory.fromJson(entry as Map<String, dynamic>))
         .toList();
+    categories.sort((a, b) {
+      final aYear = a.sortYear;
+      final bYear = b.sortYear;
+      if (aYear != null && bYear != null && aYear != bYear) {
+        return aYear.compareTo(bYear);
+      }
+      if (aYear != null && bYear == null) {
+        return -1;
+      }
+      if (aYear == null && bYear != null) {
+        return 1;
+      }
+      return a.categoryName.compareTo(b.categoryName);
+    });
     return ZoneMatch(
       id: json['id'] as int? ?? 0,
       matchday: json['matchday'] as int? ?? 0,
@@ -154,33 +185,46 @@ class ZoneMatch {
   String get homeDisplayName => homeClub?.displayName ?? 'Por definir';
   String get awayDisplayName => awayClub?.displayName ?? 'Por definir';
 
-  int get totalHomeGoals => categories.fold(0, (total, category) => total + category.homeScore);
-  int get totalAwayGoals => categories.fold(0, (total, category) => total + category.awayScore);
+  int get totalHomeGoals =>
+      categories.fold(0, (total, category) => total + (category.homeScore ?? 0));
+  int get totalAwayGoals =>
+      categories.fold(0, (total, category) => total + (category.awayScore ?? 0));
 
-  int get homePoints {
+  bool get _hasRecordedScores {
     if (categories.isEmpty) {
-      return 0;
+      return false;
     }
-    if (totalHomeGoals > totalAwayGoals) {
-      return 3;
+    for (final category in categories) {
+      if (category.homeScore != null && category.awayScore != null) {
+        return true;
+      }
     }
-    if (totalHomeGoals == totalAwayGoals) {
-      return 1;
-    }
-    return 0;
+    return false;
   }
 
-  int get awayPoints {
-    if (categories.isEmpty) {
-      return 0;
+  bool get hasRecordedScores => _hasRecordedScores;
+
+  int get homePoints => _calculatePoints(isHome: true);
+
+  int get awayPoints => _calculatePoints(isHome: false);
+
+  int _calculatePoints({required bool isHome}) {
+    var total = 0;
+    for (final category in categories) {
+      final homeScore = category.homeScore;
+      final awayScore = category.awayScore;
+      if (homeScore == null || awayScore == null) {
+        continue;
+      }
+      if (homeScore == awayScore) {
+        total += 1;
+      } else if (isHome && homeScore > awayScore) {
+        total += 3;
+      } else if (!isHome && awayScore > homeScore) {
+        total += 3;
+      }
     }
-    if (totalAwayGoals > totalHomeGoals) {
-      return 3;
-    }
-    if (totalAwayGoals == totalHomeGoals) {
-      return 1;
-    }
-    return 0;
+    return total;
   }
 }
 

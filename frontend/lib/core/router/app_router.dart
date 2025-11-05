@@ -20,6 +20,7 @@ import '../../features/settings/account_settings_page.dart';
 import '../../features/settings/site_identity_page.dart';
 import '../../features/shared/widgets/app_shell.dart';
 import '../../features/standings/presentation/standings_page.dart';
+import '../../features/standings/presentation/zone_standings_page.dart';
 import '../../features/tournaments/presentation/tournaments_page.dart';
 import '../../features/zones/presentation/zones_page.dart';
 import '../../features/zones/domain/zone_match_models.dart';
@@ -78,6 +79,17 @@ GoRouter createRouter(Ref ref) {
           GoRoute(path: '/tournaments', builder: (context, state) => const TournamentsPage()),
           GoRoute(path: '/zones', builder: (context, state) => const ZonesPage()),
           GoRoute(
+            path: '/zones/:zoneId/standings',
+            builder: (context, state) {
+              final rawId = state.pathParameters['zoneId'];
+              final zoneId = rawId != null ? int.tryParse(rawId) : null;
+              if (zoneId == null) {
+                return const Center(child: Text('Zona no válida'));
+              }
+              return ZoneStandingsPage(zoneId: zoneId);
+            },
+          ),
+          GoRoute(
             path: '/zones/:zoneId/fixture',
             builder: (context, state) {
               final rawId = state.pathParameters['zoneId'];
@@ -85,7 +97,9 @@ GoRouter createRouter(Ref ref) {
               if (zoneId == null) {
                 return const Center(child: Text('Zona no válida'));
               }
-              return ZoneFixturePage(zoneId: zoneId);
+              final extra = state.extra;
+              final viewOnly = extra is ZoneFixturePageArgs ? extra.viewOnly : false;
+              return ZoneFixturePage(zoneId: zoneId, viewOnly: viewOnly);
             },
             routes: [
               GoRoute(

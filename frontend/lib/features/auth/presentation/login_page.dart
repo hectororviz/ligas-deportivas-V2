@@ -86,7 +86,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       width: 64,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
-                        color: Theme.of(context).colorScheme.surfaceVariant,
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest,
                       ),
                       clipBehavior: Clip.antiAlias,
                       child: iconUrl != null
@@ -103,18 +105,22 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     const SizedBox(height: 24),
                     TextFormField(
                       controller: _emailController,
-                      decoration: const InputDecoration(labelText: 'Correo electrónico'),
+                      decoration: const InputDecoration(
+                          labelText: 'Correo electrónico'),
                       keyboardType: TextInputType.emailAddress,
-                      validator: (value) =>
-                          (value == null || value.isEmpty) ? 'Ingresa un correo válido' : null,
+                      validator: (value) => (value == null || value.isEmpty)
+                          ? 'Ingresa un correo válido'
+                          : null,
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _passwordController,
-                      decoration: const InputDecoration(labelText: 'Contraseña'),
+                      decoration:
+                          const InputDecoration(labelText: 'Contraseña'),
                       obscureText: true,
-                      validator: (value) =>
-                          (value == null || value.length < 8) ? 'Contraseña inválida' : null,
+                      validator: (value) => (value == null || value.length < 8)
+                          ? 'Contraseña inválida'
+                          : null,
                     ),
                     const SizedBox(height: 16),
                     if (_error != null)
@@ -141,7 +147,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       child: const Text('¿Olvidaste tu contraseña?'),
                     ),
                     TextButton(
-                      onPressed: _loading ? null : () => context.go('/register'),
+                      onPressed:
+                          _loading ? null : () => context.go('/register'),
                       child: const Text('Crear cuenta'),
                     ),
                   ],
@@ -155,7 +162,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   }
 
   Future<void> _showResetPasswordDialog() async {
-    final controller = TextEditingController(text: _emailController.text.trim());
+    final controller =
+        TextEditingController(text: _emailController.text.trim());
     final formKey = GlobalKey<FormState>();
     final confirmed = await showDialog<bool>(
       context: context,
@@ -166,10 +174,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             key: formKey,
             child: TextFormField(
               controller: controller,
-              decoration: const InputDecoration(labelText: 'Correo electrónico'),
+              decoration:
+                  const InputDecoration(labelText: 'Correo electrónico'),
               keyboardType: TextInputType.emailAddress,
               validator: (value) =>
-                  (value == null || value.isEmpty || !value.contains('@')) ? 'Ingresa un correo válido' : null,
+                  (value == null || value.isEmpty || !value.contains('@'))
+                      ? 'Ingresa un correo válido'
+                      : null,
             ),
           ),
           actions: [
@@ -194,10 +205,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       return;
     }
     try {
-      await ref.read(authControllerProvider.notifier).requestPasswordReset(controller.text.trim());
+      await ref
+          .read(authControllerProvider.notifier)
+          .requestPasswordReset(controller.text.trim());
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Enviamos un enlace para recuperar la contraseña.')),
+          const SnackBar(
+              content:
+                  Text('Enviamos un enlace para recuperar la contraseña.')),
         );
       }
     } catch (error) {
