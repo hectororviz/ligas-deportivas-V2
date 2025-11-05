@@ -39,6 +39,24 @@ class AppTheme {
         selectedLabelTextStyle:
             TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0057B8)),
       ),
+      scrollbarTheme: ScrollbarThemeData(
+        thumbVisibility: MaterialStateProperty.all(true),
+        trackVisibility: MaterialStateProperty.all(true),
+        thickness: MaterialStateProperty.all(12),
+        radius: const Radius.circular(999),
+        mainAxisMargin: 4,
+        crossAxisMargin: 4,
+        thumbColor: MaterialStateProperty.resolveWith((states) {
+          const base = Color(0xFF0057B8);
+          if (states.contains(MaterialState.dragged) ||
+              states.contains(MaterialState.hovered)) {
+            return base;
+          }
+          return base.withOpacity(0.75);
+        }),
+        trackColor: MaterialStateProperty.all(const Color(0xFFE3F2FD)),
+        trackBorderColor: MaterialStateProperty.all(const Color(0xFFBBDEFB)),
+      ),
       cardTheme: CardThemeData(
         color: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
