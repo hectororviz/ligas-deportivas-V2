@@ -4,14 +4,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/api_client.dart';
 
 final rolesProvider = FutureProvider<List<RoleModel>>((ref) async {
-  final response = await ref.read(apiClientProvider).get<List<dynamic>>('/roles');
+  final response =
+      await ref.read(apiClientProvider).get<List<dynamic>>('/roles');
   final data = response.data ?? [];
-  return data.map((json) => RoleModel.fromJson(json as Map<String, dynamic>)).toList();
+  return data
+      .map((json) => RoleModel.fromJson(json as Map<String, dynamic>))
+      .toList();
 });
 
 final permissionsCatalogProvider =
     FutureProvider<List<PermissionModel>>((ref) async {
-  final response = await ref.read(apiClientProvider).get<List<dynamic>>('/roles/permissions');
+  final response = await ref
+      .read(apiClientProvider)
+      .get<List<dynamic>>('/roles/permissions');
   final data = response.data ?? [];
   return data
       .map((json) => PermissionModel.fromJson(json as Map<String, dynamic>))
@@ -22,7 +27,8 @@ class RolePermissionsPage extends ConsumerStatefulWidget {
   const RolePermissionsPage({super.key});
 
   @override
-  ConsumerState<RolePermissionsPage> createState() => _RolePermissionsPageState();
+  ConsumerState<RolePermissionsPage> createState() =>
+      _RolePermissionsPageState();
 }
 
 class _RolePermissionsPageState extends ConsumerState<RolePermissionsPage> {
@@ -155,7 +161,7 @@ class _RolePermissionsPageState extends ConsumerState<RolePermissionsPage> {
                 children: [
                   Expanded(
                     child: DropdownButtonFormField<int>(
-                      value: _selectedRoleId,
+                      initialValue: _selectedRoleId,
                       decoration: const InputDecoration(labelText: 'Rol'),
                       onChanged: (value) => _onRoleChanged(value, roles),
                       items: roles
@@ -170,12 +176,15 @@ class _RolePermissionsPageState extends ConsumerState<RolePermissionsPage> {
                   ),
                   const SizedBox(width: 12),
                   FilledButton.icon(
-                    onPressed: (_selectedRoleId == null || _isSaving) ? null : _saveChanges,
+                    onPressed: (_selectedRoleId == null || _isSaving)
+                        ? null
+                        : _saveChanges,
                     icon: _isSaving
                         ? const SizedBox(
                             width: 18,
                             height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white),
                           )
                         : const Icon(Icons.save_outlined),
                     label: const Text('Guardar cambios'),
@@ -184,14 +193,16 @@ class _RolePermissionsPageState extends ConsumerState<RolePermissionsPage> {
               );
             },
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, stack) => Center(child: Text('No se pudieron cargar los roles: $error')),
+            error: (error, stack) =>
+                Center(child: Text('No se pudieron cargar los roles: $error')),
           ),
           const SizedBox(height: 24),
           Expanded(
             child: permissionsAsync.when(
               data: (permissions) {
                 if (permissions.isEmpty) {
-                  return const Center(child: Text('No hay permisos configurados.'));
+                  return const Center(
+                      child: Text('No hay permisos configurados.'));
                 }
                 final grouped = _groupByModule(permissions);
                 return ListView(
@@ -203,14 +214,17 @@ class _RolePermissionsPageState extends ConsumerState<RolePermissionsPage> {
                       child: ExpansionTile(
                         title: Text(_formatKey(module)),
                         children: modulePermissions.map((permission) {
-                          final isSelected = _selectedPermissions.contains(permission.id);
+                          final isSelected =
+                              _selectedPermissions.contains(permission.id);
                           return CheckboxListTile(
                             value: isSelected,
                             onChanged: _selectedRoleId == null
                                 ? null
-                                : (value) => _togglePermission(permission.id, value ?? false),
+                                : (value) => _togglePermission(
+                                    permission.id, value ?? false),
                             title: Text(permission.displayName),
-                            subtitle: Text('Acción: ${_formatKey(permission.action)} • Alcance: ${_formatKey(permission.scope)}'),
+                            subtitle: Text(
+                                'Acción: ${_formatKey(permission.action)} • Alcance: ${_formatKey(permission.scope)}'),
                           );
                         }).toList(),
                       ),
@@ -229,7 +243,8 @@ class _RolePermissionsPageState extends ConsumerState<RolePermissionsPage> {
     );
   }
 
-  Map<String, List<PermissionModel>> _groupByModule(List<PermissionModel> permissions) {
+  Map<String, List<PermissionModel>> _groupByModule(
+      List<PermissionModel> permissions) {
     final map = <String, List<PermissionModel>>{};
     for (final permission in permissions) {
       map.putIfAbsent(permission.module, () => []).add(permission);
@@ -291,8 +306,9 @@ class RoleModel {
       return key
           .toLowerCase()
           .split('_')
-          .map((segment) =>
-              segment.isEmpty ? segment : segment[0].toUpperCase() + segment.substring(1))
+          .map((segment) => segment.isEmpty
+              ? segment
+              : segment[0].toUpperCase() + segment.substring(1))
           .join(' ');
     }
     return 'Rol #$id';
@@ -308,7 +324,8 @@ class PermissionModel {
     this.description,
   });
 
-  factory PermissionModel.fromJson(Map<String, dynamic> json) => PermissionModel(
+  factory PermissionModel.fromJson(Map<String, dynamic> json) =>
+      PermissionModel(
         id: json['id'] as int,
         module: json['module'] as String? ?? 'DESCONOCIDO',
         action: json['action'] as String? ?? 'DESCONOCIDO',
@@ -322,15 +339,17 @@ class PermissionModel {
   final String scope;
   final String? description;
 
-  String get displayName =>
-      description?.isNotEmpty == true ? description! : '${_titleCase(action)} (${_titleCase(scope)})';
+  String get displayName => description?.isNotEmpty == true
+      ? description!
+      : '${_titleCase(action)} (${_titleCase(scope)})';
 
   String _titleCase(String value) {
     return value
         .toLowerCase()
         .split('_')
-        .map((segment) =>
-            segment.isEmpty ? segment : segment[0].toUpperCase() + segment.substring(1))
+        .map((segment) => segment.isEmpty
+            ? segment
+            : segment[0].toUpperCase() + segment.substring(1))
         .join(' ');
   }
 }

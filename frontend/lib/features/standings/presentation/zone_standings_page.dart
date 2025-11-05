@@ -96,6 +96,7 @@ class _ZoneStandingsView extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 _StandingsTable(
+                  storageKey: 'zone-${data.zone.id}-general-table',
                   rows: data.general,
                   emptyMessage: 'Todavía no hay datos para la tabla general.',
                 ),
@@ -139,6 +140,8 @@ class _ZoneStandingsView extends StatelessWidget {
                       ),
                 children: [
                   _StandingsTable(
+                    storageKey:
+                        'zone-${data.zone.id}-category-${category.tournamentCategoryId}-table',
                     rows: category.standings,
                     emptyMessage: 'No hay datos para esta categoría.',
                   ),
@@ -152,8 +155,13 @@ class _ZoneStandingsView extends StatelessWidget {
 }
 
 class _StandingsTable extends StatelessWidget {
-  const _StandingsTable({required this.rows, required this.emptyMessage});
+  const _StandingsTable({
+    required this.storageKey,
+    required this.rows,
+    required this.emptyMessage,
+  });
 
+  final String storageKey;
   final List<StandingsRow> rows;
   final String emptyMessage;
 
@@ -170,6 +178,7 @@ class _StandingsTable extends StatelessWidget {
     }
 
     return SingleChildScrollView(
+      key: PageStorageKey<String>(storageKey),
       scrollDirection: Axis.horizontal,
       child: DataTable(
         columns: const [

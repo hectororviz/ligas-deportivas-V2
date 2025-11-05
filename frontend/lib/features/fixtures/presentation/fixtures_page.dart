@@ -6,14 +6,17 @@ import '../../../services/api_client.dart';
 import '../../zones/domain/zone_models.dart';
 import '../../zones/presentation/zone_fixture_page.dart';
 
-final fixturesTournamentsProvider = FutureProvider<List<FixtureTournament>>((ref) async {
+final fixturesTournamentsProvider =
+    FutureProvider<List<FixtureTournament>>((ref) async {
   final api = ref.read(apiClientProvider);
   final response = await api.get<List<dynamic>>('/zones');
   final data = response.data ?? <dynamic>[];
   final zones = data
       .whereType<Map<String, dynamic>>()
       .map((json) => ZoneSummary.fromJson(json))
-      .where((zone) => zone.status == ZoneStatus.inProgress || zone.status == ZoneStatus.playing)
+      .where((zone) =>
+          zone.status == ZoneStatus.inProgress ||
+          zone.status == ZoneStatus.playing)
       .toList();
 
   final grouped = <int, _FixtureTournamentBuilder>{};
@@ -43,7 +46,8 @@ final fixturesTournamentsProvider = FutureProvider<List<FixtureTournament>>((ref
     });
 
   for (final tournament in tournaments) {
-    tournament.zones.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    tournament.zones
+        .sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
   }
 
   return tournaments;
@@ -72,7 +76,8 @@ class FixturesPage extends ConsumerWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.info_outline, size: 56, color: Theme.of(context).colorScheme.primary),
+                  Icon(Icons.info_outline,
+                      size: 56, color: Theme.of(context).colorScheme.primary),
                   const SizedBox(height: 12),
                   Text(
                     'No hay torneos en juego por el momento.',
@@ -204,9 +209,11 @@ class _TournamentAccordion extends StatelessWidget {
         childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
         title: Text(
           tournament.displayName,
-          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+          style: theme.textTheme.titleMedium
+              ?.copyWith(fontWeight: FontWeight.w600),
         ),
-        subtitle: Text(tournament.leagueName, style: theme.textTheme.bodyMedium),
+        subtitle:
+            Text(tournament.leagueName, style: theme.textTheme.bodyMedium),
         children: [
           for (final zone in tournament.zones)
             _ZoneAccordion(
@@ -233,7 +240,7 @@ class _ZoneAccordion extends StatelessWidget {
     final theme = Theme.of(context);
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8),
-      color: theme.colorScheme.surfaceVariant.withOpacity(0.35),
+      color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.35),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         child: LayoutBuilder(
@@ -246,7 +253,8 @@ class _ZoneAccordion extends StatelessWidget {
               children: [
                 Text(
                   zone.name,
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 4),
                 Text(
