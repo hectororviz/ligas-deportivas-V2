@@ -9,5 +9,7 @@ export interface PermissionRequirement {
   scope?: Scope;
 }
 
-export const Permissions = (...permissions: PermissionRequirement[]) =>
+export type PermissionCondition = PermissionRequirement | PermissionRequirement[];
+
+export const Permissions = (...permissions: PermissionCondition[]) =>
   SetMetadata(PERMISSIONS_KEY, permissions);
