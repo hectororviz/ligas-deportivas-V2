@@ -58,7 +58,17 @@ export class MailService {
         ...options
       });
     } catch (error) {
-      this.logger.error('Error enviando correo', error as Error);
+      const host = this.configService.get<string>('mail.host');
+      const port = this.configService.get<number>('mail.port');
+      const normalizedError =
+        error instanceof Error ? error : new Error(String(error));
+
+      this.logger.error(
+        `Error enviando correo (SMTP ${host ?? 'desconocido'}:${port ?? 'desconocido'})`,
+        normalizedError
+      );
+
+      throw normalizedError;
     }
   }
 
