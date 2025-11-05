@@ -36,8 +36,11 @@ services:
       DATABASE_URL: postgres://postgres:postgres@db:5432/ligas
       JWT_ACCESS_SECRET: change-me-access
       JWT_REFRESH_SECRET: change-me-refresh
-      SMTP_HOST: mailhog
-      SMTP_PORT: 1025
+      SMTP_HOST: ${SMTP_HOST:-mailhog}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@ligas.local}
       STORAGE_BASE_URL: http://storage:9000/ligas
       STORAGE_BUCKET: ligas
       STORAGE_ACCESS_KEY: access
