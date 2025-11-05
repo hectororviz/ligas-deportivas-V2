@@ -6,7 +6,11 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Action, Scope } from '@prisma/client';
-import { PERMISSIONS_KEY, PermissionRequirement } from '../common/decorators/permissions.decorator';
+import {
+  PERMISSIONS_KEY,
+  PermissionCondition,
+  PermissionRequirement
+} from '../common/decorators/permissions.decorator';
 import { RequestUser } from '../common/interfaces/request-user.interface';
 
 @Injectable()
@@ -14,7 +18,7 @@ export class PermissionsGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const requirements = this.reflector.getAllAndOverride<PermissionRequirement[]>(PERMISSIONS_KEY, [
+    const requirements = this.reflector.getAllAndOverride<PermissionCondition[]>(PERMISSIONS_KEY, [
       context.getHandler(),
       context.getClass()
     ]);
@@ -31,7 +35,7 @@ export class PermissionsGuard implements CanActivate {
     }
 
     const hasAllPermissions = requirements.every((requirement) =>
-      this.hasPermission(user, requirement)
+      this.satisfiesRequirement(user, requirement)
     );
 
     if (!hasAllPermissions) {
@@ -39,6 +43,13 @@ export class PermissionsGuard implements CanActivate {
     }
 
     return true;
+  }
+
+  private satisfiesRequirement(user: RequestUser, requirement: PermissionCondition): boolean {
+    if (Array.isArray(requirement)) {
+      return requirement.some((option) => this.hasPermission(user, option));
+    }
+    return this.hasPermission(user, requirement);
   }
 
   private hasPermission(user: RequestUser, requirement: PermissionRequirement): boolean {
