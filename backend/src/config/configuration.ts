@@ -1,5 +1,23 @@
 const removeTrailingSlash = (value: string) => value.replace(/\/$/, '');
 
+const normalizeOptionalString = (value?: string) => {
+  if (value === undefined || value === null) {
+    return '';
+  }
+
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return '';
+  }
+
+  const lowered = trimmed.toLowerCase();
+  if (['null', 'undefined', 'false', '0', 'off', 'no'].includes(lowered)) {
+    return '';
+  }
+
+  return trimmed;
+};
+
 const resolveStorageBaseUrl = () => {
   const explicitBaseUrl = process.env.STORAGE_BASE_URL;
   if (explicitBaseUrl && explicitBaseUrl.trim().length > 0) {
@@ -14,6 +32,10 @@ const resolveCaptchaProvider = () => {
   const provider = (process.env.CAPTCHA_PROVIDER ?? 'turnstile').trim();
   return provider.length > 0 ? provider : 'turnstile';
 };
+
+const resolveCaptchaSecret = () => normalizeOptionalString(process.env.CAPTCHA_SECRET);
+
+const captchaSecret = resolveCaptchaSecret();
 
 export default () => ({
   app: {
@@ -33,7 +55,8 @@ export default () => ({
   },
   captcha: {
     provider: resolveCaptchaProvider(),
-    secret: process.env.CAPTCHA_SECRET?.trim() ?? ''
+    secret: captchaSecret,
+    enabled: captchaSecret.length > 0
   },
   mail: {
     host: process.env.SMTP_HOST ?? 'localhost',
