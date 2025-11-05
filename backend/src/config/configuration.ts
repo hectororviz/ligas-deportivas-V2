@@ -66,11 +66,20 @@ const resolveMailService = (): MailServiceProvider => {
   return service === 'gmail' ? 'gmail' : 'custom';
 };
 
+const isNonDefaultLocalHost = (host: string) => {
+  const lowered = host.trim().toLowerCase();
+  return lowered !== 'localhost' && lowered !== '127.0.0.1' && lowered !== 'mailhog';
+};
+
 const resolveMailHost = (service: MailServiceProvider) => {
   const host = process.env.SMTP_HOST;
   if (host) {
     const normalized = removeInlineComment(host).trim();
     if (normalized.length > 0) {
+      if (service === 'gmail' && !isNonDefaultLocalHost(normalized)) {
+        return 'smtp.gmail.com';
+      }
+
       return normalized;
     }
   }
@@ -87,6 +96,10 @@ const resolveMailPort = (service: MailServiceProvider) => {
   if (port.length > 0) {
     const parsed = parseInt(port, 10);
     if (Number.isFinite(parsed)) {
+      if (service === 'gmail' && parsed === 1025) {
+        return 465;
+      }
+
       return parsed;
     }
   }
