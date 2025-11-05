@@ -59,24 +59,56 @@ const resolveCaptchaSecret = () => normalizeOptionalString(process.env.CAPTCHA_S
 
 const captchaSecret = resolveCaptchaSecret();
 
-const resolveMailHost = () => {
-  const host = process.env.SMTP_HOST;
-  if (!host) {
-    return 'localhost';
-  }
+type MailServiceProvider = 'custom' | 'gmail';
 
-  const normalized = removeInlineComment(host).trim();
-  return normalized.length > 0 ? normalized : 'localhost';
+const resolveMailService = (): MailServiceProvider => {
+  const service = normalizeString(process.env.SMTP_SERVICE, 'custom').toLowerCase();
+  return service === 'gmail' ? 'gmail' : 'custom';
 };
 
-const resolveMailPort = () => {
-  const port = normalizeString(process.env.SMTP_PORT);
-  if (port.length === 0) {
-    return 1025;
+const isNonDefaultLocalHost = (host: string) => {
+  const lowered = host.trim().toLowerCase();
+  return lowered !== 'localhost' && lowered !== '127.0.0.1' && lowered !== 'mailhog';
+};
+
+const resolveMailHost = (service: MailServiceProvider) => {
+  const host = process.env.SMTP_HOST;
+  if (host) {
+    const normalized = removeInlineComment(host).trim();
+    if (normalized.length > 0) {
+      if (service === 'gmail' && !isNonDefaultLocalHost(normalized)) {
+        return 'smtp.gmail.com';
+      }
+
+      return normalized;
+    }
   }
 
-  const parsed = parseInt(port, 10);
-  return Number.isFinite(parsed) ? parsed : 1025;
+  if (service === 'gmail') {
+    return 'smtp.gmail.com';
+  }
+
+  return 'localhost';
+};
+
+const resolveMailPort = (service: MailServiceProvider) => {
+  const port = normalizeString(process.env.SMTP_PORT);
+  if (port.length > 0) {
+    const parsed = parseInt(port, 10);
+    if (Number.isFinite(parsed)) {
+      if (service === 'gmail' && parsed === 1025) {
+        return 465;
+      }
+
+      return parsed;
+    }
+  }
+
+  if (service === 'gmail') {
+    return 465;
+  }
+
+  return 1025;
 };
 
 const resolveOptionalBoolean = (value?: string) => {
@@ -100,42 +132,49 @@ const resolveOptionalBoolean = (value?: string) => {
   return undefined;
 };
 
-export default () => ({
-  app: {
-    port: parseInt(process.env.PORT ?? '3000', 10),
-    url: process.env.APP_URL ?? 'http://localhost:3000',
-    frontendUrl: process.env.FRONTEND_URL ?? 'http://localhost:4200',
-    autoRefreshInterval: parseInt(process.env.AUTO_REFRESH_INTERVAL ?? '10', 10)
-  },
-  database: {
-    url: process.env.DATABASE_URL
-  },
-  auth: {
-    accessSecret: process.env.JWT_ACCESS_SECRET ?? 'access-secret',
-    refreshSecret: process.env.JWT_REFRESH_SECRET ?? 'refresh-secret',
-    accessTtl: parseInt(process.env.JWT_ACCESS_TTL ?? '900', 10),
-    refreshTtl: parseInt(process.env.JWT_REFRESH_TTL ?? '604800', 10)
-  },
-  captcha: {
-    provider: resolveCaptchaProvider(),
-    secret: captchaSecret,
-    enabled: captchaSecret.length > 0
-  },
-  mail: {
-    host: resolveMailHost(),
-    port: resolveMailPort(),
-    user: process.env.SMTP_USER ?? '',
-    pass: process.env.SMTP_PASS ?? '',
-    from: process.env.SMTP_FROM ?? 'noreply@ligas.local',
-    secure: resolveOptionalBoolean(process.env.SMTP_SECURE),
-    requireTls: resolveOptionalBoolean(process.env.SMTP_REQUIRE_TLS),
-    ignoreTls: resolveOptionalBoolean(process.env.SMTP_IGNORE_TLS),
-    rejectUnauthorized: resolveOptionalBoolean(process.env.SMTP_TLS_REJECT_UNAUTHORIZED)
-  },
-  storage: {
-    baseUrl: resolveStorageBaseUrl(),
-    bucket: process.env.STORAGE_BUCKET ?? '',
-    accessKey: process.env.STORAGE_ACCESS_KEY ?? '',
-    secretKey: process.env.STORAGE_SECRET_KEY ?? ''
-  }
-});
+export default () => {
+  const mailServiceProvider = resolveMailService();
+
+  return {
+    app: {
+      port: parseInt(process.env.PORT ?? '3000', 10),
+      url: process.env.APP_URL ?? 'http://localhost:3000',
+      frontendUrl: process.env.FRONTEND_URL ?? 'http://localhost:4200',
+      autoRefreshInterval: parseInt(process.env.AUTO_REFRESH_INTERVAL ?? '10', 10)
+    },
+    database: {
+      url: process.env.DATABASE_URL
+    },
+    auth: {
+      accessSecret: process.env.JWT_ACCESS_SECRET ?? 'access-secret',
+      refreshSecret: process.env.JWT_REFRESH_SECRET ?? 'refresh-secret',
+      accessTtl: parseInt(process.env.JWT_ACCESS_TTL ?? '900', 10),
+      refreshTtl: parseInt(process.env.JWT_REFRESH_TTL ?? '604800', 10)
+    },
+    captcha: {
+      provider: resolveCaptchaProvider(),
+      secret: captchaSecret,
+      enabled: captchaSecret.length > 0
+    },
+    mail: {
+      service: mailServiceProvider,
+      host: resolveMailHost(mailServiceProvider),
+      port: resolveMailPort(mailServiceProvider),
+      user: process.env.SMTP_USER ?? '',
+      pass: process.env.SMTP_PASS ?? '',
+      from: process.env.SMTP_FROM ?? 'noreply@ligas.local',
+      secure:
+        resolveOptionalBoolean(process.env.SMTP_SECURE) ??
+        (mailServiceProvider === 'gmail' ? true : undefined),
+      requireTls: resolveOptionalBoolean(process.env.SMTP_REQUIRE_TLS),
+      ignoreTls: resolveOptionalBoolean(process.env.SMTP_IGNORE_TLS),
+      rejectUnauthorized: resolveOptionalBoolean(process.env.SMTP_TLS_REJECT_UNAUTHORIZED)
+    },
+    storage: {
+      baseUrl: resolveStorageBaseUrl(),
+      bucket: process.env.STORAGE_BUCKET ?? '',
+      accessKey: process.env.STORAGE_ACCESS_KEY ?? '',
+      secretKey: process.env.STORAGE_SECRET_KEY ?? ''
+    }
+  };
+};
