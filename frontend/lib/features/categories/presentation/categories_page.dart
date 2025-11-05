@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
+import '../../shared/widgets/app_data_table_style.dart';
 import '../../shared/widgets/page_scaffold.dart';
 import '../../shared/widgets/table_filters_bar.dart';
 import '../providers/categories_catalog_provider.dart';
@@ -653,10 +654,17 @@ class _CategoriesDataTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = AppDataTableColors.standard(theme);
+    final headerStyle =
+        theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: colors.headerText);
+
     final table = DataTable(
       headingRowHeight: 48,
       dataRowMinHeight: 44,
       dataRowMaxHeight: 60,
+      headingRowColor: buildHeaderColor(colors.headerBackground),
+      headingTextStyle: headerStyle,
       columns: const [
         DataColumn(label: Text('Nombre')),
         DataColumn(label: Text('Años de nacimiento')),
@@ -666,38 +674,38 @@ class _CategoriesDataTable extends StatelessWidget {
         DataColumn(label: Text('Activo')),
         DataColumn(label: Text('Acciones')),
       ],
-      rows: categories
-          .map(
-            (category) => DataRow(
-              cells: [
-                DataCell(Text(category.name)),
-                DataCell(Text(category.birthYearRangeLabel)),
-                DataCell(Text(category.genderLabel)),
-                DataCell(Text(category.minPlayers.toString())),
-                DataCell(Text(category.mandatory ? 'Sí' : 'No')),
-                DataCell(Text(category.active ? 'Activo' : 'Inactivo')),
-                DataCell(
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      OutlinedButton.icon(
-                        onPressed: () => onDetails(category),
-                        icon: const Icon(Icons.visibility_outlined),
-                        label: const Text('Detalles'),
-                      ),
-                      FilledButton.tonalIcon(
-                        onPressed: canEdit ? () => onEdit(category) : null,
-                        icon: const Icon(Icons.edit_outlined),
-                        label: const Text('Editar'),
-                      ),
-                    ],
-                  ),
+      rows: [
+        for (var index = 0; index < categories.length; index++)
+          DataRow(
+            color: buildStripedRowColor(index: index, colors: colors),
+            cells: [
+              DataCell(Text(categories[index].name)),
+              DataCell(Text(categories[index].birthYearRangeLabel)),
+              DataCell(Text(categories[index].genderLabel)),
+              DataCell(Text(categories[index].minPlayers.toString())),
+              DataCell(Text(categories[index].mandatory ? 'Sí' : 'No')),
+              DataCell(Text(categories[index].active ? 'Activo' : 'Inactivo')),
+              DataCell(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () => onDetails(categories[index]),
+                      icon: const Icon(Icons.visibility_outlined),
+                      label: const Text('Detalles'),
+                    ),
+                    FilledButton.tonalIcon(
+                      onPressed: canEdit ? () => onEdit(categories[index]) : null,
+                      icon: const Icon(Icons.edit_outlined),
+                      label: const Text('Editar'),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          )
-          .toList(),
+              ),
+            ],
+          ),
+      ],
     );
 
     return LayoutBuilder(

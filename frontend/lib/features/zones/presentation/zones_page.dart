@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
+import '../../shared/widgets/app_data_table_style.dart';
 import '../../shared/widgets/table_filters_bar.dart';
 import '../domain/zone_models.dart';
 
@@ -487,10 +488,17 @@ class _ZonesDataTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = AppDataTableColors.standard(theme);
+    final headerStyle =
+        theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: colors.headerText);
+
     final table = DataTable(
       headingRowHeight: 52,
       dataRowMinHeight: 64,
       dataRowMaxHeight: 84,
+      headingRowColor: buildHeaderColor(colors.headerBackground),
+      headingTextStyle: headerStyle,
       columns: const [
         DataColumn(label: Text('Liga')),
         DataColumn(label: Text('Torneo')),
@@ -499,42 +507,42 @@ class _ZonesDataTable extends StatelessWidget {
         DataColumn(label: Text('Clubes')),
         DataColumn(label: Text('Acciones')),
       ],
-      rows: zones
-          .map(
-            (zone) => DataRow(
-              cells: [
-                DataCell(Text(zone.leagueName)),
-                DataCell(Text('${zone.tournamentName} ${zone.tournamentYear}')),
-                DataCell(Text(zone.name)),
-                DataCell(_ZoneStatusChip(status: zone.status)),
-                DataCell(Text('${zone.clubCount}')), 
-                DataCell(
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      OutlinedButton.icon(
-                        onPressed: () => onFixture(zone),
-                        icon: const Icon(Icons.sports_soccer_outlined),
-                        label: const Text('Fixture'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: () => onView(zone),
-                        icon: const Icon(Icons.visibility_outlined),
-                        label: const Text('Ver'),
-                      ),
-                      FilledButton.tonalIcon(
-                        onPressed:
-                            isAdmin && zone.isEditable ? () => onEdit(zone) : null,
-                        icon: const Icon(Icons.edit_outlined),
-                        label: const Text('Editar'),
-                      ),
-                    ],
-                  ),
+      rows: [
+        for (var index = 0; index < zones.length; index++)
+          DataRow(
+            color: buildStripedRowColor(index: index, colors: colors),
+            cells: [
+              DataCell(Text(zones[index].leagueName)),
+              DataCell(Text('${zones[index].tournamentName} ${zones[index].tournamentYear}')),
+              DataCell(Text(zones[index].name)),
+              DataCell(_ZoneStatusChip(status: zones[index].status)),
+              DataCell(Text('${zones[index].clubCount}')),
+              DataCell(
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () => onFixture(zones[index]),
+                      icon: const Icon(Icons.sports_soccer_outlined),
+                      label: const Text('Fixture'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => onView(zones[index]),
+                      icon: const Icon(Icons.visibility_outlined),
+                      label: const Text('Ver'),
+                    ),
+                    FilledButton.tonalIcon(
+                      onPressed:
+                          isAdmin && zones[index].isEditable ? () => onEdit(zones[index]) : null,
+                      icon: const Icon(Icons.edit_outlined),
+                      label: const Text('Editar'),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          )
-          .toList(),
+              ),
+            ],
+          ),
+      ],
     );
 
     return LayoutBuilder(
