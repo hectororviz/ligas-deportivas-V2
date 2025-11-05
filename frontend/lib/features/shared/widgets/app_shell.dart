@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -154,10 +152,10 @@ class _AppShellState extends ConsumerState<AppShell> {
                           final maxViewportWidth = constraints.maxWidth.isFinite
                               ? constraints.maxWidth
                               : MediaQuery.sizeOf(context).width;
-                          final overflowAllowance = maxViewportWidth.isFinite
-                              ? math.min(400.0, maxViewportWidth * 0.25)
-                              : 400.0;
-                          final maxContentWidth = maxViewportWidth + overflowAllowance;
+                          final minContentWidth = maxViewportWidth.isFinite
+                              ? maxViewportWidth
+                              : MediaQuery.sizeOf(context).width;
+                          final maxContentWidth = maxViewportWidth;
 
                           return Scrollbar(
                             controller: _horizontalScrollController,
@@ -165,12 +163,14 @@ class _AppShellState extends ConsumerState<AppShell> {
                             trackVisibility: true,
                             interactive: true,
                             scrollbarOrientation: ScrollbarOrientation.bottom,
+                            thickness: 12,
+                            radius: const Radius.circular(999),
                             child: SingleChildScrollView(
                               controller: _horizontalScrollController,
                               scrollDirection: Axis.horizontal,
                               child: ConstrainedBox(
                                 constraints: BoxConstraints(
-                                  minWidth: constraints.maxWidth,
+                                  minWidth: minContentWidth,
                                   maxWidth: maxContentWidth,
                                 ),
                                 child: widget.child,
