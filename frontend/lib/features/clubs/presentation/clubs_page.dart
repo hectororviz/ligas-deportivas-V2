@@ -14,6 +14,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
+import '../../shared/widgets/app_data_table_style.dart';
 import '../../shared/widgets/page_scaffold.dart';
 import '../../shared/widgets/table_filters_bar.dart';
 import 'widgets/authenticated_image.dart';
@@ -463,6 +464,11 @@ class _ClubsDataTable extends StatelessWidget {
     final clubs = [...data.clubs]
       ..sort((a, b) => _normalizeForSort(a.name).compareTo(_normalizeForSort(b.name)));
 
+    final theme = Theme.of(context);
+    final colors = AppDataTableColors.standard(theme);
+    final headerStyle =
+        theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: colors.headerText);
+
     final table = DataTable(
       columns: const [
         DataColumn(label: Text('Nombre')),
@@ -472,84 +478,82 @@ class _ClubsDataTable extends StatelessWidget {
       dataRowMinHeight: 44,
       dataRowMaxHeight: 60,
       headingRowHeight: 48,
-      rows: clubs
-          .map(
-            (club) => DataRow(
-              cells: [
-                DataCell(
-                  Row(
-                    children: [
-                      _ClubAvatar(club: club),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              club.name,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.w600),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            if (club.slug != null)
-                              Text('Slug: ${club.slug}',
-                                  style: Theme.of(context).textTheme.bodySmall),
-                          ],
-                        ),
+      headingRowColor: buildHeaderColor(colors.headerBackground),
+      headingTextStyle: headerStyle,
+      rows: [
+        for (var index = 0; index < clubs.length; index++)
+          DataRow(
+            color: buildStripedRowColor(index: index, colors: colors),
+            cells: [
+              DataCell(
+                Row(
+                  children: [
+                    _ClubAvatar(club: clubs[index]),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            clubs[index].name,
+                            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (clubs[index].slug != null)
+                            Text('Slug: ${clubs[index].slug}', style: theme.textTheme.bodySmall),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                DataCell(
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Chip(
-                      avatar: Icon(
-                        club.active ? Icons.check_circle : Icons.pause_circle,
-                        size: 18,
-                        color: club.active
-                            ? Theme.of(context).colorScheme.onPrimary
-                            : Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                      backgroundColor: club.active
-                          ? Theme.of(context).colorScheme.primary
-                          : Theme.of(context).colorScheme.surfaceVariant,
-                      label: Text(
-                        club.active ? 'Activo' : 'Inactivo',
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                              color: club.active
-                                  ? Theme.of(context).colorScheme.onPrimary
-                                  : Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
+              ),
+              DataCell(
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Chip(
+                    avatar: Icon(
+                      clubs[index].active ? Icons.check_circle : Icons.pause_circle,
+                      size: 18,
+                      color: clubs[index].active
+                          ? theme.colorScheme.onPrimary
+                          : theme.colorScheme.onSurfaceVariant,
+                    ),
+                    backgroundColor: clubs[index].active
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.surfaceVariant,
+                    label: Text(
+                      clubs[index].active ? 'Activo' : 'Inactivo',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: clubs[index].active
+                            ? theme.colorScheme.onPrimary
+                            : theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ),
                 ),
-                DataCell(
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      OutlinedButton.icon(
-                        onPressed: () => onView(club),
-                        icon: const Icon(Icons.visibility_outlined),
-                        label: const Text('Detalles'),
-                      ),
-                      const SizedBox(width: 8),
-                      FilledButton.tonalIcon(
-                        onPressed: canEdit ? () => onEdit(club) : null,
-                        icon: const Icon(Icons.edit_outlined),
-                        label: const Text('Editar'),
-                      ),
-                    ],
-                  ),
+              ),
+              DataCell(
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () => onView(clubs[index]),
+                      icon: const Icon(Icons.visibility_outlined),
+                      label: const Text('Detalles'),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton.tonalIcon(
+                      onPressed: canEdit ? () => onEdit(clubs[index]) : null,
+                      icon: const Icon(Icons.edit_outlined),
+                      label: const Text('Editar'),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          )
-          .toList(),
+              ),
+            ],
+          ),
+      ],
     );
 
     return LayoutBuilder(

@@ -10,6 +10,7 @@ import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
 import '../../categories/providers/categories_catalog_provider.dart';
 import '../../leagues/presentation/leagues_page.dart';
+import '../../shared/widgets/app_data_table_style.dart';
 import '../../shared/widgets/table_filters_bar.dart';
 
 const _moduleTorneos = 'TORNEOS';
@@ -680,10 +681,17 @@ class _TournamentsDataTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = AppDataTableColors.standard(theme);
+    final headerStyle =
+        theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: colors.headerText);
+
     final table = DataTable(
       headingRowHeight: 52,
       dataRowMinHeight: 72,
       dataRowMaxHeight: 92,
+      headingRowColor: buildHeaderColor(colors.headerBackground),
+      headingTextStyle: headerStyle,
       columns: const [
         DataColumn(label: Text('Liga')),
         DataColumn(label: Text('Nombre del torneo')),
@@ -692,96 +700,84 @@ class _TournamentsDataTable extends StatelessWidget {
         DataColumn(label: Text('Categorías')),
         DataColumn(label: Text('Acciones')),
       ],
-      rows: tournaments
-          .map(
-            (tournament) => DataRow(
-              cells: [
-                DataCell(
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        tournament.leagueName,
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w600),
-                      ),
-                      Text('ID ${tournament.leagueId}',
-                          style: Theme.of(context).textTheme.bodySmall),
-                    ],
-                  ),
+      rows: [
+        for (var index = 0; index < tournaments.length; index++)
+          DataRow(
+            color: buildStripedRowColor(index: index, colors: colors),
+            cells: [
+              DataCell(
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      tournaments[index].leagueName,
+                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                    Text('ID ${tournaments[index].leagueId}',
+                        style: theme.textTheme.bodySmall),
+                  ],
                 ),
-                DataCell(
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        tournament.name,
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w600),
-                        overflow: TextOverflow.ellipsis,
+              ),
+              DataCell(
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      tournaments[index].name,
+                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: switch (tournaments[index].status) {
+                          TournamentStatus.draft => theme.colorScheme.surfaceVariant,
+                          TournamentStatus.scheduled => theme.colorScheme.tertiaryContainer,
+                          TournamentStatus.inProgress => theme.colorScheme.primaryContainer,
+                          TournamentStatus.finished => theme.colorScheme.secondaryContainer,
+                        },
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                      const SizedBox(height: 4),
-                      DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: switch (tournament.status) {
-                            TournamentStatus.draft =>
-                              Theme.of(context).colorScheme.surfaceVariant,
-                            TournamentStatus.scheduled =>
-                                Theme.of(context).colorScheme.tertiaryContainer,
-                            TournamentStatus.inProgress =>
-                                Theme.of(context).colorScheme.primaryContainer,
-                            TournamentStatus.finished =>
-                                Theme.of(context).colorScheme.secondaryContainer,
-                          },
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          child: Text(
-                            tournament.status.label,
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        child: Text(
+                          tournaments[index].status.label,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                DataCell(Text(tournament.year.toString())),
-                DataCell(Text('${tournament.zonesCount}')),
-                DataCell(Text('${tournament.enabledCategoriesCount}')),
-                DataCell(
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      OutlinedButton.icon(
-                        onPressed: () => onDetails(tournament),
-                        icon: const Icon(Icons.visibility_outlined),
-                        label: const Text('Detalles'),
-                      ),
-                      FilledButton.tonalIcon(
-                        onPressed: canEdit(tournament) ? () => onEdit(tournament) : null,
-                        icon: const Icon(Icons.edit_outlined),
-                        label: const Text('Editar'),
-                      ),
-                    ],
-                  ),
+              ),
+              DataCell(Text(tournaments[index].year.toString())),
+              DataCell(Text('${tournaments[index].zonesCount}')),
+              DataCell(Text('${tournaments[index].enabledCategoriesCount}')),
+              DataCell(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () => onDetails(tournaments[index]),
+                      icon: const Icon(Icons.visibility_outlined),
+                      label: const Text('Detalles'),
+                    ),
+                    FilledButton.tonalIcon(
+                      onPressed:
+                          canEdit(tournaments[index]) ? () => onEdit(tournaments[index]) : null,
+                      icon: const Icon(Icons.edit_outlined),
+                      label: const Text('Editar'),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          )
-          .toList(),
+              ),
+            ],
+          ),
+      ],
     );
 
     return LayoutBuilder(
