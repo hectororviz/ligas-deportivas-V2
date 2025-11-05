@@ -150,7 +150,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                         key: ValueKey(location),
                         builder: (context, constraints) {
                           final extraWidthAllowance =
-                              constraints.maxWidth.isFinite ? constraints.maxWidth + 1600 : 2400;
+                              constraints.maxWidth.isFinite ? constraints.maxWidth + 1600.0 : 2400.0;
 
                           return Scrollbar(
                             controller: _horizontalScrollController,
