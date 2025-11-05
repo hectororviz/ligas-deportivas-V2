@@ -86,7 +86,7 @@ class AppShell extends ConsumerWidget {
                       height: 40,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
-                        color: Theme.of(context).colorScheme.surfaceVariant,
+                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
                       ),
                       clipBehavior: Clip.antiAlias,
                       child: siteIdentity?.iconUrl != null
@@ -115,10 +115,10 @@ class AppShell extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
                     child: Row(
-                      children: const [
+                      children: [
                         Spacer(),
                         UserMenuButton(),
                       ],

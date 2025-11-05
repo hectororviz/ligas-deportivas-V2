@@ -141,12 +141,17 @@ class _ZonesPageState extends ConsumerState<ZonesPage> {
     await showDialog<void>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        return Dialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          content: ConstrainedBox(
+          child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 560),
-            child: _ZoneDetailsDialog(zoneId: zone.id),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              child: SizedBox(
+                width: double.infinity,
+                child: _ZoneDetailsDialog(zoneId: zone.id),
+              ),
+            ),
           ),
         );
       },
@@ -332,6 +337,11 @@ class _ZonesPageState extends ConsumerState<ZonesPage> {
                         Padding(
                           padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
                           child: TableFiltersBar(
+                            trailing: TextButton.icon(
+                              onPressed: hasActiveFilters ? _clearFilters : null,
+                              icon: const Icon(Icons.filter_alt_off_outlined),
+                              label: const Text('Limpiar filtros'),
+                            ),
                             children: [
                               TableFilterField(
                                 label: 'Buscar',
@@ -426,11 +436,6 @@ class _ZonesPageState extends ConsumerState<ZonesPage> {
                                 ),
                               ),
                             ],
-                            trailing: TextButton.icon(
-                              onPressed: hasActiveFilters ? _clearFilters : null,
-                              icon: const Icon(Icons.filter_alt_off_outlined),
-                              label: const Text('Limpiar filtros'),
-                            ),
                           ),
                         ),
                         const Divider(height: 1),
@@ -1032,7 +1037,7 @@ class _ZoneEditorDialogState extends ConsumerState<_ZoneEditorDialog> {
           ),
           const SizedBox(height: 16),
           DropdownButtonFormField<TournamentOption>(
-            value: _selectedTournament,
+            initialValue: _selectedTournament,
             decoration: const InputDecoration(labelText: 'Torneo'),
             onChanged: (widget.zone == null && !_submitting)
                 ? (option) => _onSelectTournament(option)
@@ -1294,6 +1299,7 @@ class _ZoneDetailsDialogState extends ConsumerState<_ZoneDetailsDialog> {
                         thumbVisibility: listHeight >= 360.0,
                         child: ListView.separated(
                           primary: false,
+                          shrinkWrap: true,
                           padding: const EdgeInsets.only(bottom: 8),
                           itemCount: clubs.length,
                           itemBuilder: (context, index) {
