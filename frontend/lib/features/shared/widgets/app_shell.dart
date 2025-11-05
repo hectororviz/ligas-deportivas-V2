@@ -150,9 +150,12 @@ class _AppShellState extends ConsumerState<AppShell> {
                         final maxViewportWidth = constraints.maxWidth.isFinite
                             ? constraints.maxWidth
                             : MediaQuery.sizeOf(context).width;
-                        final minContentWidth = maxViewportWidth.isFinite
-                            ? maxViewportWidth
-                            : MediaQuery.sizeOf(context).width;
+                        final overflowAllowance = maxViewportWidth.isFinite
+                            ? math.max(640.0, maxViewportWidth)
+                            : 640.0;
+                        final maxContentWidth = maxViewportWidth.isFinite
+                            ? maxViewportWidth + overflowAllowance
+                            : MediaQuery.sizeOf(context).width + overflowAllowance;
 
                         return Scrollbar(
                           controller: _horizontalScrollController,
@@ -167,7 +170,8 @@ class _AppShellState extends ConsumerState<AppShell> {
                             scrollDirection: Axis.horizontal,
                             child: ConstrainedBox(
                               constraints: BoxConstraints(
-                                minWidth: minContentWidth,
+                                minWidth: maxViewportWidth,
+                                maxWidth: maxContentWidth,
                               ),
                               child: AnimatedSwitcher(
                                 duration: const Duration(milliseconds: 250),
