@@ -8,6 +8,7 @@ export const validationSchema = Joi.object({
   JWT_REFRESH_TTL: Joi.number().integer().min(3600).default(604800),
   CAPTCHA_PROVIDER: Joi.string().valid('hcaptcha', 'turnstile').default('turnstile'),
   CAPTCHA_SECRET: Joi.string().allow(''),
+  SMTP_SERVICE: Joi.string().valid('custom', 'gmail').default('custom'),
   SMTP_HOST: Joi.string().default('localhost'),
   SMTP_PORT: Joi.number().integer().default(1025),
   SMTP_USER: Joi.string().allow(''),
