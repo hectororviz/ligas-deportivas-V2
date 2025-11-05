@@ -27,7 +27,6 @@ const _navigationItems = <NavigationItem>[
   NavigationItem(label: 'Torneos', icon: Icons.calendar_today_outlined, route: '/tournaments'),
   NavigationItem(label: 'Zonas', icon: Icons.grid_view_outlined, route: '/zones'),
   NavigationItem(label: 'Fixture', icon: Icons.sports_soccer_outlined, route: '/fixtures'),
-  NavigationItem(label: 'Resultados', icon: Icons.scoreboard_outlined, route: '/results'),
   NavigationItem(label: 'Tablas', icon: Icons.leaderboard_outlined, route: '/standings'),
   NavigationItem(label: 'Configuración', icon: Icons.settings_outlined, route: '/settings'),
 ];
@@ -52,13 +51,32 @@ class SidebarController extends StateNotifier<bool> {
   }
 }
 
-class AppShell extends ConsumerWidget {
+class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key, required this.child});
 
   final Widget child;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends ConsumerState<AppShell> {
+  late final ScrollController _horizontalScrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _horizontalScrollController = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _horizontalScrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final isCollapsed = ref.watch(sidebarControllerProvider);
     final location = GoRouterState.of(context).uri.toString();
     final currentIndex = _navigationItems
@@ -128,7 +146,30 @@ class AppShell extends ConsumerWidget {
                   Expanded(
                     child: AnimatedSwitcher(
                       duration: const Duration(milliseconds: 250),
-                      child: child,
+                      child: LayoutBuilder(
+                        key: ValueKey(location),
+                        builder: (context, constraints) {
+                          final extraWidthAllowance =
+                              constraints.maxWidth.isFinite ? constraints.maxWidth + 1600 : 2400;
+
+                          return Scrollbar(
+                            controller: _horizontalScrollController,
+                            notificationPredicate: (notification) =>
+                                notification.metrics.axis == Axis.horizontal,
+                            child: SingleChildScrollView(
+                              controller: _horizontalScrollController,
+                              scrollDirection: Axis.horizontal,
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  minWidth: constraints.maxWidth,
+                                  maxWidth: extraWidthAllowance,
+                                ),
+                                child: widget.child,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   ),
                 ],
