@@ -1,7 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Action, Module, Prisma, Scope } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import { RequestUser } from '../../common/interfaces/request-user.interface';
 import { CreatePlayerDto } from '../dto/create-player.dto';
 import { ListPlayersDto } from '../dto/list-players.dto';
 import { UpdatePlayerDto } from '../dto/update-player.dto';
@@ -52,7 +53,7 @@ export class PlayersService {
     }
   }
 
-  async findAll(query: ListPlayersDto) {
+  async findAll(query: ListPlayersDto, user?: RequestUser) {
     const {
       search,
       status,
@@ -84,10 +85,6 @@ export class PlayersService {
       where.active = true;
     } else if (status === 'inactive') {
       where.active = false;
-    }
-
-    if (clubId !== undefined) {
-      where.clubId = clubId;
     }
 
     if (gender) {
@@ -148,6 +145,27 @@ export class PlayersService {
       where.birthDate = filter;
     }
 
+    const restrictedClubIds = this.getRestrictedClubIds(user);
+
+    if (restrictedClubIds !== null) {
+      if (clubId !== undefined) {
+        if (clubId === null) {
+          where.clubId = { in: [] };
+        } else if (restrictedClubIds.includes(clubId)) {
+          where.clubId = clubId;
+        } else {
+          where.clubId = { in: [] };
+        }
+      } else {
+        where.clubId = {
+          in: restrictedClubIds,
+          not: null,
+        };
+      }
+    } else if (clubId !== undefined) {
+      where.clubId = clubId;
+    }
+
     const skip = (page - 1) * pageSize;
 
     const [total, players] = await this.prisma.$transaction([
@@ -167,6 +185,37 @@ export class PlayersService {
       page,
       pageSize,
     };
+  }
+
+  private getRestrictedClubIds(user?: RequestUser): number[] | null {
+    if (!user) {
+      return null;
+    }
+
+    const relevantGrants = user.permissions.filter(
+      (grant) =>
+        grant.module === Module.JUGADORES &&
+        (grant.action === Action.VIEW || grant.action === Action.MANAGE)
+    );
+
+    if (relevantGrants.length === 0) {
+      return null;
+    }
+
+    if (relevantGrants.some((grant) => grant.scope === Scope.GLOBAL)) {
+      return null;
+    }
+
+    const clubIds = new Set<number>();
+    for (const grant of relevantGrants) {
+      if (grant.scope === Scope.CLUB && grant.clubs) {
+        for (const clubId of grant.clubs) {
+          clubIds.add(clubId);
+        }
+      }
+    }
+
+    return Array.from(clubIds);
   }
 
   async findById(id: number) {

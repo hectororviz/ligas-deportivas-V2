@@ -12,6 +12,9 @@ import {
 import { Action, Module } from '@prisma/client';
 
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { JwtOptionalAuthGuard } from '../../auth/jwt-optional.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RequestUser } from '../../common/interfaces/request-user.interface';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { PermissionsGuard } from '../../rbac/permissions.guard';
 import { CreatePlayerDto } from '../dto/create-player.dto';
@@ -24,8 +27,9 @@ export class PlayersController {
   constructor(private readonly playersService: PlayersService) {}
 
   @Get()
-  findAll(@Query() query: ListPlayersDto) {
-    return this.playersService.findAll(query);
+  @UseGuards(JwtOptionalAuthGuard)
+  findAll(@Query() query: ListPlayersDto, @CurrentUser() user?: RequestUser) {
+    return this.playersService.findAll(query, user);
   }
 
   @Get(':id')
