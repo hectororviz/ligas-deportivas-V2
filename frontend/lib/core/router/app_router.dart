@@ -12,6 +12,7 @@ import '../../features/clubs/presentation/clubs_page.dart';
 import '../../features/clubs/presentation/club_admin_page.dart';
 import '../../features/categories/presentation/categories_page.dart';
 import '../../features/players/presentation/players_page.dart';
+import '../../features/users/presentation/users_admin_page.dart';
 import '../../features/settings/league_colors_page.dart';
 import '../../features/settings/role_permissions_page.dart';
 import '../../features/settings/settings_page.dart';
@@ -127,6 +128,7 @@ GoRouter createRouter(Ref ref) {
           ),
           GoRoute(path: '/fixtures', builder: (context, state) => const FixturesPage()),
           GoRoute(path: '/standings', builder: (context, state) => const StandingsPage()),
+          GoRoute(path: '/users', builder: (context, state) => const UsersAdminPage()),
           GoRoute(
             path: '/settings',
             builder: (context, state) => const SettingsPage(),

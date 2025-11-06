@@ -25,6 +25,12 @@ export class UsersService {
         take: pageSize,
         orderBy: { createdAt: 'desc' },
         include: {
+          club: {
+            select: {
+              id: true,
+              name: true
+            }
+          },
           roles: {
             include: {
               role: true,
@@ -51,7 +57,15 @@ export class UsersService {
     await this.prisma.user.findUniqueOrThrow({ where: { id } });
     return this.prisma.user.update({
       where: { id },
-      data: dto
+      data: dto,
+      include: {
+        club: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      }
     });
   }
 
