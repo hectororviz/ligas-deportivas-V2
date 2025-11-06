@@ -39,6 +39,12 @@ export class UsersService {
         take: pageSize,
         orderBy: { createdAt: 'desc' },
         include: {
+          club: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
           roles: {
             include: {
               role: true,

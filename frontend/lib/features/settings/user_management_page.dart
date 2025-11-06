@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../services/api_client.dart';
+import '../shared/models/club_summary.dart';
+import '../shared/providers/clubs_catalog_provider.dart';
 import '../shared/widgets/page_scaffold.dart';
 
 final userListFiltersProvider =
@@ -327,7 +329,24 @@ class _UserCard extends ConsumerStatefulWidget {
 class _UserCardState extends ConsumerState<_UserCard> {
   bool _isSendingReset = false;
   bool _isAssigning = false;
+  bool _isUpdatingClub = false;
+  int? _selectedClubId;
   final Set<int> _removingRoleIds = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedClubId = widget.user.club?.id;
+  }
+
+  @override
+  void didUpdateWidget(covariant _UserCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.user.id != widget.user.id ||
+        oldWidget.user.club?.id != widget.user.club?.id) {
+      _selectedClubId = widget.user.club?.id;
+    }
+  }
 
   Future<void> _sendPasswordReset() async {
     if (_isSendingReset) {
@@ -494,11 +513,54 @@ class _UserCardState extends ConsumerState<_UserCard> {
     }
   }
 
+  Future<void> _updateClub(int? clubId) async {
+    if (_isUpdatingClub || _selectedClubId == clubId) {
+      return;
+    }
+
+    setState(() {
+      _selectedClubId = clubId;
+      _isUpdatingClub = true;
+    });
+
+    try {
+      await ref.read(apiClientProvider).patch(
+            '/users/${widget.user.id}',
+            data: {'clubId': clubId},
+          );
+      if (!mounted) {
+        return;
+      }
+      final message = clubId == null
+          ? 'Se quitó el club asociado.'
+          : 'Se actualizó el club asociado.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+      ref.invalidate(usersProvider);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo actualizar el club asociado: $error')),
+      );
+      setState(() {
+        _selectedClubId = widget.user.club?.id;
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isUpdatingClub = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final dateFormat = DateFormat.yMMMMd('es');
     final user = widget.user;
+    final clubsAsync = ref.watch(clubsCatalogProvider);
 
     return Card(
       child: Padding(
@@ -534,6 +596,60 @@ class _UserCardState extends ConsumerState<_UserCard> {
                           style: theme.textTheme.bodyMedium,
                         ),
                       ],
+                      const SizedBox(height: 12),
+                      clubsAsync.when(
+                        data: (clubs) {
+                          final items = <DropdownMenuItem<int?>>[
+                            const DropdownMenuItem<int?>(
+                              value: null,
+                              child: Text('Sin club asociado'),
+                            ),
+                            ...clubs.map(
+                              (club) => DropdownMenuItem<int?>(
+                                value: club.id,
+                                child: Text(club.name),
+                              ),
+                            ),
+                          ];
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              DropdownButtonFormField<int?>(
+                                value: _selectedClubId,
+                                decoration: const InputDecoration(
+                                  labelText: 'Club asociado',
+                                  helperText: 'Opcional',
+                                  border: OutlineInputBorder(),
+                                ),
+                                items: items,
+                                onChanged: _isUpdatingClub
+                                    ? null
+                                    : (value) {
+                                        _updateClub(value);
+                                      },
+                              ),
+                              if (_isUpdatingClub)
+                                const Padding(
+                                  padding: EdgeInsets.only(top: 8),
+                                  child: LinearProgressIndicator(),
+                                ),
+                            ],
+                          );
+                        },
+                        loading: () => const Padding(
+                          padding: EdgeInsets.only(top: 4),
+                          child: LinearProgressIndicator(),
+                        ),
+                        error: (error, stackTrace) => Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'No se pudieron cargar los clubes: $error',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.error,
+                            ),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -651,6 +767,7 @@ class ManagedUser {
     required this.firstName,
     required this.lastName,
     required this.language,
+    required this.club,
     required this.createdAt,
     required this.roles,
   });
@@ -667,6 +784,9 @@ class ManagedUser {
       firstName: json['firstName'] as String? ?? '',
       lastName: json['lastName'] as String? ?? '',
       language: json['language'] as String?,
+      club: json['club'] == null
+          ? null
+          : ClubSummary.fromJson(json['club'] as Map<String, dynamic>),
       createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0),
       roles: roles,
     );
@@ -677,6 +797,7 @@ class ManagedUser {
   final String firstName;
   final String lastName;
   final String? language;
+  final ClubSummary? club;
   final DateTime createdAt;
   final List<ManagedUserRole> roles;
 
