@@ -2,8 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
-
 import '../../services/api_client.dart';
 import '../shared/models/club_summary.dart';
 import '../shared/providers/clubs_catalog_provider.dart';
@@ -149,12 +147,21 @@ class _UserManagementPageState extends ConsumerState<UserManagementPage> {
 
                   return Column(
                     children: [
-                      ...paginated.users
-                          .map((user) => Padding(
-                                padding: const EdgeInsets.only(bottom: 16),
-                                child: _UserCard(user: user),
-                              ))
-                          .toList(),
+                      Card(
+                        clipBehavior: Clip.antiAlias,
+                        child: Column(
+                          children: [
+                            const _UsersTableHeader(),
+                            const Divider(height: 1),
+                            for (var i = 0; i < paginated.users.length; i++) ...[
+                              _UserRow(user: paginated.users[i]),
+                              if (i != paginated.users.length - 1)
+                                const Divider(height: 1),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
                       _PaginationControls(
                         pagination: paginated,
                         onPageChanged: _changePage,
@@ -317,38 +324,106 @@ class _PaginationControls extends StatelessWidget {
   }
 }
 
-class _UserCard extends ConsumerStatefulWidget {
-  const _UserCard({required this.user});
+class _UsersTableHeader extends StatelessWidget {
+  const _UsersTableHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final style = theme.textTheme.labelLarge?.copyWith(
+      fontWeight: FontWeight.w600,
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+
+    return Container(
+      color: theme.colorScheme.surfaceVariant.withOpacity(0.6),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Expanded(flex: 3, child: Text('Nombre', style: style)),
+          Expanded(flex: 3, child: Text('Email', style: style)),
+          Expanded(flex: 2, child: Text('Perfil', style: style)),
+          Expanded(flex: 2, child: Text('Club', style: style)),
+          SizedBox(
+            width: 170,
+            child: Text(
+              'Restablecer clave',
+              style: style,
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UserRow extends ConsumerStatefulWidget {
+  const _UserRow({required this.user});
 
   final ManagedUser user;
 
   @override
-  ConsumerState<_UserCard> createState() => _UserCardState();
+  ConsumerState<_UserRow> createState() => _UserRowState();
 }
 
-class _UserCardState extends ConsumerState<_UserCard> {
+class _UserRowState extends ConsumerState<_UserRow> {
   bool _isSendingReset = false;
-  bool _isAssigning = false;
+  bool _isUpdatingRole = false;
   bool _isUpdatingClub = false;
   int? _selectedClubId;
-  final Set<int> _removingRoleIds = {};
+  String? _selectedRoleKey;
+  int? _currentRoleAssignmentId;
 
   @override
   void initState() {
     super.initState();
     _selectedClubId = widget.user.club?.id;
+    _selectedRoleKey = widget.user.primaryRole?.roleKey;
+    _currentRoleAssignmentId = widget.user.primaryRole?.assignmentId;
   }
 
   @override
-  void didUpdateWidget(covariant _UserCard oldWidget) {
+  void didUpdateWidget(covariant _UserRow oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.user.id != widget.user.id ||
         oldWidget.user.club?.id != widget.user.club?.id) {
       _selectedClubId = widget.user.club?.id;
     }
+    final oldRoleKey = oldWidget.user.primaryRole?.roleKey;
+    final newRoleKey = widget.user.primaryRole?.roleKey;
+    if (oldWidget.user.id != widget.user.id || oldRoleKey != newRoleKey) {
+      _selectedRoleKey = newRoleKey;
+      _currentRoleAssignmentId = widget.user.primaryRole?.assignmentId;
+    }
   }
 
-  Future<void> _sendPasswordReset() async {
+  Future<bool> _showConfirmationDialog({
+    required String title,
+    required String message,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Confirmar'),
+          ),
+        ],
+      ),
+    );
+
+    return result == true;
+  }
+
+  Future<void> _handlePasswordReset() async {
     if (_isSendingReset) {
       return;
     }
@@ -375,149 +450,24 @@ class _UserCardState extends ConsumerState<_UserCard> {
     }
   }
 
-  Future<void> _assignProfile() async {
-    if (_isAssigning) {
+  Future<void> _handleClubChange(int? clubId) async {
+    if (_isUpdatingClub || clubId == _selectedClubId) {
       return;
     }
-    setState(() => _isAssigning = true);
-    try {
-      final roles = await ref.read(rolesCatalogProvider.future);
-      final assignedKeys = widget.user.roles.map((role) => role.roleKey).toSet();
-      final available = roles.where((role) => !assignedKeys.contains(role.key)).toList();
-      if (available.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Este usuario ya tiene asignados todos los perfiles disponibles.')),
-          );
-        }
-        return;
-      }
 
-      final selected = await showDialog<RoleSummary?>(
-        context: context,
-        builder: (context) {
-          RoleSummary? current = available.first;
-          return StatefulBuilder(
-            builder: (context, setState) {
-              return AlertDialog(
-                title: const Text('Asignar perfil'),
-                content: DropdownButtonFormField<RoleSummary>(
-                  value: current,
-                  items: [
-                    for (final role in available)
-                      DropdownMenuItem<RoleSummary>(
-                        value: role,
-                        child: Text(role.name),
-                      )
-                  ],
-                  decoration: const InputDecoration(
-                    labelText: 'Perfil',
-                    border: OutlineInputBorder(),
-                  ),
-                  onChanged: (value) => setState(() => current = value),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('Cancelar'),
-                  ),
-                  FilledButton(
-                    onPressed: current == null
-                        ? null
-                        : () => Navigator.of(context).pop(current),
-                    child: const Text('Asignar'),
-                  ),
-                ],
-              );
-            },
-          );
-        },
-      );
-
-      if (!mounted || selected == null) {
-        return;
-      }
-
-      await ref.read(apiClientProvider).post(
-        '/users/${widget.user.id}/roles',
-        data: {'roleKey': selected.key},
-      );
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Se asignó el perfil "${selected.name}".')),
-      );
-      ref.invalidate(usersProvider);
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo asignar el perfil: $error')),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isAssigning = false);
-      }
-    }
-  }
-
-  Future<void> _removeRole(ManagedUserRole role) async {
-    if (_removingRoleIds.contains(role.assignmentId)) {
-      return;
-    }
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Quitar perfil'),
-        content: Text('¿Deseas quitar el perfil "${role.roleName}" de este usuario?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Quitar'),
-          )
-        ],
-      ),
+    final confirmed = await _showConfirmationDialog(
+      title: 'Actualizar club',
+      message: clubId == null
+          ? '¿Deseas quitar el club asociado de este usuario?'
+          : '¿Deseas asociar este usuario al club seleccionado?',
     );
 
-    if (confirm != true) {
+    if (!confirmed) {
+      setState(() {});
       return;
     }
 
-    setState(() => _removingRoleIds.add(role.assignmentId));
-    try {
-      await ref.read(apiClientProvider).delete('/users/roles/${role.assignmentId}');
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Se quitó el perfil "${role.roleName}".')),
-      );
-      ref.invalidate(usersProvider);
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo quitar el perfil: $error')),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _removingRoleIds.remove(role.assignmentId));
-      }
-    }
-  }
-
-  Future<void> _updateClub(int? clubId) async {
-    if (_isUpdatingClub || _selectedClubId == clubId) {
-      return;
-    }
-
+    final previousClubId = _selectedClubId;
     setState(() {
       _selectedClubId = clubId;
       _isUpdatingClub = true;
@@ -546,7 +496,7 @@ class _UserCardState extends ConsumerState<_UserCard> {
         SnackBar(content: Text('No se pudo actualizar el club asociado: $error')),
       );
       setState(() {
-        _selectedClubId = widget.user.club?.id;
+        _selectedClubId = previousClubId;
       });
     } finally {
       if (mounted) {
@@ -555,164 +505,248 @@ class _UserCardState extends ConsumerState<_UserCard> {
     }
   }
 
+  Future<void> _handleRoleChange(String? roleKey) async {
+    if (_isUpdatingRole || roleKey == _selectedRoleKey) {
+      return;
+    }
+
+    final confirmed = await _showConfirmationDialog(
+      title: 'Actualizar perfil',
+      message: roleKey == null
+          ? '¿Deseas quitar el perfil asignado a este usuario?'
+          : '¿Deseas asignar el perfil seleccionado a este usuario?',
+    );
+
+    if (!confirmed) {
+      setState(() {});
+      return;
+    }
+
+    final previousRoleKey = _selectedRoleKey;
+    final previousAssignmentId = _currentRoleAssignmentId;
+
+    final isDifferent = previousRoleKey != roleKey;
+
+    setState(() {
+      _selectedRoleKey = roleKey;
+      _isUpdatingRole = true;
+      if (isDifferent) {
+        _currentRoleAssignmentId = null;
+      }
+    });
+
+    try {
+      final client = ref.read(apiClientProvider);
+
+      if (previousAssignmentId != null && previousRoleKey != roleKey) {
+        await client.delete('/users/roles/$previousAssignmentId');
+      }
+
+      if (roleKey != null) {
+        await client.post(
+          '/users/${widget.user.id}/roles',
+          data: {'roleKey': roleKey},
+        );
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            roleKey == null ? 'Se quitó el perfil asignado.' : 'Se actualizó el perfil asignado.',
+          ),
+        ),
+      );
+      ref.invalidate(usersProvider);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo actualizar el perfil: $error')),
+      );
+      setState(() {
+        _selectedRoleKey = previousRoleKey;
+        _currentRoleAssignmentId = previousAssignmentId;
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isUpdatingRole = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final dateFormat = DateFormat.yMMMMd('es');
-    final user = widget.user;
+    final rolesAsync = ref.watch(rolesCatalogProvider);
     final clubsAsync = ref.watch(clubsCatalogProvider);
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        user.fullName,
-                        style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 4),
-                      SelectableText(
-                        user.email,
-                        style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.primary),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Registrado el ${dateFormat.format(user.createdAt)}',
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                      if (user.language != null && user.language!.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          'Idioma preferido: ${user.language}',
-                          style: theme.textTheme.bodyMedium,
-                        ),
-                      ],
-                      const SizedBox(height: 12),
-                      clubsAsync.when(
-                        data: (clubs) {
-                          final items = <DropdownMenuItem<int?>>[
-                            const DropdownMenuItem<int?>(
-                              value: null,
-                              child: Text('Sin club asociado'),
-                            ),
-                            ...clubs.map(
-                              (club) => DropdownMenuItem<int?>(
-                                value: club.id,
-                                child: Text(club.name),
-                              ),
-                            ),
-                          ];
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              DropdownButtonFormField<int?>(
-                                value: _selectedClubId,
-                                decoration: const InputDecoration(
-                                  labelText: 'Club asociado',
-                                  helperText: 'Opcional',
-                                  border: OutlineInputBorder(),
-                                ),
-                                items: items,
-                                onChanged: _isUpdatingClub
-                                    ? null
-                                    : (value) {
-                                        _updateClub(value);
-                                      },
-                              ),
-                              if (_isUpdatingClub)
-                                const Padding(
-                                  padding: EdgeInsets.only(top: 8),
-                                  child: LinearProgressIndicator(),
-                                ),
-                            ],
-                          );
-                        },
-                        loading: () => const Padding(
-                          padding: EdgeInsets.only(top: 4),
-                          child: LinearProgressIndicator(),
-                        ),
-                        error: (error, stackTrace) => Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            'No se pudieron cargar los clubes: $error',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.error,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            flex: 3,
+            child: Text(
+              widget.user.fullName,
+              style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: SelectableText(
+              widget.user.email,
+              style: theme.textTheme.bodyMedium,
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: rolesAsync.when(
+              data: (roles) {
+                final items = <DropdownMenuItem<String?>>[
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('Sin perfil'),
                   ),
-                ),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  alignment: WrapAlignment.end,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: _isSendingReset ? null : _sendPasswordReset,
-                      icon: _isSendingReset
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.lock_reset),
-                      label: Text(_isSendingReset ? 'Enviando...' : 'Enviar enlace de restablecimiento'),
+                  ...roles.map(
+                    (role) => DropdownMenuItem<String?>(
+                      value: role.key,
+                      child: Text(role.name),
                     ),
+                  ),
+                ];
+                return Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String?>(
+                          isExpanded: true,
+                          value: _selectedRoleKey,
+                          items: items,
+                          onChanged: _isUpdatingRole
+                              ? null
+                              : (value) {
+                                  unawaited(_handleRoleChange(value));
+                                },
+                        ),
+                      ),
+                    ),
+                    if (_isUpdatingRole)
+                      const Padding(
+                        padding: EdgeInsets.only(left: 8),
+                        child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
                   ],
-                )
-              ],
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Perfiles asignados',
-              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            if (user.roles.isEmpty)
-              Text(
-                'Este usuario aún no tiene perfiles asignados.',
-                style: theme.textTheme.bodyMedium,
-              )
-            else
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final role in user.roles)
-                    InputChip(
-                      label: Text(role.displayName),
-                      avatar: const Icon(Icons.badge_outlined, size: 18),
-                      onDeleted: _removingRoleIds.contains(role.assignmentId)
-                          ? null
-                          : () => _removeRole(role),
-                    )
-                ],
+                );
+              },
+              loading: () => const Align(
+                alignment: Alignment.centerLeft,
+                child: SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
               ),
-            const SizedBox(height: 12),
-            TextButton.icon(
-              onPressed: _isAssigning ? null : _assignProfile,
-              icon: _isAssigning
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.person_add_alt),
-              label: Text(_isAssigning ? 'Asignando...' : 'Asignar perfil'),
+              error: (error, stackTrace) => Text(
+                'Error al cargar perfiles',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
+              ),
             ),
-          ],
-        ),
+          ),
+          Expanded(
+            flex: 2,
+            child: clubsAsync.when(
+              data: (clubs) {
+                final items = <DropdownMenuItem<int?>>[
+                  const DropdownMenuItem<int?>(
+                    value: null,
+                    child: Text('Sin club'),
+                  ),
+                  ...clubs.map(
+                    (club) => DropdownMenuItem<int?>(
+                      value: club.id,
+                      child: Text(club.name),
+                    ),
+                  ),
+                ];
+                return Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<int?>(
+                          isExpanded: true,
+                          value: _selectedClubId,
+                          items: items,
+                          onChanged: _isUpdatingClub
+                              ? null
+                              : (value) {
+                                  unawaited(_handleClubChange(value));
+                                },
+                        ),
+                      ),
+                    ),
+                    if (_isUpdatingClub)
+                      const Padding(
+                        padding: EdgeInsets.only(left: 8),
+                        child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                  ],
+                );
+              },
+              loading: () => const Align(
+                alignment: Alignment.centerLeft,
+                child: SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+              error: (error, stackTrace) => Text(
+                'Error al cargar clubes',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 170,
+            child: Align(
+              alignment: Alignment.center,
+              child: TextButton.icon(
+                onPressed: _isSendingReset
+                    ? null
+                    : () {
+                        unawaited(_handlePasswordReset());
+                      },
+                icon: _isSendingReset
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.lock_reset),
+                label: Text(_isSendingReset ? 'Enviando...' : 'Restablecer'),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -807,6 +841,13 @@ class ManagedUser {
       return email;
     }
     return pieces.join(' ');
+  }
+
+  ManagedUserRole? get primaryRole {
+    if (roles.isEmpty) {
+      return null;
+    }
+    return roles.first;
   }
 }
 
