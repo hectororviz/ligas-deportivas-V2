@@ -316,6 +316,26 @@ class AuthUser {
         .toSet();
     return leagueIds;
   }
+
+  Set<int>? allowedClubsFor({
+    required String module,
+    required String action,
+  }) {
+    final matching = permissions.where(
+      (grant) => grant.module == module && grant.matchesAction(action),
+    );
+    if (matching.isEmpty) {
+      return null;
+    }
+    if (matching.any((grant) => grant.scope == PermissionScope.global)) {
+      return null;
+    }
+    final clubIds = matching
+        .where((grant) => grant.scope == PermissionScope.club)
+        .expand((grant) => grant.clubs ?? const <int>[])
+        .toSet();
+    return clubIds;
+  }
 }
 
 class PermissionGrant {
