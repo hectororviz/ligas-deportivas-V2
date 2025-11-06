@@ -43,6 +43,11 @@ export async function seedBaseData(prisma: PrismaClient) {
     ensurePermission(module, Action.VIEW, Scope.CATEGORIA);
   });
 
+  // Needed for Delegate/Coach role assignments using viewClub(JUGADORES/PLANTELES)
+  [Module.JUGADORES, Module.PLANTELES].forEach((module) => {
+    ensurePermission(module, Action.VIEW, Scope.CLUB);
+  });
+
   const permissions = await Promise.all(
     Array.from(permissionsData.values()).map((permission) =>
       prisma.permission.upsert({
