@@ -74,8 +74,11 @@ services:
       DATABASE_URL: postgres://postgres:postgres@db:5432/ligas
       JWT_ACCESS_SECRET: change-me-access
       JWT_REFRESH_SECRET: change-me-refresh
-      SMTP_HOST: mailhog
-      SMTP_PORT: 1025
+      SMTP_HOST: ${SMTP_HOST:-mailhog}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@ligas.local}
     depends_on:
       - db
     ports:
@@ -129,8 +132,11 @@ services:
       DATABASE_URL: postgres://postgres:postgres@db:5432/ligas
       JWT_ACCESS_SECRET: change-me-access
       JWT_REFRESH_SECRET: change-me-refresh
-      SMTP_HOST: mailhog
-      SMTP_PORT: 1025
+      SMTP_HOST: ${SMTP_HOST:-mailhog}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@ligas.local}
     depends_on:
       - db
     ports:
@@ -151,6 +157,8 @@ volumes:
 ```
 
 > **Nota:** si ya tienes una instancia SMTP real, puedes retirar el servicio `mailhog` y ajustar `SMTP_*` con tus credenciales.
+> Puedes definirlas como variables de entorno al invocar `docker compose` o colocarlas en un archivo `.env` junto a los manifests en `infra/`.
+> Los campos `SMTP_SECURE`, `SMTP_REQUIRE_TLS`, `SMTP_IGNORE_TLS` y `SMTP_TLS_REJECT_UNAUTHORIZED` permiten afinar el handshake TLS cuando usas un proveedor externo.
 
 ## 5. Ejecución
 

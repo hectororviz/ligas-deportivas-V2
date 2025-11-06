@@ -11,10 +11,22 @@ CREATE TYPE "Action" AS ENUM ('VIEW', 'CREATE', 'UPDATE', 'DELETE', 'MANAGE');
 CREATE TYPE "Scope" AS ENUM ('GLOBAL', 'LIGA', 'CLUB', 'CATEGORIA');
 
 -- CreateEnum
+CREATE TYPE "Gender" AS ENUM ('MASCULINO', 'FEMENINO', 'MIXTO');
+
+-- CreateEnum
 CREATE TYPE "TournamentChampionMode" AS ENUM ('ROUND_AND_ANNUAL', 'GLOBAL');
 
 -- CreateEnum
+CREATE TYPE "ZoneStatus" AS ENUM ('OPEN', 'IN_PROGRESS', 'PLAYING', 'FINISHED');
+
+-- CreateEnum
+CREATE TYPE "GameDay" AS ENUM ('DOMINGO', 'LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES', 'SABADO');
+
+-- CreateEnum
 CREATE TYPE "MatchStatus" AS ENUM ('PROGRAMMED', 'PENDING', 'FINISHED');
+
+-- CreateEnum
+CREATE TYPE "MatchdayStatus" AS ENUM ('PENDING', 'IN_PROGRESS', 'INCOMPLETE', 'PLAYED');
 
 -- CreateEnum
 CREATE TYPE "Round" AS ENUM ('FIRST', 'SECOND');
@@ -25,6 +37,7 @@ CREATE TABLE "League" (
     "name" TEXT NOT NULL,
     "slug" TEXT NOT NULL,
     "colorHex" TEXT NOT NULL DEFAULT '#0057b8',
+    "gameDay" "GameDay" NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -37,9 +50,14 @@ CREATE TABLE "Tournament" (
     "leagueId" INTEGER NOT NULL,
     "name" TEXT NOT NULL,
     "year" INTEGER NOT NULL,
+    "gender" "Gender" NOT NULL DEFAULT 'MIXTO',
+    "pointsWin" INTEGER NOT NULL DEFAULT 3,
+    "pointsDraw" INTEGER NOT NULL DEFAULT 1,
+    "pointsLoss" INTEGER NOT NULL DEFAULT 0,
     "championMode" "TournamentChampionMode" NOT NULL DEFAULT 'GLOBAL',
     "startDate" TIMESTAMP(3),
     "endDate" TIMESTAMP(3),
+    "fixtureLockedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -51,6 +69,9 @@ CREATE TABLE "Zone" (
     "id" SERIAL NOT NULL,
     "tournamentId" INTEGER NOT NULL,
     "name" TEXT NOT NULL,
+    "status" "ZoneStatus" NOT NULL DEFAULT 'OPEN',
+    "lockedAt" TIMESTAMP(3),
+    "fixtureSeed" INTEGER,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -66,10 +87,28 @@ CREATE TABLE "Club" (
     "leagueId" INTEGER,
     "primaryColor" TEXT,
     "secondaryColor" TEXT,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "logoKey" TEXT,
+    "logoUrl" TEXT,
+    "instagramUrl" TEXT,
+    "facebookUrl" TEXT,
+    "latitude" DECIMAL(11,8),
+    "longitude" DECIMAL(11,8),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "Club_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SiteIdentity" (
+    "id" INTEGER NOT NULL DEFAULT 1,
+    "title" TEXT NOT NULL DEFAULT 'Ligas Deportivas',
+    "iconKey" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "SiteIdentity_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -87,7 +126,13 @@ CREATE TABLE "ClubZone" (
 CREATE TABLE "Category" (
     "id" SERIAL NOT NULL,
     "name" TEXT NOT NULL,
-    "birthYear" INTEGER NOT NULL,
+    "birthYearMin" INTEGER NOT NULL,
+    "birthYearMax" INTEGER NOT NULL,
+    "gender" "Gender" NOT NULL,
+    "minPlayers" INTEGER NOT NULL DEFAULT 7,
+    "mandatory" BOOLEAN NOT NULL DEFAULT true,
+    "promotional" BOOLEAN NOT NULL DEFAULT false,
+    "active" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -99,10 +144,26 @@ CREATE TABLE "TournamentCategory" (
     "id" SERIAL NOT NULL,
     "tournamentId" INTEGER NOT NULL,
     "categoryId" INTEGER NOT NULL,
+    "enabled" BOOLEAN NOT NULL DEFAULT false,
+    "kickoffTime" TEXT,
+    "countsForGeneral" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "TournamentCategory_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Team" (
+    "id" SERIAL NOT NULL,
+    "clubId" INTEGER NOT NULL,
+    "tournamentCategoryId" INTEGER NOT NULL,
+    "publicName" TEXT NOT NULL,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Team_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -125,6 +186,7 @@ CREATE TABLE "Player" (
     "lastName" TEXT NOT NULL,
     "birthDate" TIMESTAMP(3) NOT NULL,
     "dni" TEXT NOT NULL,
+    "gender" "Gender" NOT NULL DEFAULT 'MASCULINO',
     "active" BOOLEAN NOT NULL DEFAULT true,
     "addressStreet" TEXT,
     "addressNumber" TEXT,
@@ -167,10 +229,24 @@ CREATE TABLE "Match" (
 );
 
 -- CreateTable
+CREATE TABLE "ZoneMatchday" (
+    "id" SERIAL NOT NULL,
+    "zoneId" INTEGER NOT NULL,
+    "matchday" INTEGER NOT NULL,
+    "status" "MatchdayStatus" NOT NULL DEFAULT 'PENDING',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ZoneMatchday_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "MatchCategory" (
     "id" SERIAL NOT NULL,
     "matchId" INTEGER NOT NULL,
     "tournamentCategoryId" INTEGER NOT NULL,
+    "kickoffTime" TEXT,
+    "isPromocional" BOOLEAN NOT NULL DEFAULT false,
     "homeScore" INTEGER NOT NULL DEFAULT 0,
     "awayScore" INTEGER NOT NULL DEFAULT 0,
     "closedAt" TIMESTAMP(3),
@@ -234,6 +310,11 @@ CREATE TABLE "User" (
     "firstName" TEXT NOT NULL,
     "lastName" TEXT NOT NULL,
     "emailVerifiedAt" TIMESTAMP(3),
+    "language" TEXT,
+    "avatarHash" TEXT,
+    "avatarUpdatedAt" TIMESTAMP(3),
+    "avatarMime" TEXT,
+    "clubId" INTEGER,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -323,6 +404,32 @@ CREATE TABLE "PasswordResetToken" (
 );
 
 -- CreateTable
+CREATE TABLE "PasswordChangeRequest" (
+    "id" SERIAL NOT NULL,
+    "userId" INTEGER NOT NULL,
+    "token" TEXT NOT NULL,
+    "newPassword" TEXT NOT NULL,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "confirmedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "PasswordChangeRequest_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "EmailChangeRequest" (
+    "id" SERIAL NOT NULL,
+    "userId" INTEGER NOT NULL,
+    "newEmail" TEXT NOT NULL,
+    "token" TEXT NOT NULL,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "confirmedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "EmailChangeRequest_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "CategoryStanding" (
     "id" SERIAL NOT NULL,
     "zoneId" INTEGER NOT NULL,
@@ -362,22 +469,31 @@ CREATE UNIQUE INDEX "Zone_tournamentId_name_key" ON "Zone"("tournamentId", "name
 CREATE UNIQUE INDEX "Club_slug_key" ON "Club"("slug");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Player_dni_key" ON "Player"("dni");
-
--- CreateIndex
 CREATE UNIQUE INDEX "ClubZone_clubId_zoneId_key" ON "ClubZone"("clubId", "zoneId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "ClubZone_zoneId_clubId_key" ON "ClubZone"("zoneId", "clubId");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "Category_name_key" ON "Category"("name");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "TournamentCategory_tournamentId_categoryId_key" ON "TournamentCategory"("tournamentId", "categoryId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Team_clubId_tournamentCategoryId_publicName_key" ON "Team"("clubId", "tournamentCategoryId", "publicName");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Roster_clubId_tournamentCategoryId_key" ON "Roster"("clubId", "tournamentCategoryId");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "Player_dni_key" ON "Player"("dni");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "RosterPlayer_rosterId_playerId_key" ON "RosterPlayer"("rosterId", "playerId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ZoneMatchday_zoneId_matchday_key" ON "ZoneMatchday"("zoneId", "matchday");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
@@ -389,6 +505,9 @@ CREATE UNIQUE INDEX "Role_key_key" ON "Role"("key");
 CREATE UNIQUE INDEX "Permission_module_action_scope_key" ON "Permission"("module", "action", "scope");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "UserRole_userId_roleId_leagueId_clubId_categoryId_key" ON "UserRole"("userId", "roleId", "leagueId", "clubId", "categoryId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "UserToken_token_key" ON "UserToken"("token");
 
 -- CreateIndex
@@ -396,6 +515,12 @@ CREATE UNIQUE INDEX "EmailVerificationToken_token_key" ON "EmailVerificationToke
 
 -- CreateIndex
 CREATE UNIQUE INDEX "PasswordResetToken_token_key" ON "PasswordResetToken"("token");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PasswordChangeRequest_token_key" ON "PasswordChangeRequest"("token");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "EmailChangeRequest_token_key" ON "EmailChangeRequest"("token");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "CategoryStanding_zoneId_tournamentCategoryId_clubId_key" ON "CategoryStanding"("zoneId", "tournamentCategoryId", "clubId");
@@ -420,6 +545,12 @@ ALTER TABLE "TournamentCategory" ADD CONSTRAINT "TournamentCategory_tournamentId
 
 -- AddForeignKey
 ALTER TABLE "TournamentCategory" ADD CONSTRAINT "TournamentCategory_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "Category"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Team" ADD CONSTRAINT "Team_clubId_fkey" FOREIGN KEY ("clubId") REFERENCES "Club"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Team" ADD CONSTRAINT "Team_tournamentCategoryId_fkey" FOREIGN KEY ("tournamentCategoryId") REFERENCES "TournamentCategory"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Roster" ADD CONSTRAINT "Roster_clubId_fkey" FOREIGN KEY ("clubId") REFERENCES "Club"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -447,6 +578,9 @@ ALTER TABLE "Match" ADD CONSTRAINT "Match_homeClubId_fkey" FOREIGN KEY ("homeClu
 
 -- AddForeignKey
 ALTER TABLE "Match" ADD CONSTRAINT "Match_awayClubId_fkey" FOREIGN KEY ("awayClubId") REFERENCES "Club"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ZoneMatchday" ADD CONSTRAINT "ZoneMatchday_zoneId_fkey" FOREIGN KEY ("zoneId") REFERENCES "Zone"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "MatchCategory" ADD CONSTRAINT "MatchCategory_matchId_fkey" FOREIGN KEY ("matchId") REFERENCES "Match"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -485,6 +619,9 @@ ALTER TABLE "MatchLog" ADD CONSTRAINT "MatchLog_matchId_fkey" FOREIGN KEY ("matc
 ALTER TABLE "MatchLog" ADD CONSTRAINT "MatchLog_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "User" ADD CONSTRAINT "User_clubId_fkey" FOREIGN KEY ("clubId") REFERENCES "Club"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "RolePermission" ADD CONSTRAINT "RolePermission_roleId_fkey" FOREIGN KEY ("roleId") REFERENCES "Role"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -513,6 +650,12 @@ ALTER TABLE "EmailVerificationToken" ADD CONSTRAINT "EmailVerificationToken_user
 
 -- AddForeignKey
 ALTER TABLE "PasswordResetToken" ADD CONSTRAINT "PasswordResetToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PasswordChangeRequest" ADD CONSTRAINT "PasswordChangeRequest_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "EmailChangeRequest" ADD CONSTRAINT "EmailChangeRequest_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "CategoryStanding" ADD CONSTRAINT "CategoryStanding_zoneId_fkey" FOREIGN KEY ("zoneId") REFERENCES "Zone"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

@@ -12,19 +12,28 @@ export class RolesController {
   constructor(private readonly accessControlService: AccessControlService) {}
 
   @Get()
-  @Permissions({ module: Module.ROLES, action: Action.VIEW })
+  @Permissions([
+    { module: Module.ROLES, action: Action.VIEW },
+    { module: Module.PERMISOS, action: Action.VIEW }
+  ])
   listRoles() {
     return this.accessControlService.listRoles();
   }
 
   @Get('permissions')
-  @Permissions({ module: Module.PERMISOS, action: Action.VIEW })
+  @Permissions([
+    { module: Module.PERMISOS, action: Action.VIEW },
+    { module: Module.ROLES, action: Action.VIEW }
+  ])
   listPermissions() {
     return this.accessControlService.listPermissions();
   }
 
   @Patch(':roleId/permissions')
-  @Permissions({ module: Module.PERMISOS, action: Action.MANAGE })
+  @Permissions([
+    { module: Module.PERMISOS, action: Action.MANAGE },
+    { module: Module.ROLES, action: Action.MANAGE }
+  ])
   updateRolePermissions(
     @Param('roleId', ParseIntPipe) roleId: number,
     @Body() dto: SetRolePermissionsDto

@@ -1,40 +1,60 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { PaginationQueryDto } from '../common/dto/pagination.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { AssignRoleDto } from './dto/assign-role.dto';
 import { AccessControlService } from '../rbac/access-control.service';
 import { RoleKey } from '@prisma/client';
+import { ListUsersQueryDto } from './dto/list-users-query.dto';
+import { MailService } from '../mail/mail.service';
+import { randomBytes } from 'crypto';
 
 @Injectable()
 export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly accessControlService: AccessControlService
+    private readonly accessControlService: AccessControlService,
+    private readonly mailService: MailService,
   ) {}
 
-  async findAll(pagination: PaginationQueryDto) {
-    const page = pagination.page ?? 1;
-    const pageSize = pagination.pageSize ?? 20;
+  async findAll(query: ListUsersQueryDto) {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 20;
     const skip = (page - 1) * pageSize;
+    const search = query.search?.trim();
+    const where = search
+      ? {
+          OR: [
+            { email: { contains: search, mode: 'insensitive' as const } },
+            { firstName: { contains: search, mode: 'insensitive' as const } },
+            { lastName: { contains: search, mode: 'insensitive' as const } },
+          ],
+        }
+      : undefined;
 
     const [total, users] = await this.prisma.$transaction([
-      this.prisma.user.count(),
+      this.prisma.user.count({ where }),
       this.prisma.user.findMany({
+        where,
         skip,
         take: pageSize,
         orderBy: { createdAt: 'desc' },
         include: {
+          club: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
           roles: {
             include: {
               role: true,
               league: true,
               club: true,
-              category: true
-            }
-          }
-        }
-      })
+              category: true,
+            },
+          },
+        },
+      }),
     ]);
 
     return {
@@ -42,8 +62,8 @@ export class UsersService {
       meta: {
         total,
         page,
-        pageSize
-      }
+        pageSize,
+      },
     };
   }
 
@@ -51,7 +71,7 @@ export class UsersService {
     await this.prisma.user.findUniqueOrThrow({ where: { id } });
     return this.prisma.user.update({
       where: { id },
-      data: dto
+      data: dto,
     });
   }
 
@@ -60,7 +80,7 @@ export class UsersService {
     return this.accessControlService.assignRoleToUser(userId, dto.roleKey as RoleKey, {
       leagueId: dto.leagueId,
       clubId: dto.clubId,
-      categoryId: dto.categoryId
+      categoryId: dto.categoryId,
     });
   }
 
@@ -70,6 +90,27 @@ export class UsersService {
       throw new NotFoundException('Asignación no encontrada');
     }
     await this.accessControlService.removeRoleFromUser(assignmentId);
+    return { success: true };
+  }
+
+  async sendPasswordReset(userId: number) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    const token = randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 60);
+
+    await this.prisma.passwordResetToken.create({
+      data: {
+        userId,
+        token,
+        expiresAt,
+      },
+    });
+
+    await this.mailService.sendPasswordReset(user.email, token, user.firstName);
     return { success: true };
   }
 }

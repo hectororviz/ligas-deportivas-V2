@@ -59,6 +59,25 @@ docs/      → Documentación técnica y funcional
    ```
    Todos los endpoints quedan disponibles bajo `http://localhost:3000/api/v1` y comparten tuberías globales de validación y CORS configurados para el frontend. ([backend/src/main.ts](backend/src/main.ts))
 
+### Correo SMTP sin Docker
+
+Si ejecutas el backend directamente desde Visual Studio Code o desde la raíz del repositorio (por ejemplo con `npm run start:dev --prefix backend`), NestJS ahora carga automáticamente el archivo `backend/.env` además de cualquier `.env` ubicado en la raíz. Aun así, necesitas reemplazar los valores de Mailhog por las credenciales reales del proveedor SMTP que vayas a usar.
+
+1. Genera una contraseña de aplicación en el proveedor (por ejemplo, en Gmail habilita la verificación en dos pasos y crea una contraseña de aplicación para SMTP).
+2. Edita `backend/.env` y configura el bloque **Email (SMTP)**, por ejemplo:
+   ```ini
+   SMTP_HOST=smtp.gmail.com
+   SMTP_PORT=465
+   SMTP_USER=tu_correo@gmail.com
+   SMTP_PASS=contraseña_de_aplicacion
+   SMTP_FROM="Tu Nombre <tu_correo@gmail.com>"
+   SMTP_SECURE=true
+   ```
+   También puedes usar STARTTLS en el puerto 587 con `SMTP_REQUIRE_TLS=true`, `SMTP_IGNORE_TLS=false` y `SMTP_TLS_REJECT_UNAUTHORIZED=true` según lo requiera tu proveedor.
+3. Reinicia el backend (`npm run start:dev`) para que NestJS reconstruya el transporte de correo con los nuevos valores.
+
+Si la API no puede conectarse al servidor SMTP, el panel te mostrará el error y los logs incluirán el host y puerto utilizados para ayudarte a diagnosticar la configuración.
+
 ### Scripts de calidad
 
 - `npm run lint` ejecuta ESLint sobre `src/`.

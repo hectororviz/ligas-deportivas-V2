@@ -10,6 +10,8 @@ import 'package:intl/intl.dart';
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
 import '../../categories/providers/categories_catalog_provider.dart';
+import '../../shared/models/club_summary.dart';
+import '../../shared/providers/clubs_catalog_provider.dart';
 import '../../shared/widgets/app_data_table_style.dart';
 import '../../shared/widgets/page_scaffold.dart';
 import '../../shared/widgets/table_filters_bar.dart';
@@ -55,20 +57,6 @@ final playersProvider = FutureProvider<PaginatedPlayers>((ref) async {
     }
     rethrow;
   }
-});
-
-final clubsCatalogProvider = FutureProvider<List<ClubSummary>>((ref) async {
-  final api = ref.read(apiClientProvider);
-  final response = await api.get<Map<String, dynamic>>('/clubs', queryParameters: {
-    'page': 1,
-    'pageSize': 200,
-    'status': 'active',
-  });
-  final json = response.data ?? {};
-  final paginated = PaginatedClubs.fromJson(json);
-  final clubs = [...paginated.clubs]
-    ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-  return clubs;
 });
 
 class PlayersPage extends ConsumerStatefulWidget {
@@ -2112,42 +2100,6 @@ class EmergencyContact {
   final String? name;
   final String? relationship;
   final String? phone;
-}
-
-class ClubSummary {
-  ClubSummary({required this.id, required this.name});
-
-  factory ClubSummary.fromJson(Map<String, dynamic> json) {
-    return ClubSummary(
-      id: json['id'] as int,
-      name: json['name'] as String,
-    );
-  }
-
-  final int id;
-  final String name;
-}
-
-class PaginatedClubs {
-  PaginatedClubs({required this.clubs, required this.total, required this.page,
-      required this.pageSize});
-
-  factory PaginatedClubs.fromJson(Map<String, dynamic> json) {
-    final data = (json['data'] as List<dynamic>? ?? [])
-        .map((item) => ClubSummary.fromJson(item as Map<String, dynamic>))
-        .toList();
-    return PaginatedClubs(
-      clubs: data,
-      total: json['total'] as int? ?? data.length,
-      page: json['page'] as int? ?? 1,
-      pageSize: json['pageSize'] as int? ?? data.length,
-    );
-  }
-
-  final List<ClubSummary> clubs;
-  final int total;
-  final int page;
-  final int pageSize;
 }
 
 DateTime? _parseDate(dynamic value) {
