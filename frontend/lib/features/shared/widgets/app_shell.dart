@@ -28,6 +28,7 @@ const _navigationItems = <NavigationItem>[
   NavigationItem(label: 'Zonas', icon: Icons.grid_view_outlined, route: '/zones'),
   NavigationItem(label: 'Fixture', icon: Icons.sports_soccer_outlined, route: '/fixtures'),
   NavigationItem(label: 'Tablas', icon: Icons.leaderboard_outlined, route: '/standings'),
+  NavigationItem(label: 'Usuarios', icon: Icons.manage_accounts_outlined, route: '/users'),
   NavigationItem(label: 'Configuración', icon: Icons.settings_outlined, route: '/settings'),
 ];
 

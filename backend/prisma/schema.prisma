@@ -109,24 +109,24 @@ model League {
 }
 
 model Tournament {
-  id           Int                    @id @default(autoincrement())
-  leagueId     Int
-  name         String
-  year         Int
-  gender       Gender                 @default(MIXTO)
-  pointsWin    Int                    @default(3)
-  pointsDraw   Int                    @default(1)
-  pointsLoss   Int                    @default(0)
-  championMode TournamentChampionMode @default(GLOBAL)
-  startDate    DateTime?
-  endDate      DateTime?
+  id              Int                    @id @default(autoincrement())
+  leagueId        Int
+  name            String
+  year            Int
+  gender          Gender                 @default(MIXTO)
+  pointsWin       Int                    @default(3)
+  pointsDraw      Int                    @default(1)
+  pointsLoss      Int                    @default(0)
+  championMode    TournamentChampionMode @default(GLOBAL)
+  startDate       DateTime?
+  endDate         DateTime?
   fixtureLockedAt DateTime?
-  createdAt    DateTime               @default(now())
-  updatedAt    DateTime               @updatedAt
-  league       League                 @relation(fields: [leagueId], references: [id])
-  zones        Zone[]
-  categories   TournamentCategory[]
-  matches      Match[]
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  league          League                 @relation(fields: [leagueId], references: [id])
+  zones           Zone[]
+  categories      TournamentCategory[]
+  matches         Match[]
 }
 
 model Zone {
@@ -173,6 +173,7 @@ model Club {
   otherGoals        OtherGoal[]
   goals             Goal[]
   userRoles         UserRole[]
+  users             User[]
   categoryStandings CategoryStanding[]
   teams             Team[]
 }
@@ -215,20 +216,20 @@ model Category {
 }
 
 model TournamentCategory {
-  id                Int                @id @default(autoincrement())
-  tournamentId      Int
-  categoryId        Int
-  enabled           Boolean            @default(false)
-  kickoffTime       String?
-  countsForGeneral  Boolean            @default(true)
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  tournament        Tournament         @relation(fields: [tournamentId], references: [id])
-  category          Category           @relation(fields: [categoryId], references: [id])
-  matches           MatchCategory[]
-  rosters           Roster[]
-  standings         CategoryStanding[]
-  teams             Team[]
+  id               Int                @id @default(autoincrement())
+  tournamentId     Int
+  categoryId       Int
+  enabled          Boolean            @default(false)
+  kickoffTime      String?
+  countsForGeneral Boolean            @default(true)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  tournament       Tournament         @relation(fields: [tournamentId], references: [id])
+  category         Category           @relation(fields: [categoryId], references: [id])
+  matches          MatchCategory[]
+  rosters          Roster[]
+  standings        CategoryStanding[]
+  teams            Team[]
 
   @@unique([tournamentId, categoryId])
 }
@@ -317,12 +318,12 @@ model Match {
 }
 
 model ZoneMatchday {
-  id        Int             @id @default(autoincrement())
+  id        Int            @id @default(autoincrement())
   zoneId    Int
   matchday  Int
-  status    MatchdayStatus  @default(PENDING)
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
+  status    MatchdayStatus @default(PENDING)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
 
   zone Zone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
 
@@ -401,6 +402,8 @@ model User {
   avatarHash      String?
   avatarUpdatedAt DateTime?
   avatarMime      String?
+  clubId          Int?
+  club            Club?                    @relation(fields: [clubId], references: [id])
   createdAt       DateTime                 @default(now())
   updatedAt       DateTime                 @updatedAt
   roles           UserRole[]
@@ -496,14 +499,14 @@ model PasswordResetToken {
 }
 
 model PasswordChangeRequest {
-  id             Int       @id @default(autoincrement())
-  userId         Int
-  token          String    @unique
-  newPassword    String
-  expiresAt      DateTime
-  confirmedAt    DateTime?
-  createdAt      DateTime  @default(now())
-  user           User      @relation(fields: [userId], references: [id])
+  id          Int       @id @default(autoincrement())
+  userId      Int
+  token       String    @unique
+  newPassword String
+  expiresAt   DateTime
+  confirmedAt DateTime?
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id])
 }
 
 model EmailChangeRequest {
