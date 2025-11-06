@@ -131,34 +131,67 @@ export async function seedBaseData(prisma: PrismaClient) {
     })),
   );
 
+  const viewGlobal = (module: Module) => ({
+    module,
+    action: Action.VIEW,
+    scope: Scope.GLOBAL,
+  });
+
+  const viewClub = (module: Module) => ({
+    module,
+    action: Action.VIEW,
+    scope: Scope.CLUB,
+  });
+
   await assignPermissions(RoleKey.COLLABORATOR, [
     { module: Module.RESULTADOS, action: Action.MANAGE, scope: Scope.GLOBAL },
     { module: Module.PARTIDOS, action: Action.MANAGE, scope: Scope.GLOBAL },
     { module: Module.FIXTURE, action: Action.MANAGE, scope: Scope.GLOBAL },
     { module: Module.PLANTELES, action: Action.MANAGE, scope: Scope.GLOBAL },
-    { module: Module.TABLAS, action: Action.VIEW, scope: Scope.GLOBAL },
-    { module: Module.CLUBES, action: Action.VIEW, scope: Scope.GLOBAL },
-    { module: Module.CATEGORIAS, action: Action.VIEW, scope: Scope.GLOBAL },
+    viewGlobal(Module.LIGAS),
+    viewGlobal(Module.TORNEOS),
+    viewGlobal(Module.ZONAS),
+    viewGlobal(Module.CLUBES),
+    viewGlobal(Module.CATEGORIAS),
+    viewGlobal(Module.JUGADORES),
+    viewGlobal(Module.FIXTURE),
+    viewGlobal(Module.PARTIDOS),
+    viewGlobal(Module.RESULTADOS),
+    viewGlobal(Module.TABLAS),
   ]);
 
   await assignPermissions(RoleKey.DELEGATE, [
-    { module: Module.RESULTADOS, action: Action.VIEW, scope: Scope.CLUB },
-    { module: Module.PARTIDOS, action: Action.VIEW, scope: Scope.CLUB },
-    { module: Module.FIXTURE, action: Action.VIEW, scope: Scope.CLUB },
-    { module: Module.TABLAS, action: Action.VIEW, scope: Scope.GLOBAL },
+    viewGlobal(Module.CLUBES),
+    viewGlobal(Module.CATEGORIAS),
+    viewGlobal(Module.TORNEOS),
+    viewGlobal(Module.ZONAS),
+    viewGlobal(Module.FIXTURE),
+    viewGlobal(Module.PARTIDOS),
+    viewGlobal(Module.RESULTADOS),
+    viewGlobal(Module.TABLAS),
+    viewClub(Module.JUGADORES),
+    viewClub(Module.PLANTELES),
   ]);
 
   await assignPermissions(RoleKey.COACH, [
-    { module: Module.JUGADORES, action: Action.VIEW, scope: Scope.CATEGORIA },
-    { module: Module.PLANTELES, action: Action.VIEW, scope: Scope.CATEGORIA },
-    { module: Module.RESULTADOS, action: Action.VIEW, scope: Scope.CATEGORIA },
-    { module: Module.FIXTURE, action: Action.VIEW, scope: Scope.CATEGORIA },
+    viewGlobal(Module.CLUBES),
+    viewGlobal(Module.CATEGORIAS),
+    viewGlobal(Module.TORNEOS),
+    viewGlobal(Module.ZONAS),
+    viewGlobal(Module.FIXTURE),
+    viewGlobal(Module.PARTIDOS),
+    viewGlobal(Module.RESULTADOS),
+    viewGlobal(Module.TABLAS),
+    viewClub(Module.JUGADORES),
+    viewClub(Module.PLANTELES),
   ]);
 
   await assignPermissions(RoleKey.USER, [
-    { module: Module.RESULTADOS, action: Action.VIEW, scope: Scope.GLOBAL },
-    { module: Module.FIXTURE, action: Action.VIEW, scope: Scope.GLOBAL },
-    { module: Module.TABLAS, action: Action.VIEW, scope: Scope.GLOBAL },
+    viewGlobal(Module.CLUBES),
+    viewGlobal(Module.FIXTURE),
+    viewGlobal(Module.PARTIDOS),
+    viewGlobal(Module.RESULTADOS),
+    viewGlobal(Module.TABLAS),
   ]);
 
   await prisma.siteIdentity.upsert({
