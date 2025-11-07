@@ -217,6 +217,8 @@ class AuthState {
   }
 }
 
+const _authUserClubUnset = Object();
+
 class AuthUser {
   const AuthUser({
     required this.id,
@@ -227,6 +229,7 @@ class AuthUser {
     required this.permissions,
     this.language,
     this.avatarUrls,
+    this.club,
   });
 
   factory AuthUser.fromJson(Map<String, dynamic> json) => AuthUser(
@@ -240,6 +243,9 @@ class AuthUser {
             .toList(),
         language: json['language'] as String?,
         avatarUrls: (json['avatar'] as Map<String, dynamic>?)?.map((key, value) => MapEntry(key, value as String)),
+        club: json['club'] is Map<String, dynamic>
+            ? AuthUserClub.fromJson(json['club'] as Map<String, dynamic>)
+            : null,
       );
 
   AuthUser copyWith({
@@ -248,6 +254,7 @@ class AuthUser {
     String? lastName,
     String? language,
     Map<String, String>? avatarUrls,
+    Object? club = _authUserClubUnset,
   }) {
     return AuthUser(
       id: id,
@@ -258,6 +265,7 @@ class AuthUser {
       permissions: permissions,
       language: language ?? this.language,
       avatarUrls: avatarUrls ?? this.avatarUrls,
+      club: club == _authUserClubUnset ? this.club : club as AuthUserClub?,
     );
   }
 
@@ -282,9 +290,22 @@ class AuthUser {
   final List<PermissionGrant> permissions;
   final String? language;
   final Map<String, String>? avatarUrls;
+  final AuthUserClub? club;
 
   String get fullName => '$firstName $lastName'.trim();
   String get initials => (firstName.isNotEmpty ? firstName[0] : '') + (lastName.isNotEmpty ? lastName[0] : '');
+  int? get clubId => club?.id;
+
+  bool hasRole(String role) => roles.contains(role);
+
+  bool hasAnyRole(Iterable<String> values) {
+    for (final role in values) {
+      if (roles.contains(role)) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   bool hasPermission({
     required String module,
@@ -336,6 +357,21 @@ class AuthUser {
         .toSet();
     return clubIds;
   }
+}
+
+class AuthUserClub {
+  const AuthUserClub({
+    required this.id,
+    required this.name,
+  });
+
+  factory AuthUserClub.fromJson(Map<String, dynamic> json) => AuthUserClub(
+        id: json['id'] as int,
+        name: json['name'] as String? ?? 'Club',
+      );
+
+  final int id;
+  final String name;
 }
 
 class PermissionGrant {

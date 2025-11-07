@@ -9,6 +9,11 @@ export interface PermissionGrant {
   categories?: number[];
 }
 
+export interface RequestUserClub {
+  id: number;
+  name: string;
+}
+
 export interface RequestUser {
   id: number;
   email: string;
@@ -20,4 +25,5 @@ export interface RequestUser {
   avatarMime?: string | null;
   roles: string[];
   permissions: PermissionGrant[];
+  club?: RequestUserClub | null;
 }

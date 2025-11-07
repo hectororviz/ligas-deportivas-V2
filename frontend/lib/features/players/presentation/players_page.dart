@@ -214,8 +214,13 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
     final canEdit =
         user?.hasPermission(module: _modulePlayers, action: _actionUpdate) ??
             false;
-    final restrictedClubIds =
+    final assignedClubId = user?.clubId;
+    final hasClubScopedRole = user?.hasAnyRole(const ['DELEGATE', 'COACH']) ?? false;
+    var restrictedClubIds =
         user?.allowedClubsFor(module: _modulePlayers, action: 'VIEW');
+    if (restrictedClubIds == null && hasClubScopedRole && assignedClubId != null) {
+      restrictedClubIds = {assignedClubId};
+    }
     final restrictToAssignedClubs = restrictedClubIds != null;
     final playersAsync = ref.watch(playersProvider);
     final filters = ref.watch(playersFiltersProvider);
