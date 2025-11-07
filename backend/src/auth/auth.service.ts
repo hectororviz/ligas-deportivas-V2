@@ -264,6 +264,12 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: {
+        club: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
         roles: {
           include: {
             league: true,
@@ -301,7 +307,13 @@ export class AuthService {
       avatarUpdatedAt: user.avatarUpdatedAt,
       avatarMime: user.avatarMime,
       roles,
-      permissions
+      permissions,
+      club: user.club
+        ? {
+            id: user.club.id,
+            name: user.club.name
+          }
+        : null
     };
   }
 
