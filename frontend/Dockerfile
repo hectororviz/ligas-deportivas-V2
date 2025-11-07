@@ -1,4 +1,4 @@
-FROM cirrusci/flutter:3.19.5 AS builder
+FROM cirrusci/flutter:stable AS builder
 WORKDIR /app
 COPY pubspec.yaml analysis_options.yaml ./
 RUN flutter pub get
