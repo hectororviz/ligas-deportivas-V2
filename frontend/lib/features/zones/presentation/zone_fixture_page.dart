@@ -531,7 +531,7 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
         ).map(
           (matchday) => _FixtureMatchdayCard(
             title: 'Fecha ${matchday.displayIndex}',
-            subtitle: matchday.round.label,
+            round: matchday.round,
             matches: matchday.matches,
             byeClubName: matchday.byeClubName,
             status: matchday.status,
@@ -636,7 +636,7 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
         ...matchdayCards.map(
           (matchday) => _FixtureMatchdayCard(
             title: 'Fecha ${matchday.displayIndex}',
-            subtitle: matchday.round.label,
+            round: matchday.round,
             matches: matchday.matches,
             byeClubName: matchday.byeClubName,
             status: matchday.status,
@@ -776,7 +776,7 @@ class ZoneStatusChip extends StatelessWidget {
 class _FixtureMatchdayCard extends StatelessWidget {
   const _FixtureMatchdayCard({
     required this.title,
-    required this.subtitle,
+    required this.round,
     required this.matches,
     required this.status,
     this.date,
@@ -791,7 +791,7 @@ class _FixtureMatchdayCard extends StatelessWidget {
   });
 
   final String title;
-  final String subtitle;
+  final FixtureRound round;
   final List<FixtureMatchRow> matches;
   final FixtureMatchdayStatus status;
   final DateTime? date;
@@ -807,6 +807,9 @@ class _FixtureMatchdayCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final baseTitleStyle = theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600);
+    final dateFormatter = DateFormat('dd/MM');
+    final dateLabel = date != null ? dateFormatter.format(date!) : 'Sin fecha';
     return Align(
       alignment: Alignment.center,
       child: ConstrainedBox(
@@ -814,41 +817,34 @@ class _FixtureMatchdayCard extends StatelessWidget {
         child: Card(
           margin: const EdgeInsets.only(bottom: 16),
           child: ExpansionTile(
-            tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            title: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            title: Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.center,
+                RichText(
+                  text: TextSpan(
+                    style: baseTitleStyle,
                     children: [
-                      Text(
-                        title,
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.bodySmall,
+                      TextSpan(text: '${round.shortLabel} - '),
+                      TextSpan(
+                        text: title,
+                        style: baseTitleStyle?.copyWith(fontWeight: FontWeight.w700),
                       ),
                     ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              _MatchdayDateField(
-                date: date,
-                canEdit: canEditDate,
-                isUpdating: isUpdatingDate,
-                onSelectDate: onDateSelected,
-                onClearDate: onClearDate,
-              ),
-              const SizedBox(width: 12),
-              _FixtureMatchdayStatusIndicator(status: status),
-              if (showFinalizeButton) ...[
-                const SizedBox(width: 12),
+                _MatchdayDateField(
+                  date: date,
+                  dateLabel: dateLabel,
+                  canEdit: canEditDate,
+                  isUpdating: isUpdatingDate,
+                  onSelectDate: onDateSelected,
+                  onClearDate: onClearDate,
+                ),
+                if (showFinalizeButton)
                   TextButton.icon(
                     onPressed: isFinalizing ? null : onFinalize,
                     icon: isFinalizing
@@ -860,7 +856,7 @@ class _FixtureMatchdayCard extends StatelessWidget {
                         : const Icon(Icons.flag_outlined),
                     label: const Text('Finalizar fecha'),
                   ),
-                ],
+                _FixtureMatchdayStatusIndicator(status: status),
               ],
             ),
             children: [
@@ -884,6 +880,7 @@ class _FixtureMatchdayCard extends StatelessWidget {
 class _MatchdayDateField extends StatelessWidget {
   const _MatchdayDateField({
     required this.date,
+    required this.dateLabel,
     required this.canEdit,
     required this.isUpdating,
     this.onSelectDate,
@@ -891,6 +888,7 @@ class _MatchdayDateField extends StatelessWidget {
   });
 
   final DateTime? date;
+  final String dateLabel;
   final bool canEdit;
   final bool isUpdating;
   final VoidCallback? onSelectDate;
@@ -899,55 +897,45 @@ class _MatchdayDateField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final formatter = DateFormat('dd/MM/yyyy');
-    final label = date != null ? formatter.format(date!) : 'Sin fecha';
+    final labelStyle = theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600);
 
-    return SizedBox(
-      width: 190,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    if (!canEdit) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            'Fecha',
-            style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
+          const Icon(Icons.event_outlined, size: 18),
+          const SizedBox(width: 6),
+          Text(dateLabel, style: labelStyle),
+        ],
+      );
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        OutlinedButton.icon(
+          onPressed: isUpdating ? null : onSelectDate,
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: canEdit ? onSelectDate : null,
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  ),
-                  icon: isUpdating
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.event_outlined),
-                  label: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      label,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
-              ),
-              if (canEdit && date != null) ...[
-                const SizedBox(width: 8),
-                IconButton(
-                  tooltip: 'Quitar fecha',
-                  onPressed: isUpdating ? null : onClearDate,
-                  icon: const Icon(Icons.clear),
-                ),
-              ],
-            ],
+          icon: isUpdating
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.event_outlined),
+          label: Text(dateLabel),
+        ),
+        if (date != null) ...[
+          const SizedBox(width: 6),
+          IconButton(
+            tooltip: 'Quitar fecha',
+            onPressed: isUpdating ? null : onClearDate,
+            icon: const Icon(Icons.clear),
           ),
         ],
-      ),
+      ],
     );
   }
 }
