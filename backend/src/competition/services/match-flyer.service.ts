@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../storage/storage.service';
 import { promises as fs } from 'fs';
@@ -6,7 +11,6 @@ import * as path from 'path';
 import * as dayjs from 'dayjs';
 import 'dayjs/locale/es';
 import { Match, Round } from '@prisma/client';
-import { Resvg } from '@resvg/resvg-js';
 
 dayjs.locale('es');
 
@@ -25,6 +29,9 @@ interface FlyerContext {
 
 @Injectable()
 export class MatchFlyerService {
+  private resvgModule?: Promise<typeof import('@resvg/resvg-js')>;
+  private sharpModule?: Promise<typeof import('sharp')>;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly storageService: StorageService,
@@ -77,30 +84,111 @@ export class MatchFlyerService {
     };
 
     const svg = this.buildSvg(context);
-    const rendered = await this.renderFlyer(svg);
 
-    return rendered;
+    try {
+      const rendered = await this.renderFlyer(svg);
+      return rendered;
+    } catch (error) {
+      if (error instanceof BadRequestException && this.isRendererUnavailable(error.message)) {
+        const fallbackRender = await this.renderWithSharp(svg);
+        if (fallbackRender) {
+          return fallbackRender;
+        }
+
+        throw new BadRequestException(
+          'No se pudo renderizar el flyer a PNG. Instala la dependencia "@resvg/resvg-js" o la alternativa "sharp".',
+        );
+      }
+
+      throw error;
+    }
   }
 
   private async renderFlyer(svg: string) {
-    const resvgModule = await this.loadResvg();
+    try {
+      const Resvg = await this.loadResvg();
+      const renderer = new Resvg(svg, { fitTo: { mode: 'original' } });
+      const image = renderer.render();
+      return { buffer: Buffer.from(image.asPng()), contentType: 'image/png', fileExtension: 'png' };
+    } catch (error) {
+      if (error instanceof BadRequestException && this.isRendererUnavailable(error.message)) {
+        const sharpRender = await this.renderWithSharp(svg);
+        if (sharpRender) {
+          return sharpRender;
+        }
 
-    if (!resvgModule) {
-      return { buffer: Buffer.from(svg), contentType: 'image/svg+xml', fileExtension: 'svg' };
+        throw new BadRequestException(
+          'No se pudo renderizar el flyer a PNG. Instala la dependencia "@resvg/resvg-js" o la alternativa "sharp".',
+        );
+      }
+
+      throw error;
     }
+  }
 
-    const renderer = new resvgModule.Resvg(svg, { fitTo: { mode: 'original' } });
-    const image = renderer.render();
-    return { buffer: Buffer.from(image.asPng()), contentType: 'image/png', fileExtension: 'png' };
+  private isRendererUnavailable(message?: string) {
+    if (!message) return false;
+    return message.includes('@resvg/resvg-js');
+  }
+
+  private async renderWithSharp(svg: string) {
+    try {
+      const sharp = await this.loadSharp();
+      const buffer = await sharp(Buffer.from(svg)).png().toBuffer();
+      return { buffer, contentType: 'image/png', fileExtension: 'png' };
+    } catch (error) {
+      if (error instanceof BadRequestException && this.isSharpUnavailable(error.message)) {
+        return null;
+      }
+
+      throw new InternalServerErrorException('No se pudo renderizar el flyer.');
+    }
   }
 
   private async loadResvg() {
-    try {
-      const mod = await import('@resvg/resvg-js');
-      return mod as { Resvg: new (svg: string, options?: unknown) => { render(): { asPng(): Uint8Array } } };
-    } catch (error) {
-      return null;
+    if (!this.resvgModule) {
+      this.resvgModule = import('@resvg/resvg-js');
     }
+
+    try {
+      const module = await this.resvgModule;
+      return module.Resvg;
+    } catch (error) {
+      this.resvgModule = undefined;
+      if (error instanceof Error && /Cannot find module/.test(error.message)) {
+        throw new BadRequestException(
+          'No se pudo cargar el renderizador de flyers. Verifica que la dependencia "@resvg/resvg-js" esté instalada.',
+        );
+      }
+
+      throw new InternalServerErrorException('No se pudo inicializar el renderizador de flyers.');
+    }
+  }
+
+  private async loadSharp() {
+    if (!this.sharpModule) {
+      this.sharpModule = import('sharp');
+    }
+
+    try {
+      const module = await this.sharpModule;
+      const sharpFn = (module as unknown as typeof import('sharp')).default || (module as unknown as any);
+      return sharpFn as unknown as typeof import('sharp');
+    } catch (error) {
+      this.sharpModule = undefined;
+      if (error instanceof Error && /Cannot find module/.test(error.message)) {
+        throw new BadRequestException(
+          'No se pudo cargar el renderizador de flyers. Verifica que la dependencia "sharp" esté instalada.',
+        );
+      }
+
+      throw new InternalServerErrorException('No se pudo inicializar el renderizador de flyers.');
+    }
+  }
+
+  private isSharpUnavailable(message?: string) {
+    if (!message) return false;
+    return message.includes('sharp');
   }
 
   private resolveZoneName(zoneName: string) {
@@ -265,6 +353,19 @@ export class MatchFlyerService {
         return 'image/svg+xml';
       default:
         return 'application/octet-stream';
+    }
+  }
+
+  private getFileExtensionFromMime(mimeType: string) {
+    switch (mimeType.toLowerCase()) {
+      case 'image/png':
+        return 'png';
+      case 'image/jpeg':
+        return 'jpg';
+      case 'image/svg+xml':
+        return 'svg';
+      default:
+        return 'bin';
     }
   }
 }
