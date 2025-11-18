@@ -22,6 +22,7 @@ import { TeamsService } from './services/teams.service';
 import { TeamsController } from './controllers/teams.controller';
 import { ZonesService } from './services/zones.service';
 import { ZonesController } from './controllers/zones.controller';
+import { MatchFlyerService } from './services/match-flyer.service';
 
 @Module({
   imports: [PrismaModule, StorageModule, AccessControlModule],
@@ -32,6 +33,7 @@ import { ZonesController } from './controllers/zones.controller';
     TournamentsService,
     FixtureService,
     MatchesService,
+    MatchFlyerService,
     StandingsService,
     PlayersService,
     TeamsService,
