@@ -89,7 +89,7 @@ export class MatchFlyerService {
       return rendered;
     } catch (error) {
       if (error instanceof BadRequestException && this.isRendererUnavailable(error.message)) {
-        return this.buildBaseFlyerResponse(flyerBase);
+        return this.buildSvgResponse(svg);
       }
 
       throw error;
@@ -108,13 +108,11 @@ export class MatchFlyerService {
     return message.includes('@resvg/resvg-js');
   }
 
-  private buildBaseFlyerResponse(baseImage: FlyerContext['baseImage']) {
-    const encoded = baseImage.dataUri.split(',')[1];
-    const buffer = Buffer.from(encoded, 'base64');
+  private buildSvgResponse(svg: string) {
     return {
-      buffer,
-      contentType: baseImage.mimeType,
-      fileExtension: this.getFileExtensionFromMime(baseImage.mimeType),
+      buffer: Buffer.from(svg, 'utf8'),
+      contentType: 'image/svg+xml',
+      fileExtension: 'svg',
     };
   }
 
