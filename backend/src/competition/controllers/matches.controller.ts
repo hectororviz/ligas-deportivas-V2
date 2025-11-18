@@ -71,10 +71,10 @@ export class MatchesController {
     @Param('matchId', ParseIntPipe) matchId: number,
     @Res() res: Response,
   ) {
-    const buffer = await this.matchFlyerService.generate(matchId);
-    res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Content-Disposition', `attachment; filename="flyer-${matchId}.png"`);
-    return res.send(buffer);
+    const flyer = await this.matchFlyerService.generate(matchId);
+    res.setHeader('Content-Type', flyer.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="flyer-${matchId}.${flyer.fileExtension}"`);
+    return res.send(flyer.buffer);
   }
 
   @Patch('matches/:matchId')

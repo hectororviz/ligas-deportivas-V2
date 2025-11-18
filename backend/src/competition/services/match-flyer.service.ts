@@ -30,7 +30,7 @@ export class MatchFlyerService {
     private readonly storageService: StorageService,
   ) {}
 
-  async generate(matchId: number): Promise<Buffer> {
+  async generate(matchId: number): Promise<{ buffer: Buffer; contentType: string; fileExtension: string }> {
     const [match, identity] = await Promise.all([
       this.prisma.match.findUnique({
         where: { id: matchId },
@@ -77,10 +77,30 @@ export class MatchFlyerService {
     };
 
     const svg = this.buildSvg(context);
-    return sharp(Buffer.from(svg))
-      .resize(1080, 1920, { fit: 'cover' })
-      .png({ quality: 100 })
-      .toBuffer();
+    const png = await this.tryRenderPng(svg);
+
+    if (png) {
+      return { buffer: png, contentType: 'image/png', fileExtension: 'png' };
+    }
+
+    return { buffer: Buffer.from(svg), contentType: 'image/svg+xml', fileExtension: 'svg' };
+  }
+
+  private async tryRenderPng(svg: string): Promise<Buffer | null> {
+    try {
+      const sharpModule = await import('sharp');
+      const sharp = (sharpModule as any).default ?? sharpModule;
+
+      return await sharp(Buffer.from(svg))
+        .resize(1080, 1920, { fit: 'cover' })
+        .png({ quality: 100 })
+        .toBuffer();
+    } catch (error) {
+      // Continue with the SVG fallback when sharp is not available in the environment.
+      // eslint-disable-next-line no-console
+      console.warn('PNG render skipped because sharp is unavailable:', error);
+      return null;
+    }
   }
 
   private resolveZoneName(zoneName: string) {
