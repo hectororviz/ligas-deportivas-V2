@@ -95,9 +95,7 @@ export class MatchFlyerService {
           return fallbackRender;
         }
 
-        throw new BadRequestException(
-          'No se pudo renderizar el flyer a PNG. Instala la dependencia "@resvg/resvg-js" o la alternativa "sharp".',
-        );
+        return this.buildSvgResponse(svg);
       }
 
       throw error;
@@ -117,9 +115,7 @@ export class MatchFlyerService {
           return sharpRender;
         }
 
-        throw new BadRequestException(
-          'No se pudo renderizar el flyer a PNG. Instala la dependencia "@resvg/resvg-js" o la alternativa "sharp".',
-        );
+        return this.buildSvgResponse(svg);
       }
 
       throw error;
