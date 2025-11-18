@@ -10,6 +10,7 @@ import { RecordMatchResultDto } from '../dto/record-match-result.dto';
 import { MatchStatus, MatchdayStatus } from '@prisma/client';
 import { StorageService } from '../../storage/storage.service';
 import { StandingsService } from '../../standings/standings.service';
+import { UpdateMatchdayDto } from '../dto/update-matchday.dto';
 
 @Injectable()
 export class MatchesService {
@@ -51,6 +52,7 @@ export class MatchesService {
           index === 0
             ? MatchdayStatus.IN_PROGRESS
             : MatchdayStatus.PENDING,
+        date: null,
         createdAt: new Date(),
         updatedAt: new Date(),
         id: 0
@@ -111,6 +113,26 @@ export class MatchesService {
         where: { zoneId },
         orderBy: { matchday: 'asc' }
       });
+    });
+  }
+
+  async updateMatchdayDate(zoneId: number, matchday: number, dto: UpdateMatchdayDto) {
+    const entry = await this.prisma.zoneMatchday.findUnique({
+      where: { zoneId_matchday: { zoneId, matchday } }
+    });
+
+    if (!entry) {
+      throw new NotFoundException('Fecha no encontrada para la zona indicada');
+    }
+
+    if (dto.date === undefined) {
+      return entry;
+    }
+
+    const parsedDate = dto.date ? new Date(dto.date) : null;
+    return this.prisma.zoneMatchday.update({
+      where: { zoneId_matchday: { zoneId, matchday } },
+      data: { date: parsedDate }
     });
   }
 
