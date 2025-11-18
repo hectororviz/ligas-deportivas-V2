@@ -259,18 +259,20 @@ extension ZoneMatchdayStatusX on ZoneMatchdayStatus {
 }
 
 class ZoneMatchdayState {
-  ZoneMatchdayState({required this.matchday, required this.status});
+  ZoneMatchdayState({required this.matchday, required this.status, this.date});
 
   factory ZoneMatchdayState.fromJson(Map<String, dynamic> json) {
     final statusValue = json['status'] as String? ?? 'PENDING';
     return ZoneMatchdayState(
       matchday: json['matchday'] as int? ?? 0,
       status: ZoneMatchdayStatusX.fromApi(statusValue),
+      date: json['date'] != null ? DateTime.tryParse(json['date'] as String) : null,
     );
   }
 
   final int matchday;
   final ZoneMatchdayStatus status;
+  final DateTime? date;
 }
 
 class ZoneMatchesData {
