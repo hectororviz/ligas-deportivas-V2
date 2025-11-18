@@ -531,7 +531,7 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
         ).map(
           (matchday) => _FixtureMatchdayCard(
             title: 'Fecha ${matchday.displayIndex}',
-            subtitle: matchday.round.label,
+            round: matchday.round,
             matches: matchday.matches,
             byeClubName: matchday.byeClubName,
             status: matchday.status,
@@ -636,7 +636,7 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
         ...matchdayCards.map(
           (matchday) => _FixtureMatchdayCard(
             title: 'Fecha ${matchday.displayIndex}',
-            subtitle: matchday.round.label,
+            round: matchday.round,
             matches: matchday.matches,
             byeClubName: matchday.byeClubName,
             status: matchday.status,
@@ -776,7 +776,7 @@ class ZoneStatusChip extends StatelessWidget {
 class _FixtureMatchdayCard extends StatelessWidget {
   const _FixtureMatchdayCard({
     required this.title,
-    required this.subtitle,
+    required this.round,
     required this.matches,
     required this.status,
     this.date,
@@ -791,7 +791,7 @@ class _FixtureMatchdayCard extends StatelessWidget {
   });
 
   final String title;
-  final String subtitle;
+  final FixtureRound round;
   final List<FixtureMatchRow> matches;
   final FixtureMatchdayStatus status;
   final DateTime? date;
@@ -807,6 +807,7 @@ class _FixtureMatchdayCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final baseTitleStyle = theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600);
     return Align(
       alignment: Alignment.center,
       child: ConstrainedBox(
@@ -814,54 +815,67 @@ class _FixtureMatchdayCard extends StatelessWidget {
         child: Card(
           margin: const EdgeInsets.only(bottom: 16),
           child: ExpansionTile(
-            tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             title: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        title,
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                      RichText(
+                        text: TextSpan(
+                          style: baseTitleStyle,
+                          children: [
+                            TextSpan(text: '${round.shortLabel} - '),
+                            TextSpan(
+                              text: title,
+                              style: baseTitleStyle?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        subtitle,
-                        textAlign: TextAlign.center,
+                        round.label,
                         style: theme.textTheme.bodySmall,
                       ),
                     ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              _MatchdayDateField(
-                date: date,
-                canEdit: canEditDate,
-                isUpdating: isUpdatingDate,
-                onSelectDate: onDateSelected,
-                onClearDate: onClearDate,
-              ),
-              const SizedBox(width: 12),
-              _FixtureMatchdayStatusIndicator(status: status),
-              if (showFinalizeButton) ...[
-                const SizedBox(width: 12),
-                  TextButton.icon(
-                    onPressed: isFinalizing ? null : onFinalize,
-                    icon: isFinalizing
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.flag_outlined),
-                    label: const Text('Finalizar fecha'),
                   ),
-                ],
+                ),
+                const SizedBox(width: 12),
+                _FixtureMatchdayStatusIndicator(status: status),
               ],
+            ),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  _MatchdayDateField(
+                    date: date,
+                    canEdit: canEditDate,
+                    isUpdating: isUpdatingDate,
+                    onSelectDate: onDateSelected,
+                    onClearDate: onClearDate,
+                  ),
+                  if (showFinalizeButton)
+                    TextButton.icon(
+                      onPressed: isFinalizing ? null : onFinalize,
+                      icon: isFinalizing
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.flag_outlined),
+                      label: const Text('Finalizar fecha'),
+                    ),
+                ],
+              ),
             ),
             children: [
               const Divider(height: 24),
@@ -899,7 +913,7 @@ class _MatchdayDateField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final formatter = DateFormat('dd/MM/yyyy');
+    final formatter = DateFormat('dd/MM');
     final label = date != null ? formatter.format(date!) : 'Sin fecha';
 
     return SizedBox(
