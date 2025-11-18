@@ -83,9 +83,17 @@ export class MatchFlyerService {
     };
 
     const svg = this.buildSvg(context);
-    const rendered = await this.renderFlyer(svg);
 
-    return rendered;
+    try {
+      const rendered = await this.renderFlyer(svg);
+      return rendered;
+    } catch (error) {
+      if (error instanceof BadRequestException && this.isRendererUnavailable(error.message)) {
+        return this.buildBaseFlyerResponse(flyerBase);
+      }
+
+      throw error;
+    }
   }
 
   private async renderFlyer(svg: string) {
@@ -93,6 +101,21 @@ export class MatchFlyerService {
     const renderer = new Resvg(svg, { fitTo: { mode: 'original' } });
     const image = renderer.render();
     return { buffer: Buffer.from(image.asPng()), contentType: 'image/png', fileExtension: 'png' };
+  }
+
+  private isRendererUnavailable(message?: string) {
+    if (!message) return false;
+    return message.includes('@resvg/resvg-js');
+  }
+
+  private buildBaseFlyerResponse(baseImage: FlyerContext['baseImage']) {
+    const encoded = baseImage.dataUri.split(',')[1];
+    const buffer = Buffer.from(encoded, 'base64');
+    return {
+      buffer,
+      contentType: baseImage.mimeType,
+      fileExtension: this.getFileExtensionFromMime(baseImage.mimeType),
+    };
   }
 
   private async loadResvg() {
@@ -277,6 +300,19 @@ export class MatchFlyerService {
         return 'image/svg+xml';
       default:
         return 'application/octet-stream';
+    }
+  }
+
+  private getFileExtensionFromMime(mimeType: string) {
+    switch (mimeType.toLowerCase()) {
+      case 'image/png':
+        return 'png';
+      case 'image/jpeg':
+        return 'jpg';
+      case 'image/svg+xml':
+        return 'svg';
+      default:
+        return 'bin';
     }
   }
 }
