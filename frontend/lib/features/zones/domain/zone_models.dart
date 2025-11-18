@@ -142,6 +142,7 @@ class ZoneTournament {
     required this.id,
     required this.name,
     required this.year,
+    required this.leagueId,
     required this.leagueName,
     required this.fixtureLocked,
   });
@@ -152,6 +153,7 @@ class ZoneTournament {
       id: json['id'] as int? ?? 0,
       name: json['name'] as String? ?? 'Torneo',
       year: json['year'] as int? ?? 0,
+      leagueId: league['id'] as int? ?? 0,
       leagueName: league['name'] as String? ?? 'Liga',
       fixtureLocked: (json['fixtureLockedAt'] as String?) != null,
     );
@@ -160,6 +162,7 @@ class ZoneTournament {
   final int id;
   final String name;
   final int year;
+  final int leagueId;
   final String leagueName;
   final bool fixtureLocked;
 }

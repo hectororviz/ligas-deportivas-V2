@@ -214,6 +214,14 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
     final canEdit =
         user?.hasPermission(module: _modulePlayers, action: _actionUpdate) ??
             false;
+    final assignedClubId = user?.clubId;
+    final hasClubScopedRole = user?.hasAnyRole(const ['DELEGATE', 'COACH']) ?? false;
+    var restrictedClubIds =
+        user?.allowedClubsFor(module: _modulePlayers, action: 'VIEW');
+    if (restrictedClubIds == null && hasClubScopedRole && assignedClubId != null) {
+      restrictedClubIds = {assignedClubId};
+    }
+    final restrictToAssignedClubs = restrictedClubIds != null;
     final playersAsync = ref.watch(playersProvider);
     final filters = ref.watch(playersFiltersProvider);
     final clubsAsync = ref.watch(clubsCatalogProvider);
@@ -311,6 +319,70 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
                       width: 240,
                       child: clubsAsync.when(
                         data: (clubs) {
+                          final notifier =
+                              ref.read(playersFiltersProvider.notifier);
+                          if (restrictToAssignedClubs) {
+                            final allowedIds =
+                                restrictedClubIds!.toList(growable: false);
+                            final allowedClubs = clubs
+                                .where(
+                                  (club) => allowedIds.contains(club.id),
+                                )
+                                .toList();
+
+                            if (allowedClubs.isEmpty) {
+                              if (filters.clubId != null) {
+                                WidgetsBinding.instance.addPostFrameCallback((_) {
+                                  notifier.setClubId(null);
+                                });
+                              }
+                              return const Text('Sin clubes asignados');
+                            }
+
+                            final hasMultipleAllowed = allowedClubs.length > 1;
+                            final validValues = <int?>{
+                              if (hasMultipleAllowed) null,
+                              ...allowedClubs.map((club) => club.id),
+                            };
+
+                            final desiredValue = validValues.contains(filters.clubId)
+                                ? filters.clubId
+                                : (hasMultipleAllowed
+                                    ? null
+                                    : allowedClubs.first.id);
+
+                            if (filters.clubId != desiredValue) {
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                notifier.setClubId(desiredValue);
+                              });
+                            }
+
+                            final items = [
+                              if (hasMultipleAllowed)
+                                const DropdownMenuItem<int?>(
+                                  value: null,
+                                  child: Text('Todos mis clubes'),
+                                ),
+                              ...allowedClubs.map(
+                                (club) => DropdownMenuItem<int?>(
+                                  value: club.id,
+                                  child: Text(club.name),
+                                ),
+                              ),
+                            ];
+
+                            return DropdownButtonHideUnderline(
+                              child: DropdownButton<int?>(
+                                value: desiredValue,
+                                isExpanded: true,
+                                items: items,
+                                onChanged: (value) {
+                                  notifier.setClubId(value);
+                                },
+                              ),
+                            );
+                          }
+
                           final items = [
                             const DropdownMenuItem<int?>(
                               value: _noClubFilterValue,
@@ -333,9 +405,7 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
                               isExpanded: true,
                               items: items,
                               onChanged: (value) {
-                                ref
-                                    .read(playersFiltersProvider.notifier)
-                                    .setClubId(value);
+                                notifier.setClubId(value);
                               },
                             ),
                           );

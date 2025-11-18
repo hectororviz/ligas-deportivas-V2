@@ -322,6 +322,7 @@ model ZoneMatchday {
   zoneId    Int
   matchday  Int
   status    MatchdayStatus @default(PENDING)
+  date      DateTime?
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
 

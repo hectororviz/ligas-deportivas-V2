@@ -1,0 +1,9 @@
+node_modules
+npm-debug.log*
+dist
+coverage
+.env
+storage
+Dockerfile
+.DS_Store
+*.tsbuildinfo

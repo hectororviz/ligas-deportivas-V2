@@ -20,6 +20,7 @@ import { RecordMatchResultDto } from '../dto/record-match-result.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequestUser } from '../../common/interfaces/request-user.interface';
+import { UpdateMatchdayDto } from '../dto/update-matchday.dto';
 
 @Controller()
 export class MatchesController {
@@ -38,6 +39,17 @@ export class MatchesController {
     @Param('matchday', ParseIntPipe) matchday: number
   ) {
     return this.matchesService.finalizeMatchday(zoneId, matchday);
+  }
+
+  @Patch('zones/:zoneId/matchdays/:matchday')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @Permissions({ module: Module.FIXTURE, action: Action.UPDATE })
+  updateMatchday(
+    @Param('zoneId', ParseIntPipe) zoneId: number,
+    @Param('matchday', ParseIntPipe) matchday: number,
+    @Body() dto: UpdateMatchdayDto
+  ) {
+    return this.matchesService.updateMatchdayDate(zoneId, matchday, dto);
   }
 
   @Get('matches/:matchId/categories/:categoryId/result')
