@@ -6,6 +6,7 @@ import * as path from 'path';
 import * as dayjs from 'dayjs';
 import 'dayjs/locale/es';
 import { Match, Round } from '@prisma/client';
+import * as sharp from 'sharp';
 
 dayjs.locale('es');
 
