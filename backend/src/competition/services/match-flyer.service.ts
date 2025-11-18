@@ -90,14 +90,12 @@ export class MatchFlyerService {
       return rendered;
     } catch (error) {
       if (error instanceof BadRequestException && this.isRendererUnavailable(error.message)) {
-        const fallbackRender = await this.renderWithSharp(svg);
+        const fallbackRender = await this.renderWithSharp(svg, 'jpeg');
         if (fallbackRender) {
           return fallbackRender;
         }
 
-        throw new BadRequestException(
-          'No se pudo renderizar el flyer a PNG. Instala la dependencia "@resvg/resvg-js" o la alternativa "sharp".',
-        );
+        return this.buildSvgResponse(svg);
       }
 
       throw error;
@@ -112,14 +110,12 @@ export class MatchFlyerService {
       return { buffer: Buffer.from(image.asPng()), contentType: 'image/png', fileExtension: 'png' };
     } catch (error) {
       if (error instanceof BadRequestException && this.isRendererUnavailable(error.message)) {
-        const sharpRender = await this.renderWithSharp(svg);
+        const sharpRender = await this.renderWithSharp(svg, 'jpeg');
         if (sharpRender) {
           return sharpRender;
         }
 
-        throw new BadRequestException(
-          'No se pudo renderizar el flyer a PNG. Instala la dependencia "@resvg/resvg-js" o la alternativa "sharp".',
-        );
+        return this.buildSvgResponse(svg);
       }
 
       throw error;
@@ -131,11 +127,15 @@ export class MatchFlyerService {
     return message.includes('@resvg/resvg-js');
   }
 
-  private async renderWithSharp(svg: string) {
+  private async renderWithSharp(svg: string, format: 'png' | 'jpeg' = 'png') {
     try {
       const sharp = await this.loadSharp();
-      const buffer = await sharp(Buffer.from(svg)).png().toBuffer();
-      return { buffer, contentType: 'image/png', fileExtension: 'png' };
+      const transformer = sharp(Buffer.from(svg));
+      const buffer =
+        format === 'jpeg' ? await transformer.jpeg({ quality: 90 }).toBuffer() : await transformer.png().toBuffer();
+      const contentType = format === 'jpeg' ? 'image/jpeg' : 'image/png';
+      const fileExtension = format === 'jpeg' ? 'jpg' : 'png';
+      return { buffer, contentType, fileExtension };
     } catch (error) {
       if (error instanceof BadRequestException && this.isSharpUnavailable(error.message)) {
         return null;
@@ -143,11 +143,6 @@ export class MatchFlyerService {
 
       throw new InternalServerErrorException('No se pudo renderizar el flyer.');
     }
-  }
-
-  private isRendererUnavailable(message?: string) {
-    if (!message) return false;
-    return message.includes('@resvg/resvg-js');
   }
 
   private buildSvgResponse(svg: string) {
