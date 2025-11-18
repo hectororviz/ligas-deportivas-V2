@@ -77,23 +77,21 @@ export class MatchFlyerService {
     };
 
     const svg = this.buildSvg(context);
-    const png = await this.renderPng(svg);
+    const rendered = await this.renderFlyer(svg);
 
-    return { buffer: png, contentType: 'image/png', fileExtension: 'png' };
+    return rendered;
   }
 
-  private async renderPng(svg: string) {
+  private async renderFlyer(svg: string) {
     const resvgModule = await this.loadResvg();
 
     if (!resvgModule) {
-      throw new BadRequestException(
-        'La dependencia opcional @resvg/resvg-js no está instalada. Instálala para generar el flyer en PNG.',
-      );
+      return { buffer: Buffer.from(svg), contentType: 'image/svg+xml', fileExtension: 'svg' };
     }
 
     const renderer = new resvgModule.Resvg(svg, { fitTo: { mode: 'original' } });
     const image = renderer.render();
-    return Buffer.from(image.asPng());
+    return { buffer: Buffer.from(image.asPng()), contentType: 'image/png', fileExtension: 'png' };
   }
 
   private async loadResvg() {
