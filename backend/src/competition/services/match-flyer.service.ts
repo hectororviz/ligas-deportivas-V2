@@ -6,6 +6,7 @@ import * as path from 'path';
 import * as dayjs from 'dayjs';
 import 'dayjs/locale/es';
 import { Match, Round } from '@prisma/client';
+import { Resvg } from '@resvg/resvg-js';
 
 dayjs.locale('es');
 
@@ -14,9 +15,7 @@ interface FlyerContext {
   zoneName: string;
   homeClubName: string;
   awayClubName: string;
-  dateLine: string;
-  timeLine: string;
-  roundLine: string;
+  matchSummaryLine: string;
   addressLine: string;
   categories: { time: string; name: string }[];
   baseImage: { mimeType: string; dataUri: string };
@@ -31,7 +30,7 @@ export class MatchFlyerService {
     private readonly storageService: StorageService,
   ) {}
 
-  async generate(matchId: number): Promise<Buffer> {
+  async generate(matchId: number): Promise<{ buffer: Buffer; contentType: string; fileExtension: string }> {
     const [match, identity] = await Promise.all([
       this.prisma.match.findUnique({
         where: { id: matchId },
@@ -66,13 +65,11 @@ export class MatchFlyerService {
 
     const context: FlyerContext = {
       tournamentName: match.tournament.name,
-      zoneName: match.zone.name,
+      zoneName: this.resolveZoneName(match.zone.name),
       homeClubName: match.homeClub?.shortName || match.homeClub?.name || 'Local',
       awayClubName: match.awayClub?.shortName || match.awayClub?.name || 'Visitante',
-      dateLine: this.resolveDateLine(match),
-      timeLine: this.resolveTimeLine(match),
-      roundLine: this.resolveRoundLine(match.round),
-      addressLine: this.resolveAddress(match.homeClub?.name),
+      matchSummaryLine: this.buildMatchSummary(match),
+      addressLine: this.resolveAddress(match.homeClub?.shortName || match.homeClub?.name),
       categories: this.buildCategories(match),
       baseImage: flyerBase,
       homeLogo,
@@ -80,25 +77,39 @@ export class MatchFlyerService {
     };
 
     const svg = this.buildSvg(context);
-    return Buffer.from(svg, 'utf8');
+    const png = this.renderPng(svg);
+
+    return { buffer: png, contentType: 'image/png', fileExtension: 'png' };
   }
 
-  private resolveDateLine(match: Match) {
-    return match.date ? dayjs(match.date).format('dddd DD [de] MMMM YYYY') : 'Fecha a confirmar';
+  private renderPng(svg: string) {
+    const renderer = new Resvg(svg, { fitTo: { mode: 'original' } });
+    const image = renderer.render();
+    return Buffer.from(image.asPng());
   }
 
-  private resolveTimeLine(match: Match) {
-    return match.date ? dayjs(match.date).format('HH:mm') : 'Horario a confirmar';
+  private resolveZoneName(zoneName: string) {
+    if (/^zona\s+/i.test(zoneName)) {
+      return zoneName;
+    }
+    return `Zona ${zoneName}`;
   }
 
-  private resolveRoundLine(round: Round) {
+  private buildMatchSummary(match: Match) {
+    const datePart = match.date ? dayjs(match.date).format('DD/MM') : 'Fecha a confirmar';
+    const roundPart = this.resolveRoundNumber(match.round);
+    const matchdayPart = match.matchday ? `Fecha ${match.matchday}` : 'Fecha a confirmar';
+    return `${datePart} - ${roundPart} - ${matchdayPart}`;
+  }
+
+  private resolveRoundNumber(round: Round) {
     switch (round) {
       case Round.FIRST:
-        return 'Primera rueda';
+        return 'Rueda 1';
       case Round.SECOND:
-        return 'Segunda rueda';
+        return 'Rueda 2';
       default:
-        return 'Rueda sin especificar';
+        return 'Rueda a confirmar';
     }
   }
 
@@ -161,14 +172,24 @@ export class MatchFlyerService {
   }
 
   private buildSvg(context: FlyerContext) {
-    const categories = context.categories
-      .map((cat, index) => {
-        const dy = index === 0 ? 0 : 52;
-        return `<tspan x="80" dy="${dy}">${this.escape(cat.time)} · ${this.escape(cat.name)}</tspan>`;
+    const categoryLines = context.categories.map((cat) => `${this.escape(cat.time)} - ${this.escape(cat.name)}`);
+    const maxLineLength = Math.max('Horarios:'.length, ...categoryLines.map((line) => line.length));
+    const approxCharWidth = 22;
+    const boxPadding = 40;
+    const boxWidth = Math.min(980, Math.max(520, maxLineLength * approxCharWidth + boxPadding * 2));
+    const boxX = (1080 - boxWidth) / 2;
+    const boxY = 820;
+    const lineHeight = 64;
+    const headerOffset = 76;
+    const boxHeight = headerOffset + categoryLines.length * lineHeight + 40;
+    const categories = categoryLines
+      .map((line, index) => {
+        const dy = index === 0 ? 0 : lineHeight;
+        return `<tspan x="${boxX + boxPadding}" dy="${dy}">${line}</tspan>`;
       })
       .join('');
 
-    const tournament = this.escape(context.tournamentName);
+    const tournament = this.escape(`Torneo ${context.tournamentName}`);
     const zone = this.escape(context.zoneName);
     const home = this.escape(context.homeClubName);
     const away = this.escape(context.awayClubName);
@@ -176,37 +197,36 @@ export class MatchFlyerService {
     return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
   <defs>
     <style>
-      .title { font: 700 52px 'Arial', sans-serif; fill: #ffffff; }
-      .subtitle { font: 600 34px 'Arial', sans-serif; fill: #f1f5f9; }
-      .label { font: 600 30px 'Arial', sans-serif; fill: #ffffff; }
-      .info { font: 500 32px 'Arial', sans-serif; fill: #ffffff; }
-      .category { font: 500 32px 'Arial', sans-serif; fill: #0f172a; }
-      .address { font: 600 30px 'Arial', sans-serif; fill: #ffffff; }
+      .title { font: 800 96px 'Arial', sans-serif; fill: #ffffff; stroke: #000000; stroke-width: 4px; paint-order: stroke fill; }
+      .subtitle { font: 700 68px 'Arial', sans-serif; fill: #ffffff; stroke: #000000; stroke-width: 3px; paint-order: stroke fill; }
+      .label { font: 700 38px 'Arial', sans-serif; fill: #ffffff; stroke: #000000; stroke-width: 2px; paint-order: stroke fill; }
+      .info { font: 700 40px 'Arial', sans-serif; fill: #ffffff; }
+      .category { font: 700 40px 'Arial', sans-serif; fill: #0f172a; }
+      .section { font: 800 44px 'Arial', sans-serif; fill: #0f172a; }
+      .address { font: 700 30px 'Arial', sans-serif; fill: #ffffff; }
     </style>
   </defs>
   <image href="${context.baseImage.dataUri}" x="0" y="0" width="1080" height="1920" preserveAspectRatio="xMidYMid slice" />
   <rect x="0" y="0" width="1080" height="1920" fill="rgba(0,0,0,0.35)" />
 
-  <rect x="60" y="80" width="960" height="200" rx="22" fill="rgba(15,23,42,0.65)" />
-  <text x="80" y="160" class="title">${tournament}</text>
-  <text x="80" y="220" class="subtitle">Zona ${zone}</text>
+  <text x="540" y="170" text-anchor="middle" class="title">${tournament}</text>
+  <text x="540" y="260" text-anchor="middle" class="subtitle">${zone}</text>
 
-  ${context.homeLogo ? `<image href="${context.homeLogo}" x="110" y="280" width="220" height="220" />` : ''}
-  ${context.awayLogo ? `<image href="${context.awayLogo}" x="750" y="280" width="220" height="220" />` : ''}
-  <text x="220" y="540" text-anchor="middle" class="label">${home}</text>
-  <text x="860" y="540" text-anchor="middle" class="label">${away}</text>
-  <text x="540" y="460" text-anchor="middle" class="subtitle">vs</text>
+  ${context.homeLogo ? `<image href="${context.homeLogo}" x="100" y="280" width="390" height="390" />` : ''}
+  ${context.awayLogo ? `<image href="${context.awayLogo}" x="590" y="280" width="390" height="390" />` : ''}
+  <text x="295" y="720" text-anchor="middle" class="label">${home}</text>
+  <text x="785" y="720" text-anchor="middle" class="label">${away}</text>
+  <text x="540" y="520" text-anchor="middle" class="subtitle">vs</text>
 
-  <rect x="80" y="600" width="920" height="180" rx="20" fill="rgba(15,23,42,0.55)" />
-  <text x="540" y="670" text-anchor="middle" class="info">${this.escape(context.dateLine)}</text>
-  <text x="540" y="720" text-anchor="middle" class="info">${this.escape(context.timeLine)} · ${this.escape(context.roundLine)}</text>
+  <rect x="0" y="660" width="1080" height="120" fill="#000000" />
+  <text x="540" y="735" text-anchor="middle" class="info">${this.escape(context.matchSummaryLine)}</text>
 
-  <rect x="60" y="820" width="960" height="720" rx="22" fill="rgba(255,255,255,0.92)" />
-  <text x="80" y="900" class="label" fill="#0f172a">Cronograma</text>
-  <text x="80" y="960" class="category">${categories}</text>
+  <rect x="${boxX}" y="${boxY}" width="${boxWidth}" height="${boxHeight}" rx="24" fill="rgba(255,255,255,0.82)" />
+  <text x="${boxX + boxPadding}" y="${boxY + 60}" class="section">Horarios:</text>
+  <text x="${boxX + boxPadding}" y="${boxY + headerOffset}" class="category">${categories}</text>
 
-  <rect x="0" y="1760" width="1080" height="120" fill="rgba(15,23,42,0.8)" />
-  <text x="540" y="1834" text-anchor="middle" class="address">${this.escape(context.addressLine)}</text>
+  <rect x="0" y="1810" width="1080" height="60" fill="#000000" />
+  <text x="540" y="1850" text-anchor="middle" class="address">${this.escape(context.addressLine)}</text>
 </svg>`;
   }
 
