@@ -26,6 +26,9 @@ class _SiteIdentityPageState extends ConsumerState<SiteIdentityPage> {
   Uint8List? _iconBytes;
   String? _iconFileName;
   bool _removeIcon = false;
+  Uint8List? _flyerBytes;
+  String? _flyerFileName;
+  bool _removeFlyer = false;
 
   @override
   void initState() {
@@ -177,6 +180,81 @@ class _SiteIdentityPageState extends ConsumerState<SiteIdentityPage> {
                                   style: theme.textTheme.bodySmall?.copyWith(
                                       color: theme.colorScheme.error),
                                 ),
+                            ),
+                          ],
+                        ),
+                      )
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Text('Flyer del sitio', style: theme.textTheme.titleSmall),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Imagen base para los flyers de partido. Debe medir 1080x1920 px (PNG o JPG).',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildFlyerPreview(identity),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 8,
+                              children: [
+                                OutlinedButton.icon(
+                                  onPressed: _saving ? null : _pickFlyer,
+                                  icon: const Icon(Icons.upload_file_outlined),
+                                  label: const Text('Seleccionar archivo'),
+                                ),
+                                if ((identity?.flyerUrl != null || _flyerBytes != null) &&
+                                    !_removeFlyer)
+                                  TextButton(
+                                    onPressed: _saving
+                                        ? null
+                                        : () {
+                                            setState(() {
+                                              _flyerBytes = null;
+                                              _flyerFileName = null;
+                                              _removeFlyer = true;
+                                            });
+                                          },
+                                    child: const Text('Quitar flyer'),
+                                  ),
+                                if (_removeFlyer)
+                                  TextButton(
+                                    onPressed: _saving
+                                        ? null
+                                        : () {
+                                            setState(() {
+                                              _removeFlyer = false;
+                                            });
+                                          },
+                                    child: const Text('Cancelar'),
+                                  )
+                              ],
+                            ),
+                            if (_flyerFileName != null && !_removeFlyer)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8.0),
+                                child: Text(
+                                  'Seleccionado: $_flyerFileName',
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                              ),
+                            if (_removeFlyer)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8.0),
+                                child: Text(
+                                  'El flyer actual se eliminará.',
+                                  style: theme.textTheme.bodySmall
+                                      ?.copyWith(color: theme.colorScheme.error),
+                                ),
                               ),
                           ],
                         ),
@@ -242,6 +320,34 @@ class _SiteIdentityPageState extends ConsumerState<SiteIdentityPage> {
     );
   }
 
+  Widget _buildFlyerPreview(SiteIdentity? identity) {
+    Widget child;
+    if (_removeFlyer) {
+      child = const Icon(Icons.hide_image_outlined, size: 40);
+    } else if (_flyerBytes != null) {
+      child = Image.memory(_flyerBytes!, fit: BoxFit.cover);
+    } else if (identity?.flyerUrl != null) {
+      child = Image.network(identity!.flyerUrl!, fit: BoxFit.cover);
+    } else {
+      child = const Icon(Icons.image_outlined, size: 40);
+    }
+
+    return Container(
+      width: 150,
+      height: 266,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      ),
+      clipBehavior: Clip.antiAlias,
+      alignment: Alignment.center,
+      child: AspectRatio(
+        aspectRatio: 9 / 16,
+        child: child,
+      ),
+    );
+  }
+
   Future<void> _pickIcon() async {
     final result = await FilePicker.platform
         .pickFiles(type: FileType.image, withData: true);
@@ -258,6 +364,27 @@ class _SiteIdentityPageState extends ConsumerState<SiteIdentityPage> {
       _iconBytes = file.bytes;
       _iconFileName = file.name;
       _removeIcon = false;
+    });
+  }
+
+  Future<void> _pickFlyer() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) {
+      return;
+    }
+
+    final file = result.files.first;
+    if (file.bytes == null) {
+      return;
+    }
+
+    setState(() {
+      _flyerBytes = file.bytes;
+      _flyerFileName = file.name;
+      _removeFlyer = false;
     });
   }
 
@@ -289,6 +416,20 @@ class _SiteIdentityPageState extends ConsumerState<SiteIdentityPage> {
         formData.fields.add(const MapEntry('removeIcon', 'true'));
       }
 
+      if (_flyerBytes != null) {
+        formData.files.add(
+          MapEntry(
+            'flyer',
+            MultipartFile.fromBytes(
+              _flyerBytes!,
+              filename: _flyerFileName ?? 'flyer.png',
+            ),
+          ),
+        );
+      } else if (_removeFlyer) {
+        formData.fields.add(const MapEntry('removeFlyer', 'true'));
+      }
+
       await ref.read(apiClientProvider).put('/site-identity', data: formData);
       ref.invalidate(siteIdentityProvider);
       await ref.read(siteIdentityProvider.future);
@@ -301,6 +442,9 @@ class _SiteIdentityPageState extends ConsumerState<SiteIdentityPage> {
         _iconBytes = null;
         _iconFileName = null;
         _removeIcon = false;
+        _flyerBytes = null;
+        _flyerFileName = null;
+        _removeFlyer = false;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(

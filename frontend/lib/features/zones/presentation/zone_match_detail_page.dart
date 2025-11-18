@@ -4,6 +4,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 
 import '../domain/zone_match_models.dart';
 import 'zone_fixture_page.dart' show zoneMatchesProvider;
@@ -166,7 +168,7 @@ class _ErrorBanner extends StatelessWidget {
   }
 }
 
-class _ZoneMatchDetailContent extends ConsumerWidget {
+class _ZoneMatchDetailContent extends ConsumerStatefulWidget {
   const _ZoneMatchDetailContent({
     required this.match,
     required this.zoneId,
@@ -178,8 +180,18 @@ class _ZoneMatchDetailContent extends ConsumerWidget {
   final bool canEditScores;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ZoneMatchDetailContent> createState() => _ZoneMatchDetailContentState();
+}
+
+class _ZoneMatchDetailContentState extends ConsumerState<_ZoneMatchDetailContent> {
+  bool _downloadingFlyer = false;
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final match = widget.match;
+    final zoneId = widget.zoneId;
+    final canEditScores = widget.canEditScores;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Align(
@@ -228,6 +240,21 @@ class _ZoneMatchDetailContent extends ConsumerWidget {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.icon(
+                      onPressed: _downloadingFlyer ? null : _downloadFlyer,
+                      icon: _downloadingFlyer
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.download_outlined),
+                      label: const Text('Descargar flyer'),
+                    ),
+                  ),
                   const SizedBox(height: 24),
                   if (match.categories.isEmpty)
                     Padding(
@@ -259,6 +286,39 @@ class _ZoneMatchDetailContent extends ConsumerWidget {
     }
     final points = isHome ? match.homePoints : match.awayPoints;
     return points == 1 ? '1 pt' : '$points pts';
+  }
+
+  Future<void> _downloadFlyer() async {
+    setState(() {
+      _downloadingFlyer = true;
+    });
+
+    try {
+      final api = ref.read(apiClientProvider);
+      final downloadUrl = '${api.baseUrl}/matches/${widget.match.id}/flyer';
+      final launched = await launchUrlString(
+        downloadUrl,
+        mode: LaunchMode.externalApplication,
+      );
+
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo iniciar la descarga del flyer.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo descargar el flyer: $error')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _downloadingFlyer = false;
+        });
+      }
+    }
   }
 }
 
