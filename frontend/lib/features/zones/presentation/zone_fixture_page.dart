@@ -819,44 +819,58 @@ class _FixtureMatchdayCard extends StatelessWidget {
           child: ExpansionTile(
             tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            title: Wrap(
-              spacing: 12,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
+            title: Row(
               children: [
-                RichText(
-                  text: TextSpan(
-                    style: baseTitleStyle,
-                    children: [
-                      TextSpan(text: '${round.shortLabel} - '),
-                      TextSpan(
-                        text: title,
-                        style: baseTitleStyle?.copyWith(fontWeight: FontWeight.w700),
+                Expanded(
+                  child: RichText(
+                    text: TextSpan(
+                      style: baseTitleStyle,
+                      children: [
+                        TextSpan(text: '${round.shortLabel} - '),
+                        TextSpan(
+                          text: title,
+                          style: baseTitleStyle?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 120),
+                  child: Align(
+                    alignment: Alignment.center,
+                    child: _MatchdayDateField(
+                      date: date,
+                      dateLabel: dateLabel,
+                      canEdit: canEditDate,
+                      isUpdating: isUpdatingDate,
+                      onSelectDate: onDateSelected,
+                      onClearDate: onClearDate,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (showFinalizeButton) ...[
+                      TextButton.icon(
+                        onPressed: isFinalizing ? null : onFinalize,
+                        icon: isFinalizing
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.flag_outlined),
+                        label: const Text('Finalizar fecha'),
                       ),
+                      const SizedBox(width: 8),
                     ],
-                  ),
+                    _FixtureMatchdayStatusIndicator(status: status),
+                  ],
                 ),
-                _MatchdayDateField(
-                  date: date,
-                  dateLabel: dateLabel,
-                  canEdit: canEditDate,
-                  isUpdating: isUpdatingDate,
-                  onSelectDate: onDateSelected,
-                  onClearDate: onClearDate,
-                ),
-                if (showFinalizeButton)
-                  TextButton.icon(
-                    onPressed: isFinalizing ? null : onFinalize,
-                    icon: isFinalizing
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.flag_outlined),
-                    label: const Text('Finalizar fecha'),
-                  ),
-                _FixtureMatchdayStatusIndicator(status: status),
               ],
             ),
             children: [
@@ -900,32 +914,35 @@ class _MatchdayDateField extends StatelessWidget {
     final labelStyle = theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600);
 
     if (!canEdit) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.event_outlined, size: 18),
-          const SizedBox(width: 6),
-          Text(dateLabel, style: labelStyle),
-        ],
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: theme.colorScheme.outlineVariant),
+        ),
+        alignment: Alignment.center,
+        child: Text(dateLabel, style: labelStyle, textAlign: TextAlign.center),
       );
     }
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        OutlinedButton.icon(
-          onPressed: isUpdating ? null : onSelectDate,
-          style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        SizedBox(
+          width: 124,
+          child: OutlinedButton(
+            onPressed: isUpdating ? null : onSelectDate,
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            ),
+            child: isUpdating
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(dateLabel, textAlign: TextAlign.center),
           ),
-          icon: isUpdating
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.event_outlined),
-          label: Text(dateLabel),
         ),
         if (date != null) ...[
           const SizedBox(width: 6),
