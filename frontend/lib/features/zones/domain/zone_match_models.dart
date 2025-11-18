@@ -43,6 +43,15 @@ extension FixtureRoundX on FixtureRound {
         return 'Rueda 2';
     }
   }
+
+  String get shortLabel {
+    switch (this) {
+      case FixtureRound.first:
+        return 'R1';
+      case FixtureRound.second:
+        return 'R2';
+    }
+  }
 }
 
 class FixtureClub {
