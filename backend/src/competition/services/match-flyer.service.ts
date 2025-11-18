@@ -6,7 +6,7 @@ import * as path from 'path';
 import * as dayjs from 'dayjs';
 import 'dayjs/locale/es';
 import { Match, Round } from '@prisma/client';
-import * as sharp from 'sharp';
+import { Resvg } from '@resvg/resvg-js';
 
 dayjs.locale('es');
 
@@ -77,30 +77,15 @@ export class MatchFlyerService {
     };
 
     const svg = this.buildSvg(context);
-    const png = await this.tryRenderPng(svg);
+    const png = this.renderPng(svg);
 
-    if (png) {
-      return { buffer: png, contentType: 'image/png', fileExtension: 'png' };
-    }
-
-    return { buffer: Buffer.from(svg), contentType: 'image/svg+xml', fileExtension: 'svg' };
+    return { buffer: png, contentType: 'image/png', fileExtension: 'png' };
   }
 
-  private async tryRenderPng(svg: string): Promise<Buffer | null> {
-    try {
-      const sharpModule = await import('sharp');
-      const sharp = (sharpModule as any).default ?? sharpModule;
-
-      return await sharp(Buffer.from(svg))
-        .resize(1080, 1920, { fit: 'cover' })
-        .png({ quality: 100 })
-        .toBuffer();
-    } catch (error) {
-      // Continue with the SVG fallback when sharp is not available in the environment.
-      // eslint-disable-next-line no-console
-      console.warn('PNG render skipped because sharp is unavailable:', error);
-      return null;
-    }
+  private renderPng(svg: string) {
+    const renderer = new Resvg(svg, { fitTo: { mode: 'original' } });
+    const image = renderer.render();
+    return Buffer.from(image.asPng());
   }
 
   private resolveZoneName(zoneName: string) {
@@ -187,10 +172,20 @@ export class MatchFlyerService {
   }
 
   private buildSvg(context: FlyerContext) {
-    const categories = context.categories
-      .map((cat, index) => {
-        const dy = index === 0 ? 0 : 56;
-        return `<tspan x="100" dy="${dy}">${this.escape(cat.time)} - ${this.escape(cat.name)}</tspan>`;
+    const categoryLines = context.categories.map((cat) => `${this.escape(cat.time)} - ${this.escape(cat.name)}`);
+    const maxLineLength = Math.max('Horarios:'.length, ...categoryLines.map((line) => line.length));
+    const approxCharWidth = 22;
+    const boxPadding = 40;
+    const boxWidth = Math.min(980, Math.max(520, maxLineLength * approxCharWidth + boxPadding * 2));
+    const boxX = (1080 - boxWidth) / 2;
+    const boxY = 820;
+    const lineHeight = 64;
+    const headerOffset = 76;
+    const boxHeight = headerOffset + categoryLines.length * lineHeight + 40;
+    const categories = categoryLines
+      .map((line, index) => {
+        const dy = index === 0 ? 0 : lineHeight;
+        return `<tspan x="${boxX + boxPadding}" dy="${dy}">${line}</tspan>`;
       })
       .join('');
 
@@ -202,12 +197,12 @@ export class MatchFlyerService {
     return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
   <defs>
     <style>
-      .title { font: 800 92px 'Arial', sans-serif; fill: #ffffff; stroke: #000000; stroke-width: 4px; paint-order: stroke fill; }
-      .subtitle { font: 700 64px 'Arial', sans-serif; fill: #ffffff; stroke: #000000; stroke-width: 3px; paint-order: stroke fill; }
+      .title { font: 800 96px 'Arial', sans-serif; fill: #ffffff; stroke: #000000; stroke-width: 4px; paint-order: stroke fill; }
+      .subtitle { font: 700 68px 'Arial', sans-serif; fill: #ffffff; stroke: #000000; stroke-width: 3px; paint-order: stroke fill; }
       .label { font: 700 38px 'Arial', sans-serif; fill: #ffffff; stroke: #000000; stroke-width: 2px; paint-order: stroke fill; }
       .info { font: 700 40px 'Arial', sans-serif; fill: #ffffff; }
-      .category { font: 700 36px 'Arial', sans-serif; fill: #0f172a; }
-      .section { font: 800 40px 'Arial', sans-serif; fill: #0f172a; }
+      .category { font: 700 40px 'Arial', sans-serif; fill: #0f172a; }
+      .section { font: 800 44px 'Arial', sans-serif; fill: #0f172a; }
       .address { font: 700 30px 'Arial', sans-serif; fill: #ffffff; }
     </style>
   </defs>
@@ -217,21 +212,21 @@ export class MatchFlyerService {
   <text x="540" y="170" text-anchor="middle" class="title">${tournament}</text>
   <text x="540" y="260" text-anchor="middle" class="subtitle">${zone}</text>
 
-  ${context.homeLogo ? `<image href="${context.homeLogo}" x="110" y="300" width="260" height="260" />` : ''}
-  ${context.awayLogo ? `<image href="${context.awayLogo}" x="710" y="300" width="260" height="260" />` : ''}
-  <text x="240" y="620" text-anchor="middle" class="label">${home}</text>
-  <text x="840" y="620" text-anchor="middle" class="label">${away}</text>
-  <text x="540" y="490" text-anchor="middle" class="subtitle">vs</text>
+  ${context.homeLogo ? `<image href="${context.homeLogo}" x="100" y="280" width="390" height="390" />` : ''}
+  ${context.awayLogo ? `<image href="${context.awayLogo}" x="590" y="280" width="390" height="390" />` : ''}
+  <text x="295" y="720" text-anchor="middle" class="label">${home}</text>
+  <text x="785" y="720" text-anchor="middle" class="label">${away}</text>
+  <text x="540" y="520" text-anchor="middle" class="subtitle">vs</text>
 
   <rect x="0" y="660" width="1080" height="120" fill="#000000" />
   <text x="540" y="735" text-anchor="middle" class="info">${this.escape(context.matchSummaryLine)}</text>
 
-  <rect x="70" y="820" width="940" height="260" rx="24" fill="rgba(255,255,255,0.85)" />
-  <text x="100" y="900" class="section">Horarios:</text>
-  <text x="100" y="960" class="category">${categories}</text>
+  <rect x="${boxX}" y="${boxY}" width="${boxWidth}" height="${boxHeight}" rx="24" fill="rgba(255,255,255,0.82)" />
+  <text x="${boxX + boxPadding}" y="${boxY + 60}" class="section">Horarios:</text>
+  <text x="${boxX + boxPadding}" y="${boxY + headerOffset}" class="category">${categories}</text>
 
-  <rect x="0" y="1800" width="1080" height="80" fill="#000000" />
-  <text x="540" y="1855" text-anchor="middle" class="address">${this.escape(context.addressLine)}</text>
+  <rect x="0" y="1810" width="1080" height="60" fill="#000000" />
+  <text x="540" y="1850" text-anchor="middle" class="address">${this.escape(context.addressLine)}</text>
 </svg>`;
   }
 
