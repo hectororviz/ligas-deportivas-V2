@@ -284,19 +284,11 @@ export class MatchFlyerService {
 
   private buildSvg(context: FlyerContext) {
     const categoryLines = context.categories.map((cat) => `${this.escape(cat.time)} - ${this.escape(cat.name)}`);
-    const maxLineLength = Math.max('Horarios:'.length, ...categoryLines.map((line) => line.length));
-    const approxCharWidth = 28;
-    const boxPadding = 48;
-    const boxWidth = Math.min(1000, Math.max(560, maxLineLength * approxCharWidth + boxPadding * 2));
-    const boxX = (1080 - boxWidth) / 2;
-    const boxY = 860;
-    const lineHeight = 72;
-    const headerOffset = 88;
-    const boxHeight = headerOffset + categoryLines.length * lineHeight + 40;
+    const lineHeight = 80;
     const categories = categoryLines
       .map((line, index) => {
         const dy = index === 0 ? 0 : lineHeight;
-        return `<tspan x="${boxX + boxPadding}" dy="${dy}">${line}</tspan>`;
+        return `<tspan x="140" dy="${dy}">${line}</tspan>`;
       })
       .join('');
 
@@ -308,36 +300,36 @@ export class MatchFlyerService {
     return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
   <defs>
     <style>
-      .title { font: 800 120px 'Arial', sans-serif; fill: #ffffff; stroke: #000000; stroke-width: 5px; paint-order: stroke fill; }
-      .subtitle { font: 800 88px 'Arial', sans-serif; fill: #ffffff; stroke: #000000; stroke-width: 4px; paint-order: stroke fill; }
-      .label { font: 800 58px 'Arial', sans-serif; fill: #ffffff; stroke: #000000; stroke-width: 3px; paint-order: stroke fill; }
-      .info { font: 800 52px 'Arial', sans-serif; fill: #ffffff; }
-      .category { font: 800 48px 'Arial', sans-serif; fill: #0f172a; }
-      .section { font: 900 54px 'Arial', sans-serif; fill: #0f172a; }
-      .address { font: 700 38px 'Arial', sans-serif; fill: #ffffff; }
+      .eyebrow { font: 900 72px 'Arial', sans-serif; fill: #3f6212; letter-spacing: 4px; }
+      .title { font: 900 124px 'Arial', sans-serif; fill: #111827; }
+      .subtitle { font: 800 84px 'Arial', sans-serif; fill: #4b5563; }
+      .label { font: 900 60px 'Arial', sans-serif; fill: #111827; }
+      .info { font: 800 52px 'Arial', sans-serif; fill: #ffffff; letter-spacing: 2px; }
+      .category { font: 800 56px 'Arial', sans-serif; fill: #111827; }
+      .section { font: 900 62px 'Arial', sans-serif; fill: #111827; }
+      .address { font: 800 40px 'Arial', sans-serif; fill: #ffffff; letter-spacing: 1px; }
     </style>
   </defs>
   <image href="${context.baseImage.dataUri}" x="0" y="0" width="1080" height="1920" preserveAspectRatio="xMidYMid slice" />
-  <rect x="0" y="0" width="1080" height="1920" fill="rgba(0,0,0,0.35)" />
 
-  <text x="540" y="180" text-anchor="middle" class="title">${tournament}</text>
-  <text x="540" y="290" text-anchor="middle" class="subtitle">${zone}</text>
+  <text x="540" y="150" text-anchor="middle" class="eyebrow">Torneo</text>
+  <text x="540" y="260" text-anchor="middle" class="title">${tournament.replace('Torneo ', '')}</text>
+  <text x="540" y="350" text-anchor="middle" class="subtitle">${zone}</text>
 
-  ${context.homeLogo ? `<image href="${context.homeLogo}" x="100" y="300" width="390" height="390" />` : ''}
-  ${context.awayLogo ? `<image href="${context.awayLogo}" x="590" y="300" width="390" height="390" />` : ''}
-  <text x="295" y="740" text-anchor="middle" class="label">${home}</text>
-  <text x="785" y="740" text-anchor="middle" class="label">${away}</text>
-  <text x="540" y="540" text-anchor="middle" class="subtitle">vs</text>
+  ${context.homeLogo ? `<image href="${context.homeLogo}" x="140" y="420" width="360" height="360" />` : ''}
+  ${context.awayLogo ? `<image href="${context.awayLogo}" x="580" y="420" width="360" height="360" />` : ''}
+  <text x="320" y="840" text-anchor="middle" class="label">${home}</text>
+  <text x="760" y="840" text-anchor="middle" class="label">${away}</text>
+  <text x="540" y="670" text-anchor="middle" class="subtitle">vs</text>
 
-  <rect x="0" y="680" width="1080" height="140" fill="#000000" />
-  <text x="540" y="770" text-anchor="middle" class="info">${this.escape(context.matchSummaryLine)}</text>
+  <rect x="0" y="900" width="1080" height="130" fill="#000000" />
+  <text x="540" y="985" text-anchor="middle" class="info">${this.escape(context.matchSummaryLine)}</text>
 
-  <rect x="${boxX}" y="${boxY}" width="${boxWidth}" height="${boxHeight}" rx="24" fill="rgba(255,255,255,0.82)" />
-  <text x="${boxX + boxPadding}" y="${boxY + 60}" class="section">Horarios:</text>
-  <text x="${boxX + boxPadding}" y="${boxY + headerOffset}" class="category">${categories}</text>
+  <text x="120" y="1110" class="section">Horarios</text>
+  <text x="140" y="1180" class="category">${categories}</text>
 
-  <rect x="0" y="1810" width="1080" height="60" fill="#000000" />
-  <text x="540" y="1850" text-anchor="middle" class="address">${this.escape(context.addressLine)}</text>
+  <rect x="0" y="1820" width="1080" height="70" fill="#000000" />
+  <text x="540" y="1870" text-anchor="middle" class="address">${this.escape(context.addressLine)}</text>
 </svg>`;
   }
 
