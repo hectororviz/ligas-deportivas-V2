@@ -72,8 +72,8 @@ export class MatchesController {
     @Res() res: Response,
   ) {
     const buffer = await this.matchFlyerService.generate(matchId);
-    res.setHeader('Content-Type', 'image/svg+xml');
-    res.setHeader('Content-Disposition', `attachment; filename="flyer-${matchId}.svg"`);
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Content-Disposition', `attachment; filename="flyer-${matchId}.png"`);
     return res.send(buffer);
   }
 
