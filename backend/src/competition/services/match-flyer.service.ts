@@ -95,9 +95,7 @@ export class MatchFlyerService {
           return fallbackRender;
         }
 
-        throw new BadRequestException(
-          'No se pudo renderizar el flyer a PNG. Instala la dependencia "@resvg/resvg-js" o la alternativa "sharp".',
-        );
+        return this.buildSvgResponse(svg);
       }
 
       throw error;
@@ -117,9 +115,7 @@ export class MatchFlyerService {
           return sharpRender;
         }
 
-        throw new BadRequestException(
-          'No se pudo renderizar el flyer a PNG. Instala la dependencia "@resvg/resvg-js" o la alternativa "sharp".',
-        );
+        return this.buildSvgResponse(svg);
       }
 
       throw error;
@@ -143,11 +139,6 @@ export class MatchFlyerService {
 
       throw new InternalServerErrorException('No se pudo renderizar el flyer.');
     }
-  }
-
-  private isRendererUnavailable(message?: string) {
-    if (!message) return false;
-    return message.includes('@resvg/resvg-js');
   }
 
   private buildSvgResponse(svg: string) {
