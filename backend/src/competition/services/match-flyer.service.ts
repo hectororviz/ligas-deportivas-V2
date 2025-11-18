@@ -14,9 +14,7 @@ interface FlyerContext {
   zoneName: string;
   homeClubName: string;
   awayClubName: string;
-  dateLine: string;
-  timeLine: string;
-  roundLine: string;
+  matchSummaryLine: string;
   addressLine: string;
   categories: { time: string; name: string }[];
   baseImage: { mimeType: string; dataUri: string };
@@ -31,7 +29,7 @@ export class MatchFlyerService {
     private readonly storageService: StorageService,
   ) {}
 
-  async generate(matchId: number): Promise<Buffer> {
+  async generate(matchId: number): Promise<{ buffer: Buffer; contentType: string; fileExtension: string }> {
     const [match, identity] = await Promise.all([
       this.prisma.match.findUnique({
         where: { id: matchId },
@@ -66,13 +64,11 @@ export class MatchFlyerService {
 
     const context: FlyerContext = {
       tournamentName: match.tournament.name,
-      zoneName: match.zone.name,
+      zoneName: this.resolveZoneName(match.zone.name),
       homeClubName: match.homeClub?.shortName || match.homeClub?.name || 'Local',
       awayClubName: match.awayClub?.shortName || match.awayClub?.name || 'Visitante',
-      dateLine: this.resolveDateLine(match),
-      timeLine: this.resolveTimeLine(match),
-      roundLine: this.resolveRoundLine(match.round),
-      addressLine: this.resolveAddress(match.homeClub?.name),
+      matchSummaryLine: this.buildMatchSummary(match),
+      addressLine: this.resolveAddress(match.homeClub?.shortName || match.homeClub?.name),
       categories: this.buildCategories(match),
       baseImage: flyerBase,
       homeLogo,
@@ -80,25 +76,54 @@ export class MatchFlyerService {
     };
 
     const svg = this.buildSvg(context);
-    return Buffer.from(svg, 'utf8');
+    const png = await this.tryRenderPng(svg);
+
+    if (png) {
+      return { buffer: png, contentType: 'image/png', fileExtension: 'png' };
+    }
+
+    return { buffer: Buffer.from(svg), contentType: 'image/svg+xml', fileExtension: 'svg' };
   }
 
-  private resolveDateLine(match: Match) {
-    return match.date ? dayjs(match.date).format('dddd DD [de] MMMM YYYY') : 'Fecha a confirmar';
+  private async tryRenderPng(svg: string): Promise<Buffer | null> {
+    try {
+      const sharpModule = await import('sharp');
+      const sharp = (sharpModule as any).default ?? sharpModule;
+
+      return await sharp(Buffer.from(svg))
+        .resize(1080, 1920, { fit: 'cover' })
+        .png({ quality: 100 })
+        .toBuffer();
+    } catch (error) {
+      // Continue with the SVG fallback when sharp is not available in the environment.
+      // eslint-disable-next-line no-console
+      console.warn('PNG render skipped because sharp is unavailable:', error);
+      return null;
+    }
   }
 
-  private resolveTimeLine(match: Match) {
-    return match.date ? dayjs(match.date).format('HH:mm') : 'Horario a confirmar';
+  private resolveZoneName(zoneName: string) {
+    if (/^zona\s+/i.test(zoneName)) {
+      return zoneName;
+    }
+    return `Zona ${zoneName}`;
   }
 
-  private resolveRoundLine(round: Round) {
+  private buildMatchSummary(match: Match) {
+    const datePart = match.date ? dayjs(match.date).format('DD/MM') : 'Fecha a confirmar';
+    const roundPart = this.resolveRoundNumber(match.round);
+    const matchdayPart = match.matchday ? `Fecha ${match.matchday}` : 'Fecha a confirmar';
+    return `${datePart} - ${roundPart} - ${matchdayPart}`;
+  }
+
+  private resolveRoundNumber(round: Round) {
     switch (round) {
       case Round.FIRST:
-        return 'Primera rueda';
+        return 'Rueda 1';
       case Round.SECOND:
-        return 'Segunda rueda';
+        return 'Rueda 2';
       default:
-        return 'Rueda sin especificar';
+        return 'Rueda a confirmar';
     }
   }
 
@@ -163,12 +188,12 @@ export class MatchFlyerService {
   private buildSvg(context: FlyerContext) {
     const categories = context.categories
       .map((cat, index) => {
-        const dy = index === 0 ? 0 : 52;
-        return `<tspan x="80" dy="${dy}">${this.escape(cat.time)} · ${this.escape(cat.name)}</tspan>`;
+        const dy = index === 0 ? 0 : 56;
+        return `<tspan x="100" dy="${dy}">${this.escape(cat.time)} - ${this.escape(cat.name)}</tspan>`;
       })
       .join('');
 
-    const tournament = this.escape(context.tournamentName);
+    const tournament = this.escape(`Torneo ${context.tournamentName}`);
     const zone = this.escape(context.zoneName);
     const home = this.escape(context.homeClubName);
     const away = this.escape(context.awayClubName);
@@ -176,37 +201,36 @@ export class MatchFlyerService {
     return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
   <defs>
     <style>
-      .title { font: 700 52px 'Arial', sans-serif; fill: #ffffff; }
-      .subtitle { font: 600 34px 'Arial', sans-serif; fill: #f1f5f9; }
-      .label { font: 600 30px 'Arial', sans-serif; fill: #ffffff; }
-      .info { font: 500 32px 'Arial', sans-serif; fill: #ffffff; }
-      .category { font: 500 32px 'Arial', sans-serif; fill: #0f172a; }
-      .address { font: 600 30px 'Arial', sans-serif; fill: #ffffff; }
+      .title { font: 800 92px 'Arial', sans-serif; fill: #ffffff; stroke: #000000; stroke-width: 4px; paint-order: stroke fill; }
+      .subtitle { font: 700 64px 'Arial', sans-serif; fill: #ffffff; stroke: #000000; stroke-width: 3px; paint-order: stroke fill; }
+      .label { font: 700 38px 'Arial', sans-serif; fill: #ffffff; stroke: #000000; stroke-width: 2px; paint-order: stroke fill; }
+      .info { font: 700 40px 'Arial', sans-serif; fill: #ffffff; }
+      .category { font: 700 36px 'Arial', sans-serif; fill: #0f172a; }
+      .section { font: 800 40px 'Arial', sans-serif; fill: #0f172a; }
+      .address { font: 700 30px 'Arial', sans-serif; fill: #ffffff; }
     </style>
   </defs>
   <image href="${context.baseImage.dataUri}" x="0" y="0" width="1080" height="1920" preserveAspectRatio="xMidYMid slice" />
   <rect x="0" y="0" width="1080" height="1920" fill="rgba(0,0,0,0.35)" />
 
-  <rect x="60" y="80" width="960" height="200" rx="22" fill="rgba(15,23,42,0.65)" />
-  <text x="80" y="160" class="title">${tournament}</text>
-  <text x="80" y="220" class="subtitle">Zona ${zone}</text>
+  <text x="540" y="170" text-anchor="middle" class="title">${tournament}</text>
+  <text x="540" y="260" text-anchor="middle" class="subtitle">${zone}</text>
 
-  ${context.homeLogo ? `<image href="${context.homeLogo}" x="110" y="280" width="220" height="220" />` : ''}
-  ${context.awayLogo ? `<image href="${context.awayLogo}" x="750" y="280" width="220" height="220" />` : ''}
-  <text x="220" y="540" text-anchor="middle" class="label">${home}</text>
-  <text x="860" y="540" text-anchor="middle" class="label">${away}</text>
-  <text x="540" y="460" text-anchor="middle" class="subtitle">vs</text>
+  ${context.homeLogo ? `<image href="${context.homeLogo}" x="110" y="300" width="260" height="260" />` : ''}
+  ${context.awayLogo ? `<image href="${context.awayLogo}" x="710" y="300" width="260" height="260" />` : ''}
+  <text x="240" y="620" text-anchor="middle" class="label">${home}</text>
+  <text x="840" y="620" text-anchor="middle" class="label">${away}</text>
+  <text x="540" y="490" text-anchor="middle" class="subtitle">vs</text>
 
-  <rect x="80" y="600" width="920" height="180" rx="20" fill="rgba(15,23,42,0.55)" />
-  <text x="540" y="670" text-anchor="middle" class="info">${this.escape(context.dateLine)}</text>
-  <text x="540" y="720" text-anchor="middle" class="info">${this.escape(context.timeLine)} · ${this.escape(context.roundLine)}</text>
+  <rect x="0" y="660" width="1080" height="120" fill="#000000" />
+  <text x="540" y="735" text-anchor="middle" class="info">${this.escape(context.matchSummaryLine)}</text>
 
-  <rect x="60" y="820" width="960" height="720" rx="22" fill="rgba(255,255,255,0.92)" />
-  <text x="80" y="900" class="label" fill="#0f172a">Cronograma</text>
-  <text x="80" y="960" class="category">${categories}</text>
+  <rect x="70" y="820" width="940" height="260" rx="24" fill="rgba(255,255,255,0.85)" />
+  <text x="100" y="900" class="section">Horarios:</text>
+  <text x="100" y="960" class="category">${categories}</text>
 
-  <rect x="0" y="1760" width="1080" height="120" fill="rgba(15,23,42,0.8)" />
-  <text x="540" y="1834" text-anchor="middle" class="address">${this.escape(context.addressLine)}</text>
+  <rect x="0" y="1800" width="1080" height="80" fill="#000000" />
+  <text x="540" y="1855" text-anchor="middle" class="address">${this.escape(context.addressLine)}</text>
 </svg>`;
   }
 
