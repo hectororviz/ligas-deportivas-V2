@@ -83,24 +83,9 @@ export class MatchFlyerService {
   }
 
   private async renderFlyer(svg: string) {
-    const resvgModule = await this.loadResvg();
-
-    if (!resvgModule) {
-      return { buffer: Buffer.from(svg), contentType: 'image/svg+xml', fileExtension: 'svg' };
-    }
-
-    const renderer = new resvgModule.Resvg(svg, { fitTo: { mode: 'original' } });
+    const renderer = new Resvg(svg, { fitTo: { mode: 'original' } });
     const image = renderer.render();
     return { buffer: Buffer.from(image.asPng()), contentType: 'image/png', fileExtension: 'png' };
-  }
-
-  private async loadResvg() {
-    try {
-      const mod = await import('@resvg/resvg-js');
-      return mod as { Resvg: new (svg: string, options?: unknown) => { render(): { asPng(): Uint8Array } } };
-    } catch (error) {
-      return null;
-    }
   }
 
   private resolveZoneName(zoneName: string) {
