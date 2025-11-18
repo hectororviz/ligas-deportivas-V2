@@ -2,8 +2,10 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../services/api_client.dart';
+import '../../../services/auth_controller.dart';
 import '../domain/zone_models.dart';
 import '../domain/zone_match_models.dart';
 import 'zones_page.dart';
@@ -45,8 +47,10 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
   bool _submitting = false;
   String? _previewError;
   final Set<int> _finalizingMatchdays = <int>{};
+  final Set<int> _updatingMatchdays = <int>{};
 
   bool _isFinalizing(int matchday) => _finalizingMatchdays.contains(matchday);
+  bool _isUpdatingDate(int matchday) => _updatingMatchdays.contains(matchday);
 
   FixtureMatchdayStatus _mapFixtureStatus(ZoneMatchdayStatus status) {
     switch (status) {
@@ -139,6 +143,48 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
       if (mounted) {
         setState(() {
           _finalizingMatchdays.remove(matchday);
+        });
+      }
+    }
+  }
+
+  Future<void> _updateMatchdayDate(int matchday, DateTime? date) async {
+    if (_isUpdatingDate(matchday)) {
+      return;
+    }
+
+    setState(() {
+      _updatingMatchdays.add(matchday);
+    });
+
+    try {
+      final api = ref.read(apiClientProvider);
+      await api.patch('/zones/${widget.zoneId}/matchdays/$matchday', data: {
+        'date': date?.toIso8601String(),
+      });
+
+      ref.invalidate(zoneMatchesProvider(widget.zoneId));
+
+      if (mounted) {
+        final label = date != null ? 'Fecha actualizada.' : 'Fecha eliminada.';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(label)));
+      }
+    } on DioException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo actualizar la fecha: ${_mapError(error)}')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo actualizar la fecha: $error')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _updatingMatchdays.remove(matchday);
         });
       }
     }
@@ -273,6 +319,9 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
     return detailAsync.when(
       data: (zone) {
         final fixtureAsync = ref.watch(zoneMatchesProvider(widget.zoneId));
+        final authState = ref.watch(authControllerProvider);
+        final canEditMatchdayDates =
+            !widget.viewOnly && (authState.user?.roles.contains('ADMIN') ?? false);
         final hasPreview = _preview != null;
         return Padding(
           padding: const EdgeInsets.all(24),
@@ -313,7 +362,7 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
                     } else if (hasPreview) {
                       content = _buildPreview(zone, _preview!);
                     } else {
-                      content = _buildFixtureSchedule(zone, fixtureData);
+                      content = _buildFixtureSchedule(zone, fixtureData, canEditMatchdayDates);
                     }
 
                     return Scrollbar(
@@ -505,7 +554,7 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
     );
   }
 
-  Widget _buildFixtureSchedule(ZoneDetail zone, ZoneMatchesData data) {
+  Widget _buildFixtureSchedule(ZoneDetail zone, ZoneMatchesData data, bool canEditMatchdayDates) {
     final matches = data.matches;
     final clubs = {for (final club in zone.clubs) club.id: club};
     if (matches.isEmpty) {
@@ -515,6 +564,9 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
     final statusMap = {
       for (final entry in data.matchdays)
         entry.matchday: _mapFixtureStatus(entry.status),
+    };
+    final matchdayDates = {
+      for (final entry in data.matchdays) entry.matchday: entry.date,
     };
 
     final grouped = <_MatchdayKey, List<ZoneMatch>>{};
@@ -553,6 +605,7 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
               return _MatchdayContent(
                 round: round,
                 matchdayNumber: entry.key.matchday,
+                date: matchdayDates[entry.key.matchday],
                 matches: dayMatches
                     .map(
                       (match) => FixtureMatchRow(
@@ -570,6 +623,7 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
           )
           .toList(),
       statusByMatchday: statusMap.isEmpty ? null : statusMap,
+      matchdayDates: matchdayDates,
     );
 
     return Column(
@@ -586,6 +640,14 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
             matches: matchday.matches,
             byeClubName: matchday.byeClubName,
             status: matchday.status,
+            date: matchday.date,
+            canEditDate: canEditMatchdayDates,
+            isUpdatingDate: _isUpdatingDate(matchday.matchdayNumber),
+            onDateSelected:
+                canEditMatchdayDates ? () => _selectMatchdayDate(matchday) : null,
+            onClearDate: canEditMatchdayDates && matchday.date != null
+                ? () => _updateMatchdayDate(matchday.matchdayNumber, null)
+                : null,
             showFinalizeButton: !widget.viewOnly &&
                 statusMap.isNotEmpty &&
                 _shouldShowFinalize(matchday.status),
@@ -599,6 +661,22 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
         ),
       ],
     );
+  }
+
+  Future<void> _selectMatchdayDate(_DecoratedMatchday matchday) async {
+    final initialDate = matchday.date ?? DateTime.now();
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime.now().subtract(const Duration(days: 365 * 5)),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+    );
+
+    if (selected == null) {
+      return;
+    }
+
+    await _updateMatchdayDate(matchday.matchdayNumber, selected);
   }
 
   void _openMatchDetail(ZoneDetail zone, ZoneMatch match) {
@@ -701,6 +779,11 @@ class _FixtureMatchdayCard extends StatelessWidget {
     required this.subtitle,
     required this.matches,
     required this.status,
+    this.date,
+    this.canEditDate = false,
+    this.isUpdatingDate = false,
+    this.onDateSelected,
+    this.onClearDate,
     this.onFinalize,
     this.isFinalizing = false,
     this.showFinalizeButton = false,
@@ -711,6 +794,11 @@ class _FixtureMatchdayCard extends StatelessWidget {
   final String subtitle;
   final List<FixtureMatchRow> matches;
   final FixtureMatchdayStatus status;
+  final DateTime? date;
+  final bool canEditDate;
+  final bool isUpdatingDate;
+  final VoidCallback? onDateSelected;
+  final VoidCallback? onClearDate;
   final VoidCallback? onFinalize;
   final bool isFinalizing;
   final bool showFinalizeButton;
@@ -747,12 +835,20 @@ class _FixtureMatchdayCard extends StatelessWidget {
                         style: theme.textTheme.bodySmall,
                       ),
                     ],
-                  ),
                 ),
+              ),
+              const SizedBox(width: 12),
+              _MatchdayDateField(
+                date: date,
+                canEdit: canEditDate,
+                isUpdating: isUpdatingDate,
+                onSelectDate: onDateSelected,
+                onClearDate: onClearDate,
+              ),
+              const SizedBox(width: 12),
+              _FixtureMatchdayStatusIndicator(status: status),
+              if (showFinalizeButton) ...[
                 const SizedBox(width: 12),
-                _FixtureMatchdayStatusIndicator(status: status),
-                if (showFinalizeButton) ...[
-                  const SizedBox(width: 12),
                   TextButton.icon(
                     onPressed: isFinalizing ? null : onFinalize,
                     icon: isFinalizing
@@ -780,6 +876,77 @@ class _FixtureMatchdayCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _MatchdayDateField extends StatelessWidget {
+  const _MatchdayDateField({
+    required this.date,
+    required this.canEdit,
+    required this.isUpdating,
+    this.onSelectDate,
+    this.onClearDate,
+  });
+
+  final DateTime? date;
+  final bool canEdit;
+  final bool isUpdating;
+  final VoidCallback? onSelectDate;
+  final VoidCallback? onClearDate;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final formatter = DateFormat('dd/MM/yyyy');
+    final label = date != null ? formatter.format(date!) : 'Sin fecha';
+
+    return SizedBox(
+      width: 190,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Fecha',
+            style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: canEdit ? onSelectDate : null,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                  icon: isUpdating
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.event_outlined),
+                  label: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      label,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              ),
+              if (canEdit && date != null) ...[
+                const SizedBox(width: 8),
+                IconButton(
+                  tooltip: 'Quitar fecha',
+                  onPressed: isUpdating ? null : onClearDate,
+                  icon: const Icon(Icons.clear),
+                ),
+              ],
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -927,12 +1094,14 @@ class _MatchdayContent {
     required this.round,
     required this.matchdayNumber,
     required this.matches,
+    this.date,
     this.byeClubName,
   });
 
   final FixtureRound round;
   final int matchdayNumber;
   final List<FixtureMatchRow> matches;
+  final DateTime? date;
   final String? byeClubName;
 }
 
@@ -943,6 +1112,7 @@ class _DecoratedMatchday {
     required this.round,
     required this.matches,
     required this.status,
+    this.date,
     this.byeClubName,
   });
 
@@ -951,6 +1121,7 @@ class _DecoratedMatchday {
   final FixtureRound round;
   final List<FixtureMatchRow> matches;
   final FixtureMatchdayStatus status;
+  final DateTime? date;
   final String? byeClubName;
 }
 
@@ -974,6 +1145,7 @@ List<_DecoratedMatchday> _decorateMatchdays(
   List<_MatchdayContent> matchdays, {
   int playedMatchdaysCount = 0,
   Map<int, FixtureMatchdayStatus>? statusByMatchday,
+  Map<int, DateTime?>? matchdayDates,
 }) {
   if (matchdays.isEmpty) {
     return const <_DecoratedMatchday>[];
@@ -1015,6 +1187,7 @@ List<_DecoratedMatchday> _decorateMatchdays(
       ..sort(
         (a, b) => a.homeName.toLowerCase().compareTo(b.homeName.toLowerCase()),
       );
+    final matchdayDate = raw.date ?? matchdayDates?[raw.matchdayNumber];
 
     decorated.add(
       _DecoratedMatchday(
@@ -1023,6 +1196,7 @@ List<_DecoratedMatchday> _decorateMatchdays(
         round: raw.round,
         matches: sortedMatches,
         status: status,
+        date: matchdayDate,
         byeClubName: raw.byeClubName,
       ),
     );
