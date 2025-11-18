@@ -44,6 +44,7 @@
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "passport-local": "^1.0.0",
+    "sharp": "^0.33.4",
     "uuid": "^9.0.1",
     "zod": "^3.22.4",
     "joi": "^17.12.0"
