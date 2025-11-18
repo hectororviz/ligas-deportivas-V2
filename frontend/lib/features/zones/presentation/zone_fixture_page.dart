@@ -868,7 +868,7 @@ class _FixtureMatchdayCard extends StatelessWidget {
                                 child: CircularProgressIndicator(strokeWidth: 2),
                               )
                             : const Icon(Icons.flag_outlined),
-                        label: const Text('Finalizar fecha'),
+                        label: const Text('Finalizar'),
                       ),
                       const SizedBox(width: 8),
                     ],
@@ -929,25 +929,31 @@ class _MatchdayDateField extends StatelessWidget {
       );
     }
 
+    final dateField = InkWell(
+      onTap: isUpdating ? null : onSelectDate,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        width: 140,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: theme.colorScheme.outlineVariant),
+        ),
+        alignment: Alignment.center,
+        child: isUpdating
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Text(dateLabel, style: labelStyle, textAlign: TextAlign.center),
+      ),
+    );
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        SizedBox(
-          width: 124,
-          child: OutlinedButton(
-            onPressed: isUpdating ? null : onSelectDate,
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            ),
-            child: isUpdating
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Text(dateLabel, textAlign: TextAlign.center),
-          ),
-        ),
+        dateField,
         if (date != null) ...[
           const SizedBox(width: 6),
           IconButton(
