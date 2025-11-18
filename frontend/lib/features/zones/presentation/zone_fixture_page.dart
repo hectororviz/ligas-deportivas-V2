@@ -10,6 +10,9 @@ import '../domain/zone_models.dart';
 import '../domain/zone_match_models.dart';
 import 'zones_page.dart';
 
+const _moduleFixture = 'FIXTURE';
+const _actionUpdate = 'UPDATE';
+
 class ZoneFixturePageArgs {
   const ZoneFixturePageArgs({this.viewOnly = false});
 
@@ -320,8 +323,15 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
       data: (zone) {
         final fixtureAsync = ref.watch(zoneMatchesProvider(widget.zoneId));
         final authState = ref.watch(authControllerProvider);
-        final canEditMatchdayDates =
-            !widget.viewOnly && (authState.user?.roles.contains('ADMIN') ?? false);
+        final user = authState.user;
+        final canManageFixture = !widget.viewOnly &&
+            ((user?.hasAnyRole(const ['ADMIN']) ?? false) ||
+                (user?.hasPermission(
+                          module: _moduleFixture,
+                          action: _actionUpdate,
+                          leagueId: zone.tournament.leagueId,
+                        ) ??
+                    false));
         final hasPreview = _preview != null;
         return Padding(
           padding: const EdgeInsets.all(24),
@@ -362,7 +372,7 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
                     } else if (hasPreview) {
                       content = _buildPreview(zone, _preview!);
                     } else {
-                      content = _buildFixtureSchedule(zone, fixtureData, canEditMatchdayDates);
+                      content = _buildFixtureSchedule(zone, fixtureData, canManageFixture);
                     }
 
                     return Scrollbar(
@@ -554,7 +564,7 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
     );
   }
 
-  Widget _buildFixtureSchedule(ZoneDetail zone, ZoneMatchesData data, bool canEditMatchdayDates) {
+  Widget _buildFixtureSchedule(ZoneDetail zone, ZoneMatchesData data, bool canManageFixture) {
     final matches = data.matches;
     final clubs = {for (final club in zone.clubs) club.id: club};
     if (matches.isEmpty) {
@@ -641,22 +651,16 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
             byeClubName: matchday.byeClubName,
             status: matchday.status,
             date: matchday.date,
-            canEditDate: canEditMatchdayDates,
+            canEditDate: canManageFixture,
             isUpdatingDate: _isUpdatingDate(matchday.matchdayNumber),
-            onDateSelected:
-                canEditMatchdayDates ? () => _selectMatchdayDate(matchday) : null,
-            onClearDate: canEditMatchdayDates && matchday.date != null
+            onDateSelected: canManageFixture ? () => _selectMatchdayDate(matchday) : null,
+            onClearDate: canManageFixture && matchday.date != null
                 ? () => _updateMatchdayDate(matchday.matchdayNumber, null)
                 : null,
-            showFinalizeButton: !widget.viewOnly &&
-                statusMap.isNotEmpty &&
-                _shouldShowFinalize(matchday.status),
-            isFinalizing: !widget.viewOnly &&
-                statusMap.isNotEmpty &&
-                _isFinalizing(matchday.matchdayNumber),
-            onFinalize: !widget.viewOnly && statusMap.isNotEmpty
-                ? _buildFinalizeCallback(matchday)
-                : null,
+            showFinalizeButton:
+                canManageFixture && _shouldShowFinalize(matchday.status),
+            isFinalizing: canManageFixture && _isFinalizing(matchday.matchdayNumber),
+            onFinalize: canManageFixture ? _buildFinalizeCallback(matchday) : null,
           ),
         ),
       ],
