@@ -6,6 +6,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors
@@ -21,10 +22,15 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequestUser } from '../../common/interfaces/request-user.interface';
 import { UpdateMatchdayDto } from '../dto/update-matchday.dto';
+import { MatchFlyerService } from '../services/match-flyer.service';
+import { Response } from 'express';
 
 @Controller()
 export class MatchesController {
-  constructor(private readonly matchesService: MatchesService) {}
+  constructor(
+    private readonly matchesService: MatchesService,
+    private readonly matchFlyerService: MatchFlyerService,
+  ) {}
 
   @Get('zones/:zoneId/matches')
   getByZone(@Param('zoneId', ParseIntPipe) zoneId: number) {
@@ -58,6 +64,17 @@ export class MatchesController {
     @Param('categoryId', ParseIntPipe) categoryId: number
   ) {
     return this.matchesService.getResult(matchId, categoryId);
+  }
+
+  @Get('matches/:matchId/flyer')
+  async downloadFlyer(
+    @Param('matchId', ParseIntPipe) matchId: number,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.matchFlyerService.generate(matchId);
+    res.setHeader('Content-Type', 'image/svg+xml');
+    res.setHeader('Content-Disposition', `attachment; filename="flyer-${matchId}.svg"`);
+    return res.send(buffer);
   }
 
   @Patch('matches/:matchId')
