@@ -145,11 +145,6 @@ export class MatchFlyerService {
     }
   }
 
-  private isRendererUnavailable(message?: string) {
-    if (!message) return false;
-    return message.includes('@resvg/resvg-js');
-  }
-
   private buildSvgResponse(svg: string) {
     return {
       buffer: Buffer.from(svg, 'utf8'),
