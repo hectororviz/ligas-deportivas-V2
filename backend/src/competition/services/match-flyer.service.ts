@@ -3,7 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../storage/storage.service';
 import { promises as fs } from 'fs';
 import * as path from 'path';
-import dayjs from 'dayjs';
+import * as dayjs from 'dayjs';
 import 'dayjs/locale/es';
 import { Match, Round } from '@prisma/client';
 
