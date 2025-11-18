@@ -30,6 +30,7 @@ interface FlyerContext {
 @Injectable()
 export class MatchFlyerService {
   private resvgModule?: Promise<typeof import('@resvg/resvg-js')>;
+  private sharpModule?: Promise<typeof import('sharp')>;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -89,7 +90,14 @@ export class MatchFlyerService {
       return rendered;
     } catch (error) {
       if (error instanceof BadRequestException && this.isRendererUnavailable(error.message)) {
-        return this.buildSvgResponse(svg);
+        const fallbackRender = await this.renderWithSharp(svg);
+        if (fallbackRender) {
+          return fallbackRender;
+        }
+
+        throw new BadRequestException(
+          'No se pudo renderizar el flyer a PNG. Instala la dependencia "@resvg/resvg-js" o la alternativa "sharp".',
+        );
       }
 
       throw error;
@@ -97,10 +105,44 @@ export class MatchFlyerService {
   }
 
   private async renderFlyer(svg: string) {
-    const Resvg = await this.loadResvg();
-    const renderer = new Resvg(svg, { fitTo: { mode: 'original' } });
-    const image = renderer.render();
-    return { buffer: Buffer.from(image.asPng()), contentType: 'image/png', fileExtension: 'png' };
+    try {
+      const Resvg = await this.loadResvg();
+      const renderer = new Resvg(svg, { fitTo: { mode: 'original' } });
+      const image = renderer.render();
+      return { buffer: Buffer.from(image.asPng()), contentType: 'image/png', fileExtension: 'png' };
+    } catch (error) {
+      if (error instanceof BadRequestException && this.isRendererUnavailable(error.message)) {
+        const sharpRender = await this.renderWithSharp(svg);
+        if (sharpRender) {
+          return sharpRender;
+        }
+
+        throw new BadRequestException(
+          'No se pudo renderizar el flyer a PNG. Instala la dependencia "@resvg/resvg-js" o la alternativa "sharp".',
+        );
+      }
+
+      throw error;
+    }
+  }
+
+  private isRendererUnavailable(message?: string) {
+    if (!message) return false;
+    return message.includes('@resvg/resvg-js');
+  }
+
+  private async renderWithSharp(svg: string) {
+    try {
+      const sharp = await this.loadSharp();
+      const buffer = await sharp(Buffer.from(svg)).png().toBuffer();
+      return { buffer, contentType: 'image/png', fileExtension: 'png' };
+    } catch (error) {
+      if (error instanceof BadRequestException && this.isSharpUnavailable(error.message)) {
+        return null;
+      }
+
+      throw new InternalServerErrorException('No se pudo renderizar el flyer.');
+    }
   }
 
   private isRendererUnavailable(message?: string) {
@@ -134,6 +176,32 @@ export class MatchFlyerService {
 
       throw new InternalServerErrorException('No se pudo inicializar el renderizador de flyers.');
     }
+  }
+
+  private async loadSharp() {
+    if (!this.sharpModule) {
+      this.sharpModule = import('sharp');
+    }
+
+    try {
+      const module = await this.sharpModule;
+      const sharpFn = (module as unknown as typeof import('sharp')).default || (module as unknown as any);
+      return sharpFn as unknown as typeof import('sharp');
+    } catch (error) {
+      this.sharpModule = undefined;
+      if (error instanceof Error && /Cannot find module/.test(error.message)) {
+        throw new BadRequestException(
+          'No se pudo cargar el renderizador de flyers. Verifica que la dependencia "sharp" esté instalada.',
+        );
+      }
+
+      throw new InternalServerErrorException('No se pudo inicializar el renderizador de flyers.');
+    }
+  }
+
+  private isSharpUnavailable(message?: string) {
+    if (!message) return false;
+    return message.includes('sharp');
   }
 
   private resolveZoneName(zoneName: string) {
