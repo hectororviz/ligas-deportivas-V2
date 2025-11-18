@@ -145,6 +145,19 @@ export class MatchFlyerService {
     }
   }
 
+  private isRendererUnavailable(message?: string) {
+    if (!message) return false;
+    return message.includes('@resvg/resvg-js');
+  }
+
+  private buildSvgResponse(svg: string) {
+    return {
+      buffer: Buffer.from(svg, 'utf8'),
+      contentType: 'image/svg+xml',
+      fileExtension: 'svg',
+    };
+  }
+
   private async loadResvg() {
     if (!this.resvgModule) {
       this.resvgModule = import('@resvg/resvg-js');
