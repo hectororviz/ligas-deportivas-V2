@@ -90,7 +90,7 @@ export class MatchFlyerService {
       return rendered;
     } catch (error) {
       if (error instanceof BadRequestException && this.isRendererUnavailable(error.message)) {
-        const fallbackRender = await this.renderWithSharp(svg);
+        const fallbackRender = await this.renderWithSharp(svg, 'jpeg');
         if (fallbackRender) {
           return fallbackRender;
         }
@@ -110,7 +110,7 @@ export class MatchFlyerService {
       return { buffer: Buffer.from(image.asPng()), contentType: 'image/png', fileExtension: 'png' };
     } catch (error) {
       if (error instanceof BadRequestException && this.isRendererUnavailable(error.message)) {
-        const sharpRender = await this.renderWithSharp(svg);
+        const sharpRender = await this.renderWithSharp(svg, 'jpeg');
         if (sharpRender) {
           return sharpRender;
         }
@@ -127,11 +127,15 @@ export class MatchFlyerService {
     return message.includes('@resvg/resvg-js');
   }
 
-  private async renderWithSharp(svg: string) {
+  private async renderWithSharp(svg: string, format: 'png' | 'jpeg' = 'png') {
     try {
       const sharp = await this.loadSharp();
-      const buffer = await sharp(Buffer.from(svg)).png().toBuffer();
-      return { buffer, contentType: 'image/png', fileExtension: 'png' };
+      const transformer = sharp(Buffer.from(svg));
+      const buffer =
+        format === 'jpeg' ? await transformer.jpeg({ quality: 90 }).toBuffer() : await transformer.png().toBuffer();
+      const contentType = format === 'jpeg' ? 'image/jpeg' : 'image/png';
+      const fileExtension = format === 'jpeg' ? 'jpg' : 'png';
+      return { buffer, contentType, fileExtension };
     } catch (error) {
       if (error instanceof BadRequestException && this.isSharpUnavailable(error.message)) {
         return null;
