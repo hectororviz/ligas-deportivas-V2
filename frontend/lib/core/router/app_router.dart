@@ -18,6 +18,7 @@ import '../../features/settings/account_settings_page.dart';
 import '../../features/settings/site_identity_page.dart';
 import '../../features/settings/settings_page.dart';
 import '../../features/settings/user_management_page.dart';
+import '../../features/settings/flyer_template_page.dart';
 import '../../features/shared/widgets/app_shell.dart';
 import '../../features/standings/presentation/standings_page.dart';
 import '../../features/standings/presentation/zone_standings_page.dart';
@@ -151,6 +152,10 @@ GoRouter createRouter(Ref ref) {
               GoRoute(
                 path: 'permissions',
                 builder: (context, state) => const RolePermissionsPage(),
+              ),
+              GoRoute(
+                path: 'flyer-template',
+                builder: (context, state) => const FlyerTemplatePage(),
               )
             ],
           ),
