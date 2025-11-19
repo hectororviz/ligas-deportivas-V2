@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/api_client.dart';
 import 'flyer_template.dart';
 
-final flyerTemplateProvider = FutureProvider<FlyerTemplateConfig>((ref) async {
-  final response = await ref.read(apiClientProvider).get<Map<String, dynamic>>('/site-identity/flyer-template');
+final flyerTemplateProvider = FutureProvider.family<FlyerTemplateConfig, int?>((ref, competitionId) async {
+  final path =
+      competitionId == null ? '/site-identity/flyer-template' : '/competitions/$competitionId/flyer-template';
+  final response = await ref.read(apiClientProvider).get<Map<String, dynamic>>(path);
   final data = response.data;
   if (data is Map<String, dynamic>) {
     return FlyerTemplateConfig.fromJson(data);
