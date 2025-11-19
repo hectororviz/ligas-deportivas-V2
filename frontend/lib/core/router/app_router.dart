@@ -178,10 +178,6 @@ GoRouter createRouter(Ref ref) {
                 path: 'permissions',
                 builder: (context, state) => const RolePermissionsPage(),
               ),
-              GoRoute(
-                path: 'flyer-template',
-                builder: (context, state) => const FlyerTemplatePage(),
-              )
             ],
           ),
         ],
