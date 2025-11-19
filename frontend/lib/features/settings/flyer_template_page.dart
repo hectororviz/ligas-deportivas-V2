@@ -206,10 +206,20 @@ class _FlyerTemplatePageState extends ConsumerState<FlyerTemplatePage> {
             children: [
               Text('Fondo 1080x1920 (PNG o JPG)', style: theme.textTheme.titleSmall),
               const SizedBox(height: 8),
-              Text(
-                'Este archivo se usará como imagen base para cada flyer. Debe respetar el tamaño y una relación vertical.',
-                style: theme.textTheme.bodyMedium,
-              ),
+        Text(
+          'Este archivo se usará como imagen base para cada flyer. Debe respetar el tamaño y una relación vertical.',
+          style: theme.textTheme.bodyMedium,
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'Para que aparezca en la descarga final, tu SVG debe incluir el token {{{assets.background}}} dentro de una etiqueta <image>.',
+          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 8),
+        SelectableText(
+          '<image href="{{{assets.background}}}" x="0" y="0" width="1080" height="1920" />',
+          style: theme.textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
+        ),
               const SizedBox(height: 12),
               Wrap(
                 spacing: 12,
@@ -253,6 +263,11 @@ class _FlyerTemplatePageState extends ConsumerState<FlyerTemplatePage> {
         Text(
           'La plantilla SVG define las posiciones de textos, logos y tokens dinámicos. Puedes usar Mustache para insertar tokens.',
           style: theme.textTheme.bodyMedium,
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'El PNG descargado será exactamente el SVG resultante tras reemplazar los tokens, por lo que debes ubicar ahí el fondo, textos y logos.',
+          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 12),
         Wrap(
