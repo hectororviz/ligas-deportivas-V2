@@ -10,21 +10,56 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as dayjs from 'dayjs';
 import 'dayjs/locale/es';
-import { Match, Round } from '@prisma/client';
+import { Match, Round, SiteIdentity } from '@prisma/client';
 
 dayjs.locale('es');
 
-interface FlyerContext {
-  tournamentName: string;
-  zoneName: string;
-  homeClubName: string;
-  awayClubName: string;
-  matchSummaryLine: string;
-  addressLine: string;
-  categories: { time: string; name: string }[];
-  baseImage: { mimeType: string; dataUri: string };
-  homeLogo?: string | null;
-  awayLogo?: string | null;
+interface FlyerCategoryToken {
+  time: string;
+  name: string;
+}
+
+interface FlyerTemplateContext {
+  site: { title: string };
+  tournament: { name: string };
+  zone: { name: string };
+  match: {
+    id: number;
+    summary: string;
+    roundLabel: string;
+    matchdayLabel: string;
+    dateLabel: string;
+    home: { name: string };
+    away: { name: string };
+  };
+  address: { line: string };
+  categories: FlyerCategoryToken[];
+  assets: {
+    background: string;
+    backgroundMimeType: string;
+    homeLogo?: string | null;
+    awayLogo?: string | null;
+  };
+  custom?: Record<string, unknown>;
+}
+
+type TemplateToken = TemplateTextToken | TemplateVariableToken | TemplateSectionToken;
+
+interface TemplateTextToken {
+  type: 'text';
+  value: string;
+}
+
+interface TemplateVariableToken {
+  type: 'variable';
+  name: string;
+  raw: boolean;
+}
+
+interface TemplateSectionToken {
+  type: 'section';
+  name: string;
+  tokens: TemplateToken[];
 }
 
 @Injectable()
@@ -61,29 +96,31 @@ export class MatchFlyerService {
       throw new NotFoundException('Partido no encontrado.');
     }
 
-    if (!identity?.flyerKey) {
-      throw new BadRequestException('El sitio no tiene un flyer configurado.');
+    if (!identity?.backgroundImage) {
+      throw new BadRequestException('El sitio no tiene una imagen de fondo configurada para los flyers.');
     }
 
-    const flyerBase = await this.loadExistingFile(identity.flyerKey, 'flyer');
+    if (!identity.layoutSvg) {
+      throw new BadRequestException('El sitio no tiene una plantilla SVG configurada para los flyers.');
+    }
+
+    const [backgroundAsset, layoutTemplate] = await Promise.all([
+      this.loadExistingFile(identity.backgroundImage, 'fondo del flyer'),
+      this.readTemplateFile(identity.layoutSvg, 'layout del flyer'),
+    ]);
 
     const homeLogo = await this.readLogo(match.homeClub?.logoKey);
     const awayLogo = await this.readLogo(match.awayClub?.logoKey);
 
-    const context: FlyerContext = {
-      tournamentName: match.tournament.name,
-      zoneName: this.resolveZoneName(match.zone.name),
-      homeClubName: match.homeClub?.shortName || match.homeClub?.name || 'Local',
-      awayClubName: match.awayClub?.shortName || match.awayClub?.name || 'Visitante',
-      matchSummaryLine: this.buildMatchSummary(match),
-      addressLine: this.resolveAddress(match.homeClub?.shortName || match.homeClub?.name),
-      categories: this.buildCategories(match),
-      baseImage: flyerBase,
+    const context = this.buildTemplateContext({
+      match,
+      identity,
+      background: backgroundAsset,
       homeLogo,
       awayLogo,
-    };
+    });
 
-    const svg = this.buildSvg(context);
+    const svg = this.renderTemplate(layoutTemplate, context);
 
     try {
       const rendered = await this.renderFlyer(svg);
@@ -151,6 +188,243 @@ export class MatchFlyerService {
       contentType: 'image/svg+xml',
       fileExtension: 'svg',
     };
+  }
+
+  private buildTemplateContext(options: {
+    match: Match & {
+      categories: {
+        kickoffTime: string | null;
+        tournamentCategory?: { category?: { name?: string | null } | null };
+      }[];
+    };
+    identity: SiteIdentity;
+    background: { mimeType: string; dataUri: string };
+    homeLogo?: string | null;
+    awayLogo?: string | null;
+  }): FlyerTemplateContext {
+    const homeName = options.match.homeClub?.shortName || options.match.homeClub?.name || 'Local';
+    const awayName = options.match.awayClub?.shortName || options.match.awayClub?.name || 'Visitante';
+    const custom = this.extractCustomConfig(options.identity.tokenConfig);
+
+    return {
+      site: { title: options.identity.title },
+      tournament: { name: options.match.tournament.name },
+      zone: { name: this.resolveZoneName(options.match.zone.name) },
+      match: {
+        id: options.match.id,
+        summary: this.buildMatchSummary(options.match),
+        roundLabel: this.resolveRoundNumber(options.match.round),
+        matchdayLabel: options.match.matchday ? `Fecha ${options.match.matchday}` : 'Fecha a confirmar',
+        dateLabel: options.match.date ? dayjs(options.match.date).format('DD/MM/YYYY') : 'Fecha a confirmar',
+        home: { name: homeName },
+        away: { name: awayName },
+      },
+      address: { line: this.resolveAddress(homeName) },
+      categories: this.buildCategories(options.match),
+      assets: {
+        background: options.background.dataUri,
+        backgroundMimeType: options.background.mimeType,
+        homeLogo: options.homeLogo,
+        awayLogo: options.awayLogo,
+      },
+      custom,
+    };
+  }
+
+  private renderTemplate(template: string, context: FlyerTemplateContext) {
+    const tokens = this.parseTemplate(template);
+    return this.renderTokens(tokens, [context]);
+  }
+
+  private parseTemplate(template: string) {
+    const { tokens } = this.readSection(template, 0);
+    return tokens;
+  }
+
+  private readSection(template: string, startIndex: number, stopTag?: string): { tokens: TemplateToken[]; index: number } {
+    const tokens: TemplateToken[] = [];
+    let cursor = startIndex;
+    while (cursor < template.length) {
+      const openIndex = template.indexOf('{{', cursor);
+      if (openIndex === -1) {
+        tokens.push({ type: 'text', value: template.slice(cursor) });
+        cursor = template.length;
+        break;
+      }
+      if (openIndex > cursor) {
+        tokens.push({ type: 'text', value: template.slice(cursor, openIndex) });
+      }
+
+      const isTriple = template.startsWith('{{{', openIndex);
+      if (isTriple) {
+        const closeTriple = template.indexOf('}}}', openIndex + 3);
+        if (closeTriple === -1) {
+          tokens.push({ type: 'text', value: template.slice(openIndex) });
+          cursor = template.length;
+          break;
+        }
+        const name = template.slice(openIndex + 3, closeTriple).trim();
+        tokens.push({ type: 'variable', name, raw: true });
+        cursor = closeTriple + 3;
+        continue;
+      }
+
+      const closeIndex = template.indexOf('}}', openIndex + 2);
+      if (closeIndex === -1) {
+        tokens.push({ type: 'text', value: template.slice(openIndex) });
+        cursor = template.length;
+        break;
+      }
+
+      const tagContent = template.slice(openIndex + 2, closeIndex).trim();
+      if (tagContent.startsWith('/')) {
+        const closingName = tagContent.slice(1).trim();
+        if (stopTag && closingName === stopTag) {
+          return { tokens, index: closeIndex + 2 };
+        }
+        tokens.push({ type: 'text', value: template.slice(openIndex, closeIndex + 2) });
+        cursor = closeIndex + 2;
+        continue;
+      }
+
+      if (tagContent.startsWith('#')) {
+        const sectionName = tagContent.slice(1).trim();
+        const inner = this.readSection(template, closeIndex + 2, sectionName);
+        tokens.push({ type: 'section', name: sectionName, tokens: inner.tokens });
+        cursor = inner.index;
+        continue;
+      }
+
+      if (tagContent.startsWith('!')) {
+        cursor = closeIndex + 2;
+        continue;
+      }
+
+      if (tagContent.startsWith('&')) {
+        const name = tagContent.slice(1).trim();
+        tokens.push({ type: 'variable', name, raw: true });
+        cursor = closeIndex + 2;
+        continue;
+      }
+
+      if (!tagContent) {
+        cursor = closeIndex + 2;
+        continue;
+      }
+
+      tokens.push({ type: 'variable', name: tagContent, raw: false });
+      cursor = closeIndex + 2;
+    }
+
+    if (stopTag) {
+      throw new BadRequestException(`No se encontró el cierre para la sección "${stopTag}" en la plantilla del flyer.`);
+    }
+
+    return { tokens, index: cursor };
+  }
+
+  private renderTokens(tokens: TemplateToken[], stack: unknown[]): string {
+    let result = '';
+    for (const token of tokens) {
+      if (token.type === 'text') {
+        result += token.value;
+        continue;
+      }
+
+      if (token.type === 'variable') {
+        const value = this.lookupValue(stack, token.name);
+        if (value === undefined || value === null) {
+          continue;
+        }
+        const stringValue = typeof value === 'string' ? value : String(value);
+        result += token.raw ? stringValue : this.escapeHtml(stringValue);
+        continue;
+      }
+
+      if (token.type === 'section') {
+        const value = this.lookupValue(stack, token.name);
+        if (Array.isArray(value)) {
+          for (const item of value) {
+            const context = this.normalizeContext(item);
+            result += this.renderTokens(token.tokens, [context, ...stack]);
+          }
+          continue;
+        }
+
+        if (this.isTruthy(value)) {
+          const context = this.normalizeContext(value);
+          result += this.renderTokens(token.tokens, [context, ...stack]);
+        }
+      }
+    }
+    return result;
+  }
+
+  private lookupValue(stack: unknown[], path: string): unknown {
+    if (!path) {
+      return undefined;
+    }
+
+    if (path === '.') {
+      return stack[0];
+    }
+
+    const segments = path.split('.');
+    for (const context of stack) {
+      let current: unknown = context;
+      let matched = true;
+      for (const segment of segments) {
+        if (segment === '.') {
+          continue;
+        }
+
+        if (current === null || current === undefined) {
+          matched = false;
+          break;
+        }
+
+        if (typeof current !== 'object' && typeof current !== 'function') {
+          matched = false;
+          break;
+        }
+
+        current = (current as Record<string, unknown>)[segment];
+        if (current === undefined) {
+          matched = false;
+          break;
+        }
+      }
+
+      if (matched && current !== undefined) {
+        return current;
+      }
+    }
+
+    return undefined;
+  }
+
+  private normalizeContext(value: unknown) {
+    if (value && typeof value === 'object') {
+      return value as Record<string, unknown>;
+    }
+    return { '.': value };
+  }
+
+  private isTruthy(value: unknown) {
+    if (value === false || value === null || value === undefined) {
+      return false;
+    }
+    if (Array.isArray(value)) {
+      return value.length > 0;
+    }
+    return Boolean(value);
+  }
+
+  private extractCustomConfig(config: SiteIdentity['tokenConfig']) {
+    if (!config || typeof config !== 'object' || Array.isArray(config)) {
+      return undefined;
+    }
+    return config as Record<string, unknown>;
   }
 
   private async loadResvg() {
@@ -250,13 +524,13 @@ export class MatchFlyerService {
     try {
       filePath = this.storageService.resolveAttachmentPath(key);
     } catch {
-      throw new NotFoundException(`El archivo base del ${label} no existe.`);
+      throw new NotFoundException(`El archivo del ${label} no existe.`);
     }
 
     try {
       await fs.access(filePath);
     } catch {
-      throw new NotFoundException(`El archivo base del ${label} no existe.`);
+      throw new NotFoundException(`El archivo del ${label} no existe.`);
     }
 
     const buffer = await fs.readFile(filePath);
@@ -265,6 +539,23 @@ export class MatchFlyerService {
       mimeType,
       dataUri: `data:${mimeType};base64,${buffer.toString('base64')}`,
     };
+  }
+
+  private async readTemplateFile(key: string, label: string) {
+    let filePath: string;
+    try {
+      filePath = this.storageService.resolveAttachmentPath(key);
+    } catch {
+      throw new NotFoundException(`El archivo del ${label} no existe.`);
+    }
+
+    try {
+      await fs.access(filePath);
+    } catch {
+      throw new NotFoundException(`El archivo del ${label} no existe.`);
+    }
+
+    return fs.readFile(filePath, 'utf8');
   }
 
   private async readLogo(logoKey?: string | null) {
@@ -282,58 +573,7 @@ export class MatchFlyerService {
     }
   }
 
-  private buildSvg(context: FlyerContext) {
-    const categoryLines = context.categories.map((cat) => `${this.escape(cat.time)} - ${this.escape(cat.name)}`);
-    const lineHeight = 80;
-    const categories = categoryLines
-      .map((line, index) => {
-        const dy = index === 0 ? 0 : lineHeight;
-        return `<tspan x="140" dy="${dy}">${line}</tspan>`;
-      })
-      .join('');
-
-    const tournament = this.escape(`Torneo ${context.tournamentName}`);
-    const zone = this.escape(context.zoneName);
-    const home = this.escape(context.homeClubName);
-    const away = this.escape(context.awayClubName);
-
-    return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
-  <defs>
-    <style>
-      .eyebrow { font: 900 72px 'Arial', sans-serif; fill: #3f6212; letter-spacing: 4px; }
-      .title { font: 900 124px 'Arial', sans-serif; fill: #111827; }
-      .subtitle { font: 800 84px 'Arial', sans-serif; fill: #4b5563; }
-      .label { font: 900 60px 'Arial', sans-serif; fill: #111827; }
-      .info { font: 800 52px 'Arial', sans-serif; fill: #ffffff; letter-spacing: 2px; }
-      .category { font: 800 56px 'Arial', sans-serif; fill: #111827; }
-      .section { font: 900 62px 'Arial', sans-serif; fill: #111827; }
-      .address { font: 800 40px 'Arial', sans-serif; fill: #ffffff; letter-spacing: 1px; }
-    </style>
-  </defs>
-  <image href="${context.baseImage.dataUri}" x="0" y="0" width="1080" height="1920" preserveAspectRatio="xMidYMid slice" />
-
-  <text x="540" y="150" text-anchor="middle" class="eyebrow">Torneo</text>
-  <text x="540" y="260" text-anchor="middle" class="title">${tournament.replace('Torneo ', '')}</text>
-  <text x="540" y="350" text-anchor="middle" class="subtitle">${zone}</text>
-
-  ${context.homeLogo ? `<image href="${context.homeLogo}" x="140" y="420" width="360" height="360" />` : ''}
-  ${context.awayLogo ? `<image href="${context.awayLogo}" x="580" y="420" width="360" height="360" />` : ''}
-  <text x="320" y="840" text-anchor="middle" class="label">${home}</text>
-  <text x="760" y="840" text-anchor="middle" class="label">${away}</text>
-  <text x="540" y="670" text-anchor="middle" class="subtitle">vs</text>
-
-  <rect x="0" y="900" width="1080" height="130" fill="#000000" />
-  <text x="540" y="985" text-anchor="middle" class="info">${this.escape(context.matchSummaryLine)}</text>
-
-  <text x="120" y="1110" class="section">Horarios</text>
-  <text x="140" y="1180" class="category">${categories}</text>
-
-  <rect x="0" y="1820" width="1080" height="70" fill="#000000" />
-  <text x="540" y="1870" text-anchor="middle" class="address">${this.escape(context.addressLine)}</text>
-</svg>`;
-  }
-
-  private escape(value: string) {
+  private escapeHtml(value: string) {
     return value
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
@@ -356,16 +596,4 @@ export class MatchFlyerService {
     }
   }
 
-  private getFileExtensionFromMime(mimeType: string) {
-    switch (mimeType.toLowerCase()) {
-      case 'image/png':
-        return 'png';
-      case 'image/jpeg':
-        return 'jpg';
-      case 'image/svg+xml':
-        return 'svg';
-      default:
-        return 'bin';
-    }
-  }
 }
