@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http_parser/http_parser.dart';
 
 import '../../services/api_client.dart';
 import 'flyer_template.dart';
@@ -418,7 +419,7 @@ class _FlyerTemplatePageState extends ConsumerState<FlyerTemplatePage> {
             MultipartFile.fromBytes(
               _layoutBytes!,
               filename: _layoutName ?? 'flyer-layout.svg',
-              contentType: 'image/svg+xml',
+              contentType: MediaType.parse('image/svg+xml'),
             ),
           ),
         );
