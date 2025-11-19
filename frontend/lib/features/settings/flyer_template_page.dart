@@ -10,9 +10,9 @@ import 'flyer_template.dart';
 import 'flyer_template_provider.dart';
 
 class FlyerTemplatePage extends ConsumerStatefulWidget {
-  const FlyerTemplatePage({super.key, this.competitionId, this.tournamentName});
+  const FlyerTemplatePage({super.key, required this.competitionId, this.tournamentName});
 
-  final int? competitionId;
+  final int competitionId;
   final String? tournamentName;
 
   @override
@@ -51,19 +51,14 @@ class _FlyerTemplatePageState extends ConsumerState<FlyerTemplatePage> {
     AsyncValue<List<FlyerTemplateToken>> tokensAsync,
   ) {
     final theme = Theme.of(context);
-    final title = widget.competitionId == null
-        ? 'Plantilla de flyers'
-        : 'Plantilla de flyers · ${widget.tournamentName ?? 'Torneo ${widget.competitionId}'}';
-    final description = widget.competitionId == null
-        ? 'Sube un fondo en 1080x1920 y un archivo SVG para definir el layout base de los flyers automáticos.'
-        : 'Esta configuración aplica únicamente para el torneo seleccionado. Si no cargas archivos, se utilizará la plantilla global.';
-    final showResetBanner = widget.competitionId != null && !template.hasCustomTemplate;
-    final templateScopeLabel = widget.competitionId == null
-        ? null
-        : template.hasCustomTemplate
-            ? 'Plantilla personalizada para este torneo'
-            : 'Usando la plantilla global del sitio';
-    final showDeleteButton = widget.competitionId != null && template.hasCustomTemplate;
+    final title = 'Plantilla de flyers · ${widget.tournamentName ?? 'Torneo ${widget.competitionId}'}';
+    final description =
+        'Esta configuración aplica únicamente para el torneo seleccionado. Si no cargas archivos, se utilizará la plantilla global.';
+    final showResetBanner = !template.hasCustomTemplate;
+    final templateScopeLabel = template.hasCustomTemplate
+        ? 'Plantilla personalizada para este torneo'
+        : 'Usando la plantilla global del sitio';
+    final showDeleteButton = template.hasCustomTemplate;
 
     return ListView(
       children: [
@@ -510,9 +505,6 @@ class _FlyerTemplatePageState extends ConsumerState<FlyerTemplatePage> {
   }
 
   String _templatePath() {
-    if (widget.competitionId == null) {
-      return '/site-identity/flyer-template';
-    }
     return '/competitions/${widget.competitionId}/flyer-template';
   }
 
