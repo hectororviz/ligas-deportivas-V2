@@ -240,8 +240,23 @@ export class MatchFlyerService {
   }
 
   private renderTemplate(template: string, context: FlyerTemplateContext) {
-    const tokens = this.parseTemplate(template);
+    const normalizedTemplate = this.normalizeTemplateDelimiters(template);
+    const tokens = this.parseTemplate(normalizedTemplate);
     return this.renderTokens(tokens, [context]);
+  }
+
+  private normalizeTemplateDelimiters(template: string) {
+    if (!template.includes('&#') && !template.includes('&lbrace;') && !template.includes('&rbrace;')) {
+      return template;
+    }
+
+    return template
+      .replace(/&#123;/g, '{')
+      .replace(/&#125;/g, '}')
+      .replace(/&#x7b;/gi, '{')
+      .replace(/&#x7d;/gi, '}')
+      .replace(/&lbrace;/gi, '{')
+      .replace(/&rbrace;/gi, '}');
   }
 
   private parseTemplate(template: string) {
