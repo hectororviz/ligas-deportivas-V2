@@ -49,6 +49,16 @@ class SettingsPage extends StatelessWidget {
             onTap: () => context.push('/settings/colors'),
           ),
         ),
+        const SizedBox(height: 12),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.photo_library_outlined),
+            title: const Text('Plantilla de flyers'),
+            subtitle: const Text('Gestiona el fondo y layout SVG para los flyers automáticos.'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/settings/flyer-template'),
+          ),
+        ),
         Card(
           child: ListTile(
             leading: const Icon(Icons.security_outlined),
