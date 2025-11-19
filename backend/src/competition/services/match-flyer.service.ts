@@ -14,6 +14,17 @@ import { Match, MatchStatus, Round, SiteIdentity } from '@prisma/client';
 
 dayjs.locale('es');
 
+type MatchWithFlyerRelations = Match & {
+  tournament: { name: string };
+  zone: { name: string };
+  homeClub?: { name?: string | null; shortName?: string | null; logoKey?: string | null } | null;
+  awayClub?: { name?: string | null; shortName?: string | null; logoKey?: string | null } | null;
+  categories: {
+    kickoffTime: string | null;
+    tournamentCategory?: { category?: { name?: string | null } | null } | null;
+  }[];
+};
+
 interface FlyerCategoryToken {
   time: string;
   name: string;
@@ -193,12 +204,7 @@ export class MatchFlyerService {
   }
 
   private buildTemplateContext(options: {
-    match: Match & {
-      categories: {
-        kickoffTime: string | null;
-        tournamentCategory?: { category?: { name?: string | null } | null };
-      }[];
-    };
+    match: MatchWithFlyerRelations;
     identity: SiteIdentity;
     background: { mimeType: string; dataUri: string };
     homeLogo?: string | null;
@@ -505,14 +511,7 @@ export class MatchFlyerService {
     return `${name} - Dirección a confirmar`;
   }
 
-  private buildCategories(
-    match: Match & {
-      categories: {
-        kickoffTime: string | null;
-        tournamentCategory?: { category?: { name?: string | null } | null };
-      }[];
-    },
-  ) {
+  private buildCategories(match: MatchWithFlyerRelations) {
     return match.categories
       .map((category) => ({
         time: category.kickoffTime || 'Horario a confirmar',
@@ -621,16 +620,7 @@ export class MatchFlyerService {
     return this.renderFlyer(svg);
   }
 
-  private buildPreviewMatch(): Match & {
-    tournament: { name: string };
-    zone: { name: string };
-    homeClub?: { name?: string | null; shortName?: string | null } | null;
-    awayClub?: { name?: string | null; shortName?: string | null } | null;
-    categories: {
-      kickoffTime: string | null;
-      tournamentCategory?: { category?: { name?: string | null } | null } | null;
-    }[];
-  } {
+  private buildPreviewMatch(): MatchWithFlyerRelations {
     const now = new Date();
     return {
       id: 0,
@@ -652,16 +642,7 @@ export class MatchFlyerService {
         { kickoffTime: '09:00', tournamentCategory: { category: { name: 'Sub 12' } } },
         { kickoffTime: '10:30', tournamentCategory: { category: { name: 'Sub 14' } } },
       ],
-    } as Match & {
-      tournament: { name: string };
-      zone: { name: string };
-      homeClub?: { name?: string | null; shortName?: string | null } | null;
-      awayClub?: { name?: string | null; shortName?: string | null } | null;
-      categories: {
-        kickoffTime: string | null;
-        tournamentCategory?: { category?: { name?: string | null } | null } | null;
-      }[];
-    };
+    } as MatchWithFlyerRelations;
   }
 
   private escapeHtml(value: string) {

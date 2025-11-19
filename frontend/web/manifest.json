@@ -1,0 +1,11 @@
+{
+  "name": "ligas_deportivas_v2",
+  "short_name": "Ligas",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#121212",
+  "theme_color": "#0056B3",
+  "description": "Panel de gestión para las ligas deportivas.",
+  "orientation": "portrait-primary",
+  "prefer_related_applications": false
+}
