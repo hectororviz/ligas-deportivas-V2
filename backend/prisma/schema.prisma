@@ -127,6 +127,7 @@ model Tournament {
   zones           Zone[]
   categories      TournamentCategory[]
   matches         Match[]
+  flyerTemplate  FlyerTemplate?
 }
 
 model Zone {
