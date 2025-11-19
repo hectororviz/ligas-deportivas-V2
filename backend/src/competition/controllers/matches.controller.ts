@@ -24,6 +24,7 @@ import { RequestUser } from '../../common/interfaces/request-user.interface';
 import { UpdateMatchdayDto } from '../dto/update-matchday.dto';
 import { MatchFlyerService } from '../services/match-flyer.service';
 import { Response } from 'express';
+import { MATCH_FLYER_TOKEN_DEFINITIONS } from '../dto/match-flyer-token.dto';
 
 @Controller()
 export class MatchesController {
@@ -64,6 +65,11 @@ export class MatchesController {
     @Param('categoryId', ParseIntPipe) categoryId: number
   ) {
     return this.matchesService.getResult(matchId, categoryId);
+  }
+
+  @Get('matches/flyer/tokens')
+  listFlyerTokens() {
+    return MATCH_FLYER_TOKEN_DEFINITIONS;
   }
 
   @Get('matches/:matchId/flyer')
