@@ -546,6 +546,19 @@ model CategoryStanding {
   @@unique([zoneId, tournamentCategoryId, clubId])
 }
 
+model FlyerTemplate {
+  id             Int        @id @default(autoincrement())
+  competitionId  Int?
+  backgroundKey  String?
+  layoutKey      String?
+  layoutFileName String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  competition    Tournament? @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+
+  @@unique([competitionId])
+}
+
 model AuditLog {
   id        Int      @id @default(autoincrement())
   userId    Int?

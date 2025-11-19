@@ -10,7 +10,7 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as dayjs from 'dayjs';
 import 'dayjs/locale/es';
-import { Match, Round, SiteIdentity } from '@prisma/client';
+import { Match, MatchStatus, Round, SiteIdentity } from '@prisma/client';
 
 dayjs.locale('es');
 
@@ -96,17 +96,19 @@ export class MatchFlyerService {
       throw new NotFoundException('Partido no encontrado.');
     }
 
-    if (!identity?.backgroundImage) {
-      throw new BadRequestException('El sitio no tiene una imagen de fondo configurada para los flyers.');
+    const templateAssets = await this.resolveTemplateAssets(match.tournamentId, identity);
+    if (!templateAssets) {
+      throw new BadRequestException(
+        'No se encontró una plantilla de flyer configurada para este torneo ni a nivel global.',
+      );
     }
 
-    if (!identity.layoutSvg) {
-      throw new BadRequestException('El sitio no tiene una plantilla SVG configurada para los flyers.');
-    }
+    const siteIdentity = identity ??
+      ({ title: 'Ligas Deportivas', tokenConfig: null } as SiteIdentity);
 
     const [backgroundAsset, layoutTemplate] = await Promise.all([
-      this.loadExistingFile(identity.backgroundImage, 'fondo del flyer'),
-      this.readTemplateFile(identity.layoutSvg, 'layout del flyer'),
+      this.loadExistingFile(templateAssets.backgroundKey, 'fondo del flyer'),
+      this.readTemplateFile(templateAssets.layoutKey, 'layout del flyer'),
     ]);
 
     const homeLogo = await this.readLogo(match.homeClub?.logoKey);
@@ -114,7 +116,7 @@ export class MatchFlyerService {
 
     const context = this.buildTemplateContext({
       match,
-      identity,
+      identity: siteIdentity,
       background: backgroundAsset,
       homeLogo,
       awayLogo,
@@ -571,6 +573,95 @@ export class MatchFlyerService {
     } catch {
       return null;
     }
+  }
+
+  private async resolveTemplateAssets(tournamentId: number, identity: SiteIdentity | null) {
+    const competitionTemplate = await this.prisma.flyerTemplate.findUnique({ where: { competitionId: tournamentId } });
+    if (competitionTemplate?.backgroundKey && competitionTemplate?.layoutKey) {
+      return { backgroundKey: competitionTemplate.backgroundKey, layoutKey: competitionTemplate.layoutKey };
+    }
+
+    const defaultTemplate = await this.prisma.flyerTemplate.findFirst({
+      where: { competitionId: null },
+      orderBy: { id: 'desc' },
+    });
+    if (defaultTemplate?.backgroundKey && defaultTemplate?.layoutKey) {
+      return { backgroundKey: defaultTemplate.backgroundKey, layoutKey: defaultTemplate.layoutKey };
+    }
+
+    if (identity?.backgroundImage && identity.layoutSvg) {
+      return { backgroundKey: identity.backgroundImage, layoutKey: identity.layoutSvg };
+    }
+
+    return null;
+  }
+
+  async previewTemplate(options: {
+    backgroundKey: string;
+    layoutKey: string;
+    siteTitle: string;
+    tokenConfig?: SiteIdentity['tokenConfig'];
+  }) {
+    const identity = {
+      title: options.siteTitle,
+      tokenConfig: options.tokenConfig ?? null,
+    } as SiteIdentity;
+    const [backgroundAsset, layoutTemplate] = await Promise.all([
+      this.loadExistingFile(options.backgroundKey, 'fondo del flyer'),
+      this.readTemplateFile(options.layoutKey, 'layout del flyer'),
+    ]);
+    const context = this.buildTemplateContext({
+      match: this.buildPreviewMatch(),
+      identity,
+      background: backgroundAsset,
+      homeLogo: null,
+      awayLogo: null,
+    });
+    const svg = this.renderTemplate(layoutTemplate, context);
+    return this.renderFlyer(svg);
+  }
+
+  private buildPreviewMatch(): Match & {
+    tournament: { name: string };
+    zone: { name: string };
+    homeClub?: { name?: string | null; shortName?: string | null } | null;
+    awayClub?: { name?: string | null; shortName?: string | null } | null;
+    categories: {
+      kickoffTime: string | null;
+      tournamentCategory?: { category?: { name?: string | null } | null } | null;
+    }[];
+  } {
+    const now = new Date();
+    return {
+      id: 0,
+      tournamentId: 0,
+      zoneId: 0,
+      matchday: 1,
+      round: Round.FIRST,
+      date: now,
+      status: MatchStatus.PROGRAMMED,
+      homeClubId: null,
+      awayClubId: null,
+      createdAt: now,
+      updatedAt: now,
+      tournament: { name: 'Torneo de ejemplo' },
+      zone: { name: 'Zona A' },
+      homeClub: { name: 'Club Local', shortName: 'Local' },
+      awayClub: { name: 'Club Visitante', shortName: 'Visitante' },
+      categories: [
+        { kickoffTime: '09:00', tournamentCategory: { category: { name: 'Sub 12' } } },
+        { kickoffTime: '10:30', tournamentCategory: { category: { name: 'Sub 14' } } },
+      ],
+    } as Match & {
+      tournament: { name: string };
+      zone: { name: string };
+      homeClub?: { name?: string | null; shortName?: string | null } | null;
+      awayClub?: { name?: string | null; shortName?: string | null } | null;
+      categories: {
+        kickoffTime: string | null;
+        tournamentCategory?: { category?: { name?: string | null } | null } | null;
+      }[];
+    };
   }
 
   private escapeHtml(value: string) {

@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
@@ -14,6 +15,7 @@ import '../../shared/widgets/app_data_table_style.dart';
 import '../../shared/widgets/table_filters_bar.dart';
 
 const _moduleTorneos = 'TORNEOS';
+const _moduleConfiguracion = 'CONFIGURACION';
 const _actionCreate = 'CREATE';
 const _actionUpdate = 'UPDATE';
 
@@ -342,15 +344,26 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
     );
   }
 
+  void _openTournamentFlyerTemplate(TournamentSummary tournament) {
+    if (!mounted) {
+      return;
+    }
+    context.push(
+      '/tournaments/${tournament.id}/flyer-template',
+      extra: tournament,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tournamentsAsync = ref.watch(tournamentsProvider);
     final authState = ref.watch(authControllerProvider);
     final user = authState.user;
     final isAdmin = user?.roles.contains('ADMIN') ?? false;
-    final canCreate = isAdmin ||
-        (user?.hasPermission(module: _moduleTorneos, action: _actionCreate) ??
-            false);
+    final canCreate =
+        isAdmin || (user?.hasPermission(module: _moduleTorneos, action: _actionCreate) ?? false);
+    final canManageTemplates =
+        user?.hasPermission(module: _moduleConfiguracion, action: _actionUpdate) ?? false;
     final years = ref.watch(availableTournamentYearsProvider);
     final leaguesAsync = ref.watch(leaguesProvider);
     final filters = ref.watch(tournamentFiltersProvider);
@@ -538,6 +551,8 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
                               tournaments: tournaments,
                               onDetails: _showTournamentDetails,
                               onEdit: _openEditTournament,
+                              onTemplate: _openTournamentFlyerTemplate,
+                              canManageTemplates: canManageTemplates,
                               canEdit: (tournament) => user?.hasPermission(
                                     module: _moduleTorneos,
                                     action: _actionUpdate,
@@ -671,12 +686,16 @@ class _TournamentsDataTable extends StatelessWidget {
     required this.tournaments,
     required this.onDetails,
     required this.onEdit,
+    required this.onTemplate,
+    required this.canManageTemplates,
     required this.canEdit,
   });
 
   final List<TournamentSummary> tournaments;
   final ValueChanged<TournamentSummary> onDetails;
   final ValueChanged<TournamentSummary> onEdit;
+  final ValueChanged<TournamentSummary> onTemplate;
+  final bool canManageTemplates;
   final bool Function(TournamentSummary tournament) canEdit;
 
   @override
@@ -772,6 +791,12 @@ class _TournamentsDataTable extends StatelessWidget {
                       icon: const Icon(Icons.edit_outlined),
                       label: const Text('Editar'),
                     ),
+                    if (canManageTemplates)
+                      FilledButton.tonalIcon(
+                        onPressed: () => onTemplate(tournaments[index]),
+                        icon: const Icon(Icons.palette_outlined),
+                        label: const Text('Plantilla'),
+                      ),
                   ],
                 ),
               ),

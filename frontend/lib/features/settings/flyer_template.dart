@@ -4,6 +4,7 @@ class FlyerTemplateConfig {
     this.layoutPreviewUrl,
     this.layoutFileName,
     this.updatedAt,
+    this.hasCustomTemplate = false,
   });
 
   factory FlyerTemplateConfig.fromJson(Map<String, dynamic> json) {
@@ -12,6 +13,7 @@ class FlyerTemplateConfig {
       layoutPreviewUrl: json['layoutPreviewUrl'] as String?,
       layoutFileName: json['layoutFileName'] as String?,
       updatedAt: _parseDate(json['updatedAt']),
+      hasCustomTemplate: json['hasCustomTemplate'] as bool? ?? false,
     );
   }
 
@@ -19,6 +21,7 @@ class FlyerTemplateConfig {
   final String? layoutPreviewUrl;
   final String? layoutFileName;
   final DateTime? updatedAt;
+  final bool hasCustomTemplate;
 
   static DateTime? _parseDate(dynamic value) {
     if (value is String) {

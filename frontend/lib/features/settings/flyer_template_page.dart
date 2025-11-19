@@ -10,7 +10,10 @@ import 'flyer_template.dart';
 import 'flyer_template_provider.dart';
 
 class FlyerTemplatePage extends ConsumerStatefulWidget {
-  const FlyerTemplatePage({super.key});
+  const FlyerTemplatePage({super.key, this.competitionId, this.tournamentName});
+
+  final int? competitionId;
+  final String? tournamentName;
 
   @override
   ConsumerState<FlyerTemplatePage> createState() => _FlyerTemplatePageState();
@@ -19,6 +22,7 @@ class FlyerTemplatePage extends ConsumerStatefulWidget {
 class _FlyerTemplatePageState extends ConsumerState<FlyerTemplatePage> {
   bool _saving = false;
   bool _previewing = false;
+  bool _deleting = false;
   Uint8List? _backgroundBytes;
   String? _backgroundName;
   Uint8List? _layoutBytes;
@@ -26,7 +30,7 @@ class _FlyerTemplatePageState extends ConsumerState<FlyerTemplatePage> {
 
   @override
   Widget build(BuildContext context) {
-    final templateAsync = ref.watch(flyerTemplateProvider);
+    final templateAsync = ref.watch(flyerTemplateProvider(widget.competitionId));
     final tokensAsync = ref.watch(flyerTokenDefinitionsProvider);
 
     return Padding(
@@ -47,18 +51,59 @@ class _FlyerTemplatePageState extends ConsumerState<FlyerTemplatePage> {
     AsyncValue<List<FlyerTemplateToken>> tokensAsync,
   ) {
     final theme = Theme.of(context);
+    final title = widget.competitionId == null
+        ? 'Plantilla de flyers'
+        : 'Plantilla de flyers · ${widget.tournamentName ?? 'Torneo ${widget.competitionId}'}';
+    final description = widget.competitionId == null
+        ? 'Sube un fondo en 1080x1920 y un archivo SVG para definir el layout base de los flyers automáticos.'
+        : 'Esta configuración aplica únicamente para el torneo seleccionado. Si no cargas archivos, se utilizará la plantilla global.';
+    final showResetBanner = widget.competitionId != null && !template.hasCustomTemplate;
+    final templateScopeLabel = widget.competitionId == null
+        ? null
+        : template.hasCustomTemplate
+            ? 'Plantilla personalizada para este torneo'
+            : 'Usando la plantilla global del sitio';
+    final showDeleteButton = widget.competitionId != null && template.hasCustomTemplate;
 
     return ListView(
       children: [
         Text(
-          'Plantilla de flyers',
+          title,
           style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
         Text(
-          'Sube un fondo en 1080x1920 y un archivo SVG para definir el layout base de los flyers automáticos.',
+          description,
           style: theme.textTheme.bodyMedium,
         ),
+        if (templateScopeLabel != null) ...[
+          const SizedBox(height: 12),
+          Text(
+            templateScopeLabel,
+            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary),
+          ),
+        ],
+        if (showResetBanner) ...[
+          const SizedBox(height: 12),
+          Card(
+            color: theme.colorScheme.surfaceVariant,
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: theme.colorScheme.primary),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Este torneo está heredando la plantilla global. Carga archivos nuevos para sobrescribirla.',
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 24),
         Card(
           child: Padding(
@@ -97,6 +142,20 @@ class _FlyerTemplatePageState extends ConsumerState<FlyerTemplatePage> {
                           : const Icon(Icons.visibility_outlined),
                       label: const Text('Vista previa'),
                     ),
+                    if (showDeleteButton) ...[
+                      const SizedBox(width: 12),
+                      TextButton.icon(
+                        onPressed: _deleting ? null : _deleteTemplate,
+                        icon: _deleting
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.restart_alt),
+                        label: const Text('Restablecer a plantilla global'),
+                      ),
+                    ],
                   ],
                 )
               ],
@@ -370,8 +429,8 @@ class _FlyerTemplatePageState extends ConsumerState<FlyerTemplatePage> {
         );
       }
 
-      await ref.read(apiClientProvider).put('/site-identity/flyer-template', data: formData);
-      ref.invalidate(flyerTemplateProvider);
+      await ref.read(apiClientProvider).put(_templatePath(), data: formData);
+      ref.invalidate(flyerTemplateProvider(widget.competitionId));
 
       if (!mounted) {
         return;
@@ -409,7 +468,7 @@ class _FlyerTemplatePageState extends ConsumerState<FlyerTemplatePage> {
     });
 
     try {
-      final bytes = await ref.read(apiClientProvider).getBytes('/site-identity/flyer-template/preview');
+      final bytes = await ref.read(apiClientProvider).getBytes('${_templatePath()}/preview');
       if (!mounted) {
         return;
       }
@@ -445,6 +504,43 @@ class _FlyerTemplatePageState extends ConsumerState<FlyerTemplatePage> {
       if (mounted) {
         setState(() {
           _previewing = false;
+        });
+      }
+    }
+  }
+
+  String _templatePath() {
+    if (widget.competitionId == null) {
+      return '/site-identity/flyer-template';
+    }
+    return '/competitions/${widget.competitionId}/flyer-template';
+  }
+
+  Future<void> _deleteTemplate() async {
+    setState(() {
+      _deleting = true;
+    });
+
+    try {
+      await ref.read(apiClientProvider).delete(_templatePath());
+      ref.invalidate(flyerTemplateProvider(widget.competitionId));
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('La plantilla del torneo se restableció a la configuración global.')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo restablecer la plantilla: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _deleting = false;
         });
       }
     }
