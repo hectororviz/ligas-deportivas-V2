@@ -421,13 +421,13 @@ export class MatchesService {
       categories: orderedCategories,
       rows: Array.from(rows.values()).map((row) => ({
         ...row,
-        categoryPoints: Array.from(row.categoryPoints.entries()).reduce(
-          (acc, [key, value]) => ({
-            ...acc,
-            [key]: value
-          }),
-          {}
-        )
+        categoryPoints: (() => {
+          const points: Record<number, number | null> = {};
+          for (const [key, value] of row.categoryPoints.entries()) {
+            points[key] = value;
+          }
+          return points;
+        })()
       }))
     };
   }
