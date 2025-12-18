@@ -1,3 +1,5 @@
+import { randomInt } from 'crypto';
+
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { MatchdayStatus, Prisma, Round, ZoneStatus } from '@prisma/client';
 
@@ -42,11 +44,7 @@ export class FixtureService {
   constructor(private readonly prisma: PrismaService) {}
 
   async generateForTournament(tournamentId: number, options?: GenerateFixtureDto) {
-    const { zones, doubleRound = true, shuffle = false, publish = false, seed } = options ?? {};
-
-    if (shuffle && seed == null) {
-      throw new BadRequestException('Debe proporcionar una semilla (seed) para mezclar el orden de los clubes');
-    }
+    const { zones, doubleRound = true, shuffle = true, publish = false, seed } = options ?? {};
 
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -205,7 +203,7 @@ export class FixtureService {
 
   async previewForZone(zoneId: number, options: ZoneFixtureOptionsDto = {}) {
     const doubleRound = options.doubleRound ?? true;
-    const shuffle = options.shuffle ?? false;
+    const shuffle = options.shuffle ?? true;
 
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -247,7 +245,7 @@ export class FixtureService {
 
   async generateForZone(zoneId: number, options: ZoneFixtureOptionsDto = {}) {
     const doubleRound = options.doubleRound ?? true;
-    const shuffle = options.shuffle ?? false;
+    const shuffle = options.shuffle ?? true;
 
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -437,7 +435,8 @@ export class FixtureService {
     let working = [...normalized];
 
     let seed = normalizedOptions.seed ?? null;
-    if (normalizedOptions.shuffle) {
+    const shouldShuffle = normalizedOptions.shuffle || seed != null;
+    if (shouldShuffle) {
       seed = seed ?? this.generateSeed();
       const random = this.createSeededRandom(seed);
       this.shuffleClubIds(working, random);
@@ -557,7 +556,6 @@ export class FixtureService {
   }
 
   private generateSeed() {
-    const value = Math.floor(Date.now() % 2147483647);
-    return value > 0 ? value : 1;
+    return randomInt(1, 2147483647);
   }
 }
