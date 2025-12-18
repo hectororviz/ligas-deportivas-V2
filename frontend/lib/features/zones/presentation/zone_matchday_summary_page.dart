@@ -182,7 +182,7 @@ class _MatchdaySummaryView extends ConsumerWidget {
           style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 12),
-        if (generalStandings.categoryStandings.isEmpty)
+        if (generalStandings.categories.isEmpty)
           Card(
             child: Padding(
               padding: const EdgeInsets.all(20),
@@ -193,7 +193,7 @@ class _MatchdaySummaryView extends ConsumerWidget {
             ),
           )
         else
-          ...generalStandings.categoryStandings.map(
+          ...generalStandings.categories.map(
             (category) => Card(
               margin: const EdgeInsets.only(bottom: 12),
               child: ExpansionTile(
