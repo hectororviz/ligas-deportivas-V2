@@ -204,7 +204,11 @@ class ZoneMatch {
       return false;
     }
     for (final category in categories) {
-      if (category.homeScore != null && category.awayScore != null) {
+      final homeScore = category.homeScore;
+      final awayScore = category.awayScore;
+      if (homeScore != null &&
+          awayScore != null &&
+          (homeScore != 0 || awayScore != 0)) {
         return true;
       }
     }
@@ -218,6 +222,9 @@ class ZoneMatch {
   int get awayPoints => _calculatePoints(isHome: false);
 
   int _calculatePoints({required bool isHome}) {
+    if (!_hasRecordedScores) {
+      return 0;
+    }
     var total = 0;
     for (final category in categories) {
       final homeScore = category.homeScore;
