@@ -41,7 +41,7 @@ El proyecto requiere como mínimo:
 
 ### 1.5 Flujo general de backend y frontend
 1. Instala dependencias y genera el cliente de Prisma (`npm install`, `npx prisma generate`). ([README.md](README.md))
-2. Ejecuta las migraciones y el seed base (`npx prisma migrate dev`, `npm run seed`). ([README.md](README.md))
+2. Genera una migración inicial limpia (se eliminaron las anteriores) y ejecuta el seed base (`npx prisma migrate dev`, `npm run seed`). ([README.md](README.md))
 3. Levanta la API en modo desarrollo con `npm run start:dev` para habilitar recarga en caliente y el prefijo `/api/v1`. ([README.md](README.md))
 4. En otra terminal instala dependencias del frontend (`flutter pub get`, `flutter pub run build_runner build`). ([README.md](README.md))
 5. Ejecuta la app web apuntando al backend local (`flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:3000/api/v1`). ([README.md](README.md))
