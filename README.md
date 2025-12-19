@@ -113,11 +113,13 @@ docker compose up --build
 ```
 
 Los servicios quedarán disponibles en:
+- Proxy reverso (entrada única): `http://localhost` (redirige `/api` y `/storage` al backend y el resto al frontend)
 - API: `http://localhost:3000`
 - Frontend estático: `http://localhost:8080`
 - Mailhog (correo de prueba): `http://localhost:8025`
-- Consola MinIO: `http://localhost:9001`
 - PostgreSQL: `localhost:5432`
+
+La base de datos y los archivos subidos se persisten en volúmenes (`postgres-data`, `backend-storage`) definidos en el Compose.
 
 Las variables de entorno del contenedor `backend` se basan en los mismos nombres definidos en `backend/.env`, por lo que puedes adaptarlas para entornos de staging o producción. ([infra/docker-compose.yml](infra/docker-compose.yml))
 
