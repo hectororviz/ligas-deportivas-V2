@@ -26,6 +26,7 @@ import '../../features/zones/presentation/zones_page.dart';
 import '../../features/zones/domain/zone_match_models.dart';
 import '../../features/zones/presentation/zone_fixture_page.dart';
 import '../../features/zones/presentation/zone_match_detail_page.dart';
+import '../../features/zones/presentation/zone_matchday_summary_page.dart';
 import '../../services/auth_controller.dart';
 
 class GoRouterRefreshStream extends ChangeNotifier {
@@ -122,6 +123,21 @@ GoRouter createRouter(Ref ref) {
                     matchId: matchId,
                     initialMatch: initialMatch,
                   );
+                },
+              ),
+              GoRoute(
+                path: 'matchdays/:matchday/summary',
+                builder: (context, state) {
+                  final zoneParam = state.pathParameters['zoneId'];
+                  final matchdayParam = state.pathParameters['matchday'];
+                  final zoneId = zoneParam != null ? int.tryParse(zoneParam) : null;
+                  final matchday = matchdayParam != null ? int.tryParse(matchdayParam) : null;
+
+                  if (zoneId == null || matchday == null) {
+                    return const Center(child: Text('Fecha no válida'));
+                  }
+
+                  return ZoneMatchdaySummaryPage(zoneId: zoneId, matchday: matchday);
                 },
               ),
             ],

@@ -41,6 +41,14 @@ export class MatchesController {
     return this.matchesService.finalizeMatchday(zoneId, matchday);
   }
 
+  @Get('zones/:zoneId/matchdays/:matchday/summary')
+  getMatchdaySummary(
+    @Param('zoneId', ParseIntPipe) zoneId: number,
+    @Param('matchday', ParseIntPipe) matchday: number
+  ) {
+    return this.matchesService.getMatchdaySummary(zoneId, matchday);
+  }
+
   @Patch('zones/:zoneId/matchdays/:matchday')
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @Permissions({ module: Module.FIXTURE, action: Action.UPDATE })

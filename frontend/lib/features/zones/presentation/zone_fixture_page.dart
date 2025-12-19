@@ -661,6 +661,10 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
                 canManageFixture && _shouldShowFinalize(matchday.status),
             isFinalizing: canManageFixture && _isFinalizing(matchday.matchdayNumber),
             onFinalize: canManageFixture ? _buildFinalizeCallback(matchday) : null,
+            showSummaryButton: matchday.status == FixtureMatchdayStatus.played,
+            onViewSummary: matchday.status == FixtureMatchdayStatus.played
+                ? () => _openMatchdaySummary(zone, matchday)
+                : null,
           ),
         ),
       ],
@@ -681,6 +685,14 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
     }
 
     await _updateMatchdayDate(matchday.matchdayNumber, selected);
+  }
+
+  void _openMatchdaySummary(ZoneDetail zone, _DecoratedMatchday matchday) {
+    if (!mounted) {
+      return;
+    }
+    final route = '/zones/${zone.id}/fixture/matchdays/${matchday.matchdayNumber}/summary';
+    GoRouter.of(context).push(route);
   }
 
   void _openMatchDetail(ZoneDetail zone, ZoneMatch match) {
@@ -792,6 +804,8 @@ class _FixtureMatchdayCard extends StatelessWidget {
     this.isFinalizing = false,
     this.showFinalizeButton = false,
     this.byeClubName,
+    this.showSummaryButton = false,
+    this.onViewSummary,
   });
 
   final String title;
@@ -807,6 +821,8 @@ class _FixtureMatchdayCard extends StatelessWidget {
   final bool isFinalizing;
   final bool showFinalizeButton;
   final String? byeClubName;
+  final bool showSummaryButton;
+  final VoidCallback? onViewSummary;
 
   @override
   Widget build(BuildContext context) {
@@ -858,6 +874,14 @@ class _FixtureMatchdayCard extends StatelessWidget {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    if (showSummaryButton) ...[
+                      TextButton.icon(
+                        onPressed: onViewSummary,
+                        icon: const Icon(Icons.summarize_outlined),
+                        label: const Text('Resumen'),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
                     if (showFinalizeButton) ...[
                       TextButton.icon(
                         onPressed: isFinalizing ? null : onFinalize,
