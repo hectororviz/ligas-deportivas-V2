@@ -47,7 +47,7 @@ docs/      → Documentación técnica y funcional
    npm install
    npx prisma generate
    ```
-3. Ejecuta las migraciones y datos base (roles, permisos, usuario administrador, datos de ejemplo):
+3. Genera una migración inicial fresca (se eliminaron las migraciones anteriores) y aplica los datos base (roles, permisos, usuario administrador, datos de ejemplo):
    ```bash
    npx prisma migrate dev
    npm run seed
