@@ -131,6 +131,8 @@ Los servicios quedan detrás del proxy Nginx en `http://localhost`, que enruta `
 
 La base de datos y los archivos subidos se persisten en volúmenes (`postgres-data`, `backend-storage`) definidos en el Compose.
 
+La base de datos y los archivos subidos se persisten en volúmenes (`postgres-data`, `backend-storage`) definidos en el Compose.
+
 Las variables de entorno del contenedor `backend` se basan en los mismos nombres definidos en `backend/.env`, por lo que puedes adaptarlas para entornos de staging o producción. ([infra/docker-compose.yml](infra/docker-compose.yml))
 
 ## Datos de ejemplo
