@@ -112,12 +112,24 @@ cd infra
 docker compose up --build
 ```
 
-Los servicios quedarán disponibles en:
-- Proxy reverso (entrada única): `http://localhost` (redirige `/api` y `/storage` al backend y el resto al frontend)
-- API: `http://localhost:3000`
-- Frontend estático: `http://localhost:8080`
-- Mailhog (correo de prueba): `http://localhost:8025`
-- PostgreSQL: `localhost:5432`
+Antes de iniciar, crea el archivo `infra/.env` con las variables requeridas:
+
+```ini
+POSTGRES_PASSWORD=ligas_db_password_2024
+JWT_ACCESS_SECRET=8c50d5110a7a4f1c8f3b1c86b5e8a4f3
+JWT_REFRESH_SECRET=2e94f8c2d7c44109b7f3f71c49c5d9ad
+APP_URL=http://ligas.local
+FRONTEND_URL=http://ligas.local
+# SMTP_HOST=mailhog
+# SMTP_PORT=1025
+# SMTP_USER=
+# SMTP_PASS=
+# SMTP_FROM=noreply@ligas.local
+```
+
+Los servicios quedan detrás del proxy Nginx en `http://localhost`, que enruta `/api` y `/storage` al backend y sirve el frontend para el resto de las rutas. La base de datos y los contenedores internos no exponen puertos hacia el host para evitar accesos directos; si necesitas acceder a Mailhog o a PostgreSQL desde fuera del clúster, utiliza `docker compose exec` o agrega temporalmente un `ports:` en tu entorno local.
+
+La base de datos y los archivos subidos se persisten en volúmenes (`postgres-data`, `backend-storage`) definidos en el Compose.
 
 La base de datos y los archivos subidos se persisten en volúmenes (`postgres-data`, `backend-storage`) definidos en el Compose.
 
