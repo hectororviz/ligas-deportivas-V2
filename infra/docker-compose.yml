@@ -44,6 +44,8 @@ services:
   frontend:
     build:
       context: ../frontend
+      args:
+        API_BASE_URL: /api/v1
     restart: unless-stopped
     depends_on:
       - backend

@@ -5,13 +5,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'auth_controller.dart';
 
+const apiBaseUrl =
+    String.fromEnvironment('API_BASE_URL', defaultValue: '/api/v1');
+
 final apiClientProvider = Provider<ApiClient>((ref) => ApiClient(ref));
 
 class ApiClient {
   ApiClient(this.ref)
       : _dio = Dio(
           BaseOptions(
-            baseUrl: const String.fromEnvironment('API_BASE_URL', defaultValue: 'http://localhost:3000/api/v1'),
+            baseUrl: apiBaseUrl,
             connectTimeout: const Duration(seconds: 10),
             receiveTimeout: const Duration(seconds: 15)
           ),
