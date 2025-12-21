@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
@@ -145,6 +146,7 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
     final leagues = await ref.read(leaguesProvider.future);
     final user = ref.read(authControllerProvider).user;
     final allowedLeagues = _filterLeaguesForPermission(leagues, user, _actionCreate);
+    final canConfigureFlyer = user?.roles.contains('ADMIN') ?? false;
     if (!mounted) {
       return;
     }
@@ -158,6 +160,7 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
         allowedLeagueIds:
             user?.allowedLeaguesFor(module: _moduleTorneos, action: _actionCreate),
         allowSaveAndAdd: true,
+        canConfigureFlyer: canConfigureFlyer,
       );
       if (!mounted || result == null) {
         break;
@@ -178,6 +181,7 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
     final allowedLeagues = _filterLeaguesForPermission(leagues, user, _actionUpdate);
     final allowedLeagueIds =
         user?.allowedLeaguesFor(module: _moduleTorneos, action: _actionUpdate);
+    final canConfigureFlyer = user?.roles.contains('ADMIN') ?? false;
 
     if (!mounted) {
       return;
@@ -190,6 +194,7 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
       readOnly: false,
       allowedLeagueIds: allowedLeagueIds,
       allowSaveAndAdd: false,
+      canConfigureFlyer: canConfigureFlyer,
     );
 
     if (!mounted || result == null) {
@@ -211,6 +216,7 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
     required bool readOnly,
     Set<int>? allowedLeagueIds,
     bool allowSaveAndAdd = false,
+    required bool canConfigureFlyer,
   }) {
     final size = MediaQuery.sizeOf(context);
     final isCompact = size.width < 640;
@@ -227,6 +233,7 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
       allowedLeagueIds: allowedLeagueIds,
       allowSaveAndAdd: allowSaveAndAdd,
       maxContentWidth: estimatedContentWidth,
+      canConfigureFlyer: canConfigureFlyer,
     );
     if (isCompact) {
       return showModalBottomSheet<_TournamentFormResult>(
@@ -348,9 +355,8 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
     final authState = ref.watch(authControllerProvider);
     final user = authState.user;
     final isAdmin = user?.roles.contains('ADMIN') ?? false;
-    final canCreate = isAdmin ||
-        (user?.hasPermission(module: _moduleTorneos, action: _actionCreate) ??
-            false);
+    final canCreate =
+        isAdmin || (user?.hasPermission(module: _moduleTorneos, action: _actionCreate) ?? false);
     final years = ref.watch(availableTournamentYearsProvider);
     final leaguesAsync = ref.watch(leaguesProvider);
     final filters = ref.watch(tournamentFiltersProvider);
@@ -814,6 +820,7 @@ class _TournamentFormDialog extends ConsumerStatefulWidget {
     this.allowedLeagueIds,
     this.allowSaveAndAdd = false,
     required this.maxContentWidth,
+    required this.canConfigureFlyer,
   });
 
   final List<League> leagues;
@@ -822,6 +829,7 @@ class _TournamentFormDialog extends ConsumerStatefulWidget {
   final Set<int>? allowedLeagueIds;
   final bool allowSaveAndAdd;
   final double maxContentWidth;
+  final bool canConfigureFlyer;
 
   @override
   ConsumerState<_TournamentFormDialog> createState() => _TournamentFormDialogState();
@@ -839,6 +847,17 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
   bool _showCategoryErrors = false;
   List<_CategorySelection> _selections = [];
   bool _categoriesInitialized = false;
+
+  void _openFlyerTemplate() {
+    final tournament = widget.tournament;
+    if (tournament == null) {
+      return;
+    }
+    context.push(
+      '/tournaments/${tournament.id}/flyer-template',
+      extra: tournament,
+    );
+  }
 
   @override
   void initState() {
@@ -1110,6 +1129,22 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
                   : 'Completa los datos esenciales. Podrás ajustar detalles avanzados más adelante.',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
+            if (widget.canConfigureFlyer) ...[
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Tooltip(
+                  message: widget.tournament == null
+                      ? 'Guarda el torneo para habilitar la configuración del flyer.'
+                      : 'Abre la pantalla para subir el fondo y el SVG del flyer de este torneo.',
+                  child: FilledButton.tonalIcon(
+                    onPressed: widget.tournament == null ? null : _openFlyerTemplate,
+                    icon: const Icon(Icons.palette_outlined),
+                    label: const Text('Configurar flyer'),
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
             Builder(
               builder: (context) {

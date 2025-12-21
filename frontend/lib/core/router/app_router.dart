@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -18,6 +19,7 @@ import '../../features/settings/account_settings_page.dart';
 import '../../features/settings/site_identity_page.dart';
 import '../../features/settings/settings_page.dart';
 import '../../features/settings/user_management_page.dart';
+import '../../features/settings/flyer_template_page.dart';
 import '../../features/shared/widgets/app_shell.dart';
 import '../../features/standings/presentation/standings_page.dart';
 import '../../features/standings/presentation/zone_standings_page.dart';
@@ -77,7 +79,31 @@ GoRouter createRouter(Ref ref) {
           ),
           GoRoute(path: '/categories', builder: (context, state) => const CategoriesPage()),
           GoRoute(path: '/players', builder: (context, state) => const PlayersPage()),
-          GoRoute(path: '/tournaments', builder: (context, state) => const TournamentsPage()),
+          GoRoute(
+            path: '/tournaments',
+            builder: (context, state) => const TournamentsPage(),
+            routes: [
+              GoRoute(
+                path: ':tournamentId/flyer-template',
+                builder: (context, state) {
+                  final id = int.tryParse(state.pathParameters['tournamentId'] ?? '');
+                  final tournament = state.extra is TournamentSummary ? state.extra as TournamentSummary : null;
+                  if (id == null) {
+                    return const Scaffold(
+                      body: Center(child: Text('Torneo inválido para configurar la plantilla.')),
+                    );
+                  }
+                  final subtitle = tournament == null
+                      ? null
+                      : '${tournament.leagueName} · ${tournament.name} ${tournament.year}';
+                  return FlyerTemplatePage(
+                    competitionId: id,
+                    tournamentName: subtitle,
+                  );
+                },
+              )
+            ],
+          ),
           GoRoute(path: '/zones', builder: (context, state) => const ZonesPage()),
           GoRoute(
             path: '/zones/:zoneId/standings',
@@ -167,7 +193,7 @@ GoRouter createRouter(Ref ref) {
               GoRoute(
                 path: 'permissions',
                 builder: (context, state) => const RolePermissionsPage(),
-              )
+              ),
             ],
           ),
         ],

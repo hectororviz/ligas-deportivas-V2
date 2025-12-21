@@ -177,7 +177,7 @@ class _SiteIdentityPageState extends ConsumerState<SiteIdentityPage> {
                                   style: theme.textTheme.bodySmall?.copyWith(
                                       color: theme.colorScheme.error),
                                 ),
-                              ),
+                            ),
                           ],
                         ),
                       )
