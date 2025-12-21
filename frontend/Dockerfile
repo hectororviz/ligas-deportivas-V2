@@ -1,13 +1,17 @@
-FROM ghcr.io/cirruslabs/flutter:3.19.6 AS builder
-USER root
+FROM ghcr.io/cirruslabs/flutter:latest AS builder
 WORKDIR /app
-RUN chown -R cirrus:cirrus /app
-USER cirrus
-COPY --chown=cirrus:cirrus pubspec.yaml analysis_options.yaml ./
+
+ARG API_BASE_URL=/api/v1
+
+COPY pubspec.yaml pubspec.lock analysis_options.yaml ./
 RUN flutter pub get
-COPY --chown=cirrus:cirrus lib ./lib
-COPY --chown=cirrus:cirrus assets ./assets
-RUN flutter build web --release
+
+COPY lib ./lib
+COPY assets ./assets
+COPY web ./web
+
+RUN flutter build web --release --dart-define=API_BASE_URL=$API_BASE_URL
 
 FROM nginx:1.25-alpine
 COPY --from=builder /app/build/web /usr/share/nginx/html
+
