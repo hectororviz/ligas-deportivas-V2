@@ -5,6 +5,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_client.dart';
 
+const _publicViewModules = {
+  'CLUBES',
+  'FIXTURE',
+  'PARTIDOS',
+  'RESULTADOS',
+  'TABLAS',
+};
+
 final authControllerProvider =
     StateNotifierProvider<AuthController, AuthState>((ref) => AuthController(ref));
 
@@ -207,6 +215,27 @@ class AuthState {
   final AuthUser? user;
 
   bool get isAuthenticated => accessToken != null && user != null;
+
+  bool hasPermissionOrPublic({
+    required String module,
+    required String action,
+    int? leagueId,
+  }) {
+    final currentUser = user;
+    if (currentUser != null) {
+      return currentUser.hasPermission(
+        module: module,
+        action: action,
+        leagueId: leagueId,
+      );
+    }
+
+    if (action == 'VIEW' && _publicViewModules.contains(module)) {
+      return true;
+    }
+
+    return false;
+  }
 
   AuthState copyWith({String? accessToken, String? refreshToken, AuthUser? user}) {
     return AuthState(
