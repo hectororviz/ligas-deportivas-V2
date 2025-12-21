@@ -46,8 +46,7 @@ const resolveStorageBaseUrl = () => {
     return removeTrailingSlash(explicitBaseUrl.trim());
   }
 
-  const appUrl = removeTrailingSlash(process.env.APP_URL ?? 'http://localhost:3000');
-  return `${appUrl}/storage`;
+  return '/storage';
 };
 
 const resolveCaptchaProvider = () => {
