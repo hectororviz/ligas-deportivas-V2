@@ -43,6 +43,26 @@ class GoRouterRefreshStream extends ChangeNotifier {
   }
 }
 
+bool _isPublicRoute(String location) {
+  const publicRoutes = {
+    '/home',
+    '/clubs',
+    '/fixtures',
+    '/standings',
+    '/login',
+    '/register',
+  };
+
+  if (publicRoutes.any((route) => location == route || location.startsWith('$route/'))) {
+    return true;
+  }
+
+  final zoneStandings = RegExp(r'^/zones/\d+/standings').hasMatch(location);
+  final zoneFixture = RegExp(r'^/zones/\d+/fixture').hasMatch(location);
+
+  return zoneStandings || zoneFixture;
+}
+
 GoRouter createRouter(Ref ref) {
   final authNotifier = ref.read(authControllerProvider.notifier);
   return GoRouter(
@@ -51,7 +71,7 @@ GoRouter createRouter(Ref ref) {
     redirect: (context, state) {
       final authState = ref.read(authControllerProvider);
       final loggingIn = state.matchedLocation == '/login' || state.matchedLocation == '/register';
-      if (!authState.isAuthenticated && !loggingIn) {
+      if (!authState.isAuthenticated && !_isPublicRoute(state.matchedLocation) && !loggingIn) {
         return '/login';
       }
       if (authState.isAuthenticated && loggingIn) {
@@ -99,7 +119,9 @@ GoRouter createRouter(Ref ref) {
                 return const Center(child: Text('Zona no válida'));
               }
               final extra = state.extra;
-              final viewOnly = extra is ZoneFixturePageArgs ? extra.viewOnly : false;
+              final viewOnly = extra is ZoneFixturePageArgs
+                  ? extra.viewOnly
+                  : !ref.read(authControllerProvider).isAuthenticated;
               return ZoneFixturePage(zoneId: zoneId, viewOnly: viewOnly);
             },
             routes: [
