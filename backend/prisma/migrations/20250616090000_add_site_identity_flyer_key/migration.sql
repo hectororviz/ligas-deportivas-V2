@@ -1,0 +1,2 @@
+ALTER TABLE "SiteIdentity"
+  ADD COLUMN IF NOT EXISTS "flyerKey" TEXT;
