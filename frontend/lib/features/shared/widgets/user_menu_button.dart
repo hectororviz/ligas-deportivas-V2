@@ -89,7 +89,7 @@ class UserMenuButton extends ConsumerWidget {
       case _UserMenuAction.logout:
         await ref.read(authControllerProvider.notifier).logout();
         if (context.mounted) {
-          context.go('/login');
+          context.go('/home');
         }
         break;
       case _UserMenuAction.login:

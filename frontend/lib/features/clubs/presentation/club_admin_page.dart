@@ -890,7 +890,7 @@ class _ClubTournamentsAccordionState extends State<_ClubTournamentsAccordion> {
                     child: Icon(Icons.circle, color: iconColor, size: 16),
                   ),
                   title: Text(
-                    '${tournament.leagueName} - ${tournament.name} (${tournament.year})',
+                    '${tournament.leagueName} - ${tournament.name}',
                   ),
                   subtitle: Text(
                     tournament.categories.isEmpty
@@ -1975,16 +1975,6 @@ class _ClubJoinTournamentDialogState extends ConsumerState<ClubJoinTournamentDia
     });
   }
 
-  void _toggleCategory(bool? selected, int id) {
-    setState(() {
-      if (selected == true) {
-        _selectedCategories.add(id);
-      } else {
-        _selectedCategories.remove(id);
-      }
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     Widget content;
@@ -2059,7 +2049,7 @@ class _ClubJoinTournamentDialogState extends ConsumerState<ClubJoinTournamentDia
                     (item) => DropdownMenuItem(
                       value: item,
                       child: Text(
-                        '${item.leagueName} - ${item.name} (${item.year})',
+                        '${item.leagueName} - ${item.name}',
                       ),
                     ),
                   )
@@ -2072,12 +2062,8 @@ class _ClubJoinTournamentDialogState extends ConsumerState<ClubJoinTournamentDia
               Expanded(
                 child: ListView(
                   children: tournament.categories.map((category) {
-                    final checked =
-                        _selectedCategories.contains(category.tournamentCategoryId);
-                    return CheckboxListTile(
-                      value: checked,
-                      onChanged: (value) =>
-                          _toggleCategory(value, category.tournamentCategoryId),
+                    return ListTile(
+                      leading: const Icon(Icons.check_circle_outline),
                       title: Text(category.categoryName),
                       subtitle: Text(
                         '${category.birthYearRangeLabel} · ${category.genderLabel}',
