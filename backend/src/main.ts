@@ -33,9 +33,13 @@ async function bootstrap() {
   app.setGlobalPrefix('api/v1');
   app.use(helmet());
   app.use(cookieParser());
-  app.useStaticAssets(join(process.cwd(), 'storage', 'uploads'), {
-    prefix: '/storage/uploads/'
-  });
+  const uploadsDir = join(process.cwd(), 'storage', 'uploads');
+
+  // Serve uploaded files both with and without the API prefix so that
+  // absolute URLs stored as "/storage/..." still work when the HTTP client
+  // applies the global `/api/v1` prefix.
+  app.useStaticAssets(uploadsDir, { prefix: '/storage/uploads/' });
+  app.useStaticAssets(uploadsDir, { prefix: '/api/v1/storage/uploads/' });
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
