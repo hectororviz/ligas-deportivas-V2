@@ -1054,7 +1054,7 @@ class _ZoneEditorDialogState extends ConsumerState<_ZoneEditorDialog> {
                 .map(
                   (tournament) => DropdownMenuItem<TournamentOption>(
                     value: tournament,
-                    child: Text('${tournament.leagueName} - ${tournament.name} ${tournament.year}'),
+                    child: Text('${tournament.leagueName} - ${tournament.name}'),
                   ),
                 )
                 .toList(),

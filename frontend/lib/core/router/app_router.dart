@@ -49,6 +49,7 @@ bool _isPublicRoute(String location) {
   const publicRoutes = {
     '/home',
     '/clubs',
+    '/club',
     '/fixtures',
     '/standings',
     '/login',

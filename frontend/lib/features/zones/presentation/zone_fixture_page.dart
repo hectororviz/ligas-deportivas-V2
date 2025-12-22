@@ -352,7 +352,7 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${zone.tournament.leagueName} · ${zone.tournament.name} ${zone.tournament.year}',
+                          '${zone.tournament.leagueName} · ${zone.tournament.name}',
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                       ],
