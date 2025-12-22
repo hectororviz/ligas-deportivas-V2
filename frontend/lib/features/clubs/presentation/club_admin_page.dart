@@ -178,6 +178,7 @@ class _ClubAdminPageState extends ConsumerState<ClubAdminPage> {
     final authState = ref.watch(authControllerProvider);
     final user = authState.user;
     final isAdmin = user?.roles.contains('ADMIN') ?? false;
+    final isAuthenticated = authState.isAuthenticated;
     final overviewAsync = ref.watch(clubAdminOverviewProvider(widget.slug));
 
     return Scaffold(
@@ -199,6 +200,7 @@ class _ClubAdminPageState extends ConsumerState<ClubAdminPage> {
             return _ClubAdminContent(
               overview: overview,
               isAdmin: isAdmin,
+              isAuthenticated: isAuthenticated,
               leavingTournamentId: _leavingTournamentId,
               onEditCategory: (tournament, category) =>
                   _openRosterEditor(overview, tournament, category),
@@ -223,6 +225,7 @@ class _ClubAdminContent extends StatelessWidget {
   const _ClubAdminContent({
     required this.overview,
     required this.isAdmin,
+    required this.isAuthenticated,
     required this.leavingTournamentId,
     required this.onEditCategory,
     required this.onViewCategory,
@@ -231,6 +234,7 @@ class _ClubAdminContent extends StatelessWidget {
 
   final ClubAdminOverview overview;
   final bool isAdmin;
+  final bool isAuthenticated;
   final int? leavingTournamentId;
   final void Function(ClubAdminTournament tournament, ClubAdminCategory category)
       onEditCategory;
@@ -265,6 +269,7 @@ class _ClubAdminContent extends StatelessWidget {
             _ClubTournamentsAccordion(
               tournaments: overview.tournaments,
               isAdmin: isAdmin,
+              isAuthenticated: isAuthenticated,
               leavingTournamentId: leavingTournamentId,
               onEditCategory: onEditCategory,
               onViewCategory: onViewCategory,
@@ -845,6 +850,7 @@ class _ClubTournamentsAccordion extends StatefulWidget {
   const _ClubTournamentsAccordion({
     required this.tournaments,
     required this.isAdmin,
+    required this.isAuthenticated,
     required this.leavingTournamentId,
     required this.onEditCategory,
     required this.onViewCategory,
@@ -853,6 +859,7 @@ class _ClubTournamentsAccordion extends StatefulWidget {
 
   final List<ClubAdminTournament> tournaments;
   final bool isAdmin;
+  final bool isAuthenticated;
   final int? leavingTournamentId;
   final void Function(ClubAdminTournament tournament, ClubAdminCategory category)
       onEditCategory;
@@ -902,6 +909,7 @@ class _ClubTournamentsAccordionState extends State<_ClubTournamentsAccordion> {
               body: _TournamentCategoriesList(
                 tournament: widget.tournaments[i],
                 isAdmin: widget.isAdmin,
+                isAuthenticated: widget.isAuthenticated,
                 isRemoving: widget.leavingTournamentId == widget.tournaments[i].id,
                 onEditCategory: widget.onEditCategory,
                 onViewCategory: widget.onViewCategory,
@@ -918,6 +926,7 @@ class _TournamentCategoriesList extends StatelessWidget {
   const _TournamentCategoriesList({
     required this.tournament,
     required this.isAdmin,
+    required this.isAuthenticated,
     required this.isRemoving,
     required this.onEditCategory,
     required this.onViewCategory,
@@ -926,6 +935,7 @@ class _TournamentCategoriesList extends StatelessWidget {
 
   final ClubAdminTournament tournament;
   final bool isAdmin;
+  final bool isAuthenticated;
   final bool isRemoving;
   final void Function(ClubAdminTournament tournament, ClubAdminCategory category)
       onEditCategory;
@@ -1010,6 +1020,7 @@ class _TournamentCategoriesList extends StatelessWidget {
                 tournament: tournament,
                 category: category,
                 isAdmin: isAdmin,
+                isAuthenticated: isAuthenticated,
                 onEditCategory: onEditCategory,
                 onViewCategory: onViewCategory,
               ),
@@ -1024,6 +1035,7 @@ class _CategoryRow extends StatelessWidget {
     required this.tournament,
     required this.category,
     required this.isAdmin,
+    required this.isAuthenticated,
     required this.onEditCategory,
     required this.onViewCategory,
   });
@@ -1031,6 +1043,7 @@ class _CategoryRow extends StatelessWidget {
   final ClubAdminTournament tournament;
   final ClubAdminCategory category;
   final bool isAdmin;
+  final bool isAuthenticated;
   final void Function(ClubAdminTournament tournament, ClubAdminCategory category)
       onEditCategory;
   final void Function(ClubAdminTournament tournament, ClubAdminCategory category)
@@ -1085,10 +1098,11 @@ class _CategoryRow extends StatelessWidget {
             Wrap(
               spacing: 8,
               children: [
-                OutlinedButton(
-                  onPressed: () => onViewCategory(tournament, category),
-                  child: const Text('Ver'),
-                ),
+                if (isAuthenticated)
+                  OutlinedButton(
+                    onPressed: () => onViewCategory(tournament, category),
+                    child: const Text('Ver'),
+                  ),
                 if (isAdmin)
                   FilledButton(
                     onPressed: () => onEditCategory(tournament, category),

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
+import '../../clubs/presentation/widgets/authenticated_image.dart';
 import '../domain/zone_match_models.dart';
 import 'zone_fixture_page.dart' show zoneMatchesProvider;
 import '../../../services/api_client.dart';
@@ -386,12 +387,11 @@ class _ClubCrest extends StatelessWidget {
           border: Border.all(color: theme.colorScheme.outlineVariant),
         ),
         clipBehavior: Clip.antiAlias,
-        child: Image.network(
-          logoUrl,
+        child: AuthenticatedImage(
+          imageUrl: logoUrl,
           fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) {
-            return _FallbackAvatar(name: club?.displayName ?? '—', club: club);
-          },
+          placeholder: _FallbackAvatar(name: club?.displayName ?? '—', club: club),
+          error: _FallbackAvatar(name: club?.displayName ?? '—', club: club),
         ),
       );
     }
