@@ -43,3 +43,8 @@ Thumbs.db
 
 # -------- Otros --------
 
+
+# Secrets
+infra/.env
+backend/.env
+**/.env

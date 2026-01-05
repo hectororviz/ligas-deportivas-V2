@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -22,10 +23,12 @@ import '../../features/shared/widgets/app_shell.dart';
 import '../../features/standings/presentation/standings_page.dart';
 import '../../features/standings/presentation/zone_standings_page.dart';
 import '../../features/tournaments/presentation/tournaments_page.dart';
+import '../../features/tournaments/presentation/poster_template_page.dart';
 import '../../features/zones/presentation/zones_page.dart';
 import '../../features/zones/domain/zone_match_models.dart';
 import '../../features/zones/presentation/zone_fixture_page.dart';
 import '../../features/zones/presentation/zone_match_detail_page.dart';
+import '../../features/zones/presentation/zone_matchday_summary_page.dart';
 import '../../services/auth_controller.dart';
 
 class GoRouterRefreshStream extends ChangeNotifier {
@@ -42,6 +45,27 @@ class GoRouterRefreshStream extends ChangeNotifier {
   }
 }
 
+bool _isPublicRoute(String location) {
+  const publicRoutes = {
+    '/home',
+    '/clubs',
+    '/club',
+    '/fixtures',
+    '/standings',
+    '/login',
+    '/register',
+  };
+
+  if (publicRoutes.any((route) => location == route || location.startsWith('$route/'))) {
+    return true;
+  }
+
+  final zoneStandings = RegExp(r'^/zones/\d+/standings').hasMatch(location);
+  final zoneFixture = RegExp(r'^/zones/\d+/fixture').hasMatch(location);
+
+  return zoneStandings || zoneFixture;
+}
+
 GoRouter createRouter(Ref ref) {
   final authNotifier = ref.read(authControllerProvider.notifier);
   return GoRouter(
@@ -50,7 +74,7 @@ GoRouter createRouter(Ref ref) {
     redirect: (context, state) {
       final authState = ref.read(authControllerProvider);
       final loggingIn = state.matchedLocation == '/login' || state.matchedLocation == '/register';
-      if (!authState.isAuthenticated && !loggingIn) {
+      if (!authState.isAuthenticated && !_isPublicRoute(state.matchedLocation) && !loggingIn) {
         return '/login';
       }
       if (authState.isAuthenticated && loggingIn) {
@@ -76,7 +100,31 @@ GoRouter createRouter(Ref ref) {
           ),
           GoRoute(path: '/categories', builder: (context, state) => const CategoriesPage()),
           GoRoute(path: '/players', builder: (context, state) => const PlayersPage()),
-          GoRoute(path: '/tournaments', builder: (context, state) => const TournamentsPage()),
+          GoRoute(
+            path: '/tournaments',
+            builder: (context, state) => const TournamentsPage(),
+            routes: [
+              GoRoute(
+                path: ':tournamentId/poster-template',
+                builder: (context, state) {
+                  final id = int.tryParse(state.pathParameters['tournamentId'] ?? '');
+                  final tournament = state.extra is TournamentSummary ? state.extra as TournamentSummary : null;
+                  if (id == null) {
+                    return const Scaffold(
+                      body: Center(child: Text('Torneo inválido para configurar la plantilla.')),
+                    );
+                  }
+                  final subtitle = tournament == null
+                      ? null
+                      : '${tournament.leagueName} · ${tournament.name} ${tournament.year}';
+                  return PosterTemplatePage(
+                    competitionId: id,
+                    tournamentName: subtitle,
+                  );
+                },
+              ),
+            ],
+          ),
           GoRoute(path: '/zones', builder: (context, state) => const ZonesPage()),
           GoRoute(
             path: '/zones/:zoneId/standings',
@@ -98,7 +146,9 @@ GoRouter createRouter(Ref ref) {
                 return const Center(child: Text('Zona no válida'));
               }
               final extra = state.extra;
-              final viewOnly = extra is ZoneFixturePageArgs ? extra.viewOnly : false;
+              final viewOnly = extra is ZoneFixturePageArgs
+                  ? extra.viewOnly
+                  : !ref.read(authControllerProvider).isAuthenticated;
               return ZoneFixturePage(zoneId: zoneId, viewOnly: viewOnly);
             },
             routes: [
@@ -122,6 +172,21 @@ GoRouter createRouter(Ref ref) {
                     matchId: matchId,
                     initialMatch: initialMatch,
                   );
+                },
+              ),
+              GoRoute(
+                path: 'matchdays/:matchday/summary',
+                builder: (context, state) {
+                  final zoneParam = state.pathParameters['zoneId'];
+                  final matchdayParam = state.pathParameters['matchday'];
+                  final zoneId = zoneParam != null ? int.tryParse(zoneParam) : null;
+                  final matchday = matchdayParam != null ? int.tryParse(matchdayParam) : null;
+
+                  if (zoneId == null || matchday == null) {
+                    return const Center(child: Text('Fecha no válida'));
+                  }
+
+                  return ZoneMatchdaySummaryPage(zoneId: zoneId, matchday: matchday);
                 },
               ),
             ],
@@ -151,7 +216,7 @@ GoRouter createRouter(Ref ref) {
               GoRoute(
                 path: 'permissions',
                 builder: (context, state) => const RolePermissionsPage(),
-              )
+              ),
             ],
           ),
         ],

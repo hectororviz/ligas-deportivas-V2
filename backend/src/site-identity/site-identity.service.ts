@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { SiteIdentity } from '@prisma/client';
@@ -6,10 +6,12 @@ import { UpdateSiteIdentityDto } from './dto/update-site-identity.dto';
 import { ConfigService } from '@nestjs/config';
 import { promises as fs } from 'fs';
 import * as path from 'path';
+import { validateFlyerImage } from './flyer-template.utils';
 
 export interface SiteIdentityResponse {
   title: string;
   iconUrl: string | null;
+  flyerUrl: string | null;
 }
 
 export interface SiteIdentityIcon {
@@ -33,9 +35,11 @@ export class SiteIdentityService {
   async updateIdentity(
     dto: UpdateSiteIdentityDto,
     iconFile?: Express.Multer.File,
+    flyerFile?: Express.Multer.File,
   ): Promise<SiteIdentityResponse> {
     const existing = await this.ensureIdentity();
     let iconKey: string | null | undefined;
+    let flyerKey: string | null | undefined;
 
     if (dto.removeIcon) {
       if (existing.iconKey) {
@@ -51,16 +55,33 @@ export class SiteIdentityService {
       iconKey = await this.storageService.saveAttachment(iconFile);
     }
 
+    if (dto.removeFlyer) {
+      if (existing.flyerKey) {
+        await this.storageService.deleteAttachment(existing.flyerKey);
+      }
+      flyerKey = null;
+    }
+
+    if (flyerFile) {
+      validateFlyerImage(flyerFile);
+      if (existing.flyerKey && !dto.removeFlyer) {
+        await this.storageService.deleteAttachment(existing.flyerKey);
+      }
+      flyerKey = await this.storageService.saveAttachment(flyerFile);
+    }
+
     const updated = await this.prisma.siteIdentity.upsert({
       where: { id: existing.id },
       update: {
         title: dto.title,
         iconKey: iconKey !== undefined ? iconKey : existing.iconKey,
+        flyerKey: flyerKey !== undefined ? flyerKey : existing.flyerKey,
       },
       create: {
         id: existing.id,
         title: dto.title,
         iconKey: iconKey ?? null,
+        flyerKey: flyerKey ?? null,
       },
     });
 
@@ -92,6 +113,31 @@ export class SiteIdentityService {
     };
   }
 
+  async getFlyerFile(): Promise<SiteIdentityIcon> {
+    const identity = await this.ensureIdentity();
+    if (!identity.flyerKey) {
+      throw new NotFoundException('El sitio no tiene un flyer configurado.');
+    }
+
+    let filePath: string;
+    try {
+      filePath = this.storageService.resolveAttachmentPath(identity.flyerKey);
+    } catch {
+      throw new NotFoundException('El archivo del flyer no existe.');
+    }
+
+    try {
+      await fs.access(filePath);
+    } catch {
+      throw new NotFoundException('El archivo del flyer no existe.');
+    }
+
+    return {
+      path: filePath,
+      mimeType: this.getMimeType(path.extname(filePath)),
+    };
+  }
+
   private async ensureIdentity(): Promise<SiteIdentity> {
     const existing = await this.prisma.siteIdentity.findUnique({ where: { id: 1 } });
     if (existing) {
@@ -101,6 +147,7 @@ export class SiteIdentityService {
       data: {
         id: 1,
         title: 'Ligas Deportivas',
+        flyerKey: null,
       },
     });
   }
@@ -112,9 +159,16 @@ export class SiteIdentityService {
       const version = identity.updatedAt.getTime();
       iconUrl = `${appUrl}/api/v1/site-identity/icon?v=${version}`;
     }
+    let flyerUrl: string | null = null;
+    if (identity.flyerKey) {
+      const appUrl = (this.configService.get<string>('app.url') ?? '').replace(/\/$/, '');
+      const version = identity.updatedAt.getTime();
+      flyerUrl = `${appUrl}/api/v1/site-identity/flyer?v=${version}`;
+    }
     return {
       title: identity.title,
       iconUrl,
+      flyerUrl,
     };
   }
 
@@ -137,4 +191,5 @@ export class SiteIdentityService {
         return 'application/octet-stream';
     }
   }
+
 }

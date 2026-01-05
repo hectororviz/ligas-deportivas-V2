@@ -324,8 +324,9 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
         final fixtureAsync = ref.watch(zoneMatchesProvider(widget.zoneId));
         final authState = ref.watch(authControllerProvider);
         final user = authState.user;
-        final canManageFixture = !widget.viewOnly &&
-            ((user?.hasAnyRole(const ['ADMIN']) ?? false) ||
+        final isAdmin = user?.hasAnyRole(const ['ADMIN']) ?? false;
+        final canManageFixture = isAdmin ||
+            (!widget.viewOnly &&
                 (user?.hasPermission(
                           module: _moduleFixture,
                           action: _actionUpdate,
@@ -352,7 +353,7 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${zone.tournament.leagueName} · ${zone.tournament.name} ${zone.tournament.year}',
+                          '${zone.tournament.leagueName} · ${zone.tournament.name}',
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                       ],
@@ -368,7 +369,7 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
                     Widget content;
                     final matches = fixtureData.matches;
                     if (matches.isEmpty && !hasPreview) {
-                      content = _buildGenerationPrompt(zone);
+                      content = _buildGenerationPrompt(zone, canManageFixture);
                     } else if (hasPreview) {
                       content = _buildPreview(zone, _preview!);
                     } else {
@@ -421,8 +422,8 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
     );
   }
 
-  Widget _buildGenerationPrompt(ZoneDetail zone) {
-    if (widget.viewOnly) {
+  Widget _buildGenerationPrompt(ZoneDetail zone, bool canManageFixture) {
+    if (widget.viewOnly || !canManageFixture) {
       return Card(
         margin: EdgeInsets.zero,
         child: Padding(
@@ -661,6 +662,10 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
                 canManageFixture && _shouldShowFinalize(matchday.status),
             isFinalizing: canManageFixture && _isFinalizing(matchday.matchdayNumber),
             onFinalize: canManageFixture ? _buildFinalizeCallback(matchday) : null,
+            showSummaryButton: matchday.status == FixtureMatchdayStatus.played,
+            onViewSummary: matchday.status == FixtureMatchdayStatus.played
+                ? () => _openMatchdaySummary(zone, matchday)
+                : null,
           ),
         ),
       ],
@@ -681,6 +686,14 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
     }
 
     await _updateMatchdayDate(matchday.matchdayNumber, selected);
+  }
+
+  void _openMatchdaySummary(ZoneDetail zone, _DecoratedMatchday matchday) {
+    if (!mounted) {
+      return;
+    }
+    final route = '/zones/${zone.id}/fixture/matchdays/${matchday.matchdayNumber}/summary';
+    GoRouter.of(context).push(route);
   }
 
   void _openMatchDetail(ZoneDetail zone, ZoneMatch match) {
@@ -792,6 +805,8 @@ class _FixtureMatchdayCard extends StatelessWidget {
     this.isFinalizing = false,
     this.showFinalizeButton = false,
     this.byeClubName,
+    this.showSummaryButton = false,
+    this.onViewSummary,
   });
 
   final String title;
@@ -807,6 +822,8 @@ class _FixtureMatchdayCard extends StatelessWidget {
   final bool isFinalizing;
   final bool showFinalizeButton;
   final String? byeClubName;
+  final bool showSummaryButton;
+  final VoidCallback? onViewSummary;
 
   @override
   Widget build(BuildContext context) {
@@ -858,6 +875,14 @@ class _FixtureMatchdayCard extends StatelessWidget {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    if (showSummaryButton) ...[
+                      TextButton.icon(
+                        onPressed: onViewSummary,
+                        icon: const Icon(Icons.summarize_outlined),
+                        label: const Text('Resumen'),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
                     if (showFinalizeButton) ...[
                       TextButton.icon(
                         onPressed: isFinalizing ? null : onFinalize,

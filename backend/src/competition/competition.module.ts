@@ -22,6 +22,11 @@ import { TeamsService } from './services/teams.service';
 import { TeamsController } from './controllers/teams.controller';
 import { ZonesService } from './services/zones.service';
 import { ZonesController } from './controllers/zones.controller';
+import { MatchFlyerService } from './services/match-flyer.service';
+import { FlyerTemplatesService } from './services/flyer-templates.service';
+import { MatchPosterService } from './services/match-poster.service';
+import { PosterTemplatesService } from './services/poster-templates.service';
+import { CompetitionController } from './controllers/competition.controller';
 
 @Module({
   imports: [PrismaModule, StorageModule, AccessControlModule],
@@ -32,6 +37,10 @@ import { ZonesController } from './controllers/zones.controller';
     TournamentsService,
     FixtureService,
     MatchesService,
+    MatchFlyerService,
+    MatchPosterService,
+    FlyerTemplatesService,
+    PosterTemplatesService,
     StandingsService,
     PlayersService,
     TeamsService,
@@ -44,6 +53,7 @@ import { ZonesController } from './controllers/zones.controller';
     TournamentsController,
     FixtureController,
     MatchesController,
+    CompetitionController,
     StandingsController,
     PlayersController,
     TeamsController,

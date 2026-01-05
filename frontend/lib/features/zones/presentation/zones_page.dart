@@ -513,7 +513,7 @@ class _ZonesDataTable extends StatelessWidget {
             color: buildStripedRowColor(index: index, colors: colors),
             cells: [
               DataCell(Text(zones[index].leagueName)),
-              DataCell(Text('${zones[index].tournamentName} ${zones[index].tournamentYear}')),
+              DataCell(Text(zones[index].tournamentName)),
               DataCell(Text(zones[index].name)),
               DataCell(_ZoneStatusChip(status: zones[index].status)),
               DataCell(Text('${zones[index].clubCount}')),
@@ -1054,7 +1054,7 @@ class _ZoneEditorDialogState extends ConsumerState<_ZoneEditorDialog> {
                 .map(
                   (tournament) => DropdownMenuItem<TournamentOption>(
                     value: tournament,
-                    child: Text('${tournament.leagueName} - ${tournament.name} ${tournament.year}'),
+                    child: Text('${tournament.leagueName} - ${tournament.name}'),
                   ),
                 )
                 .toList(),

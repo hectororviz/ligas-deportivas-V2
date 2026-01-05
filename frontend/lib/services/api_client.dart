@@ -5,13 +5,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'auth_controller.dart';
 
+const apiBaseUrl =
+    String.fromEnvironment('API_BASE_URL', defaultValue: '/api/v1');
+
 final apiClientProvider = Provider<ApiClient>((ref) => ApiClient(ref));
 
 class ApiClient {
   ApiClient(this.ref)
       : _dio = Dio(
           BaseOptions(
-            baseUrl: const String.fromEnvironment('API_BASE_URL', defaultValue: 'http://localhost:3000/api/v1'),
+            baseUrl: apiBaseUrl,
             connectTimeout: const Duration(seconds: 10),
             receiveTimeout: const Duration(seconds: 15)
           ),
@@ -42,6 +45,8 @@ class ApiClient {
   final Ref ref;
   final Dio _dio;
 
+  String get baseUrl => _dio.options.baseUrl;
+
   Future<Response<T>> get<T>(String path, {Map<String, dynamic>? queryParameters}) {
     return _dio.get<T>(path, queryParameters: queryParameters);
   }
@@ -66,9 +71,11 @@ class ApiClient {
     String path, {
     CancelToken? cancelToken,
     Map<String, String>? headers,
+    Map<String, dynamic>? queryParameters,
   }) async {
     final response = await _dio.get<List<int>>(
       path,
+      queryParameters: queryParameters,
       options: Options(
         responseType: ResponseType.bytes,
         headers: headers,

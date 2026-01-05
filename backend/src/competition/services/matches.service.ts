@@ -121,19 +121,153 @@ export class MatchesService {
       where: { zoneId_matchday: { zoneId, matchday } }
     });
 
-    if (!entry) {
-      throw new NotFoundException('Fecha no encontrada para la zona indicada');
-    }
-
     if (dto.date === undefined) {
+      if (!entry) {
+        throw new NotFoundException('Fecha no encontrada para la zona indicada');
+      }
       return entry;
     }
 
     const parsedDate = dto.date ? new Date(dto.date) : null;
+    if (!entry) {
+      const existingMatchday = await this.prisma.zoneMatchday.findFirst({
+        where: { zoneId },
+        orderBy: { matchday: 'asc' },
+        select: { matchday: true }
+      });
+      let status: MatchdayStatus = MatchdayStatus.PENDING;
+      if (!existingMatchday) {
+        const firstMatch = await this.prisma.match.findFirst({
+          where: { zoneId },
+          orderBy: { matchday: 'asc' },
+          select: { matchday: true }
+        });
+        if (firstMatch?.matchday === matchday) {
+          status = MatchdayStatus.IN_PROGRESS;
+        }
+      }
+      return this.prisma.zoneMatchday.create({
+        data: {
+          zoneId,
+          matchday,
+          status,
+          date: parsedDate
+        }
+      });
+    }
     return this.prisma.zoneMatchday.update({
       where: { zoneId_matchday: { zoneId, matchday } },
       data: { date: parsedDate }
     });
+  }
+
+  async getMatchdaySummary(zoneId: number, matchday: number) {
+    const zone = await this.prisma.zone.findUnique({
+      where: { id: zoneId },
+      include: {
+        tournament: {
+          include: {
+            league: true,
+            categories: {
+              where: { enabled: true },
+              include: { category: true }
+            }
+          }
+        },
+        clubZones: {
+          include: { club: true }
+        },
+        matchdays: true
+      }
+    });
+
+    if (!zone) {
+      throw new NotFoundException('Zona no encontrada');
+    }
+
+    const matchdayEntry = zone.matchdays.find((entry) => entry.matchday === matchday);
+    if (!matchdayEntry) {
+      throw new NotFoundException('Fecha no encontrada para la zona indicada');
+    }
+
+    const matches = await this.prisma.match.findMany({
+      where: { zoneId, matchday },
+      orderBy: [{ round: 'asc' }, { id: 'asc' }],
+      include: {
+        homeClub: true,
+        awayClub: true,
+        categories: {
+          orderBy: { tournamentCategoryId: 'asc' },
+          include: {
+            tournamentCategory: {
+              include: { category: true }
+            }
+          }
+        }
+      }
+    });
+
+    const standingsSummary = await this.standingsService.getZoneStandingsSummary(zoneId);
+
+    const categories = zone.tournament.categories.map((category) => ({
+      tournamentCategoryId: category.id,
+      categoryId: category.categoryId,
+      categoryName: category.category.name,
+      countsForGeneral: category.countsForGeneral,
+      birthYearMin: category.category.birthYearMin
+    }));
+
+    const scoreboard = this.buildMatchdayScoreboard(categories, matches, zone.clubZones, standingsSummary.general);
+
+    return {
+      zone: {
+        id: zone.id,
+        name: zone.name,
+        tournamentId: zone.tournamentId,
+        tournamentName: zone.tournament.name,
+        tournamentYear: zone.tournament.year,
+        leagueId: zone.tournament.leagueId,
+        leagueName: zone.tournament.league?.name ?? ''
+      },
+      matchday: {
+        matchday: matchdayEntry.matchday,
+        status: matchdayEntry.status,
+        date: matchdayEntry.date
+      },
+      matches: matches.map((match) => ({
+        id: match.id,
+        round: match.round,
+        homeClub: match.homeClub
+          ? {
+              id: match.homeClub.id,
+              name: match.homeClub.name,
+              shortName: match.homeClub.shortName,
+              logoUrl: match.homeClub.logoUrl
+            }
+          : null,
+        awayClub: match.awayClub
+          ? {
+              id: match.awayClub.id,
+              name: match.awayClub.name,
+              shortName: match.awayClub.shortName,
+              logoUrl: match.awayClub.logoUrl
+            }
+          : null,
+        categories: match.categories.map((category) => ({
+          tournamentCategoryId: category.tournamentCategoryId,
+          categoryId: category.tournamentCategory.categoryId,
+          categoryName: category.tournamentCategory.category.name,
+          countsForGeneral: category.tournamentCategory.countsForGeneral,
+          homeScore: category.homeScore,
+          awayScore: category.awayScore
+        }))
+      })),
+      standings: {
+        general: standingsSummary.general,
+        categories: standingsSummary.categories
+      },
+      scoreboard
+    };
   }
 
   async getResult(matchId: number, tournamentCategoryId: number) {
@@ -217,6 +351,95 @@ export class MatchesService {
         date: dto.date ? new Date(dto.date) : undefined
       }
     });
+  }
+
+  private buildMatchdayScoreboard(
+    categories: Array<{
+      tournamentCategoryId: number;
+      categoryId: number;
+      categoryName: string;
+      countsForGeneral: boolean;
+      birthYearMin: number;
+    }>,
+    matches: any[],
+    clubAssignments: Array<{
+      clubId: number;
+      club: { id: number; name: string; shortName: string | null } | null;
+    }>,
+    generalStandings: Array<{ clubId: number; points: number }>
+  ) {
+    const generalCategories = categories
+      .filter((category) => category.countsForGeneral)
+      .sort((a, b) => a.birthYearMin - b.birthYearMin);
+    const promotionalCategories = categories
+      .filter((category) => !category.countsForGeneral)
+      .sort((a, b) => a.birthYearMin - b.birthYearMin);
+
+    const orderedCategories = [...generalCategories, ...promotionalCategories].map((category) => ({
+      tournamentCategoryId: category.tournamentCategoryId,
+      categoryId: category.categoryId,
+      categoryName: category.categoryName,
+      countsForGeneral: category.countsForGeneral
+    }));
+
+    const categoryMap = new Map(orderedCategories.map((category) => [category.tournamentCategoryId, category]));
+
+    const pointsByClubId = new Map<number, number>();
+    for (const row of generalStandings) {
+      pointsByClubId.set(row.clubId, row.points);
+    }
+
+    const ensureRow = (rows: Map<number, any>, club: { id: number; name: string; shortName: string | null }) => {
+      if (!rows.has(club.id)) {
+        rows.set(club.id, {
+          clubId: club.id,
+          clubName: club.shortName ?? club.name,
+          goalsByCategory: new Map<number, number | null>(),
+          pointsTotal: pointsByClubId.get(club.id) ?? 0
+        });
+      }
+      return rows.get(club.id);
+    };
+
+    const rows = new Map<number, any>();
+    for (const assignment of clubAssignments) {
+      if (assignment.club) {
+        ensureRow(rows, assignment.club);
+      }
+    }
+
+    for (const match of matches) {
+      if (!match.homeClub || !match.awayClub) {
+        continue;
+      }
+
+      const homeRow = ensureRow(rows, match.homeClub);
+      const awayRow = ensureRow(rows, match.awayClub);
+
+      for (const category of match.categories) {
+        const categoryInfo = categoryMap.get(category.tournamentCategoryId);
+        if (!categoryInfo) {
+          continue;
+        }
+
+        homeRow.goalsByCategory.set(category.tournamentCategoryId, category.homeScore);
+        awayRow.goalsByCategory.set(category.tournamentCategoryId, category.awayScore);
+      }
+    }
+
+    return {
+      categories: orderedCategories,
+      rows: Array.from(rows.values()).map((row) => ({
+        ...row,
+        goalsByCategory: (() => {
+          const goals: Record<number, number | null> = {};
+          for (const [key, value] of row.goalsByCategory.entries()) {
+            goals[key] = value;
+          }
+          return goals;
+        })()
+      }))
+    };
   }
 
   async recordResult(

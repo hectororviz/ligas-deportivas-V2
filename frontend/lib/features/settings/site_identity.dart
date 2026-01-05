@@ -1,5 +1,8 @@
 class SiteIdentity {
-  const SiteIdentity({required this.title, this.iconUrl});
+  const SiteIdentity({
+    required this.title,
+    this.iconUrl,
+  });
 
   final String title;
   final String? iconUrl;
@@ -7,7 +10,7 @@ class SiteIdentity {
   factory SiteIdentity.fromJson(Map<String, dynamic> json) {
     return SiteIdentity(
       title: (json['title'] as String?) ?? 'Ligas Deportivas',
-      iconUrl: json['iconUrl'] as String?
+      iconUrl: json['iconUrl'] as String?,
     );
   }
 }
