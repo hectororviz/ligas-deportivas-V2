@@ -190,7 +190,6 @@ class _ZoneMatchDetailContent extends ConsumerStatefulWidget {
 }
 
 class _ZoneMatchDetailContentState extends ConsumerState<_ZoneMatchDetailContent> {
-  bool _downloadingFlyer = false;
   bool _downloadingPoster = false;
 
   @override
@@ -253,17 +252,6 @@ class _ZoneMatchDetailContentState extends ConsumerState<_ZoneMatchDetailContent
                     child: Wrap(
                       spacing: 12,
                       children: [
-                        FilledButton.icon(
-                          onPressed: _downloadingFlyer ? null : _downloadFlyer,
-                          icon: _downloadingFlyer
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : const Icon(Icons.download_outlined),
-                          label: const Text('Descargar flyer'),
-                        ),
                         OutlinedButton.icon(
                           onPressed: _downloadingPoster ? null : _downloadPoster,
                           icon: _downloadingPoster
@@ -310,39 +298,6 @@ class _ZoneMatchDetailContentState extends ConsumerState<_ZoneMatchDetailContent
     }
     final points = isHome ? match.homePoints : match.awayPoints;
     return points == 1 ? '1 pt' : '$points pts';
-  }
-
-  Future<void> _downloadFlyer() async {
-    setState(() {
-      _downloadingFlyer = true;
-    });
-
-    try {
-      final api = ref.read(apiClientProvider);
-      final downloadUrl = '${api.baseUrl}/matches/${widget.match.id}/flyer';
-      final launched = await launchUrlString(
-        downloadUrl,
-        mode: LaunchMode.externalApplication,
-      );
-
-      if (!launched && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No se pudo iniciar la descarga del flyer.')),
-        );
-      }
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo descargar el flyer: $error')),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _downloadingFlyer = false;
-        });
-      }
-    }
   }
 
   Future<void> _downloadPoster() async {
