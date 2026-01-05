@@ -158,27 +158,45 @@ class _PosterTemplatePageState extends ConsumerState<PosterTemplatePage> {
   }
 
   Widget _buildCanvas() {
-    final scale = _transformationController.value.getMaxScaleOnAxis();
-    return InteractiveViewer(
-      transformationController: _transformationController,
-      minScale: 0.2,
-      maxScale: 1.4,
-      child: SizedBox(
-        width: _canvasWidth,
-        height: _canvasHeight,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: Colors.black12,
-            border: Border.all(color: Colors.grey.shade400),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final fitScale = math.min(
+          constraints.maxWidth / _canvasWidth,
+          constraints.maxHeight / _canvasHeight,
+        );
+        if (fitScale.isFinite && fitScale > 0) {
+          final current = _transformationController.value;
+          if (current.isIdentity()) {
+            _transformationController.value = Matrix4.identity()..scale(fitScale);
+          }
+        }
+        final scale = _transformationController.value.getMaxScaleOnAxis();
+        final minScale = fitScale.isFinite
+            ? math.min(1.0, math.max(fitScale, 0.1))
+            : 0.1;
+        return InteractiveViewer(
+          transformationController: _transformationController,
+          minScale: minScale,
+          maxScale: 2.0,
+          constrained: false,
+          child: SizedBox(
+            width: _canvasWidth,
+            height: _canvasHeight,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.black12,
+                border: Border.all(color: Colors.grey.shade400),
+              ),
+              child: Stack(
+                children: [
+                  for (var index = 0; index < _layers.length; index++)
+                    _buildLayer(_layers[index], index, scale),
+                ],
+              ),
+            ),
           ),
-          child: Stack(
-            children: [
-              for (var index = 0; index < _layers.length; index++)
-                _buildLayer(_layers[index], index, scale),
-            ],
-          ),
-        ),
-      ),
+        );
+      },
     );
   }
 
