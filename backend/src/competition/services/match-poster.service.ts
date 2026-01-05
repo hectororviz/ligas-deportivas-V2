@@ -13,7 +13,7 @@ import * as dayjs from 'dayjs';
 import 'dayjs/locale/es';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../storage/storage.service';
-import { PosterLayer, PosterTemplate } from '../types/poster-template.types';
+import { ensurePosterTemplate, PosterLayer, PosterTemplate } from '../types/poster-template.types';
 import { Round } from '@prisma/client';
 
 const POSTER_WIDTH = 1080;
@@ -62,7 +62,11 @@ export class MatchPosterService {
       throw new BadRequestException('No se encontró una plantilla de poster configurada para este torneo.');
     }
 
-    const renderModel = await this.buildRenderModel(match, template.template as PosterTemplate, template.backgroundKey);
+    const validatedTemplate = ensurePosterTemplate(template.template, {
+      width: POSTER_WIDTH,
+      height: POSTER_HEIGHT,
+    });
+    const renderModel = await this.buildRenderModel(match, validatedTemplate, template.backgroundKey);
     const hash = this.computeHash({
       templateVersion: template.version,
       template: template.template,
