@@ -135,7 +135,7 @@ export class MatchesService {
         orderBy: { matchday: 'asc' },
         select: { matchday: true }
       });
-      let status = MatchdayStatus.PENDING;
+      let status: MatchdayStatus = MatchdayStatus.PENDING;
       if (!existingMatchday) {
         const firstMatch = await this.prisma.match.findFirst({
           where: { zoneId },
