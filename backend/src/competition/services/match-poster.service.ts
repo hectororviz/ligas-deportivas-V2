@@ -70,7 +70,21 @@ export class MatchPosterService {
       width: POSTER_WIDTH,
       height: POSTER_HEIGHT,
     });
-    const renderModel = await this.buildRenderModel(match, validatedTemplate, template.backgroundKey);
+    const matchday = await this.prisma.zoneMatchday.findUnique({
+      where: {
+        zoneId_matchday: {
+          zoneId: match.zoneId,
+          matchday: match.matchday,
+        },
+      },
+    });
+    const resolvedMatchDate = match.date ?? matchday?.date ?? null;
+    const renderModel = await this.buildRenderModel(
+      match,
+      validatedTemplate,
+      template.backgroundKey,
+      resolvedMatchDate,
+    );
     const hash = this.computeHash({
       templateVersion: template.version,
       template: template.template,
@@ -141,9 +155,10 @@ export class MatchPosterService {
     },
     template: PosterTemplate,
     backgroundKey: string | null,
+    matchDate: Date | null,
   ) {
-    const dateLabel = match.date ? dayjs(match.date).format('DD/MM/YYYY') : 'Fecha a confirmar';
-    const dayName = match.date ? dayjs(match.date).format('dddd') : '';
+    const dateLabel = matchDate ? dayjs(matchDate).format('DD/MM/YYYY') : 'Fecha a confirmar';
+    const dayName = matchDate ? dayjs(matchDate).format('dddd') : '';
     const dayNameNormalized = dayName ? `${dayName[0].toUpperCase()}${dayName.slice(1)}` : '';
     const timeSlots = match.categories
       .map((category) => {
