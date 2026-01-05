@@ -8,7 +8,7 @@ Usa estos tokens en capas de texto o imágenes dentro del JSON de la plantilla.
 - `{{match.matchday}}`
 - `{{match.date}}`
 - `{{match.dayName}}`
-- `{{tournament.timeSlots}}`
+- `{{tournament.timeSlots}}` (lista por línea, formato `HH:mm Hs - Categoría`)
 - `{{homeClub.name}}`
 - `{{awayClub.name}}`
 - `{{venue.name}}` (si aplica)

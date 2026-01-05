@@ -148,12 +148,15 @@ export class MatchPosterService {
           return '';
         }
         if (category.kickoffTime && name) {
-          return `${category.kickoffTime} ${name}`;
+          return `${category.kickoffTime} Hs - ${name}`;
         }
-        return category.kickoffTime ?? name;
+        if (category.kickoffTime) {
+          return `${category.kickoffTime} Hs`;
+        }
+        return name;
       })
       .filter(Boolean)
-      .join(' · ');
+      .join('\n');
 
     const homeName = match.homeClub?.shortName ?? match.homeClub?.name ?? 'Local';
     const awayName = match.awayClub?.shortName ?? match.awayClub?.name ?? 'Visitante';
@@ -372,46 +375,54 @@ export class MatchPosterService {
     let fontSize = baseFontSize;
     let lines = this.wrapText(text, maxWidth, fontSize);
     const minFontSize = 14;
+    const hasManualBreaks = text.includes('\n');
 
-    while (lines.length > 2 && fontSize > minFontSize) {
-      fontSize -= 2;
-      lines = this.wrapText(text, maxWidth, fontSize);
-    }
+    if (!hasManualBreaks) {
+      while (lines.length > 2 && fontSize > minFontSize) {
+        fontSize -= 2;
+        lines = this.wrapText(text, maxWidth, fontSize);
+      }
 
-    if (lines.length > 2) {
-      lines = lines.slice(0, 2);
-      const maxChars = this.estimateMaxChars(maxWidth, fontSize);
-      lines[1] = this.truncateWithEllipsis(lines[1], maxChars);
+      if (lines.length > 2) {
+        lines = lines.slice(0, 2);
+        const maxChars = this.estimateMaxChars(maxWidth, fontSize);
+        lines[1] = this.truncateWithEllipsis(lines[1], maxChars);
+      }
     }
 
     return { lines, resolvedFontSize: fontSize };
   }
 
   private wrapText(text: string, maxWidth: number, fontSize: number) {
-    const words = text.split(/\s+/).filter(Boolean);
-    if (words.length === 0) {
-      return [''];
-    }
     const maxChars = this.estimateMaxChars(maxWidth, fontSize);
     const lines: string[] = [];
-    let current = '';
+    const rawLines = text.split(/\r?\n/);
 
-    for (const word of words) {
-      const candidate = current ? `${current} ${word}` : word;
-      if (candidate.length <= maxChars) {
-        current = candidate;
-      } else {
-        if (current) {
-          lines.push(current);
+    for (const rawLine of rawLines) {
+      const words = rawLine.split(/\s+/).filter(Boolean);
+      if (words.length === 0) {
+        lines.push('');
+        continue;
+      }
+      let current = '';
+
+      for (const word of words) {
+        const candidate = current ? `${current} ${word}` : word;
+        if (candidate.length <= maxChars) {
+          current = candidate;
+        } else {
+          if (current) {
+            lines.push(current);
+          }
+          current = word;
         }
-        current = word;
+      }
+      if (current) {
+        lines.push(current);
       }
     }
-    if (current) {
-      lines.push(current);
-    }
 
-    return lines;
+    return lines.length > 0 ? lines : [''];
   }
 
   private estimateMaxChars(maxWidth: number, fontSize: number) {
