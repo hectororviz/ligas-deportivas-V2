@@ -169,26 +169,23 @@ class MatchdayScoreboardRow {
   MatchdayScoreboardRow({
     required this.clubId,
     required this.clubName,
-    required this.generalPoints,
-    required this.promotionalPoints,
-    required this.categoryPoints,
+    required this.pointsTotal,
+    required this.goalsByCategory,
   });
 
   factory MatchdayScoreboardRow.fromJson(Map<String, dynamic> json) {
     return MatchdayScoreboardRow(
       clubId: _parseInt(json['clubId']),
       clubName: _parseString(json['clubName'], fallback: 'Club'),
-      generalPoints: _parseInt(json['generalPoints']),
-      promotionalPoints: _parseInt(json['promotionalPoints']),
-      categoryPoints: _parseCategoryPoints(json['categoryPoints']),
+      pointsTotal: _parseInt(json['pointsTotal']),
+      goalsByCategory: _parseGoalsByCategory(json['goalsByCategory']),
     );
   }
 
   final int clubId;
   final String clubName;
-  final int generalPoints;
-  final int promotionalPoints;
-  final Map<int, int?> categoryPoints;
+  final int pointsTotal;
+  final Map<int, int?> goalsByCategory;
 }
 
 class MatchdayScoreboard {
@@ -238,7 +235,7 @@ List<ZoneCategoryStandings> _parseCategoryStandingsList(dynamic value) {
   return rows;
 }
 
-Map<int, int?> _parseCategoryPoints(dynamic value) {
+Map<int, int?> _parseGoalsByCategory(dynamic value) {
   final map = <int, int?>{};
   if (value is Map) {
     value.forEach((key, dynamic rawValue) {

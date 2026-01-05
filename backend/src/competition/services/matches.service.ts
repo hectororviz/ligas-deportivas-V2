@@ -217,7 +217,7 @@ export class MatchesService {
       birthYearMin: category.category.birthYearMin
     }));
 
-    const scoreboard = this.buildMatchdayScoreboard(categories, matches, zone.clubZones);
+    const scoreboard = this.buildMatchdayScoreboard(categories, matches, zone.clubZones, standingsSummary.general);
 
     return {
       zone: {
@@ -365,7 +365,8 @@ export class MatchesService {
     clubAssignments: Array<{
       clubId: number;
       club: { id: number; name: string; shortName: string | null } | null;
-    }>
+    }>,
+    generalStandings: Array<{ clubId: number; points: number }>
   ) {
     const generalCategories = categories
       .filter((category) => category.countsForGeneral)
@@ -383,17 +384,18 @@ export class MatchesService {
 
     const categoryMap = new Map(orderedCategories.map((category) => [category.tournamentCategoryId, category]));
 
-    const ensureRow = (
-      rows: Map<number, any>,
-      club: { id: number; name: string; shortName: string | null }
-    ) => {
+    const pointsByClubId = new Map<number, number>();
+    for (const row of generalStandings) {
+      pointsByClubId.set(row.clubId, row.points);
+    }
+
+    const ensureRow = (rows: Map<number, any>, club: { id: number; name: string; shortName: string | null }) => {
       if (!rows.has(club.id)) {
         rows.set(club.id, {
           clubId: club.id,
           clubName: club.shortName ?? club.name,
-          categoryPoints: new Map<number, number | null>(),
-          generalPoints: 0,
-          promotionalPoints: 0
+          goalsByCategory: new Map<number, number | null>(),
+          pointsTotal: pointsByClubId.get(club.id) ?? 0
         });
       }
       return rows.get(club.id);
@@ -420,27 +422,8 @@ export class MatchesService {
           continue;
         }
 
-        const homePoints = this.calculateMatchPoints(category.homeScore, category.awayScore, category.closedAt, true);
-        const awayPoints = this.calculateMatchPoints(category.homeScore, category.awayScore, category.closedAt, false);
-
-        homeRow.categoryPoints.set(category.tournamentCategoryId, homePoints);
-        awayRow.categoryPoints.set(category.tournamentCategoryId, awayPoints);
-
-        if (homePoints !== null) {
-          if (categoryInfo.countsForGeneral) {
-            homeRow.generalPoints += homePoints;
-          } else {
-            homeRow.promotionalPoints += homePoints;
-          }
-        }
-
-        if (awayPoints !== null) {
-          if (categoryInfo.countsForGeneral) {
-            awayRow.generalPoints += awayPoints;
-          } else {
-            awayRow.promotionalPoints += awayPoints;
-          }
-        }
+        homeRow.goalsByCategory.set(category.tournamentCategoryId, category.homeScore);
+        awayRow.goalsByCategory.set(category.tournamentCategoryId, category.awayScore);
       }
     }
 
@@ -448,34 +431,15 @@ export class MatchesService {
       categories: orderedCategories,
       rows: Array.from(rows.values()).map((row) => ({
         ...row,
-        categoryPoints: (() => {
-          const points: Record<number, number | null> = {};
-          for (const [key, value] of row.categoryPoints.entries()) {
-            points[key] = value;
+        goalsByCategory: (() => {
+          const goals: Record<number, number | null> = {};
+          for (const [key, value] of row.goalsByCategory.entries()) {
+            goals[key] = value;
           }
-          return points;
+          return goals;
         })()
       }))
     };
-  }
-
-  private calculateMatchPoints(
-    homeScore: number | null,
-    awayScore: number | null,
-    closedAt: Date | null,
-    forHome: boolean
-  ): number | null {
-    if (homeScore === null || awayScore === null || !closedAt) {
-      return null;
-    }
-    if (homeScore === awayScore) {
-      return 1;
-    }
-    const homeWon = homeScore > awayScore;
-    if ((forHome && homeWon) || (!forHome && !homeWon)) {
-      return 3;
-    }
-    return 0;
   }
 
   async recordResult(
