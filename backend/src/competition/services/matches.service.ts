@@ -216,14 +216,16 @@ export class MatchesService {
           ? {
               id: match.homeClub.id,
               name: match.homeClub.name,
-              shortName: match.homeClub.shortName
+              shortName: match.homeClub.shortName,
+              logoUrl: match.homeClub.logoUrl
             }
           : null,
         awayClub: match.awayClub
           ? {
               id: match.awayClub.id,
               name: match.awayClub.name,
-              shortName: match.awayClub.shortName
+              shortName: match.awayClub.shortName,
+              logoUrl: match.awayClub.logoUrl
             }
           : null,
         categories: match.categories.map((category) => ({

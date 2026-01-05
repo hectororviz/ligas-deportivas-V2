@@ -161,7 +161,7 @@ class FixtureTournament {
   final String leagueName;
   final List<ZoneSummary> zones;
 
-  String get displayName => '$name $year';
+  String get displayName => name;
 }
 
 class _FixtureTournamentBuilder {

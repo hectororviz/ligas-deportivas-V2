@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../services/auth_controller.dart';
 
-enum _UserMenuAction { settings, logout }
+enum _UserMenuAction { settings, logout, login }
 
 class UserMenuButton extends ConsumerWidget {
   const UserMenuButton({super.key});
@@ -14,7 +14,31 @@ class UserMenuButton extends ConsumerWidget {
     final authState = ref.watch(authControllerProvider);
     final user = authState.user;
     if (user == null) {
-      return const SizedBox.shrink();
+      return PopupMenuButton<_UserMenuAction>(
+        onSelected: (action) => _onSelected(context, ref, action),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        itemBuilder: (context) => const [
+          PopupMenuItem(value: _UserMenuAction.login, child: Text('Iniciar sesión')),
+        ],
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            const CircleAvatar(radius: 20, child: Icon(Icons.person_outline)),
+            const SizedBox(height: 6),
+            SizedBox(
+              width: 120,
+              child: Text(
+                'Invitado',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            )
+          ],
+        ),
+      );
     }
 
     final avatarUrl = user.avatarUrls?['96'];
@@ -64,6 +88,11 @@ class UserMenuButton extends ConsumerWidget {
         break;
       case _UserMenuAction.logout:
         await ref.read(authControllerProvider.notifier).logout();
+        if (context.mounted) {
+          context.go('/home');
+        }
+        break;
+      case _UserMenuAction.login:
         if (context.mounted) {
           context.go('/login');
         }

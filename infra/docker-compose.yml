@@ -51,15 +51,18 @@ services:
       - backend
 
   proxy:
-    image: nginx:1.25-alpine
+    image: caddy:2
     restart: unless-stopped
     depends_on:
       - backend
       - frontend
     ports:
       - "80:80"
+      - "443:443"
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
 
   seed:
     build:
@@ -79,3 +82,5 @@ services:
 volumes:
   postgres-data:
   backend-storage:
+  caddy_data:
+  caddy_config:

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
+import '../../clubs/presentation/widgets/authenticated_image.dart';
 import '../domain/zone_match_models.dart';
 import 'zone_fixture_page.dart' show zoneMatchesProvider;
 import '../../../services/api_client.dart';
@@ -34,6 +35,7 @@ class ZoneMatchDetailPage extends ConsumerWidget {
     final user = authState.user;
     final canEditScores =
         (user?.roles.contains('ADMIN') ?? false) || (user?.hasPermission(module: _moduleMatches, action: _actionUpdate) ?? false);
+    final canViewPlayerNames = authState.isAuthenticated;
 
     ZoneMatch? match = initialMatch;
     final fixtureData = fixtureAsync.valueOrNull;
@@ -66,6 +68,7 @@ class ZoneMatchDetailPage extends ConsumerWidget {
               match: match!,
               zoneId: zoneId,
               canEditScores: canEditScores,
+              canViewPlayerNames: canViewPlayerNames,
             );
           },
           loading: () => const Center(child: CircularProgressIndicator()),
@@ -113,6 +116,7 @@ class ZoneMatchDetailPage extends ConsumerWidget {
             match: match!,
             zoneId: zoneId,
             canEditScores: canEditScores,
+            canViewPlayerNames: canViewPlayerNames,
           ),
           if (fixtureAsync.isLoading)
             const Positioned(
@@ -173,11 +177,13 @@ class _ZoneMatchDetailContent extends ConsumerStatefulWidget {
     required this.match,
     required this.zoneId,
     required this.canEditScores,
+    required this.canViewPlayerNames,
   });
 
   final ZoneMatch match;
   final int zoneId;
   final bool canEditScores;
+  final bool canViewPlayerNames;
 
   @override
   ConsumerState<_ZoneMatchDetailContent> createState() => _ZoneMatchDetailContentState();
@@ -266,11 +272,12 @@ class _ZoneMatchDetailContentState extends ConsumerState<_ZoneMatchDetailContent
                       ),
                     )
                   else
-                    _CategoriesTable(
-                      match: match,
-                      zoneId: zoneId,
-                      canEditScores: canEditScores,
-                    ),
+                  _CategoriesTable(
+                    match: match,
+                    zoneId: zoneId,
+                    canEditScores: canEditScores,
+                    canViewPlayerNames: widget.canViewPlayerNames,
+                  ),
                 ],
               ),
             ),
@@ -380,12 +387,11 @@ class _ClubCrest extends StatelessWidget {
           border: Border.all(color: theme.colorScheme.outlineVariant),
         ),
         clipBehavior: Clip.antiAlias,
-        child: Image.network(
-          logoUrl,
+        child: AuthenticatedImage(
+          imageUrl: logoUrl,
           fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) {
-            return _FallbackAvatar(name: club?.displayName ?? '—', club: club);
-          },
+          placeholder: _FallbackAvatar(name: club?.displayName ?? '—', club: club),
+          error: _FallbackAvatar(name: club?.displayName ?? '—', club: club),
         ),
       );
     }
@@ -442,11 +448,13 @@ class _CategoriesTable extends ConsumerStatefulWidget {
     required this.match,
     required this.zoneId,
     required this.canEditScores,
+    required this.canViewPlayerNames,
   });
 
   final ZoneMatch match;
   final int zoneId;
   final bool canEditScores;
+  final bool canViewPlayerNames;
 
   @override
   ConsumerState<_CategoriesTable> createState() => _CategoriesTableState();
@@ -454,6 +462,13 @@ class _CategoriesTable extends ConsumerStatefulWidget {
 
 class _CategoriesTableState extends ConsumerState<_CategoriesTable> {
   Future<void> _openGoalsDialog(ZoneMatchCategory category) async {
+    if (!widget.canViewPlayerNames) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Inicia sesión para ver los goleadores.')),
+      );
+      return;
+    }
+
     final saved = await showDialog<bool>(
       context: context,
       builder: (context) => _MatchCategoryGoalsDialog(
@@ -582,7 +597,7 @@ class _CategoriesTableState extends ConsumerState<_CategoriesTable> {
           innerBorderColor,
           showRightBorder: false,
           child: _ActionCell(
-            onTap: () => _openGoalsDialog(category),
+            onTap: widget.canViewPlayerNames ? () => _openGoalsDialog(category) : null,
           ),
         ),
       ],
@@ -647,7 +662,7 @@ class _ActionCell extends StatelessWidget {
     required this.onTap,
   });
 
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {

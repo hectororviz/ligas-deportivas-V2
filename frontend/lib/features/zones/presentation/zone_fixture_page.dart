@@ -352,7 +352,7 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${zone.tournament.leagueName} · ${zone.tournament.name} ${zone.tournament.year}',
+                          '${zone.tournament.leagueName} · ${zone.tournament.name}',
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                       ],
@@ -368,7 +368,7 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
                     Widget content;
                     final matches = fixtureData.matches;
                     if (matches.isEmpty && !hasPreview) {
-                      content = _buildGenerationPrompt(zone);
+                      content = _buildGenerationPrompt(zone, canManageFixture);
                     } else if (hasPreview) {
                       content = _buildPreview(zone, _preview!);
                     } else {
@@ -421,8 +421,8 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
     );
   }
 
-  Widget _buildGenerationPrompt(ZoneDetail zone) {
-    if (widget.viewOnly) {
+  Widget _buildGenerationPrompt(ZoneDetail zone, bool canManageFixture) {
+    if (widget.viewOnly || !canManageFixture) {
       return Card(
         margin: EdgeInsets.zero,
         child: Padding(

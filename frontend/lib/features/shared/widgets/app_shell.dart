@@ -138,18 +138,16 @@ class _AppShellState extends ConsumerState<AppShell> {
     final isCollapsed = ref.watch(sidebarControllerProvider);
     final location = GoRouterState.of(context).uri.toString();
     final authState = ref.watch(authControllerProvider);
-    final user = authState.user;
     final navigationItems = _navigationItems
         .where((item) {
           final permission = item.requiredPermission;
           if (permission == null) {
             return true;
           }
-          return user?.hasPermission(
-                module: permission.module,
-                action: permission.action,
-              ) ??
-              false;
+          return authState.hasPermissionOrPublic(
+            module: permission.module,
+            action: permission.action,
+          );
         })
         .toList();
     if (navigationItems.isEmpty && _navigationItems.isNotEmpty) {
