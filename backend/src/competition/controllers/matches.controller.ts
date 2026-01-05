@@ -23,14 +23,17 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequestUser } from '../../common/interfaces/request-user.interface';
 import { UpdateMatchdayDto } from '../dto/update-matchday.dto';
 import { MatchFlyerService } from '../services/match-flyer.service';
+import { MatchPosterService } from '../services/match-poster.service';
 import { Response } from 'express';
 import { MATCH_FLYER_TOKEN_DEFINITIONS } from '../dto/match-flyer-token.dto';
+import { MATCH_POSTER_TOKEN_DEFINITIONS } from '../dto/match-poster-token.dto';
 
 @Controller()
 export class MatchesController {
   constructor(
     private readonly matchesService: MatchesService,
     private readonly matchFlyerService: MatchFlyerService,
+    private readonly matchPosterService: MatchPosterService,
   ) {}
 
   @Get('zones/:zoneId/matches')
@@ -80,6 +83,11 @@ export class MatchesController {
     return MATCH_FLYER_TOKEN_DEFINITIONS;
   }
 
+  @Get('matches/poster/tokens')
+  listPosterTokens() {
+    return MATCH_POSTER_TOKEN_DEFINITIONS;
+  }
+
   @Get('matches/:matchId/flyer')
   async downloadFlyer(
     @Param('matchId', ParseIntPipe) matchId: number,
@@ -89,6 +97,17 @@ export class MatchesController {
     res.setHeader('Content-Type', flyer.contentType);
     res.setHeader('Content-Disposition', `attachment; filename="flyer-${matchId}.${flyer.fileExtension}"`);
     return res.send(flyer.buffer);
+  }
+
+  @Get('matches/:matchId/poster')
+  async downloadPoster(
+    @Param('matchId', ParseIntPipe) matchId: number,
+    @Res() res: Response,
+  ) {
+    const poster = await this.matchPosterService.generate(matchId);
+    res.setHeader('Content-Type', poster.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename=\"poster-${matchId}.${poster.fileExtension}\"`);
+    return res.send(poster.buffer);
   }
 
   @Patch('matches/:matchId')
