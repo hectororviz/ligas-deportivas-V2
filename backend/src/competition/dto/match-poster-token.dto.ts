@@ -6,6 +6,11 @@ export interface MatchPosterTokenDto {
 
 export const MATCH_POSTER_TOKEN_DEFINITIONS: MatchPosterTokenDto[] = [
   {
+    token: 'league.name',
+    description: 'Nombre de la liga.',
+    example: 'Liga Metropolitana',
+  },
+  {
     token: 'tournament.name',
     description: 'Nombre del torneo.',
     example: 'Apertura 2024',
