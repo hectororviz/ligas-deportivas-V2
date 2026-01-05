@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/utils/responsive.dart';
 import '../../../services/api_client.dart';
 import '../../zones/domain/zone_models.dart';
 import '../../zones/presentation/zone_fixture_page.dart';
@@ -64,10 +65,11 @@ class StandingsPage extends ConsumerWidget {
 
     return tournamentsAsync.when(
       data: (tournaments) {
+        final padding = Responsive.pagePadding(context);
         if (tournaments.isEmpty) {
           return Center(
             child: Padding(
-              padding: const EdgeInsets.all(24),
+              padding: padding,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -92,7 +94,7 @@ class StandingsPage extends ConsumerWidget {
         }
 
         return ListView.builder(
-          padding: const EdgeInsets.all(24),
+          padding: padding,
           itemCount: tournaments.length,
           itemBuilder: (context, index) {
             final tournament = tournaments[index];
@@ -105,9 +107,10 @@ class StandingsPage extends ConsumerWidget {
       },
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (error, stackTrace) {
+        final padding = Responsive.pagePadding(context);
         return Center(
           child: Padding(
-            padding: const EdgeInsets.all(24),
+            padding: padding,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
