@@ -660,15 +660,10 @@ class _PosterTemplatePageState extends ConsumerState<PosterTemplatePage> {
     setState(() => _previewing = true);
     try {
       final api = ref.read(apiClientProvider);
-      final response = await api.get<List<int>>(
+      final data = await api.getBytes(
         '/competitions/${widget.competitionId}/poster-template/preview',
         queryParameters: {'matchId': matchId},
-        options: Options(responseType: ResponseType.bytes),
       );
-      final data = response.data;
-      if (data == null) {
-        throw Exception('No se pudo generar la vista previa');
-      }
       if (!mounted) return;
       await showDialog(
         context: context,
@@ -676,7 +671,7 @@ class _PosterTemplatePageState extends ConsumerState<PosterTemplatePage> {
           title: const Text('Vista previa'),
           content: SizedBox(
             width: 360,
-            child: Image.memory(Uint8List.fromList(data)),
+            child: Image.memory(data),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cerrar')),

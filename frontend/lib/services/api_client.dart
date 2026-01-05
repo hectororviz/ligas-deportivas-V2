@@ -71,9 +71,11 @@ class ApiClient {
     String path, {
     CancelToken? cancelToken,
     Map<String, String>? headers,
+    Map<String, dynamic>? queryParameters,
   }) async {
     final response = await _dio.get<List<int>>(
       path,
+      queryParameters: queryParameters,
       options: Options(
         responseType: ResponseType.bytes,
         headers: headers,
