@@ -859,6 +859,17 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
     );
   }
 
+  void _openPosterTemplate() {
+    final tournament = widget.tournament;
+    if (tournament == null) {
+      return;
+    }
+    context.push(
+      '/tournaments/${tournament.id}/poster-template',
+      extra: tournament,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -1133,15 +1144,31 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
               const SizedBox(height: 12),
               Align(
                 alignment: Alignment.centerLeft,
-                child: Tooltip(
-                  message: widget.tournament == null
-                      ? 'Guarda el torneo para habilitar la configuración del flyer.'
-                      : 'Abre la pantalla para subir el fondo y el SVG del flyer de este torneo.',
-                  child: FilledButton.tonalIcon(
-                    onPressed: widget.tournament == null ? null : _openFlyerTemplate,
-                    icon: const Icon(Icons.palette_outlined),
-                    label: const Text('Configurar flyer'),
-                  ),
+                child: Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
+                  children: [
+                    Tooltip(
+                      message: widget.tournament == null
+                          ? 'Guarda el torneo para habilitar la configuración del flyer.'
+                          : 'Abre la pantalla para subir el fondo y el SVG del flyer de este torneo.',
+                      child: FilledButton.tonalIcon(
+                        onPressed: widget.tournament == null ? null : _openFlyerTemplate,
+                        icon: const Icon(Icons.palette_outlined),
+                        label: const Text('Configurar flyer'),
+                      ),
+                    ),
+                    Tooltip(
+                      message: widget.tournament == null
+                          ? 'Guarda el torneo para habilitar la configuración del poster.'
+                          : 'Abre el editor de plantilla para el poster promocional del torneo.',
+                      child: FilledButton.tonalIcon(
+                        onPressed: widget.tournament == null ? null : _openPosterTemplate,
+                        icon: const Icon(Icons.wallpaper_outlined),
+                        label: const Text('Configurar poster'),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
