@@ -88,6 +88,8 @@ export class MatchPosterService {
 
     try {
       const svg = await this.renderSvg(renderModel.layers);
+      this.logTextLayerDebug(renderModel.layers);
+      await this.writePosterDebugSvg(svg);
       const buffer = await this.renderPng(svg);
       const storageKey = await this.savePosterBuffer(buffer, matchId, template.version, hash);
       await this.prisma.matchPosterCache.upsert({
@@ -314,7 +316,7 @@ export class MatchPosterService {
   }
 
   private async layerToSvg(layer: PosterLayer) {
-    const opacity = layer.opacity ?? 1;
+    const opacity = this.normalizeOpacity(layer.opacity);
     const transform = layer.rotation
       ? `transform="rotate(${layer.rotation} ${layer.x + layer.width / 2} ${layer.y + layer.height / 2})"`
       : '';
@@ -457,6 +459,35 @@ export class MatchPosterService {
     }
     const merged = [...normalized, ...fallbacks.filter((fallback) => !normalized.includes(fallback))];
     return merged.join(', ');
+  }
+
+  private normalizeOpacity(opacity?: number) {
+    if (opacity == null) {
+      return 1;
+    }
+    return opacity > 1 ? opacity / 100 : opacity;
+  }
+
+  private logTextLayerDebug(layers: PosterLayer[]) {
+    const textLayer = layers.find((layer): layer is Extract<PosterLayer, { type: 'text' }> => layer.type === 'text');
+    if (!textLayer) {
+      this.logger.warn('Poster debug: no se encontró ninguna capa de texto.');
+      return;
+    }
+    const opacity = this.normalizeOpacity(textLayer.opacity);
+    this.logger.log(
+      `Poster debug text layer "${textLayer.id}": x=${textLayer.x}, y=${textLayer.y}, fontSize=${textLayer.fontSize ?? 'N/A'}, color=${textLayer.color ?? 'N/A'}, opacity=${opacity}`,
+    );
+  }
+
+  private async writePosterDebugSvg(svg: string) {
+    const debugPath = '/tmp/poster-debug.svg';
+    try {
+      await fs.writeFile(debugPath, svg, 'utf8');
+      this.logger.log(`Poster debug: SVG guardado en ${debugPath}.`);
+    } catch (error) {
+      this.logger.warn(`Poster debug: no se pudo guardar SVG en ${debugPath}: ${String(error)}`);
+    }
   }
 
   private async renderPng(svg: string) {
