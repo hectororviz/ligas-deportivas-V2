@@ -52,11 +52,11 @@ export interface PosterShapeLayer extends PosterLayerBase {
 
 export type PosterLayer = PosterTextLayer | PosterImageLayer | PosterShapeLayer;
 
-const isJsonObject = (value: Prisma.JsonValue): value is Prisma.JsonObject =>
+const isJsonObject = (value: unknown): value is Prisma.JsonObject =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 export const ensurePosterTemplate = (
-  value: Prisma.JsonValue,
+  value: unknown,
   defaults: { width?: number; height?: number } = {},
 ): PosterTemplate => {
   if (!isJsonObject(value)) {
