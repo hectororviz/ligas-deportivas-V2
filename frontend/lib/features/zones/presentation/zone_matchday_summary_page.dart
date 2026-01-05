@@ -83,6 +83,7 @@ class _MatchdaySummaryView extends ConsumerWidget {
     final dateLabel = data.matchday.date != null
         ? DateFormat('dd/MM/yyyy').format(data.matchday.date!.toLocal())
         : 'Sin fecha definida';
+    final highlightedTeams = _resolveHighlightedTeams(data.matches);
     final generalStandings = ZoneStandingsData(
       zone: data.zone,
       general: data.generalStandings,
@@ -123,45 +124,6 @@ class _MatchdaySummaryView extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Resultados por partido',
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 12),
-                _MatchResultsList(matches: data.matches),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 20),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Puntos por categoría',
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Las categorías que no suman a la tabla general aparecen después del total de puntos.',
-                  style: theme.textTheme.bodySmall,
-                ),
-                const SizedBox(height: 12),
-                _MatchdayScoreboardTable(scoreboard: data.scoreboard, highlightColor: leagueColor),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 20),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
                   'Tabla general',
                   style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                 ),
@@ -171,6 +133,33 @@ class _MatchdaySummaryView extends ConsumerWidget {
                   rows: generalStandings.general,
                   emptyMessage: 'Todavía no hay datos para la tabla general.',
                   leagueColor: leagueColor,
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Resultados',
+                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Los goles por categoría de la fecha se muestran en las columnas. '
+                  'Las categorías promocionales aparecen después del total de puntos.',
+                  style: theme.textTheme.bodySmall,
+                ),
+                const SizedBox(height: 12),
+                _MatchdayScoreboardTable(
+                  scoreboard: data.scoreboard,
+                  highlightColor: leagueColor,
+                  highlightedTeams: highlightedTeams,
                 ),
               ],
             ),
@@ -227,118 +216,16 @@ class _MatchdaySummaryView extends ConsumerWidget {
   }
 }
 
-class _MatchResultsList extends StatelessWidget {
-  const _MatchResultsList({required this.matches});
-
-  final List<MatchdaySummaryMatch> matches;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    if (matches.isEmpty) {
-      return Text(
-        'No hay resultados registrados para esta fecha.',
-        style: theme.textTheme.bodyMedium,
-      );
-    }
-
-    return Column(
-      children: matches
-          .map(
-            (match) => Card(
-              margin: const EdgeInsets.only(bottom: 12),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                match.round.label,
-                                style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${match.homeClub?.displayName ?? 'Por definir'} vs ${match.awayClub?.displayName ?? 'Por definir'}',
-                                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Icon(Icons.sports_soccer, size: 20),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    ..._sortedCategories(match.categories).map(
-                      (category) => _CategoryResultRow(category: category),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          )
-          .toList(),
-    );
-  }
-}
-
-class _CategoryResultRow extends StatelessWidget {
-  const _CategoryResultRow({required this.category});
-
-  final MatchdaySummaryCategory category;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final labelStyle = theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600);
-    final scores = '${category.homeScore ?? '-'} - ${category.awayScore ?? '-'}';
-    final chipColor = category.countsForGeneral
-        ? theme.colorScheme.primaryContainer
-        : theme.colorScheme.tertiaryContainer;
-    final chipTextColor = category.countsForGeneral
-        ? theme.colorScheme.onPrimaryContainer
-        : theme.colorScheme.onTertiaryContainer;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(category.categoryName, style: labelStyle),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: chipColor,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              category.countsForGeneral ? 'General' : 'Promocional',
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: chipTextColor,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Text(scores, style: theme.textTheme.titleMedium),
-        ],
-      ),
-    );
-  }
-}
-
 class _MatchdayScoreboardTable extends StatelessWidget {
-  const _MatchdayScoreboardTable({required this.scoreboard, required this.highlightColor});
+  const _MatchdayScoreboardTable({
+    required this.scoreboard,
+    required this.highlightColor,
+    required this.highlightedTeams,
+  });
 
   final MatchdayScoreboard scoreboard;
   final Color highlightColor;
+  final Set<String> highlightedTeams;
 
   @override
   Widget build(BuildContext context) {
@@ -359,18 +246,41 @@ class _MatchdayScoreboardTable extends StatelessWidget {
       fontWeight: FontWeight.w700,
       color: colors.headerText,
     );
+    final dividerColor = theme.colorScheme.outlineVariant;
+    final promoPadding = const EdgeInsets.only(left: 12);
 
     final columns = <DataColumn>[
       const DataColumn(label: Text('Club')),
       ...generalCategories.map((category) => DataColumn(label: Text(category.categoryName))),
-      const DataColumn(label: Text('Puntos'), numeric: true),
-      ...promotionalCategories.map((category) => DataColumn(label: Text(category.categoryName))),
+      DataColumn(
+        label: Container(
+          padding: const EdgeInsets.only(right: 12),
+          decoration: BoxDecoration(
+            border: Border(right: BorderSide(color: dividerColor)),
+          ),
+          child: const Text('Puntos'),
+        ),
+        numeric: true,
+      ),
+      ...promotionalCategories.map(
+        (category) => DataColumn(
+          label: Padding(
+            padding: promoPadding,
+            child: Text(category.categoryName),
+          ),
+        ),
+      ),
     ];
 
-    String formatPoints(MatchdayScoreboardRow row, MatchdayScoreboardCategory category) {
-      final value = row.categoryPoints[category.tournamentCategoryId];
-      return value == null ? '-' : value.toString();
+    String formatGoals(MatchdayScoreboardRow row, MatchdayScoreboardCategory category) {
+      final value = row.goalsByCategory[category.tournamentCategoryId];
+      return (value ?? 0).toString();
     }
+
+    final pointsStyle = theme.textTheme.titleSmall?.copyWith(
+      fontWeight: FontWeight.w700,
+      color: theme.colorScheme.primary,
+    );
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -381,15 +291,32 @@ class _MatchdayScoreboardTable extends StatelessWidget {
         rows: [
           for (var index = 0; index < scoreboard.rows.length; index++)
             DataRow(
+              selected: highlightedTeams.contains(_normalizeName(scoreboard.rows[index].clubName)),
               color: buildStripedRowColor(index: index, colors: colors),
               cells: [
                 DataCell(Text(scoreboard.rows[index].clubName)),
                 ...generalCategories.map(
-                  (category) => DataCell(Text(formatPoints(scoreboard.rows[index], category))),
+                  (category) => DataCell(Text(formatGoals(scoreboard.rows[index], category))),
                 ),
-                DataCell(Text(scoreboard.rows[index].generalPoints.toString())),
+                DataCell(
+                  Container(
+                    padding: const EdgeInsets.only(right: 12),
+                    decoration: BoxDecoration(
+                      border: Border(right: BorderSide(color: dividerColor)),
+                    ),
+                    child: Text(
+                      scoreboard.rows[index].pointsTotal.toString(),
+                      style: pointsStyle,
+                    ),
+                  ),
+                ),
                 ...promotionalCategories.map(
-                  (category) => DataCell(Text(formatPoints(scoreboard.rows[index], category))),
+                  (category) => DataCell(
+                    Padding(
+                      padding: promoPadding,
+                      child: Text(formatGoals(scoreboard.rows[index], category)),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -468,15 +395,17 @@ _StatusStyle _statusStyle(ZoneMatchdayStatus status) {
   }
 }
 
-List<MatchdaySummaryCategory> _sortedCategories(List<MatchdaySummaryCategory> categories) {
-  final sorted = [...categories];
-  sorted.sort((a, b) {
-    if (a.countsForGeneral != b.countsForGeneral) {
-      return a.countsForGeneral ? -1 : 1;
+String _normalizeName(String name) => name.trim().toLowerCase();
+
+Set<String> _resolveHighlightedTeams(List<MatchdaySummaryMatch> matches) {
+  for (final match in matches) {
+    final home = match.homeClub?.displayName;
+    final away = match.awayClub?.displayName;
+    if (home != null && home.isNotEmpty && away != null && away.isNotEmpty) {
+      return {_normalizeName(home), _normalizeName(away)};
     }
-    return a.categoryName.toLowerCase().compareTo(b.categoryName.toLowerCase());
-  });
-  return sorted;
+  }
+  return {};
 }
 
 class _MatchdaySummaryRequest {

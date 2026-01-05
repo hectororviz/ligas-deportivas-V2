@@ -190,7 +190,7 @@ class _ZoneMatchDetailContent extends ConsumerStatefulWidget {
 }
 
 class _ZoneMatchDetailContentState extends ConsumerState<_ZoneMatchDetailContent> {
-  bool _downloadingFlyer = false;
+  bool _downloadingPoster = false;
 
   @override
   Widget build(BuildContext context) {
@@ -249,16 +249,21 @@ class _ZoneMatchDetailContentState extends ConsumerState<_ZoneMatchDetailContent
                   const SizedBox(height: 16),
                   Align(
                     alignment: Alignment.centerRight,
-                    child: FilledButton.icon(
-                      onPressed: _downloadingFlyer ? null : _downloadFlyer,
-                      icon: _downloadingFlyer
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.download_outlined),
-                      label: const Text('Descargar flyer'),
+                    child: Wrap(
+                      spacing: 12,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: _downloadingPoster ? null : _downloadPoster,
+                          icon: _downloadingPoster
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.image_outlined),
+                          label: const Text('Descargar placa (1080x1920)'),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -295,14 +300,14 @@ class _ZoneMatchDetailContentState extends ConsumerState<_ZoneMatchDetailContent
     return points == 1 ? '1 pt' : '$points pts';
   }
 
-  Future<void> _downloadFlyer() async {
+  Future<void> _downloadPoster() async {
     setState(() {
-      _downloadingFlyer = true;
+      _downloadingPoster = true;
     });
 
     try {
       final api = ref.read(apiClientProvider);
-      final downloadUrl = '${api.baseUrl}/matches/${widget.match.id}/flyer';
+      final downloadUrl = '${api.baseUrl}/matches/${widget.match.id}/poster';
       final launched = await launchUrlString(
         downloadUrl,
         mode: LaunchMode.externalApplication,
@@ -310,19 +315,19 @@ class _ZoneMatchDetailContentState extends ConsumerState<_ZoneMatchDetailContent
 
       if (!launched && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No se pudo iniciar la descarga del flyer.')),
+          const SnackBar(content: Text('No se pudo iniciar la descarga del poster.')),
         );
       }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo descargar el flyer: $error')),
+          SnackBar(content: Text('No se pudo descargar el poster: $error')),
         );
       }
     } finally {
       if (mounted) {
         setState(() {
-          _downloadingFlyer = false;
+          _downloadingPoster = false;
         });
       }
     }

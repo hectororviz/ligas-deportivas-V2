@@ -324,8 +324,9 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
         final fixtureAsync = ref.watch(zoneMatchesProvider(widget.zoneId));
         final authState = ref.watch(authControllerProvider);
         final user = authState.user;
-        final canManageFixture = !widget.viewOnly &&
-            ((user?.hasAnyRole(const ['ADMIN']) ?? false) ||
+        final isAdmin = user?.hasAnyRole(const ['ADMIN']) ?? false;
+        final canManageFixture = isAdmin ||
+            (!widget.viewOnly &&
                 (user?.hasPermission(
                           module: _moduleFixture,
                           action: _actionUpdate,

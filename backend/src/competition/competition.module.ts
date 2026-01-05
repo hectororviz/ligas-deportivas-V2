@@ -24,6 +24,8 @@ import { ZonesService } from './services/zones.service';
 import { ZonesController } from './controllers/zones.controller';
 import { MatchFlyerService } from './services/match-flyer.service';
 import { FlyerTemplatesService } from './services/flyer-templates.service';
+import { MatchPosterService } from './services/match-poster.service';
+import { PosterTemplatesService } from './services/poster-templates.service';
 import { CompetitionController } from './controllers/competition.controller';
 
 @Module({
@@ -36,7 +38,9 @@ import { CompetitionController } from './controllers/competition.controller';
     FixtureService,
     MatchesService,
     MatchFlyerService,
+    MatchPosterService,
     FlyerTemplatesService,
+    PosterTemplatesService,
     StandingsService,
     PlayersService,
     TeamsService,

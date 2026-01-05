@@ -19,11 +19,11 @@ import '../../features/settings/account_settings_page.dart';
 import '../../features/settings/site_identity_page.dart';
 import '../../features/settings/settings_page.dart';
 import '../../features/settings/user_management_page.dart';
-import '../../features/settings/flyer_template_page.dart';
 import '../../features/shared/widgets/app_shell.dart';
 import '../../features/standings/presentation/standings_page.dart';
 import '../../features/standings/presentation/zone_standings_page.dart';
 import '../../features/tournaments/presentation/tournaments_page.dart';
+import '../../features/tournaments/presentation/poster_template_page.dart';
 import '../../features/zones/presentation/zones_page.dart';
 import '../../features/zones/domain/zone_match_models.dart';
 import '../../features/zones/presentation/zone_fixture_page.dart';
@@ -105,7 +105,7 @@ GoRouter createRouter(Ref ref) {
             builder: (context, state) => const TournamentsPage(),
             routes: [
               GoRoute(
-                path: ':tournamentId/flyer-template',
+                path: ':tournamentId/poster-template',
                 builder: (context, state) {
                   final id = int.tryParse(state.pathParameters['tournamentId'] ?? '');
                   final tournament = state.extra is TournamentSummary ? state.extra as TournamentSummary : null;
@@ -117,12 +117,12 @@ GoRouter createRouter(Ref ref) {
                   final subtitle = tournament == null
                       ? null
                       : '${tournament.leagueName} · ${tournament.name} ${tournament.year}';
-                  return FlyerTemplatePage(
+                  return PosterTemplatePage(
                     competitionId: id,
                     tournamentName: subtitle,
                   );
                 },
-              )
+              ),
             ],
           ),
           GoRoute(path: '/zones', builder: (context, state) => const ZonesPage()),
