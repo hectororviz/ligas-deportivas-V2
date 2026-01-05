@@ -6,7 +6,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../storage/storage.service';
 import { MatchPosterService } from './match-poster.service';
-import { PosterTemplate } from '../types/poster-template.types';
+import { ensurePosterTemplate, PosterTemplate } from '../types/poster-template.types';
 
 export interface PosterTemplateResponseDto {
   template: PosterTemplate;
@@ -37,8 +37,13 @@ export class PosterTemplatesService {
     options: { template: PosterTemplate; background?: Express.Multer.File },
   ): Promise<PosterTemplateResponseDto> {
     await this.ensureTournament(tournamentId);
-    if (!options.template || !Array.isArray(options.template.layers)) {
-      throw new BadRequestException('La plantilla debe incluir un listado de capas.');
+    let validatedTemplate: PosterTemplate;
+    try {
+      validatedTemplate = ensurePosterTemplate(options.template);
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'La plantilla no es válida.',
+      );
     }
 
     const existing = await this.prisma.tournamentPosterTemplate.findUnique({
@@ -57,13 +62,13 @@ export class PosterTemplatesService {
     const saved = await this.prisma.tournamentPosterTemplate.upsert({
       where: { tournamentId },
       update: {
-        template: options.template,
+        template: validatedTemplate,
         backgroundKey,
         version,
       },
       create: {
         tournamentId,
-        template: options.template,
+        template: validatedTemplate,
         backgroundKey,
         version,
       },
@@ -104,8 +109,17 @@ export class PosterTemplatesService {
       };
     }
 
+    let validatedTemplate: PosterTemplate;
+    try {
+      validatedTemplate = ensurePosterTemplate(template.template);
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'La plantilla no es válida.',
+      );
+    }
+
     return {
-      template: template.template as PosterTemplate,
+      template: validatedTemplate,
       version: template.version,
       updatedAt: template.updatedAt,
       backgroundUrl: template.backgroundKey
