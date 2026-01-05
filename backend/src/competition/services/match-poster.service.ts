@@ -437,23 +437,24 @@ export class MatchPosterService {
   }
 
   private buildFontFamily(fontFamily?: string) {
-    const fallbacks = ['"DejaVu Sans"', 'Arial', 'sans-serif'];
+    const fallbacks = ['DejaVu Sans', 'Arial', 'sans-serif'];
+    const maxTokenLength = 64;
+    const sanitize = (entry: string) =>
+      entry
+        .replace(/["'\n\r;{}]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, maxTokenLength);
     if (!fontFamily) {
       return fallbacks.join(', ');
     }
     const normalized = fontFamily
       .split(',')
-      .map((entry) => entry.trim())
-      .filter(Boolean)
-      .map((entry) => {
-        if ((entry.startsWith('"') && entry.endsWith('"')) || (entry.startsWith("'") && entry.endsWith("'"))) {
-          return entry;
-        }
-        if (entry.includes(' ')) {
-          return `"${entry}"`;
-        }
-        return entry;
-      });
+      .map(sanitize)
+      .filter(Boolean);
+    if (normalized.length === 0) {
+      return fallbacks.join(', ');
+    }
     const merged = [...normalized, ...fallbacks.filter((fallback) => !normalized.includes(fallback))];
     return merged.join(', ');
   }
