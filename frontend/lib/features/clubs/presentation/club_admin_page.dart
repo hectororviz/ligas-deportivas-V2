@@ -432,6 +432,7 @@ class _ClubInformationPanel extends StatelessWidget {
     final theme = Theme.of(context);
     final primary = club.primaryColor;
     final secondary = club.secondaryColor;
+    final isCompact = MediaQuery.sizeOf(context).width < 600;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -473,28 +474,32 @@ class _ClubInformationPanel extends StatelessWidget {
                     club.name,
                     style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
                   ),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surface,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+                  if (!isCompact) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surface,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.link_rounded,
+                              size: 18, color: theme.colorScheme.onSurfaceVariant),
+                          const SizedBox(width: 8),
+                          Text(
+                            club.slug != null
+                                ? 'Slug: ${club.slug}'
+                                : 'Sin identificador público',
+                            style:
+                                theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.link_rounded, size: 18, color: theme.colorScheme.onSurfaceVariant),
-                        const SizedBox(width: 8),
-                        Text(
-                          club.slug != null
-                              ? 'Slug: ${club.slug}'
-                              : 'Sin identificador público',
-                          style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
-                        ),
-                      ],
-                    ),
-                  ),
+                  ],
                 ],
               ),
             ),
