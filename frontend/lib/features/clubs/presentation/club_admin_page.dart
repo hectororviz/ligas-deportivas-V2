@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/utils/responsive.dart';
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
 import 'widgets/authenticated_image.dart';
@@ -430,6 +431,7 @@ class _ClubInformationPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isMobile = Responsive.isMobile(context);
     final primary = club.primaryColor;
     final secondary = club.secondaryColor;
 
@@ -473,28 +475,31 @@ class _ClubInformationPanel extends StatelessWidget {
                     club.name,
                     style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
                   ),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surface,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+                  if (!isMobile) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surface,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.link_rounded,
+                              size: 18, color: theme.colorScheme.onSurfaceVariant),
+                          const SizedBox(width: 8),
+                          Text(
+                            club.slug != null
+                                ? 'Slug: ${club.slug}'
+                                : 'Sin identificador público',
+                            style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.link_rounded, size: 18, color: theme.colorScheme.onSurfaceVariant),
-                        const SizedBox(width: 8),
-                        Text(
-                          club.slug != null
-                              ? 'Slug: ${club.slug}'
-                              : 'Sin identificador público',
-                          style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
-                        ),
-                      ],
-                    ),
-                  ),
+                  ],
                 ],
               ),
             ),
