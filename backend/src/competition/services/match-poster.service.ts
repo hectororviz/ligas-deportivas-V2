@@ -338,7 +338,7 @@ export class MatchPosterService {
 
     const textLayer = layer;
     const fontSize = textLayer.fontSize ?? 48;
-    const fontFamily = textLayer.fontFamily ?? 'Arial';
+    const fontFamily = this.buildFontFamily(textLayer.fontFamily);
     const fontWeight = textLayer.fontWeight ?? 'normal';
     const fontStyle = textLayer.fontStyle ?? 'normal';
     const color = textLayer.color ?? '#ffffff';
@@ -436,11 +436,34 @@ export class MatchPosterService {
       .replace(/'/g, '&apos;');
   }
 
+  private buildFontFamily(fontFamily?: string) {
+    const fallbacks = ['"DejaVu Sans"', 'Arial', 'sans-serif'];
+    if (!fontFamily) {
+      return fallbacks.join(', ');
+    }
+    const normalized = fontFamily
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .map((entry) => {
+        if ((entry.startsWith('"') && entry.endsWith('"')) || (entry.startsWith("'") && entry.endsWith("'"))) {
+          return entry;
+        }
+        if (entry.includes(' ')) {
+          return `"${entry}"`;
+        }
+        return entry;
+      });
+    const merged = [...normalized, ...fallbacks.filter((fallback) => !normalized.includes(fallback))];
+    return merged.join(', ');
+  }
+
   private async renderPng(svg: string) {
     const Resvg = await this.loadResvg();
     try {
       const renderer = new Resvg(svg, {
         fitTo: { mode: 'width', value: POSTER_WIDTH },
+        font: { loadSystemFonts: true },
       });
       return Buffer.from(renderer.render().asPng());
     } catch (error) {
