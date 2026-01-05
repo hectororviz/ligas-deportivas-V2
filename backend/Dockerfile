@@ -4,13 +4,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
   openssl \
   ca-certificates \
-  fontconfig \
-  fonts-dejavu-core \
-  fonts-liberation \
-  && rm -rf /var/lib/apt/lists/* \
-  && fc-cache -f
-
-
+  && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
 RUN npm ci
@@ -26,8 +20,14 @@ FROM node:20-bookworm-slim
 WORKDIR /app
 
 # Prisma/engines necesitan OpenSSL disponible
-RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
-  && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  openssl \
+  ca-certificates \
+  fontconfig \
+  fonts-dejavu-core \
+  fonts-liberation \
+  && rm -rf /var/lib/apt/lists/* \
+  && fc-cache -f
 
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules
