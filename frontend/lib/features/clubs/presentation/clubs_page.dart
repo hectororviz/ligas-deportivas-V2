@@ -478,22 +478,25 @@ class _ClubsDataTable extends StatelessWidget {
     final colors = AppDataTableColors.standard(theme);
     final headerStyle =
         theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: colors.headerText);
+    final isMobile = Responsive.isMobile(context);
 
     final table = DataTable(
-      columns: const [
-        DataColumn(label: Text('Nombre')),
-        DataColumn(label: Text('Estado')),
-        DataColumn(label: Text('Acciones')),
+      columns: [
+        const DataColumn(label: Text('Nombre')),
+        const DataColumn(label: Text('Estado')),
+        if (!isMobile) const DataColumn(label: Text('Acciones')),
       ],
       dataRowMinHeight: 44,
       dataRowMaxHeight: 60,
       headingRowHeight: 48,
+      showCheckboxColumn: false,
       headingRowColor: buildHeaderColor(colors.headerBackground),
       headingTextStyle: headerStyle,
       rows: [
         for (var index = 0; index < clubs.length; index++)
           DataRow(
             color: buildStripedRowColor(index: index, colors: colors),
+            onSelectChanged: isMobile ? (_) => onView(clubs[index]) : null,
             cells: [
               DataCell(
                 Row(
@@ -543,24 +546,25 @@ class _ClubsDataTable extends StatelessWidget {
                   ),
                 ),
               ),
-              DataCell(
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: () => onView(clubs[index]),
-                      icon: const Icon(Icons.visibility_outlined),
-                      label: const Text('Detalles'),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton.tonalIcon(
-                      onPressed: canEdit ? () => onEdit(clubs[index]) : null,
-                      icon: const Icon(Icons.edit_outlined),
-                      label: const Text('Editar'),
-                    ),
-                  ],
+              if (!isMobile)
+                DataCell(
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: () => onView(clubs[index]),
+                        icon: const Icon(Icons.visibility_outlined),
+                        label: const Text('Detalles'),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton.tonalIcon(
+                        onPressed: canEdit ? () => onEdit(clubs[index]) : null,
+                        icon: const Icon(Icons.edit_outlined),
+                        label: const Text('Editar'),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
             ],
           ),
       ],
