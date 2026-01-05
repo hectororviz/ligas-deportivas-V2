@@ -68,7 +68,8 @@ class _PosterTemplatePageState extends ConsumerState<PosterTemplatePage> {
     }
     _config = template;
     _layers = template.layers.isEmpty ? _defaultLayers() : [...template.layers];
-    _layers.sort((a, b) => a.zIndex.compareTo(b.zIndex));
+    _sortLayersStable();
+    _reindexLayers();
     _backgroundUrl = template.backgroundUrl;
   }
 
@@ -394,15 +395,56 @@ class _PosterTemplatePageState extends ConsumerState<PosterTemplatePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildNumberField('X', layer.x, (value) => _updateLayer(layer, (l) => l.x = value)),
-        _buildNumberField('Y', layer.y, (value) => _updateLayer(layer, (l) => l.y = value)),
-        _buildNumberField('Ancho', layer.width, (value) => _updateLayer(layer, (l) => l.width = value)),
-        _buildNumberField('Alto', layer.height, (value) => _updateLayer(layer, (l) => l.height = value)),
-        _buildNumberField('Opacidad', layer.opacity, (value) => _updateLayer(layer, (l) => l.opacity = value)),
+        _buildNumberField(
+          'X',
+          layer.x,
+          (value) => _updateLayer(layer, (l) => l.x = value),
+          fieldKey: '${layer.id}-x',
+        ),
+        _buildNumberField(
+          'Y',
+          layer.y,
+          (value) => _updateLayer(layer, (l) => l.y = value),
+          fieldKey: '${layer.id}-y',
+        ),
+        _buildNumberField(
+          'Ancho',
+          layer.width,
+          (value) => _updateLayer(layer, (l) => l.width = value),
+          fieldKey: '${layer.id}-width',
+        ),
+        _buildNumberField(
+          'Alto',
+          layer.height,
+          (value) => _updateLayer(layer, (l) => l.height = value),
+          fieldKey: '${layer.id}-height',
+        ),
+        _buildNumberField(
+          'Opacidad',
+          layer.opacity,
+          (value) => _updateLayer(layer, (l) => l.opacity = value.clamp(0, 1).toDouble()),
+          precision: 2,
+          fieldKey: '${layer.id}-opacity',
+        ),
         if (layer.type == 'text') ...[
-          _buildTextField('Texto', layer.text ?? '', (value) => _updateLayer(layer, (l) => l.text = value)),
-          _buildNumberField('Tamaño', layer.fontSize ?? 42, (value) => _updateLayer(layer, (l) => l.fontSize = value)),
-          _buildTextField('Color (#hex)', layer.color ?? '#FFFFFF', (value) => _updateLayer(layer, (l) => l.color = value)),
+          _buildTextField(
+            'Texto',
+            layer.text ?? '',
+            (value) => _updateLayer(layer, (l) => l.text = value),
+            fieldKey: '${layer.id}-text',
+          ),
+          _buildNumberField(
+            'Tamaño',
+            layer.fontSize ?? 42,
+            (value) => _updateLayer(layer, (l) => l.fontSize = value),
+            fieldKey: '${layer.id}-fontSize',
+          ),
+          _buildTextField(
+            'Color (#hex)',
+            layer.color ?? '#FFFFFF',
+            (value) => _updateLayer(layer, (l) => l.color = value),
+            fieldKey: '${layer.id}-color',
+          ),
           _buildDropdown(
             'Alineación',
             layer.align ?? 'left',
@@ -411,7 +453,12 @@ class _PosterTemplatePageState extends ConsumerState<PosterTemplatePage> {
           ),
         ],
         if (layer.type == 'image') ...[
-          _buildTextField('Src', layer.src ?? '', (value) => _updateLayer(layer, (l) => l.src = value)),
+          _buildTextField(
+            'Src',
+            layer.src ?? '',
+            (value) => _updateLayer(layer, (l) => l.src = value),
+            fieldKey: '${layer.id}-src',
+          ),
           _buildDropdown(
             'Fit',
             layer.fit ?? 'cover',
@@ -420,27 +467,50 @@ class _PosterTemplatePageState extends ConsumerState<PosterTemplatePage> {
           ),
         ],
         if (layer.type == 'shape')
-          _buildTextField('Relleno (#hex)', layer.fill ?? '#000000', (value) => _updateLayer(layer, (l) => l.fill = value)),
+          _buildTextField(
+            'Relleno (#hex)',
+            layer.fill ?? '#000000',
+            (value) => _updateLayer(layer, (l) => l.fill = value),
+            fieldKey: '${layer.id}-fill',
+          ),
       ],
     );
   }
 
-  Widget _buildNumberField(String label, double value, ValueChanged<double> onChanged) {
+  Widget _buildNumberField(
+    String label,
+    double value,
+    ValueChanged<double> onChanged, {
+    int precision = 0,
+    String? fieldKey,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: TextFormField(
-        initialValue: value.toStringAsFixed(0),
+        key: fieldKey != null ? ValueKey(fieldKey) : null,
+        initialValue: value.toStringAsFixed(precision),
         decoration: InputDecoration(labelText: label),
         keyboardType: TextInputType.number,
-        onChanged: (value) => onChanged(double.tryParse(value) ?? 0),
+        onChanged: (value) {
+          final parsed = double.tryParse(value);
+          if (parsed != null) {
+            onChanged(parsed);
+          }
+        },
       ),
     );
   }
 
-  Widget _buildTextField(String label, String value, ValueChanged<String> onChanged) {
+  Widget _buildTextField(
+    String label,
+    String value,
+    ValueChanged<String> onChanged, {
+    String? fieldKey,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: TextFormField(
+        key: fieldKey != null ? ValueKey(fieldKey) : null,
         initialValue: value,
         decoration: InputDecoration(labelText: label),
         onChanged: onChanged,
@@ -508,6 +578,18 @@ class _PosterTemplatePageState extends ConsumerState<PosterTemplatePage> {
     for (var i = 0; i < _layers.length; i++) {
       _layers[i].zIndex = i;
     }
+  }
+
+  void _sortLayersStable() {
+    final indexed = _layers.asMap().entries.toList()
+      ..sort((a, b) {
+        final zComparison = a.value.zIndex.compareTo(b.value.zIndex);
+        if (zComparison != 0) {
+          return zComparison;
+        }
+        return a.key.compareTo(b.key);
+      });
+    _layers = [for (final entry in indexed) entry.value];
   }
 
   Future<void> _pickBackground() async {
