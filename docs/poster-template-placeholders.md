@@ -3,6 +3,7 @@
 Usa estos tokens en capas de texto o imágenes dentro del JSON de la plantilla.
 
 ## Texto
+- `{{league.name}}`
 - `{{tournament.name}}`
 - `{{match.round}}`
 - `{{match.matchday}}`

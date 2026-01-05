@@ -121,15 +121,40 @@ export class MatchesService {
       where: { zoneId_matchday: { zoneId, matchday } }
     });
 
-    if (!entry) {
-      throw new NotFoundException('Fecha no encontrada para la zona indicada');
-    }
-
     if (dto.date === undefined) {
+      if (!entry) {
+        throw new NotFoundException('Fecha no encontrada para la zona indicada');
+      }
       return entry;
     }
 
     const parsedDate = dto.date ? new Date(dto.date) : null;
+    if (!entry) {
+      const existingMatchday = await this.prisma.zoneMatchday.findFirst({
+        where: { zoneId },
+        orderBy: { matchday: 'asc' },
+        select: { matchday: true }
+      });
+      let status: MatchdayStatus = MatchdayStatus.PENDING;
+      if (!existingMatchday) {
+        const firstMatch = await this.prisma.match.findFirst({
+          where: { zoneId },
+          orderBy: { matchday: 'asc' },
+          select: { matchday: true }
+        });
+        if (firstMatch?.matchday === matchday) {
+          status = MatchdayStatus.IN_PROGRESS;
+        }
+      }
+      return this.prisma.zoneMatchday.create({
+        data: {
+          zoneId,
+          matchday,
+          status,
+          date: parsedDate
+        }
+      });
+    }
     return this.prisma.zoneMatchday.update({
       where: { zoneId_matchday: { zoneId, matchday } },
       data: { date: parsedDate }

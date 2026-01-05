@@ -38,7 +38,11 @@ export class MatchPosterService {
     const match = await this.prisma.match.findUnique({
       where: { id: matchId },
       include: {
-        tournament: true,
+        tournament: {
+          include: {
+            league: true,
+          },
+        },
         homeClub: true,
         awayClub: true,
         categories: {
@@ -127,7 +131,7 @@ export class MatchPosterService {
       date: Date | null;
       matchday: number;
       round: Round;
-      tournament: { name: string };
+      tournament: { name: string; league?: { name: string } | null };
       homeClub?: { name?: string | null; shortName?: string | null; logoKey?: string | null; logoUrl?: string | null } | null;
       awayClub?: { name?: string | null; shortName?: string | null; logoKey?: string | null; logoUrl?: string | null } | null;
       categories: {
@@ -167,6 +171,7 @@ export class MatchPosterService {
     ]);
 
     const placeholderMap: Record<string, string> = {
+      'league.name': match.tournament.league?.name ?? '',
       'tournament.name': match.tournament.name,
       'match.round': this.resolveRoundLabel(match.round),
       'match.matchday': String(match.matchday ?? ''),
