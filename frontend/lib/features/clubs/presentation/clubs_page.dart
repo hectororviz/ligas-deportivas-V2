@@ -468,12 +468,14 @@ class _ClubsDataTable extends StatelessWidget {
     final colors = AppDataTableColors.standard(theme);
     final headerStyle =
         theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: colors.headerText);
+    final isCompact = MediaQuery.sizeOf(context).width < 600;
 
     final table = DataTable(
-      columns: const [
-        DataColumn(label: Text('Nombre')),
-        DataColumn(label: Text('Estado')),
-        DataColumn(label: Text('Acciones')),
+      showCheckboxColumn: false,
+      columns: [
+        const DataColumn(label: Text('Nombre')),
+        const DataColumn(label: Text('Estado')),
+        if (!isCompact) const DataColumn(label: Text('Acciones')),
       ],
       dataRowMinHeight: 44,
       dataRowMaxHeight: 60,
@@ -483,6 +485,7 @@ class _ClubsDataTable extends StatelessWidget {
       rows: [
         for (var index = 0; index < clubs.length; index++)
           DataRow(
+            onSelectChanged: isCompact ? (_) => onView(clubs[index]) : null,
             color: buildStripedRowColor(index: index, colors: colors),
             cells: [
               DataCell(
@@ -533,24 +536,25 @@ class _ClubsDataTable extends StatelessWidget {
                   ),
                 ),
               ),
-              DataCell(
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: () => onView(clubs[index]),
-                      icon: const Icon(Icons.visibility_outlined),
-                      label: const Text('Detalles'),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton.tonalIcon(
-                      onPressed: canEdit ? () => onEdit(clubs[index]) : null,
-                      icon: const Icon(Icons.edit_outlined),
-                      label: const Text('Editar'),
-                    ),
-                  ],
+              if (!isCompact)
+                DataCell(
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: () => onView(clubs[index]),
+                        icon: const Icon(Icons.visibility_outlined),
+                        label: const Text('Detalles'),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton.tonalIcon(
+                        onPressed: canEdit ? () => onEdit(clubs[index]) : null,
+                        icon: const Icon(Icons.edit_outlined),
+                        label: const Text('Editar'),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
             ],
           ),
       ],
