@@ -88,11 +88,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                         child: Center(
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(16),
-                            child: Image.network(
-                              loginImageUrl,
+                            child: SizedBox(
                               width: 320,
                               height: 250,
-                              fit: BoxFit.cover,
+                              child: Image.network(
+                                loginImageUrl,
+                                fit: BoxFit.contain,
+                              ),
                             ),
                           ),
                         ),
