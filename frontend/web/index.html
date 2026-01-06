@@ -19,6 +19,7 @@
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="A new Flutter project.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -69,51 +70,14 @@
       height: auto;
     }
 
-    .loader-dots {
-      display: flex;
-      gap: 10px;
-      height: 14px;
-      align-items: center;
-    }
-
-    .loader-dots span {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: #1f1f1f;
-      opacity: 0.3;
-      animation: dotPulse 1.2s infinite ease-in-out;
-    }
-
-    .loader-dots span:nth-child(1) {
-      animation-delay: 0s;
-    }
-
-    .loader-dots span:nth-child(2) {
-      animation-delay: 0.2s;
-    }
-
-    .loader-dots span:nth-child(3) {
-      animation-delay: 0.4s;
-    }
-
-    @keyframes dotPulse {
-      0% {
-        opacity: 0.3;
-        transform: translateY(0);
-      }
-      30% {
-        opacity: 1;
-        transform: translateY(-4px);
-      }
-      60% {
-        opacity: 0.3;
-        transform: translateY(0);
-      }
+    .lottie-container {
+      width: clamp(110px, 28vw, 180px);
+      height: clamp(110px, 28vw, 180px);
     }
 
     .loader-text {
-      font-size: 14px;
+      font-size: clamp(16px, 2.8vw, 20px);
+      line-height: 1.3;
       letter-spacing: 0.2px;
       color: #4b4b4b;
     }
@@ -122,7 +86,7 @@
       display: none;
       flex-direction: column;
       gap: 8px;
-      font-size: 14px;
+      font-size: clamp(14px, 2.6vw, 18px);
       color: #6b2c2c;
     }
 
@@ -145,11 +109,7 @@
   <div id="initial-loader" aria-label="Cargando aplicación">
     <div class="loader-content">
       <img class="loader-logo" src="icons/Icon-192.png" alt="Logo" />
-      <div class="loader-dots" aria-hidden="true">
-        <span></span>
-        <span></span>
-        <span></span>
-      </div>
+      <div id="lottie-loader" class="lottie-container" aria-label="Cargando"></div>
       <div class="loader-text">Cargando…</div>
       <div id="loader-error">
         <div>Esto está tardando más de lo normal.</div>
@@ -159,11 +119,24 @@
     </div>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
   <script>
     (function () {
       const loader = document.getElementById('initial-loader');
       const errorBlock = document.getElementById('loader-error');
       const retryButton = document.getElementById('loader-retry');
+      const lottieContainer = document.getElementById('lottie-loader');
+      let anim;
+
+      if (window.lottie && lottieContainer) {
+        anim = window.lottie.loadAnimation({
+          container: lottieContainer,
+          renderer: 'svg',
+          loop: true,
+          autoplay: true,
+          path: 'assets/brand/ball-loading.json'
+        });
+      }
 
       const timeoutId = window.setTimeout(() => {
         if (errorBlock) {
@@ -174,6 +147,9 @@
       const hideLoader = () => {
         if (loader) {
           loader.style.display = 'none';
+        }
+        if (anim) {
+          anim.destroy();
         }
         window.clearTimeout(timeoutId);
       };
