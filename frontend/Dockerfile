@@ -14,4 +14,3 @@ RUN flutter build web --release --dart-define=API_BASE_URL=$API_BASE_URL
 
 FROM nginx:1.25-alpine
 COPY --from=builder /app/build/web /usr/share/nginx/html
-COPY infra/nginx.conf /etc/nginx/conf.d/default.conf
