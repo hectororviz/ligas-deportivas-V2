@@ -392,7 +392,7 @@ class _StandingsTable extends StatelessWidget {
             ),
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
-              child: Text('Pts', style: headerStyle, textAlign: TextAlign.end),
+              child: Text('Pts', style: headerStyle, textAlign: TextAlign.center),
             ),
           ],
         ),
@@ -424,8 +424,8 @@ class _StandingsTable extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Text(
                   '${row.points}',
-                  style: theme.textTheme.bodyMedium,
-                  textAlign: TextAlign.end,
+                  style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
                 ),
               ),
             ],
