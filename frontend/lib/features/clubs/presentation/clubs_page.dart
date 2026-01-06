@@ -483,7 +483,7 @@ class _ClubsDataTable extends StatelessWidget {
     final table = DataTable(
       columns: [
         const DataColumn(label: Text('Nombre')),
-        const DataColumn(label: Text('Estado')),
+        if (!isMobile) const DataColumn(label: Text('Estado')),
         if (!isMobile) const DataColumn(label: Text('Acciones')),
       ],
       dataRowMinHeight: 44,
@@ -521,31 +521,32 @@ class _ClubsDataTable extends StatelessWidget {
                   ],
                 ),
               ),
-              DataCell(
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Chip(
-                    avatar: Icon(
-                      clubs[index].active ? Icons.check_circle : Icons.pause_circle,
-                      size: 18,
-                      color: clubs[index].active
-                          ? theme.colorScheme.onPrimary
-                          : theme.colorScheme.onSurfaceVariant,
-                    ),
-                    backgroundColor: clubs[index].active
-                        ? theme.colorScheme.primary
-                        : theme.colorScheme.surfaceVariant,
-                    label: Text(
-                      clubs[index].active ? 'Activo' : 'Inactivo',
-                      style: theme.textTheme.labelLarge?.copyWith(
+              if (!isMobile)
+                DataCell(
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Chip(
+                      avatar: Icon(
+                        clubs[index].active ? Icons.check_circle : Icons.pause_circle,
+                        size: 18,
                         color: clubs[index].active
                             ? theme.colorScheme.onPrimary
                             : theme.colorScheme.onSurfaceVariant,
                       ),
+                      backgroundColor: clubs[index].active
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.surfaceVariant,
+                      label: Text(
+                        clubs[index].active ? 'Activo' : 'Inactivo',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: clubs[index].active
+                              ? theme.colorScheme.onPrimary
+                              : theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
               if (!isMobile)
                 DataCell(
                   Row(
@@ -572,17 +573,23 @@ class _ClubsDataTable extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
+        final scrollView = SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: constraints.maxWidth),
+            child: table,
+          ),
+        );
+
+        if (isMobile) {
+          return scrollView;
+        }
+
         return Scrollbar(
           thumbVisibility: true,
           notificationPredicate: (notification) =>
               notification.metrics.axis == Axis.horizontal,
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minWidth: constraints.maxWidth),
-              child: table,
-            ),
-          ),
+          child: scrollView,
         );
       },
     );

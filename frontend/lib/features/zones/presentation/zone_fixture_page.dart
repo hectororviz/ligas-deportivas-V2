@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/utils/responsive.dart';
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
 import '../domain/zone_models.dart';
@@ -376,13 +377,19 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
                       content = _buildFixtureSchedule(zone, fixtureData, canManageFixture);
                     }
 
+                    final scrollView = SingleChildScrollView(
+                      controller: _contentScrollController,
+                      child: content,
+                    );
+
+                    if (Responsive.isMobile(context)) {
+                      return scrollView;
+                    }
+
                     return Scrollbar(
                       thumbVisibility: true,
                       controller: _contentScrollController,
-                      child: SingleChildScrollView(
-                        controller: _contentScrollController,
-                        child: content,
-                      ),
+                      child: scrollView,
                     );
                   },
                   loading: () => const Center(child: CircularProgressIndicator()),
@@ -831,6 +838,92 @@ class _FixtureMatchdayCard extends StatelessWidget {
     final baseTitleStyle = theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600);
     final dateFormatter = DateFormat('dd/MM');
     final dateLabel = date != null ? dateFormatter.format(date!) : 'Sin fecha';
+    final isMobile = Responsive.isMobile(context);
+    final dateField = _MatchdayDateField(
+      date: date,
+      dateLabel: dateLabel,
+      canEdit: canEditDate,
+      isUpdating: isUpdatingDate,
+      onSelectDate: onDateSelected,
+      onClearDate: onClearDate,
+    );
+    final summaryButton = TextButton.icon(
+      onPressed: onViewSummary,
+      icon: const Icon(Icons.summarize_outlined),
+      label: const Text('Resumen'),
+    );
+    final finalizeButton = TextButton.icon(
+      onPressed: isFinalizing ? null : onFinalize,
+      icon: isFinalizing
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.flag_outlined),
+      label: const Text('Finalizar'),
+    );
+
+    final titleWidget = RichText(
+      text: TextSpan(
+        style: baseTitleStyle,
+        children: [
+          TextSpan(text: '${round.shortLabel} - '),
+          TextSpan(
+            text: title,
+            style: baseTitleStyle?.copyWith(fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+    );
+
+    final header = isMobile
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              titleWidget,
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  dateField,
+                  if (showSummaryButton) summaryButton,
+                  if (showFinalizeButton) finalizeButton,
+                  _FixtureMatchdayStatusIndicator(status: status),
+                ],
+              ),
+            ],
+          )
+        : Row(
+            children: [
+              Expanded(child: titleWidget),
+              const SizedBox(width: 12),
+              ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 120),
+                child: Align(
+                  alignment: Alignment.center,
+                  child: dateField,
+                ),
+              ),
+              const Spacer(),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (showSummaryButton) ...[
+                    summaryButton,
+                    const SizedBox(width: 8),
+                  ],
+                  if (showFinalizeButton) ...[
+                    finalizeButton,
+                    const SizedBox(width: 8),
+                  ],
+                  _FixtureMatchdayStatusIndicator(status: status),
+                ],
+              ),
+            ],
+          );
     return Align(
       alignment: Alignment.center,
       child: ConstrainedBox(
@@ -840,68 +933,7 @@ class _FixtureMatchdayCard extends StatelessWidget {
           child: ExpansionTile(
             tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            title: Row(
-              children: [
-                Expanded(
-                  child: RichText(
-                    text: TextSpan(
-                      style: baseTitleStyle,
-                      children: [
-                        TextSpan(text: '${round.shortLabel} - '),
-                        TextSpan(
-                          text: title,
-                          style: baseTitleStyle?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(minWidth: 120),
-                  child: Align(
-                    alignment: Alignment.center,
-                    child: _MatchdayDateField(
-                      date: date,
-                      dateLabel: dateLabel,
-                      canEdit: canEditDate,
-                      isUpdating: isUpdatingDate,
-                      onSelectDate: onDateSelected,
-                      onClearDate: onClearDate,
-                    ),
-                  ),
-                ),
-                const Spacer(),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (showSummaryButton) ...[
-                      TextButton.icon(
-                        onPressed: onViewSummary,
-                        icon: const Icon(Icons.summarize_outlined),
-                        label: const Text('Resumen'),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                    if (showFinalizeButton) ...[
-                      TextButton.icon(
-                        onPressed: isFinalizing ? null : onFinalize,
-                        icon: isFinalizing
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(Icons.flag_outlined),
-                        label: const Text('Finalizar'),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                    _FixtureMatchdayStatusIndicator(status: status),
-                  ],
-                ),
-              ],
-            ),
+            title: header,
             children: [
               const Divider(height: 24),
               ...matches,

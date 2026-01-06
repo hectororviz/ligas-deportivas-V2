@@ -245,7 +245,8 @@ class _ClubAdminContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
+    final isMobile = Responsive.isMobile(context);
+    final scrollView = SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -278,6 +279,15 @@ class _ClubAdminContent extends StatelessWidget {
             ),
         ],
       ),
+    );
+
+    if (!isMobile) {
+      return scrollView;
+    }
+
+    return ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+      child: scrollView,
     );
   }
 }
