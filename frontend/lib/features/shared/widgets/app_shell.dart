@@ -132,7 +132,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     _identitySubscription =
         ref.listenManual(siteIdentityProvider, (previous, next) {
       final identity = next.valueOrNull;
-      FaviconManager.update(identity?.faviconUrl);
+      FaviconManager.update(identity?.faviconBasePath);
     });
   }
 
