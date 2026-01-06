@@ -391,13 +391,13 @@ class _ClubCrest extends StatelessWidget {
         width: size,
         height: size,
         decoration: BoxDecoration(
-          shape: BoxShape.circle,
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(color: theme.colorScheme.outlineVariant),
         ),
         clipBehavior: Clip.antiAlias,
         child: AuthenticatedImage(
           imageUrl: logoUrl,
-          fit: BoxFit.cover,
+          fit: BoxFit.contain,
           placeholder: _FallbackAvatar(name: club?.displayName ?? '—', club: club),
           error: _FallbackAvatar(name: club?.displayName ?? '—', club: club),
         ),
@@ -421,9 +421,14 @@ class _FallbackAvatar extends StatelessWidget {
     final primary = club?.primaryColor ?? theme.colorScheme.primary;
     final secondary = club?.secondaryColor ?? theme.colorScheme.primaryContainer;
     final initials = _initialsFromName(name);
-    return CircleAvatar(
-      radius: size / 2,
-      backgroundColor: secondary.withOpacity(0.35),
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        color: secondary.withOpacity(0.35),
+      ),
+      alignment: Alignment.center,
       child: Text(
         initials,
         style: theme.textTheme.titleLarge?.copyWith(color: primary, fontWeight: FontWeight.bold),

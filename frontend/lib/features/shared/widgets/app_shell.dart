@@ -219,11 +219,13 @@ class _AppShellState extends ConsumerState<AppShell> {
                       height: 100,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
-                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        color: Colors.white,
                       ),
                       clipBehavior: Clip.antiAlias,
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      alignment: Alignment.center,
                       child: siteIdentity?.iconUrl != null
-                          ? Image.network(siteIdentity!.iconUrl!, fit: BoxFit.cover)
+                          ? Image.network(siteIdentity!.iconUrl!, fit: BoxFit.contain)
                           : const FlutterLogo(size: 80),
                     ),
                     const SizedBox(height: 16),
@@ -349,11 +351,13 @@ class _NavigationDrawer extends StatelessWidget {
                 height: 100,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
-                  color: theme.colorScheme.surfaceContainerHighest,
+                  color: Colors.white,
                 ),
                 clipBehavior: Clip.antiAlias,
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                alignment: Alignment.center,
                 child: siteIdentity?.iconUrl != null
-                    ? Image.network(siteIdentity!.iconUrl!, fit: BoxFit.cover)
+                    ? Image.network(siteIdentity!.iconUrl!, fit: BoxFit.contain)
                     : const FlutterLogo(size: 80),
               ),
               title: Text(siteIdentity?.title ?? 'Ligas deportivas'),
