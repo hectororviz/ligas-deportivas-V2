@@ -198,15 +198,18 @@ class _ZoneMatchDetailContentState extends ConsumerState<_ZoneMatchDetailContent
     final match = widget.match;
     final zoneId = widget.zoneId;
     final canEditScores = widget.canEditScores;
+    final isMobile = MediaQuery.sizeOf(context).width < 600;
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: isMobile
+          ? const EdgeInsets.symmetric(horizontal: 12, vertical: 16)
+          : const EdgeInsets.all(24),
       child: Align(
         alignment: Alignment.topCenter,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 800),
           child: Card(
             child: Padding(
-              padding: const EdgeInsets.all(24),
+              padding: isMobile ? const EdgeInsets.all(16) : const EdgeInsets.all(24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -495,6 +498,7 @@ class _CategoriesTableState extends ConsumerState<_CategoriesTable> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final categories = widget.match.categories;
+    final isMobile = MediaQuery.sizeOf(context).width < 600;
 
     final outerBorderColor = theme.colorScheme.outlineVariant.withOpacity(0.6);
     final innerBorderColor = theme.colorScheme.outlineVariant.withOpacity(0.7);
@@ -513,7 +517,7 @@ class _CategoriesTableState extends ConsumerState<_CategoriesTable> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildHeaderRow(theme, headerBackground, innerBorderColor),
+            _buildHeaderRow(theme, headerBackground, innerBorderColor, isMobile),
             Divider(height: 1, thickness: 1, color: innerBorderColor),
             for (var i = 0; i < categories.length; i++) ...[
               if (i > 0)
@@ -522,6 +526,7 @@ class _CategoriesTableState extends ConsumerState<_CategoriesTable> {
                 theme,
                 innerBorderColor,
                 categories[i],
+                isMobile,
               ),
             ],
           ],
@@ -534,6 +539,7 @@ class _CategoriesTableState extends ConsumerState<_CategoriesTable> {
     ThemeData theme,
     Color headerBackground,
     Color innerBorderColor,
+    bool isMobile,
   ) {
     return Row(
       children: [
@@ -549,21 +555,23 @@ class _CategoriesTableState extends ConsumerState<_CategoriesTable> {
           theme,
           headerBackground,
           innerBorderColor,
-          label: 'Goles Local',
+          label: isMobile ? 'L' : 'Goles Local',
         ),
         _headerCell(
           theme,
           headerBackground,
           innerBorderColor,
-          label: 'Goles Visitante',
+          label: isMobile ? 'V' : 'Goles Visitante',
+          showRightBorder: !isMobile,
         ),
-        _headerCell(
-          theme,
-          headerBackground,
-          innerBorderColor,
-          label: 'Goles',
-          showRightBorder: false,
-        ),
+        if (!isMobile)
+          _headerCell(
+            theme,
+            headerBackground,
+            innerBorderColor,
+            label: 'Goles',
+            showRightBorder: false,
+          ),
       ],
     );
   }
@@ -572,6 +580,7 @@ class _CategoriesTableState extends ConsumerState<_CategoriesTable> {
     ThemeData theme,
     Color innerBorderColor,
     ZoneMatchCategory category,
+    bool isMobile,
   ) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -593,18 +602,20 @@ class _CategoriesTableState extends ConsumerState<_CategoriesTable> {
         ),
         _dataCell(
           innerBorderColor,
+          showRightBorder: !isMobile,
           child: _ScoreCell(
             score: category.awayScore ?? 0,
             outcome: _scoreOutcome(category.awayScore, category.homeScore),
           ),
         ),
-        _dataCell(
-          innerBorderColor,
-          showRightBorder: false,
-          child: _ActionCell(
-            onTap: widget.canViewPlayerNames ? () => _openGoalsDialog(category) : null,
+        if (!isMobile)
+          _dataCell(
+            innerBorderColor,
+            showRightBorder: false,
+            child: _ActionCell(
+              onTap: widget.canViewPlayerNames ? () => _openGoalsDialog(category) : null,
+            ),
           ),
-        ),
       ],
     );
   }
