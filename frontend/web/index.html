@@ -31,8 +31,160 @@
 
   <title>ligas_app</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      font-family: "Helvetica Neue", Arial, sans-serif;
+      background: #ffffff;
+      color: #1f1f1f;
+    }
+
+    #initial-loader {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #ffffff;
+      z-index: 9999;
+    }
+
+    .loader-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      text-align: center;
+      padding: 24px;
+    }
+
+    .loader-logo {
+      width: clamp(120px, 30vw, 200px);
+      max-width: 80vw;
+      height: auto;
+    }
+
+    .loader-dots {
+      display: flex;
+      gap: 10px;
+      height: 14px;
+      align-items: center;
+    }
+
+    .loader-dots span {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #1f1f1f;
+      opacity: 0.3;
+      animation: dotPulse 1.2s infinite ease-in-out;
+    }
+
+    .loader-dots span:nth-child(1) {
+      animation-delay: 0s;
+    }
+
+    .loader-dots span:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+
+    .loader-dots span:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+
+    @keyframes dotPulse {
+      0% {
+        opacity: 0.3;
+        transform: translateY(0);
+      }
+      30% {
+        opacity: 1;
+        transform: translateY(-4px);
+      }
+      60% {
+        opacity: 0.3;
+        transform: translateY(0);
+      }
+    }
+
+    .loader-text {
+      font-size: 14px;
+      letter-spacing: 0.2px;
+      color: #4b4b4b;
+    }
+
+    #loader-error {
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      font-size: 14px;
+      color: #6b2c2c;
+    }
+
+    #loader-error button {
+      border: none;
+      background: #1f1f1f;
+      color: #ffffff;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    #loader-error button:hover {
+      background: #000000;
+    }
+  </style>
 </head>
 <body>
+  <div id="initial-loader" aria-label="Cargando aplicación">
+    <div class="loader-content">
+      <img class="loader-logo" src="icons/Icon-192.png" alt="Logo" />
+      <div class="loader-dots" aria-hidden="true">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+      <div class="loader-text">Cargando…</div>
+      <div id="loader-error">
+        <div>Esto está tardando más de lo normal.</div>
+        <div>Revisá tu conexión.</div>
+        <button type="button" id="loader-retry">Reintentar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const loader = document.getElementById('initial-loader');
+      const errorBlock = document.getElementById('loader-error');
+      const retryButton = document.getElementById('loader-retry');
+
+      const timeoutId = window.setTimeout(() => {
+        if (errorBlock) {
+          errorBlock.style.display = 'flex';
+        }
+      }, 60000);
+
+      const hideLoader = () => {
+        if (loader) {
+          loader.style.display = 'none';
+        }
+        window.clearTimeout(timeoutId);
+      };
+
+      window.addEventListener('flutter-first-frame', hideLoader, { once: true });
+
+      if (retryButton) {
+        retryButton.addEventListener('click', () => window.location.reload());
+      }
+    })();
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
