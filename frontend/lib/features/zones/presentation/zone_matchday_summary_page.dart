@@ -84,6 +84,7 @@ class _MatchdaySummaryView extends ConsumerWidget {
         ? DateFormat('dd/MM/yyyy').format(data.matchday.date!.toLocal())
         : 'Sin fecha definida';
     final scoreboardGrouping = _buildScoreboardGrouping(data.scoreboard, data.matches);
+    final matchdayPoints = _buildMatchdayPoints(data.matches);
     final generalStandings = ZoneStandingsData(
       zone: data.zone,
       general: data.generalStandings,
@@ -162,6 +163,8 @@ class _MatchdaySummaryView extends ConsumerWidget {
                   rows: scoreboardGrouping.rows,
                   clubGroupIndexes: scoreboardGrouping.clubGroupIndexes,
                   clubNameGroupIndexes: scoreboardGrouping.clubNameGroupIndexes,
+                  pointsByClubId: matchdayPoints.byClubId,
+                  pointsByClubName: matchdayPoints.byClubName,
                 ),
                 if (scoreboardGrouping.byeClubs.isNotEmpty) ...[
                   const SizedBox(height: 8),
@@ -232,6 +235,8 @@ class _MatchdayScoreboardTable extends StatelessWidget {
     required this.rows,
     required this.clubGroupIndexes,
     required this.clubNameGroupIndexes,
+    required this.pointsByClubId,
+    required this.pointsByClubName,
   });
 
   final MatchdayScoreboard scoreboard;
@@ -239,6 +244,8 @@ class _MatchdayScoreboardTable extends StatelessWidget {
   final List<MatchdayScoreboardRow> rows;
   final Map<int, int> clubGroupIndexes;
   final Map<String, int> clubNameGroupIndexes;
+  final Map<int, int> pointsByClubId;
+  final Map<String, int> pointsByClubName;
 
   @override
   Widget build(BuildContext context) {
@@ -290,6 +297,14 @@ class _MatchdayScoreboardTable extends StatelessWidget {
       return (value ?? 0).toString();
     }
 
+    int resolvePoints(MatchdayScoreboardRow row) {
+      final byId = row.clubId != 0 ? pointsByClubId[row.clubId] : null;
+      if (byId != null) {
+        return byId;
+      }
+      return pointsByClubName[_normalizeName(row.clubName)] ?? 0;
+    }
+
     final pointsStyle = theme.textTheme.titleSmall?.copyWith(
       fontWeight: FontWeight.w700,
       color: theme.colorScheme.primary,
@@ -321,7 +336,7 @@ class _MatchdayScoreboardTable extends StatelessWidget {
                       border: Border(right: BorderSide(color: dividerColor)),
                     ),
                     child: Text(
-                      rows[index].pointsTotal.toString(),
+                      resolvePoints(rows[index]).toString(),
                       style: pointsStyle,
                     ),
                   ),
@@ -421,6 +436,13 @@ _StatusStyle _statusStyle(ZoneMatchdayStatus status) {
 
 String _normalizeName(String name) => name.trim().toLowerCase();
 
+bool _hasRealClub(SummaryClub? club) {
+  if (club == null) {
+    return false;
+  }
+  return club.id != 0 && club.displayName.trim().isNotEmpty && club.name != 'Por definir';
+}
+
 MaterialStateProperty<Color?> _buildMatchRowColor({
   required int index,
   required int? groupIndex,
@@ -432,6 +454,46 @@ MaterialStateProperty<Color?> _buildMatchRowColor({
     }
     return index.isEven ? colors.evenRowBackground : colors.oddRowBackground;
   });
+}
+
+_MatchdayPoints _buildMatchdayPoints(List<MatchdaySummaryMatch> matches) {
+  final pointsByClubId = <int, int>{};
+  final pointsByClubName = <String, int>{};
+
+  void addPoints(SummaryClub club, int points) {
+    if (club.id != 0) {
+      pointsByClubId[club.id] = (pointsByClubId[club.id] ?? 0) + points;
+      return;
+    }
+    final normalized = _normalizeName(club.displayName);
+    pointsByClubName[normalized] = (pointsByClubName[normalized] ?? 0) + points;
+  }
+
+  for (final match in matches) {
+    if (!_hasRealClub(match.homeClub) || !_hasRealClub(match.awayClub)) {
+      continue;
+    }
+    for (final category in match.categories) {
+      final homeScore = category.homeScore;
+      final awayScore = category.awayScore;
+      if (homeScore == null || awayScore == null) {
+        continue;
+      }
+      if (homeScore == awayScore) {
+        addPoints(match.homeClub!, 1);
+        addPoints(match.awayClub!, 1);
+      } else if (homeScore > awayScore) {
+        addPoints(match.homeClub!, 3);
+      } else {
+        addPoints(match.awayClub!, 3);
+      }
+    }
+  }
+
+  return _MatchdayPoints(
+    byClubId: pointsByClubId,
+    byClubName: pointsByClubName,
+  );
 }
 
 _ScoreboardGrouping _buildScoreboardGrouping(
@@ -450,6 +512,7 @@ _ScoreboardGrouping _buildScoreboardGrouping(
   final clubGroupIndexes = <int, int>{};
   final clubNameGroupIndexes = <String, int>{};
   final byeClubs = <String>[];
+  final byeClubKeys = <String>{};
   var groupIndex = 0;
 
   void addRow(MatchdayScoreboardRow? row, {int? group}) {
@@ -458,6 +521,9 @@ _ScoreboardGrouping _buildScoreboardGrouping(
     }
     final key = row.clubId != 0 ? 'id-${row.clubId}' : 'name-${_normalizeName(row.clubName)}';
     if (!usedKeys.add(key)) {
+      return;
+    }
+    if (byeClubKeys.contains(key)) {
       return;
     }
     orderedRows.add(row);
@@ -469,16 +535,9 @@ _ScoreboardGrouping _buildScoreboardGrouping(
     }
   }
 
-  bool hasRealClub(SummaryClub? club) {
-    if (club == null) {
-      return false;
-    }
-    return club.id != 0 && club.displayName.trim().isNotEmpty && club.name != 'Por definir';
-  }
-
   for (final match in matches) {
-    final hasHome = hasRealClub(match.homeClub);
-    final hasAway = hasRealClub(match.awayClub);
+    final hasHome = _hasRealClub(match.homeClub);
+    final hasAway = _hasRealClub(match.awayClub);
 
     if (hasHome && hasAway) {
       addRow(rowsById[match.homeClub!.id] ?? rowsByName[_normalizeName(match.homeClub!.displayName)],
@@ -492,7 +551,10 @@ _ScoreboardGrouping _buildScoreboardGrouping(
     if (hasHome || hasAway) {
       final club = hasHome ? match.homeClub! : match.awayClub!;
       byeClubs.add(club.displayName);
-      addRow(rowsById[club.id] ?? rowsByName[_normalizeName(club.displayName)], group: groupIndex);
+      if (club.id != 0) {
+        byeClubKeys.add('id-${club.id}');
+      }
+      byeClubKeys.add('name-${_normalizeName(club.displayName)}');
       groupIndex += 1;
     }
   }
@@ -521,6 +583,16 @@ class _ScoreboardGrouping {
   final Map<int, int> clubGroupIndexes;
   final Map<String, int> clubNameGroupIndexes;
   final List<String> byeClubs;
+}
+
+class _MatchdayPoints {
+  const _MatchdayPoints({
+    required this.byClubId,
+    required this.byClubName,
+  });
+
+  final Map<int, int> byClubId;
+  final Map<String, int> byClubName;
 }
 
 class _MatchdaySummaryRequest {
