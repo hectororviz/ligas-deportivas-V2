@@ -189,7 +189,6 @@ class _TournamentSummaryCardState extends State<_TournamentSummaryCard> {
     }
     final zoneCount = zones.length;
     final currentZone = zones[_page];
-    final indicatorText = 'Zona ${currentZone.name} · ${_page + 1}/$zoneCount';
     final showArrows = !widget.isMobile && zoneCount > 1;
 
     return Card(
@@ -199,13 +198,20 @@ class _TournamentSummaryCardState extends State<_TournamentSummaryCard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
+              widget.tournament.leagueName,
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
               widget.tournament.displayName,
               style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             Text(
-              indicatorText,
-              style: theme.textTheme.labelLarge,
+              'Zona ${currentZone.name}',
+              style: theme.textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
             SizedBox(
@@ -330,11 +336,6 @@ class _ZoneSlide extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Zona ${zone.name}',
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
           Expanded(
             child: standings.isEmpty
                 ? Text(
@@ -343,19 +344,7 @@ class _ZoneSlide extends StatelessWidget {
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: List.generate(
-                      standings.length,
-                      (index) => Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: _StandingRow(
-                          rank: index + 1,
-                          row: standings[index],
-                        ),
-                      ),
-                    ),
-                  ),
+                : _StandingsTable(standings: standings),
           ),
           const Divider(height: 12),
           Text(
@@ -370,32 +359,72 @@ class _ZoneSlide extends StatelessWidget {
   }
 }
 
-class _StandingRow extends StatelessWidget {
-  const _StandingRow({
-    required this.rank,
-    required this.row,
-  });
+class _StandingsTable extends StatelessWidget {
+  const _StandingsTable({required this.standings});
 
-  final int rank;
-  final HomeStandingRow row;
+  final List<HomeStandingRow> standings;
 
   @override
   Widget build(BuildContext context) {
-    final emoji = switch (rank) {
-      1 => '🥇',
-      2 => '🥈',
-      3 => '🥉',
-      _ => '•'
-    };
-    final dgLabel = row.goalDifference >= 0
-        ? '(+${row.goalDifference})'
-        : '(${row.goalDifference})';
+    final theme = Theme.of(context);
+    final headerStyle = theme.textTheme.labelSmall?.copyWith(
+      fontWeight: FontWeight.bold,
+      color: theme.colorScheme.onSurfaceVariant,
+    );
 
-    return Text(
-      '$emoji $rank) ${row.clubName} — $dgLabel — ${row.points} pts',
-      style: Theme.of(context).textTheme.bodyMedium,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
+    return Table(
+      columnWidths: const {
+        0: FixedColumnWidth(32),
+        1: FlexColumnWidth(),
+        2: FixedColumnWidth(48),
+      },
+      children: [
+        TableRow(
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Text('#', style: headerStyle),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Text('Club', style: headerStyle),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Text('Pts', style: headerStyle, textAlign: TextAlign.end),
+            ),
+          ],
+        ),
+        ...standings.asMap().entries.map((entry) {
+          final index = entry.key;
+          final row = entry.value;
+          return TableRow(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Text('${index + 1}', style: theme.textTheme.bodyMedium),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Text(
+                  row.clubName,
+                  style: theme.textTheme.bodyMedium,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Text(
+                  '${row.points}',
+                  style: theme.textTheme.bodyMedium,
+                  textAlign: TextAlign.end,
+                ),
+              ),
+            ],
+          );
+        }),
+      ],
     );
   }
 }

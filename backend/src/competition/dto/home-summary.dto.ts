@@ -24,6 +24,7 @@ export interface ZoneHomeSummaryDto {
 
 export interface TournamentHomeSummaryDto {
   id: number;
+  leagueName: string;
   name: string;
   year: number;
   zones: ZoneHomeSummaryDto[];
