@@ -1,21 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { MatchdayStatus, ZoneStatus } from '@prisma/client';
+import { HomeSummaryDto, StandingRowDto } from '../dto/home-summary.dto';
 import { PrismaService } from '../../prisma/prisma.service';
-
-interface StandingRow {
-  clubId: number;
-  clubName: string;
-  points: number;
-  goalsFor: number;
-  goalsAgainst: number;
-  goalDifference: number;
-}
 
 @Injectable()
 export class HomeSummaryService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getSummary() {
+  async getSummary(): Promise<HomeSummaryDto> {
     const tournaments = await this.prisma.tournament.findMany({
       where: {
         zones: {
@@ -53,14 +45,15 @@ export class HomeSummaryService {
             }
           });
 
-    const standingsByZone = new Map<number, Map<number, StandingRow>>();
+    const standingsByZone = new Map<number, Map<number, StandingRowDto>>();
 
     for (const entry of standings) {
       if (!entry.tournamentCategory.countsForGeneral) {
         continue;
       }
       const zoneStandings =
-        standingsByZone.get(entry.zoneId) ?? new Map<number, StandingRow>();
+        standingsByZone.get(entry.zoneId) ??
+        new Map<number, StandingRowDto>();
       if (!standingsByZone.has(entry.zoneId)) {
         standingsByZone.set(entry.zoneId, zoneStandings);
       }
@@ -135,7 +128,7 @@ export class HomeSummaryService {
     };
   }
 
-  private sortStandings(rows: StandingRow[]) {
+  private sortStandings(rows: StandingRowDto[]) {
     return rows.sort((a, b) => {
       if (b.points !== a.points) {
         return b.points - a.points;
