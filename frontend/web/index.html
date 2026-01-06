@@ -64,22 +64,9 @@
       padding: 24px;
     }
 
-    .loader-logo {
-      width: clamp(120px, 30vw, 200px);
-      max-width: 80vw;
-      height: auto;
-    }
-
     .lottie-container {
       width: clamp(110px, 28vw, 180px);
       height: clamp(110px, 28vw, 180px);
-    }
-
-    .loader-text {
-      font-size: clamp(16px, 2.8vw, 20px);
-      line-height: 1.3;
-      letter-spacing: 0.2px;
-      color: #4b4b4b;
     }
 
     #loader-error {
@@ -108,9 +95,7 @@
 <body>
   <div id="initial-loader" aria-label="Cargando aplicación">
     <div class="loader-content">
-      <img class="loader-logo" src="icons/Icon-192.png" alt="Logo" />
       <div id="lottie-loader" class="lottie-container" aria-label="Cargando"></div>
-      <div class="loader-text">Cargando…</div>
       <div id="loader-error">
         <div>Esto está tardando más de lo normal.</div>
         <div>Revisá tu conexión.</div>
