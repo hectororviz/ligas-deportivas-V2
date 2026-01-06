@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/utils/responsive.dart';
+import '../../../core/utils/favicon_manager.dart';
 import '../../../services/auth_controller.dart';
 import '../../settings/site_identity.dart';
 import '../../settings/site_identity_provider.dart';
@@ -122,15 +123,22 @@ class AppShell extends ConsumerStatefulWidget {
 
 class _AppShellState extends ConsumerState<AppShell> {
   late final ScrollController _horizontalScrollController;
+  ProviderSubscription<AsyncValue<SiteIdentity>>? _identitySubscription;
 
   @override
   void initState() {
     super.initState();
     _horizontalScrollController = ScrollController();
+    _identitySubscription =
+        ref.listenManual(siteIdentityProvider, (previous, next) {
+      final identity = next.valueOrNull;
+      FaviconManager.update(identity?.faviconUrl);
+    });
   }
 
   @override
   void dispose() {
+    _identitySubscription?.close();
     _horizontalScrollController.dispose();
     super.dispose();
   }
