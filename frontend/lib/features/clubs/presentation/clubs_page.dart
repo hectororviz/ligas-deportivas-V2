@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../../core/utils/responsive.dart';
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
 import '../../shared/widgets/app_data_table_style.dart';
@@ -215,84 +216,91 @@ class _ClubsPageState extends ConsumerState<ClubsPage> {
             )
           : null,
       builder: (context, scrollController) {
-        return ListView(
-          controller: scrollController,
-          padding: const EdgeInsets.all(24.0),
-          children: [
-            Text(
-              'Clubes',
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineMedium
-                  ?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Administrá los clubes afiliados, sus colores e información general.',
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
-            const SizedBox(height: 24),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
-                child: TableFiltersBar(
-                  children: [
-                    TableFilterField(
-                      label: 'Buscar',
-                      width: 320,
-                      child: TableFilterSearchField(
-                        controller: _searchController,
-                        placeholder: 'Buscar por nombre o liga',
-                        showClearButton: filters.query.isNotEmpty,
-                        onClear: () {
-                          _searchController.clear();
-                          ref.read(clubsFiltersProvider.notifier).setQuery('');
-                        },
-                      ),
-                    ),
-                    TableFilterField(
-                      label: 'Estado',
-                      width: 200,
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<ClubStatusFilter>(
-                          value: filters.status,
-                          isExpanded: true,
-                          items: ClubStatusFilter.values
-                              .map(
-                                (value) => DropdownMenuItem(
-                                  value: value,
-                                  child: Text(value.label),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) {
-                            if (value != null) {
-                              ref
-                                  .read(clubsFiltersProvider.notifier)
-                                  .setStatus(value);
-                            }
-                          },
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final padding = Responsive.pagePadding(context);
+            final isMobile = Responsive.isMobile(context);
+            final filterFieldWidth = isMobile ? constraints.maxWidth : 320.0;
+            final statusFieldWidth = isMobile ? constraints.maxWidth : 200.0;
+
+            return ListView(
+              controller: scrollController,
+              padding: padding,
+              children: [
+                Text(
+                  'Clubes',
+                  style: Theme.of(context)
+                      .textTheme
+                      .headlineMedium
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Administrá los clubes afiliados, sus colores e información general.',
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                const SizedBox(height: 24),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
+                    child: TableFiltersBar(
+                      children: [
+                        TableFilterField(
+                          label: 'Buscar',
+                          width: filterFieldWidth,
+                          child: TableFilterSearchField(
+                            controller: _searchController,
+                            placeholder: 'Buscar por nombre o liga',
+                            showClearButton: filters.query.isNotEmpty,
+                            onClear: () {
+                              _searchController.clear();
+                              ref.read(clubsFiltersProvider.notifier).setQuery('');
+                            },
+                          ),
                         ),
+                        TableFilterField(
+                          label: 'Estado',
+                          width: statusFieldWidth,
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<ClubStatusFilter>(
+                              value: filters.status,
+                              isExpanded: true,
+                              items: ClubStatusFilter.values
+                                  .map(
+                                    (value) => DropdownMenuItem(
+                                      value: value,
+                                      child: Text(value.label),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (value) {
+                                if (value != null) {
+                                  ref
+                                      .read(clubsFiltersProvider.notifier)
+                                      .setStatus(value);
+                                }
+                              },
+                            ),
+                          ),
+                        ),
+                      ],
+                      trailing: TextButton.icon(
+                        onPressed: filters.query.isEmpty &&
+                                filters.status == ClubStatusFilter.all
+                            ? null
+                            : () {
+                                _searchController.clear();
+                                ref.read(clubsFiltersProvider.notifier).reset();
+                              },
+                        icon: const Icon(Icons.filter_alt_off_outlined),
+                        label: const Text('Limpiar filtros'),
                       ),
                     ),
-                  ],
-                  trailing: TextButton.icon(
-                    onPressed: filters.query.isEmpty &&
-                            filters.status == ClubStatusFilter.all
-                        ? null
-                        : () {
-                            _searchController.clear();
-                            ref.read(clubsFiltersProvider.notifier).reset();
-                          },
-                    icon: const Icon(Icons.filter_alt_off_outlined),
-                    label: const Text('Limpiar filtros'),
                   ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            clubsAsync.when(
-              data: (paginated) {
+                const SizedBox(height: 16),
+                clubsAsync.when(
+                  data: (paginated) {
                   if (paginated.clubs.isEmpty) {
                     if (filters.query.isNotEmpty ||
                         filters.status != ClubStatusFilter.all) {
@@ -359,14 +367,16 @@ class _ClubsPageState extends ConsumerState<ClubsPage> {
                       ],
                     ),
                   );
-                },
-                loading: () => const _ClubsTableSkeleton(),
-                error: (error, stackTrace) => _ClubsErrorState(
-                  error: error,
-                  onRetry: () => ref.invalidate(clubsProvider),
+                  },
+                  loading: () => const _ClubsTableSkeleton(),
+                  error: (error, stackTrace) => _ClubsErrorState(
+                    error: error,
+                    onRetry: () => ref.invalidate(clubsProvider),
+                  ),
                 ),
-            ),
-          ],
+              ],
+            );
+          },
         );
       },
     );
@@ -468,22 +478,25 @@ class _ClubsDataTable extends StatelessWidget {
     final colors = AppDataTableColors.standard(theme);
     final headerStyle =
         theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: colors.headerText);
+    final isMobile = Responsive.isMobile(context);
 
     final table = DataTable(
-      columns: const [
-        DataColumn(label: Text('Nombre')),
-        DataColumn(label: Text('Estado')),
-        DataColumn(label: Text('Acciones')),
+      columns: [
+        const DataColumn(label: Text('Nombre')),
+        if (!isMobile) const DataColumn(label: Text('Estado')),
+        if (!isMobile) const DataColumn(label: Text('Acciones')),
       ],
       dataRowMinHeight: 44,
       dataRowMaxHeight: 60,
       headingRowHeight: 48,
+      showCheckboxColumn: false,
       headingRowColor: buildHeaderColor(colors.headerBackground),
       headingTextStyle: headerStyle,
       rows: [
         for (var index = 0; index < clubs.length; index++)
           DataRow(
             color: buildStripedRowColor(index: index, colors: colors),
+            onSelectChanged: isMobile ? (_) => onView(clubs[index]) : null,
             cells: [
               DataCell(
                 Row(
@@ -508,49 +521,51 @@ class _ClubsDataTable extends StatelessWidget {
                   ],
                 ),
               ),
-              DataCell(
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Chip(
-                    avatar: Icon(
-                      clubs[index].active ? Icons.check_circle : Icons.pause_circle,
-                      size: 18,
-                      color: clubs[index].active
-                          ? theme.colorScheme.onPrimary
-                          : theme.colorScheme.onSurfaceVariant,
-                    ),
-                    backgroundColor: clubs[index].active
-                        ? theme.colorScheme.primary
-                        : theme.colorScheme.surfaceVariant,
-                    label: Text(
-                      clubs[index].active ? 'Activo' : 'Inactivo',
-                      style: theme.textTheme.labelLarge?.copyWith(
+              if (!isMobile)
+                DataCell(
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Chip(
+                      avatar: Icon(
+                        clubs[index].active ? Icons.check_circle : Icons.pause_circle,
+                        size: 18,
                         color: clubs[index].active
                             ? theme.colorScheme.onPrimary
                             : theme.colorScheme.onSurfaceVariant,
                       ),
+                      backgroundColor: clubs[index].active
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.surfaceVariant,
+                      label: Text(
+                        clubs[index].active ? 'Activo' : 'Inactivo',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: clubs[index].active
+                              ? theme.colorScheme.onPrimary
+                              : theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-              DataCell(
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: () => onView(clubs[index]),
-                      icon: const Icon(Icons.visibility_outlined),
-                      label: const Text('Detalles'),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton.tonalIcon(
-                      onPressed: canEdit ? () => onEdit(clubs[index]) : null,
-                      icon: const Icon(Icons.edit_outlined),
-                      label: const Text('Editar'),
-                    ),
-                  ],
+              if (!isMobile)
+                DataCell(
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: () => onView(clubs[index]),
+                        icon: const Icon(Icons.visibility_outlined),
+                        label: const Text('Detalles'),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton.tonalIcon(
+                        onPressed: canEdit ? () => onEdit(clubs[index]) : null,
+                        icon: const Icon(Icons.edit_outlined),
+                        label: const Text('Editar'),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
             ],
           ),
       ],
@@ -558,17 +573,23 @@ class _ClubsDataTable extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
+        final scrollView = SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: constraints.maxWidth),
+            child: table,
+          ),
+        );
+
+        if (isMobile) {
+          return scrollView;
+        }
+
         return Scrollbar(
           thumbVisibility: true,
           notificationPredicate: (notification) =>
               notification.metrics.axis == Axis.horizontal,
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minWidth: constraints.maxWidth),
-              child: table,
-            ),
-          ),
+          child: scrollView,
         );
       },
     );

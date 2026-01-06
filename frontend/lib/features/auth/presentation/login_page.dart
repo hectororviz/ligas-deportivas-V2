@@ -66,6 +66,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     final siteIdentity = siteIdentityAsync.valueOrNull;
     final title = siteIdentity?.title ?? 'Ligas Deportivas';
     final iconUrl = siteIdentity?.iconUrl;
+    final loginImageUrl = siteIdentity?.flyerUrl;
 
     return Scaffold(
       body: Center(
@@ -81,6 +82,23 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (loginImageUrl != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16.0),
+                        child: Center(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: SizedBox(
+                              width: 320,
+                              height: 250,
+                              child: Image.network(
+                                loginImageUrl,
+                                fit: BoxFit.contain,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     Container(
                       height: 64,
                       width: 64,

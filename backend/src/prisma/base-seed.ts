@@ -199,14 +199,25 @@ export async function seedBaseData(prisma: PrismaClient) {
     viewGlobal(Module.TABLAS),
   ]);
 
-  await prisma.siteIdentity.upsert({
-    where: { id: 1 },
-    update: {},
-    create: {
-      id: 1,
-      title: 'Ligas Deportivas',
-    },
-  });
+  try {
+    await prisma.siteIdentity.upsert({
+      where: { id: 1 },
+      update: {},
+      create: {
+        id: 1,
+        title: 'Ligas Deportivas',
+      },
+    });
+  } catch (error) {
+    const prismaError = error as { code?: string };
+    if (prismaError.code === 'P2022') {
+      console.warn(
+        'Seed de SiteIdentity omitido: el esquema de la base está desfasado (columna faltante).',
+      );
+    } else {
+      throw error;
+    }
+  }
 
   const adminEmailRaw = process.env.ADMIN_EMAIL?.trim();
   const adminEmailEnv = adminEmailRaw ? adminEmailRaw.toLowerCase() : undefined;

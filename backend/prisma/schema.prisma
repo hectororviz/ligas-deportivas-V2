@@ -185,6 +185,7 @@ model SiteIdentity {
   id        Int      @id @default(1)
   title     String   @default("Ligas Deportivas")
   iconKey   String?
+  faviconHash String?
   flyerKey  String?
   backgroundImage String?
   layoutSvg       String?

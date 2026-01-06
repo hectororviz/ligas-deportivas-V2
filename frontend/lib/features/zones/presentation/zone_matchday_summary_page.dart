@@ -83,7 +83,8 @@ class _MatchdaySummaryView extends ConsumerWidget {
     final dateLabel = data.matchday.date != null
         ? DateFormat('dd/MM/yyyy').format(data.matchday.date!.toLocal())
         : 'Sin fecha definida';
-    final highlightedTeams = _resolveHighlightedTeams(data.matches);
+    final scoreboardGrouping = _buildScoreboardGrouping(data.scoreboard, data.matches);
+    final matchdayPoints = _buildMatchdayPoints(data.matches);
     final generalStandings = ZoneStandingsData(
       zone: data.zone,
       general: data.generalStandings,
@@ -159,8 +160,19 @@ class _MatchdaySummaryView extends ConsumerWidget {
                 _MatchdayScoreboardTable(
                   scoreboard: data.scoreboard,
                   highlightColor: leagueColor,
-                  highlightedTeams: highlightedTeams,
+                  rows: scoreboardGrouping.rows,
+                  clubGroupIndexes: scoreboardGrouping.clubGroupIndexes,
+                  clubNameGroupIndexes: scoreboardGrouping.clubNameGroupIndexes,
+                  pointsByClubId: matchdayPoints.byClubId,
+                  pointsByClubName: matchdayPoints.byClubName,
                 ),
+                if (scoreboardGrouping.byeClubs.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Libre: ${scoreboardGrouping.byeClubs.join(', ')}',
+                    style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                ],
               ],
             ),
           ),
@@ -220,12 +232,20 @@ class _MatchdayScoreboardTable extends StatelessWidget {
   const _MatchdayScoreboardTable({
     required this.scoreboard,
     required this.highlightColor,
-    required this.highlightedTeams,
+    required this.rows,
+    required this.clubGroupIndexes,
+    required this.clubNameGroupIndexes,
+    required this.pointsByClubId,
+    required this.pointsByClubName,
   });
 
   final MatchdayScoreboard scoreboard;
   final Color highlightColor;
-  final Set<String> highlightedTeams;
+  final List<MatchdayScoreboardRow> rows;
+  final Map<int, int> clubGroupIndexes;
+  final Map<String, int> clubNameGroupIndexes;
+  final Map<int, int> pointsByClubId;
+  final Map<String, int> pointsByClubName;
 
   @override
   Widget build(BuildContext context) {
@@ -277,6 +297,14 @@ class _MatchdayScoreboardTable extends StatelessWidget {
       return (value ?? 0).toString();
     }
 
+    int resolvePoints(MatchdayScoreboardRow row) {
+      final byId = row.clubId != 0 ? pointsByClubId[row.clubId] : null;
+      if (byId != null) {
+        return byId;
+      }
+      return pointsByClubName[_normalizeName(row.clubName)] ?? 0;
+    }
+
     final pointsStyle = theme.textTheme.titleSmall?.copyWith(
       fontWeight: FontWeight.w700,
       color: theme.colorScheme.primary,
@@ -289,14 +317,17 @@ class _MatchdayScoreboardTable extends StatelessWidget {
         headingTextStyle: headerStyle,
         columns: columns,
         rows: [
-          for (var index = 0; index < scoreboard.rows.length; index++)
+          for (var index = 0; index < rows.length; index++)
             DataRow(
-              selected: highlightedTeams.contains(_normalizeName(scoreboard.rows[index].clubName)),
-              color: buildStripedRowColor(index: index, colors: colors),
+              color: _buildMatchRowColor(
+                index: index,
+                groupIndex: _resolveGroupIndex(rows[index]),
+                colors: colors,
+              ),
               cells: [
-                DataCell(Text(scoreboard.rows[index].clubName)),
+                DataCell(Text(rows[index].clubName)),
                 ...generalCategories.map(
-                  (category) => DataCell(Text(formatGoals(scoreboard.rows[index], category))),
+                  (category) => DataCell(Text(formatGoals(rows[index], category))),
                 ),
                 DataCell(
                   Container(
@@ -305,7 +336,7 @@ class _MatchdayScoreboardTable extends StatelessWidget {
                       border: Border(right: BorderSide(color: dividerColor)),
                     ),
                     child: Text(
-                      scoreboard.rows[index].pointsTotal.toString(),
+                      resolvePoints(rows[index]).toString(),
                       style: pointsStyle,
                     ),
                   ),
@@ -314,7 +345,7 @@ class _MatchdayScoreboardTable extends StatelessWidget {
                   (category) => DataCell(
                     Padding(
                       padding: promoPadding,
-                      child: Text(formatGoals(scoreboard.rows[index], category)),
+                      child: Text(formatGoals(rows[index], category)),
                     ),
                   ),
                 ),
@@ -323,6 +354,14 @@ class _MatchdayScoreboardTable extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  int? _resolveGroupIndex(MatchdayScoreboardRow row) {
+    final byId = clubGroupIndexes[row.clubId];
+    if (byId != null) {
+      return byId;
+    }
+    return clubNameGroupIndexes[_normalizeName(row.clubName)];
   }
 }
 
@@ -397,15 +436,163 @@ _StatusStyle _statusStyle(ZoneMatchdayStatus status) {
 
 String _normalizeName(String name) => name.trim().toLowerCase();
 
-Set<String> _resolveHighlightedTeams(List<MatchdaySummaryMatch> matches) {
+bool _hasRealClub(SummaryClub? club) {
+  if (club == null) {
+    return false;
+  }
+  return club.id != 0 && club.displayName.trim().isNotEmpty && club.name != 'Por definir';
+}
+
+MaterialStateProperty<Color?> _buildMatchRowColor({
+  required int index,
+  required int? groupIndex,
+  required AppDataTableColors colors,
+}) {
+  return MaterialStateProperty.resolveWith((states) {
+    if (groupIndex != null) {
+      return groupIndex.isEven ? colors.oddRowBackground : colors.evenRowBackground;
+    }
+    return index.isEven ? colors.evenRowBackground : colors.oddRowBackground;
+  });
+}
+
+_MatchdayPoints _buildMatchdayPoints(List<MatchdaySummaryMatch> matches) {
+  final pointsByClubId = <int, int>{};
+  final pointsByClubName = <String, int>{};
+
+  void addPoints(SummaryClub club, int points) {
+    if (club.id != 0) {
+      pointsByClubId[club.id] = (pointsByClubId[club.id] ?? 0) + points;
+      return;
+    }
+    final normalized = _normalizeName(club.displayName);
+    pointsByClubName[normalized] = (pointsByClubName[normalized] ?? 0) + points;
+  }
+
   for (final match in matches) {
-    final home = match.homeClub?.displayName;
-    final away = match.awayClub?.displayName;
-    if (home != null && home.isNotEmpty && away != null && away.isNotEmpty) {
-      return {_normalizeName(home), _normalizeName(away)};
+    if (!_hasRealClub(match.homeClub) || !_hasRealClub(match.awayClub)) {
+      continue;
+    }
+    for (final category in match.categories) {
+      final homeScore = category.homeScore;
+      final awayScore = category.awayScore;
+      if (homeScore == null || awayScore == null) {
+        continue;
+      }
+      if (homeScore == awayScore) {
+        addPoints(match.homeClub!, 1);
+        addPoints(match.awayClub!, 1);
+      } else if (homeScore > awayScore) {
+        addPoints(match.homeClub!, 3);
+      } else {
+        addPoints(match.awayClub!, 3);
+      }
     }
   }
-  return {};
+
+  return _MatchdayPoints(
+    byClubId: pointsByClubId,
+    byClubName: pointsByClubName,
+  );
+}
+
+_ScoreboardGrouping _buildScoreboardGrouping(
+  MatchdayScoreboard scoreboard,
+  List<MatchdaySummaryMatch> matches,
+) {
+  final rowsById = <int, MatchdayScoreboardRow>{
+    for (final row in scoreboard.rows)
+      if (row.clubId != 0) row.clubId: row,
+  };
+  final rowsByName = <String, MatchdayScoreboardRow>{
+    for (final row in scoreboard.rows) _normalizeName(row.clubName): row,
+  };
+  final usedKeys = <String>{};
+  final orderedRows = <MatchdayScoreboardRow>[];
+  final clubGroupIndexes = <int, int>{};
+  final clubNameGroupIndexes = <String, int>{};
+  final byeClubs = <String>[];
+  final byeClubKeys = <String>{};
+  var groupIndex = 0;
+
+  void addRow(MatchdayScoreboardRow? row, {int? group}) {
+    if (row == null) {
+      return;
+    }
+    final key = row.clubId != 0 ? 'id-${row.clubId}' : 'name-${_normalizeName(row.clubName)}';
+    if (!usedKeys.add(key)) {
+      return;
+    }
+    if (byeClubKeys.contains(key)) {
+      return;
+    }
+    orderedRows.add(row);
+    if (group != null) {
+      if (row.clubId != 0) {
+        clubGroupIndexes[row.clubId] = group;
+      }
+      clubNameGroupIndexes[_normalizeName(row.clubName)] = group;
+    }
+  }
+
+  for (final match in matches) {
+    final hasHome = _hasRealClub(match.homeClub);
+    final hasAway = _hasRealClub(match.awayClub);
+
+    if (hasHome && hasAway) {
+      addRow(rowsById[match.homeClub!.id] ?? rowsByName[_normalizeName(match.homeClub!.displayName)],
+          group: groupIndex);
+      addRow(rowsById[match.awayClub!.id] ?? rowsByName[_normalizeName(match.awayClub!.displayName)],
+          group: groupIndex);
+      groupIndex += 1;
+      continue;
+    }
+
+    if (hasHome || hasAway) {
+      final club = hasHome ? match.homeClub! : match.awayClub!;
+      byeClubs.add(club.displayName);
+      if (club.id != 0) {
+        byeClubKeys.add('id-${club.id}');
+      }
+      byeClubKeys.add('name-${_normalizeName(club.displayName)}');
+      groupIndex += 1;
+    }
+  }
+
+  for (final row in scoreboard.rows) {
+    addRow(row);
+  }
+
+  return _ScoreboardGrouping(
+    rows: orderedRows,
+    clubGroupIndexes: clubGroupIndexes,
+    clubNameGroupIndexes: clubNameGroupIndexes,
+    byeClubs: byeClubs,
+  );
+}
+
+class _ScoreboardGrouping {
+  _ScoreboardGrouping({
+    required this.rows,
+    required this.clubGroupIndexes,
+    required this.clubNameGroupIndexes,
+    required this.byeClubs,
+  });
+
+  final List<MatchdayScoreboardRow> rows;
+  final Map<int, int> clubGroupIndexes;
+  final Map<String, int> clubNameGroupIndexes;
+  final List<String> byeClubs;
+}
+
+class _MatchdayPoints {
+  const _MatchdayPoints({
+    required this.byClubId,
+    required this.byClubName,
+  });
+
+  final Map<int, int> byClubId;
+  final Map<String, int> byClubName;
 }
 
 class _MatchdaySummaryRequest {
