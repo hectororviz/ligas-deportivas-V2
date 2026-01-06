@@ -215,8 +215,8 @@ class _AppShellState extends ConsumerState<AppShell> {
                 child: Column(
                   children: [
                     Container(
-                      width: 40,
-                      height: 40,
+                      width: 100,
+                      height: 100,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
                         color: Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -224,7 +224,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                       clipBehavior: Clip.antiAlias,
                       child: siteIdentity?.iconUrl != null
                           ? Image.network(siteIdentity!.iconUrl!, fit: BoxFit.cover)
-                          : const FlutterLogo(size: 36),
+                          : const FlutterLogo(size: 80),
                     ),
                     const SizedBox(height: 16),
                     IconButton(
@@ -345,8 +345,8 @@ class _NavigationDrawer extends StatelessWidget {
           children: [
             ListTile(
               leading: Container(
-                width: 40,
-                height: 40,
+                width: 100,
+                height: 100,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
                   color: theme.colorScheme.surfaceContainerHighest,
@@ -354,7 +354,7 @@ class _NavigationDrawer extends StatelessWidget {
                 clipBehavior: Clip.antiAlias,
                 child: siteIdentity?.iconUrl != null
                     ? Image.network(siteIdentity!.iconUrl!, fit: BoxFit.cover)
-                    : const FlutterLogo(size: 36),
+                    : const FlutterLogo(size: 80),
               ),
               title: Text(siteIdentity?.title ?? 'Ligas deportivas'),
               subtitle: const Text('Menú principal'),
