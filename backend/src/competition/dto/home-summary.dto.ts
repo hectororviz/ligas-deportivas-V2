@@ -13,6 +13,7 @@ export interface NextRoundDto {
   matchday: number;
   date: string | null;
   status: MatchdayStatus;
+  kickoffTime: string | null;
 }
 
 export interface ZoneHomeSummaryDto {

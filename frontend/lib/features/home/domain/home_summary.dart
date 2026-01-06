@@ -109,6 +109,7 @@ class HomeNextMatchday {
     required this.matchday,
     required this.date,
     required this.status,
+    required this.kickoffTime,
   });
 
   factory HomeNextMatchday.fromJson(Map<String, dynamic> json) {
@@ -117,10 +118,12 @@ class HomeNextMatchday {
       matchday: json['matchday'] as int? ?? 0,
       date: dateValue != null ? DateTime.tryParse(dateValue) : null,
       status: json['status'] as String? ?? '',
+      kickoffTime: json['kickoffTime'] as String?,
     );
   }
 
   final int matchday;
   final DateTime? date;
   final String status;
+  final String? kickoffTime;
 }
