@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/utils/responsive.dart';
+import '../../../core/utils/favicon_manager.dart';
 import '../../../services/auth_controller.dart';
+import '../../settings/site_identity.dart';
 import '../../settings/site_identity_provider.dart';
 import 'user_menu_button.dart';
 
@@ -120,15 +123,22 @@ class AppShell extends ConsumerStatefulWidget {
 
 class _AppShellState extends ConsumerState<AppShell> {
   late final ScrollController _horizontalScrollController;
+  ProviderSubscription<AsyncValue<SiteIdentity>>? _identitySubscription;
 
   @override
   void initState() {
     super.initState();
     _horizontalScrollController = ScrollController();
+    _identitySubscription =
+        ref.listenManual(siteIdentityProvider, (previous, next) {
+      final identity = next.valueOrNull;
+      FaviconManager.update(identity?.faviconBasePath);
+    });
   }
 
   @override
   void dispose() {
+    _identitySubscription?.close();
     _horizontalScrollController.dispose();
     super.dispose();
   }
@@ -156,9 +166,40 @@ class _AppShellState extends ConsumerState<AppShell> {
     final currentIndex = navigationItems
         .indexWhere((item) => location == item.route || location.startsWith('${item.route}/'));
     final siteIdentity = ref.watch(siteIdentityProvider).valueOrNull;
-    final width = MediaQuery.sizeOf(context).width;
-    final autoCollapsed = width < 1024;
+    final isMobile = Responsive.isMobile(context);
+    final isDesktop = Responsive.isDesktop(context);
+    final showUserMenu = !isMobile;
+    final autoCollapsed = MediaQuery.sizeOf(context).width < 1024;
     final showCollapsed = autoCollapsed ? true : isCollapsed;
+
+    if (!isDesktop) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(siteIdentity?.title ?? 'Ligas deportivas'),
+          leading: Builder(
+            builder: (context) => IconButton(
+              tooltip: 'Abrir menú',
+              icon: const Icon(Icons.menu),
+              onPressed: () => Scaffold.of(context).openDrawer(),
+            ),
+          ),
+          actions: [
+            if (showUserMenu)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+                child: UserMenuButton(),
+              ),
+          ],
+        ),
+        drawer: _NavigationDrawer(
+          navigationItems: navigationItems,
+          selectedIndex: currentIndex < 0 ? 0 : currentIndex,
+          siteIdentity: siteIdentity,
+          onNavigate: (route) => context.go(route),
+        ),
+        body: _buildPageBody(location, enableHorizontalScroll: false),
+      );
+    }
 
     return Scaffold(
       body: SafeArea(
@@ -174,16 +215,18 @@ class _AppShellState extends ConsumerState<AppShell> {
                 child: Column(
                   children: [
                     Container(
-                      width: 40,
-                      height: 40,
+                      width: 100,
+                      height: 100,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
-                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        color: Colors.white,
                       ),
                       clipBehavior: Clip.antiAlias,
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      alignment: Alignment.center,
                       child: siteIdentity?.iconUrl != null
-                          ? Image.network(siteIdentity!.iconUrl!, fit: BoxFit.cover)
-                          : const FlutterLogo(size: 36),
+                          ? Image.network(siteIdentity!.iconUrl!, fit: BoxFit.contain)
+                          : const FlutterLogo(size: 80),
                     ),
                     const SizedBox(height: 16),
                     IconButton(
@@ -218,50 +261,126 @@ class _AppShellState extends ConsumerState<AppShell> {
                   ),
                   const Divider(height: 1),
                   Expanded(
-                    child: LayoutBuilder(
-                      key: ValueKey(location),
-                      builder: (context, constraints) {
-                        final maxViewportWidth = constraints.maxWidth.isFinite
-                            ? constraints.maxWidth
-                            : MediaQuery.sizeOf(context).width;
-                        final viewportWidth = maxViewportWidth.isFinite
-                            ? maxViewportWidth
-                            : MediaQuery.sizeOf(context).width;
-                        final overflowAllowance = viewportWidth >= 1280.0 ? 0.0 : 640.0;
-                        final maxContentWidth = viewportWidth + overflowAllowance;
-
-                        return Scrollbar(
-                          controller: _horizontalScrollController,
-                          thumbVisibility: true,
-                          trackVisibility: true,
-                          interactive: true,
-                          scrollbarOrientation: ScrollbarOrientation.bottom,
-                          thickness: 12,
-                          radius: const Radius.circular(999),
-                          child: SingleChildScrollView(
-                            controller: _horizontalScrollController,
-                            scrollDirection: Axis.horizontal,
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(
-                                minWidth: maxViewportWidth,
-                                maxWidth: maxContentWidth,
-                              ),
-                              child: AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 250),
-                                child: KeyedSubtree(
-                                  key: ValueKey(location),
-                                  child: widget.child,
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
+                    child: _buildPageBody(location, enableHorizontalScroll: true),
                   ),
                 ],
               ),
             )
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPageBody(String location, {required bool enableHorizontalScroll}) {
+    if (!enableHorizontalScroll) {
+      return AnimatedSwitcher(
+        duration: const Duration(milliseconds: 250),
+        child: KeyedSubtree(
+          key: ValueKey(location),
+          child: widget.child,
+        ),
+      );
+    }
+
+    return LayoutBuilder(
+      key: ValueKey(location),
+      builder: (context, constraints) {
+        final maxViewportWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final viewportWidth =
+            maxViewportWidth.isFinite ? maxViewportWidth : MediaQuery.sizeOf(context).width;
+        final overflowAllowance = viewportWidth >= 1280.0 ? 0.0 : 640.0;
+        final maxContentWidth = viewportWidth + overflowAllowance;
+
+        return Scrollbar(
+          controller: _horizontalScrollController,
+          thumbVisibility: true,
+          trackVisibility: true,
+          interactive: true,
+          scrollbarOrientation: ScrollbarOrientation.bottom,
+          thickness: 12,
+          radius: const Radius.circular(999),
+          child: SingleChildScrollView(
+            controller: _horizontalScrollController,
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth: maxViewportWidth,
+                maxWidth: maxContentWidth,
+              ),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 250),
+                child: KeyedSubtree(
+                  key: ValueKey(location),
+                  child: widget.child,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _NavigationDrawer extends StatelessWidget {
+  const _NavigationDrawer({
+    required this.navigationItems,
+    required this.selectedIndex,
+    required this.onNavigate,
+    this.siteIdentity,
+  });
+
+  final List<NavigationItem> navigationItems;
+  final int selectedIndex;
+  final ValueChanged<String> onNavigate;
+  final SiteIdentity? siteIdentity;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Drawer(
+      child: SafeArea(
+        child: Column(
+          children: [
+            ListTile(
+              leading: Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.white,
+                ),
+                clipBehavior: Clip.antiAlias,
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                alignment: Alignment.center,
+                child: siteIdentity?.iconUrl != null
+                    ? Image.network(siteIdentity!.iconUrl!, fit: BoxFit.contain)
+                    : const FlutterLogo(size: 80),
+              ),
+              title: Text(siteIdentity?.title ?? 'Ligas deportivas'),
+              subtitle: const Text('Menú principal'),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: ListView.builder(
+                itemCount: navigationItems.length,
+                itemBuilder: (context, index) {
+                  final item = navigationItems[index];
+                  return ListTile(
+                    leading: Icon(item.icon),
+                    title: Text(item.label),
+                    selected: index == selectedIndex,
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      onNavigate(item.route);
+                    },
+                  );
+                },
+              ),
+            ),
           ],
         ),
       ),

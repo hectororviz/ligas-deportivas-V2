@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/responsive.dart';
 import '../../../services/api_client.dart';
 import '../domain/standings_models.dart';
 import 'standings_table.dart';
@@ -74,6 +75,13 @@ class _ZoneStandingsView extends ConsumerWidget {
     final leagueColor =
         leagueColors[data.zone.leagueId] ?? theme.colorScheme.primary;
     final subtitle = '${data.zone.tournamentName} ${data.zone.tournamentYear} · ${data.zone.leagueName}';
+    final isMobile = Responsive.isMobile(context);
+    final cardPadding = isMobile ? const EdgeInsets.all(12) : const EdgeInsets.all(20);
+    final tilePadding = isMobile
+        ? const EdgeInsets.symmetric(horizontal: 12, vertical: 10)
+        : const EdgeInsets.symmetric(horizontal: 20, vertical: 12);
+    final tileChildrenPadding =
+        isMobile ? const EdgeInsets.fromLTRB(12, 0, 12, 12) : const EdgeInsets.fromLTRB(20, 0, 20, 16);
 
     return ListView(
       padding: const EdgeInsets.all(24),
@@ -87,7 +95,7 @@ class _ZoneStandingsView extends ConsumerWidget {
         const SizedBox(height: 24),
         Card(
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: cardPadding,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -120,7 +128,7 @@ class _ZoneStandingsView extends ConsumerWidget {
         if (data.categories.isEmpty)
           Card(
             child: Padding(
-              padding: const EdgeInsets.all(20),
+              padding: cardPadding,
               child: Text(
                 'No hay categorías con estadísticas disponibles en esta zona.',
                 style: theme.textTheme.bodyMedium,
@@ -133,8 +141,8 @@ class _ZoneStandingsView extends ConsumerWidget {
               margin: const EdgeInsets.only(bottom: 12),
               child: ExpansionTile(
                 key: PageStorageKey('zone-${data.zone.id}-category-${category.tournamentCategoryId}'),
-                tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                tilePadding: tilePadding,
+                childrenPadding: tileChildrenPadding,
                 title: Text(
                   category.categoryName,
                   style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),

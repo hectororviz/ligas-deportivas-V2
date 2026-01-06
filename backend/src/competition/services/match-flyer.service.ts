@@ -76,7 +76,7 @@ interface TemplateSectionToken {
 @Injectable()
 export class MatchFlyerService {
   private resvgModule?: Promise<typeof import('@resvg/resvg-js')>;
-  private sharpModule?: Promise<typeof import('sharp')>;
+  private sharpModule?: typeof import('sharp');
 
   constructor(
     private readonly prisma: PrismaService,
@@ -471,14 +471,15 @@ export class MatchFlyerService {
   }
 
   private async loadSharp() {
-    if (!this.sharpModule) {
-      this.sharpModule = import('sharp');
+    if (this.sharpModule) {
+      return this.sharpModule;
     }
 
     try {
-      const module = await this.sharpModule;
-      const sharpFn = (module as unknown as typeof import('sharp')).default || (module as unknown as any);
-      return sharpFn as unknown as typeof import('sharp');
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const sharp = require('sharp');
+      this.sharpModule = sharp as typeof import('sharp');
+      return this.sharpModule;
     } catch (error) {
       this.sharpModule = undefined;
       if (error instanceof Error && /Cannot find module/.test(error.message)) {

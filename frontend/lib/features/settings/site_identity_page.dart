@@ -26,6 +26,12 @@ class _SiteIdentityPageState extends ConsumerState<SiteIdentityPage> {
   Uint8List? _iconBytes;
   String? _iconFileName;
   bool _removeIcon = false;
+  Uint8List? _faviconBytes;
+  String? _faviconFileName;
+  bool _removeFavicon = false;
+  Uint8List? _loginImageBytes;
+  String? _loginImageFileName;
+  bool _removeLoginImage = false;
 
   @override
   void initState() {
@@ -120,7 +126,7 @@ class _SiteIdentityPageState extends ConsumerState<SiteIdentityPage> {
                             Text('Ícono', style: theme.textTheme.titleSmall),
                             const SizedBox(height: 8),
                             Text(
-                              'Se recomienda utilizar una imagen cuadrada en formato PNG o JPG.',
+                              'Se recomienda utilizar una imagen cuadrada de 200x200 px en formato PNG o JPG.',
                               style: theme.textTheme.bodySmall,
                             ),
                             const SizedBox(height: 12),
@@ -177,10 +183,162 @@ class _SiteIdentityPageState extends ConsumerState<SiteIdentityPage> {
                                   style: theme.textTheme.bodySmall?.copyWith(
                                       color: theme.colorScheme.error),
                                 ),
-                            ),
+                              ),
                           ],
                         ),
                       )
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildFaviconPreview(identity),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Favicon', style: theme.textTheme.titleSmall),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Se recomienda un favicon en formato SVG o PNG grande.',
+                              style: theme.textTheme.bodySmall,
+                            ),
+                            const SizedBox(height: 12),
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 8,
+                              children: [
+                                OutlinedButton.icon(
+                                  onPressed: _saving ? null : _pickFavicon,
+                                  icon: const Icon(Icons.upload_file_outlined),
+                                  label: const Text('Seleccionar archivo'),
+                                ),
+                                if ((identity?.faviconBasePath != null ||
+                                        _faviconBytes != null) &&
+                                    !_removeFavicon)
+                                  TextButton(
+                                    onPressed: _saving
+                                        ? null
+                                        : () {
+                                            setState(() {
+                                              _faviconBytes = null;
+                                              _faviconFileName = null;
+                                              _removeFavicon = true;
+                                            });
+                                          },
+                                    child: const Text('Quitar favicon'),
+                                  ),
+                                if (_removeFavicon)
+                                  TextButton(
+                                    onPressed: _saving
+                                        ? null
+                                        : () {
+                                            setState(() {
+                                              _removeFavicon = false;
+                                            });
+                                          },
+                                    child: const Text('Cancelar'),
+                                  )
+                              ],
+                            ),
+                            if (_faviconFileName != null && !_removeFavicon)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8.0),
+                                child: Text(
+                                  'Seleccionado: $_faviconFileName',
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                              ),
+                            if (_removeFavicon)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8.0),
+                                child: Text(
+                                  'El favicon actual se eliminará.',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                      color: theme.colorScheme.error),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildLoginImagePreview(identity),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Inicio', style: theme.textTheme.titleSmall),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Imagen del login con tamaño recomendado de 320x250 px.',
+                              style: theme.textTheme.bodySmall,
+                            ),
+                            const SizedBox(height: 12),
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 8,
+                              children: [
+                                OutlinedButton.icon(
+                                  onPressed: _saving ? null : _pickLoginImage,
+                                  icon: const Icon(Icons.upload_file_outlined),
+                                  label: const Text('Seleccionar archivo'),
+                                ),
+                                if ((identity?.flyerUrl != null ||
+                                        _loginImageBytes != null) &&
+                                    !_removeLoginImage)
+                                  TextButton(
+                                    onPressed: _saving
+                                        ? null
+                                        : () {
+                                            setState(() {
+                                              _loginImageBytes = null;
+                                              _loginImageFileName = null;
+                                              _removeLoginImage = true;
+                                            });
+                                          },
+                                    child: const Text('Quitar imagen'),
+                                  ),
+                                if (_removeLoginImage)
+                                  TextButton(
+                                    onPressed: _saving
+                                        ? null
+                                        : () {
+                                            setState(() {
+                                              _removeLoginImage = false;
+                                            });
+                                          },
+                                    child: const Text('Cancelar'),
+                                  )
+                              ],
+                            ),
+                            if (_loginImageFileName != null && !_removeLoginImage)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8.0),
+                                child: Text(
+                                  'Seleccionado: $_loginImageFileName',
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                              ),
+                            if (_removeLoginImage)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8.0),
+                                child: Text(
+                                  'La imagen de inicio se eliminará.',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                      color: theme.colorScheme.error),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 24),
@@ -242,6 +400,59 @@ class _SiteIdentityPageState extends ConsumerState<SiteIdentityPage> {
     );
   }
 
+  Widget _buildFaviconPreview(SiteIdentity? identity) {
+    Widget child;
+    if (_removeFavicon) {
+      child = const Icon(Icons.hide_image_outlined, size: 20);
+    } else if (_faviconBytes != null) {
+      child = Image.memory(_faviconBytes!, fit: BoxFit.cover);
+    } else if (identity?.faviconBasePath != null) {
+      child = Image.network(
+        '${identity!.faviconBasePath}/favicon-32x32.png',
+        fit: BoxFit.cover,
+      );
+    } else {
+      child = const Icon(Icons.public_outlined, size: 20);
+    }
+
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      ),
+      clipBehavior: Clip.antiAlias,
+      alignment: Alignment.center,
+      child: child,
+    );
+  }
+
+  Widget _buildLoginImagePreview(SiteIdentity? identity) {
+    Widget child;
+    if (_removeLoginImage) {
+      child = const Icon(Icons.hide_image_outlined, size: 32);
+    } else if (_loginImageBytes != null) {
+      child = Image.memory(_loginImageBytes!, fit: BoxFit.cover);
+    } else if (identity?.flyerUrl != null) {
+      child = Image.network(identity!.flyerUrl!, fit: BoxFit.cover);
+    } else {
+      child = const Icon(Icons.image_outlined, size: 32);
+    }
+
+    return Container(
+      width: 160,
+      height: 125,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      ),
+      clipBehavior: Clip.antiAlias,
+      alignment: Alignment.center,
+      child: child,
+    );
+  }
+
   Future<void> _pickIcon() async {
     final result = await FilePicker.platform
         .pickFiles(type: FileType.image, withData: true);
@@ -258,6 +469,47 @@ class _SiteIdentityPageState extends ConsumerState<SiteIdentityPage> {
       _iconBytes = file.bytes;
       _iconFileName = file.name;
       _removeIcon = false;
+    });
+  }
+
+  Future<void> _pickFavicon() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['png', 'svg', 'webp'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) {
+      return;
+    }
+
+    final file = result.files.first;
+    if (file.bytes == null) {
+      return;
+    }
+
+    setState(() {
+      _faviconBytes = file.bytes;
+      _faviconFileName = file.name;
+      _removeFavicon = false;
+    });
+  }
+
+  Future<void> _pickLoginImage() async {
+    final result = await FilePicker.platform
+        .pickFiles(type: FileType.image, withData: true);
+    if (result == null || result.files.isEmpty) {
+      return;
+    }
+
+    final file = result.files.first;
+    if (file.bytes == null) {
+      return;
+    }
+
+    setState(() {
+      _loginImageBytes = file.bytes;
+      _loginImageFileName = file.name;
+      _removeLoginImage = false;
     });
   }
 
@@ -289,7 +541,39 @@ class _SiteIdentityPageState extends ConsumerState<SiteIdentityPage> {
         formData.fields.add(const MapEntry('removeIcon', 'true'));
       }
 
-      await ref.read(apiClientProvider).put('/site-identity', data: formData);
+      if (_loginImageBytes != null) {
+        formData.files.add(
+          MapEntry(
+            'flyer',
+            MultipartFile.fromBytes(
+              _loginImageBytes!,
+              filename: _loginImageFileName ?? 'login-image.png',
+            ),
+          ),
+        );
+      } else if (_removeLoginImage) {
+        formData.fields.add(const MapEntry('removeFlyer', 'true'));
+      }
+
+      final apiClient = ref.read(apiClientProvider);
+      await apiClient.put('/site-identity', data: formData);
+      if (_faviconBytes != null || _removeFavicon) {
+        final faviconData = FormData();
+        if (_faviconBytes != null) {
+          faviconData.files.add(
+            MapEntry(
+              'file',
+              MultipartFile.fromBytes(
+                _faviconBytes!,
+                filename: _faviconFileName ?? 'favicon.png',
+              ),
+            ),
+          );
+        } else if (_removeFavicon) {
+          faviconData.fields.add(const MapEntry('remove', 'true'));
+        }
+        await apiClient.post('/site-identity/favicon', data: faviconData);
+      }
       ref.invalidate(siteIdentityProvider);
       await ref.read(siteIdentityProvider.future);
 
@@ -301,6 +585,12 @@ class _SiteIdentityPageState extends ConsumerState<SiteIdentityPage> {
         _iconBytes = null;
         _iconFileName = null;
         _removeIcon = false;
+        _faviconBytes = null;
+        _faviconFileName = null;
+        _removeFavicon = false;
+        _loginImageBytes = null;
+        _loginImageFileName = null;
+        _removeLoginImage = false;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
