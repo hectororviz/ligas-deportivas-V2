@@ -43,7 +43,8 @@ services:
 
   frontend:
     build:
-      context: ../frontend
+      context: ..
+      dockerfile: frontend/Dockerfile
       args:
         API_BASE_URL: /api/v1
     restart: unless-stopped
