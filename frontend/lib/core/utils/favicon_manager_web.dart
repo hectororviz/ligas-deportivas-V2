@@ -62,14 +62,15 @@ void _upsertLink(
   final existing = document.querySelector(selector) as html.LinkElement?;
   final link = existing ?? html.LinkElement();
   link.rel = rel;
-  if (sizes != null) {
-    link.sizes = sizes;
-  }
   if (type != null) {
     link.type = type;
   }
+  if (sizes != null) {
+    link.setAttribute('sizes', sizes);
+  }
   link.href = href;
   if (link.parent == null) {
-    document.head?.append(link);
+    final head = document.querySelector('head');
+    head?.append(link);
   }
 }
