@@ -371,6 +371,7 @@ class _StandingsTable extends StatelessWidget {
       fontWeight: FontWeight.bold,
       color: theme.colorScheme.onSurfaceVariant,
     );
+    final zebraColor = theme.colorScheme.surfaceVariant.withOpacity(0.35);
 
     return Table(
       columnWidths: const {
@@ -399,10 +400,16 @@ class _StandingsTable extends StatelessWidget {
           final index = entry.key;
           final row = entry.value;
           return TableRow(
+            decoration: BoxDecoration(
+              color: index.isEven ? zebraColor : Colors.transparent,
+            ),
             children: [
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Text('${index + 1}', style: theme.textTheme.bodyMedium),
+                child: Text(
+                  _positionLabel(index),
+                  style: theme.textTheme.bodyMedium,
+                ),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
@@ -472,13 +479,31 @@ class _DotsIndicator extends StatelessWidget {
 
 String _nextMatchdayLabel(HomeNextMatchday? matchday) {
   if (matchday == null) {
-    return 'Próxima: sin programar';
+    return 'Próxima fecha: sin programar';
   }
   if (matchday.date == null) {
-    return 'Próxima: a confirmar';
+    return 'Próxima fecha: a confirmar';
   }
-  final formatter = DateFormat('EEEE HH:mm', 'es');
-  final formatted = formatter.format(matchday.date!.toLocal());
-  final capitalized = toBeginningOfSentenceCase(formatted) ?? formatted;
-  return 'Próxima: Fecha ${matchday.matchday} — $capitalized';
+  final dateFormatter = DateFormat('EEEE dd/MM', 'es');
+  final timeFormatter = DateFormat('HH:mm');
+  final dateLabel = dateFormatter.format(matchday.date!.toLocal());
+  final capitalizedDate = toBeginningOfSentenceCase(dateLabel) ?? dateLabel;
+  final kickoffTime = (matchday.kickoffTime?.isNotEmpty ?? false)
+      ? matchday.kickoffTime!
+      : timeFormatter.format(matchday.date!.toLocal());
+  return 'Próxima fecha: Fecha ${matchday.matchday} - $capitalizedDate - $kickoffTime';
+}
+
+String _positionLabel(int index) {
+  final position = index + 1;
+  switch (position) {
+    case 1:
+      return '🥇 $position';
+    case 2:
+      return '🥈 $position';
+    case 3:
+      return '🥉 $position';
+    default:
+      return '$position';
+  }
 }

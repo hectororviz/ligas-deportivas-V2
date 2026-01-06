@@ -18,6 +18,10 @@ export class HomeSummaryService {
       },
       include: {
         league: true,
+        categories: {
+          where: { enabled: true },
+          select: { kickoffTime: true }
+        },
         zones: {
           where: { status: { not: ZoneStatus.FINISHED } },
           include: {
@@ -87,6 +91,9 @@ export class HomeSummaryService {
         const zones = [...tournament.zones].sort((a, b) =>
           a.name.toLowerCase().localeCompare(b.name.toLowerCase())
         );
+        const kickoffTime = this.findEarliestKickoffTime(
+          tournament.categories.map((category) => category.kickoffTime)
+        );
         return {
           id: tournament.id,
           leagueName: tournament.league.name,
@@ -115,7 +122,8 @@ export class HomeSummaryService {
                     date: upcomingMatchday.date
                       ? upcomingMatchday.date.toISOString()
                       : null,
-                    status: upcomingMatchday.status
+                    status: upcomingMatchday.status,
+                    kickoffTime
                   }
                 : null
             };
@@ -143,5 +151,23 @@ export class HomeSummaryService {
       }
       return a.goalsAgainst - b.goalsAgainst;
     });
+  }
+
+  private findEarliestKickoffTime(times: Array<string | null>) {
+    const normalized = times
+      .map((time) => time?.trim())
+      .filter((time): time is string => Boolean(time));
+    if (normalized.length === 0) {
+      return null;
+    }
+    return normalized.reduce((earliest, current) =>
+      this.compareKickoffTimes(current, earliest) < 0 ? current : earliest
+    );
+  }
+
+  private compareKickoffTimes(left: string, right: string) {
+    const [leftHours, leftMinutes] = left.split(':').map(Number);
+    const [rightHours, rightMinutes] = right.split(':').map(Number);
+    return leftHours * 60 + leftMinutes - (rightHours * 60 + rightMinutes);
   }
 }
