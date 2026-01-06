@@ -9,6 +9,12 @@ export class DatabaseInitializerService implements OnApplicationBootstrap {
   constructor(private readonly prisma: PrismaService) {}
 
   async onApplicationBootstrap(): Promise<void> {
+    if (process.env.MIGRATIONS_APPLIED !== 'true') {
+      this.logger.warn(
+        'Seed inicial omitido: las migraciones no se han ejecutado antes del arranque.',
+      );
+      return;
+    }
     try {
       await seedBaseData(this.prisma);
       this.logger.log('Seed de datos base aplicado correctamente');
