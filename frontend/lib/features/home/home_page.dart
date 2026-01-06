@@ -290,9 +290,9 @@ class _CarouselFrame extends StatelessWidget {
     }
 
     return FocusableActionDetector(
-      shortcuts: const {
-        LogicalKeySet(LogicalKeyboardKey.arrowLeft): _CarouselPrevIntent(),
-        LogicalKeySet(LogicalKeyboardKey.arrowRight): _CarouselNextIntent(),
+      shortcuts: <ShortcutActivator, Intent>{
+        const SingleActivator(LogicalKeyboardKey.arrowLeft): const _CarouselPrevIntent(),
+        const SingleActivator(LogicalKeyboardKey.arrowRight): const _CarouselNextIntent(),
       },
       actions: {
         _CarouselPrevIntent: CallbackAction<_CarouselPrevIntent>(
