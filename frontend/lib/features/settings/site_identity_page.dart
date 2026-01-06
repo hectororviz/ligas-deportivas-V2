@@ -202,7 +202,7 @@ class _SiteIdentityPageState extends ConsumerState<SiteIdentityPage> {
                             Text('Favicon', style: theme.textTheme.titleSmall),
                             const SizedBox(height: 8),
                             Text(
-                              'Se recomienda un favicon en formato PNG o ICO.',
+                              'Se recomienda un favicon en formato SVG o PNG grande.',
                               style: theme.textTheme.bodySmall,
                             ),
                             const SizedBox(height: 12),
@@ -215,7 +215,7 @@ class _SiteIdentityPageState extends ConsumerState<SiteIdentityPage> {
                                   icon: const Icon(Icons.upload_file_outlined),
                                   label: const Text('Seleccionar archivo'),
                                 ),
-                                if ((identity?.faviconUrl != null ||
+                                if ((identity?.faviconBasePath != null ||
                                         _faviconBytes != null) &&
                                     !_removeFavicon)
                                   TextButton(
@@ -406,8 +406,11 @@ class _SiteIdentityPageState extends ConsumerState<SiteIdentityPage> {
       child = const Icon(Icons.hide_image_outlined, size: 20);
     } else if (_faviconBytes != null) {
       child = Image.memory(_faviconBytes!, fit: BoxFit.cover);
-    } else if (identity?.faviconUrl != null) {
-      child = Image.network(identity!.faviconUrl!, fit: BoxFit.cover);
+    } else if (identity?.faviconBasePath != null) {
+      child = Image.network(
+        '${identity!.faviconBasePath}/favicon-32x32.png',
+        fit: BoxFit.cover,
+      );
     } else {
       child = const Icon(Icons.public_outlined, size: 20);
     }
@@ -472,7 +475,7 @@ class _SiteIdentityPageState extends ConsumerState<SiteIdentityPage> {
   Future<void> _pickFavicon() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['png', 'jpg', 'jpeg', 'ico', 'webp'],
+      allowedExtensions: ['png', 'svg', 'webp'],
       withData: true,
     );
     if (result == null || result.files.isEmpty) {
@@ -538,20 +541,6 @@ class _SiteIdentityPageState extends ConsumerState<SiteIdentityPage> {
         formData.fields.add(const MapEntry('removeIcon', 'true'));
       }
 
-      if (_faviconBytes != null) {
-        formData.files.add(
-          MapEntry(
-            'favicon',
-            MultipartFile.fromBytes(
-              _faviconBytes!,
-              filename: _faviconFileName ?? 'favicon.png',
-            ),
-          ),
-        );
-      } else if (_removeFavicon) {
-        formData.fields.add(const MapEntry('removeFavicon', 'true'));
-      }
-
       if (_loginImageBytes != null) {
         formData.files.add(
           MapEntry(
@@ -566,7 +555,25 @@ class _SiteIdentityPageState extends ConsumerState<SiteIdentityPage> {
         formData.fields.add(const MapEntry('removeFlyer', 'true'));
       }
 
-      await ref.read(apiClientProvider).put('/site-identity', data: formData);
+      final apiClient = ref.read(apiClientProvider);
+      await apiClient.put('/site-identity', data: formData);
+      if (_faviconBytes != null || _removeFavicon) {
+        final faviconData = FormData();
+        if (_faviconBytes != null) {
+          faviconData.files.add(
+            MapEntry(
+              'file',
+              MultipartFile.fromBytes(
+                _faviconBytes!,
+                filename: _faviconFileName ?? 'favicon.png',
+              ),
+            ),
+          );
+        } else if (_removeFavicon) {
+          faviconData.fields.add(const MapEntry('remove', 'true'));
+        }
+        await apiClient.post('/site-identity/favicon', data: faviconData);
+      }
       ref.invalidate(siteIdentityProvider);
       await ref.read(siteIdentityProvider.future);
 

@@ -4,7 +4,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
 import * as cookieParser from 'cookie-parser';
-import { join } from 'path';
+import { extname, join, sep } from 'path';
 import { NestExpressApplication } from '@nestjs/platform-express';
 
 async function bootstrap() {
@@ -34,12 +34,24 @@ async function bootstrap() {
   app.use(helmet());
   app.use(cookieParser());
   const uploadsDir = join(process.cwd(), 'storage', 'uploads');
+  const publicDir = join(process.cwd(), 'public');
 
   // Serve uploaded files both with and without the API prefix so that
   // absolute URLs stored as "/storage/..." still work when the HTTP client
   // applies the global `/api/v1` prefix.
   app.useStaticAssets(uploadsDir, { prefix: '/storage/uploads/' });
   app.useStaticAssets(uploadsDir, { prefix: '/api/v1/storage/uploads/' });
+  app.useStaticAssets(publicDir, {
+    prefix: '/',
+    setHeaders: (res, filePath) => {
+      if (filePath.includes(`${sep}site-identity${sep}icons${sep}`)) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+      if (extname(filePath) === '.webmanifest') {
+        res.setHeader('Content-Type', 'application/manifest+json');
+      }
+    },
+  });
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

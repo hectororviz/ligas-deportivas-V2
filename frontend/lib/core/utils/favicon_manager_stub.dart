@@ -1,1 +1,1 @@
-void updateFavicon(String? url) {}
+void updateFavicon(String? basePath) {}
