@@ -43,13 +43,15 @@ services:
 
   frontend:
     build:
-      context: ..
-      dockerfile: frontend/Dockerfile
+      context: ../frontend
+      dockerfile: Dockerfile
       args:
         API_BASE_URL: /api/v1
     restart: unless-stopped
     depends_on:
       - backend
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
 
   proxy:
     image: caddy:2
