@@ -865,6 +865,7 @@ class _FixtureMatchdayCard extends StatelessWidget {
     );
 
     final titleWidget = RichText(
+      textAlign: isMobile ? TextAlign.center : TextAlign.left,
       text: TextSpan(
         style: baseTitleStyle,
         children: [
@@ -879,21 +880,42 @@ class _FixtureMatchdayCard extends StatelessWidget {
 
     final header = isMobile
         ? Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              titleWidget,
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
+              Align(
+                alignment: Alignment.center,
+                child: titleWidget,
+              ),
+              const SizedBox(height: 8),
+              Row(
                 children: [
-                  dateField,
-                  if (showSummaryButton) summaryButton,
-                  if (showFinalizeButton) finalizeButton,
-                  _FixtureMatchdayStatusIndicator(status: status),
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: dateField,
+                    ),
+                  ),
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.center,
+                      child: showSummaryButton ? summaryButton : const SizedBox.shrink(),
+                    ),
+                  ),
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: _FixtureMatchdayStatusIndicator(status: status),
+                    ),
+                  ),
                 ],
               ),
+              if (showFinalizeButton) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.center,
+                  child: finalizeButton,
+                ),
+              ],
             ],
           )
         : Row(
