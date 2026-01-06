@@ -200,21 +200,18 @@ export class SiteIdentityService {
   private toResponse(identity: SiteIdentity): SiteIdentityResponse {
     let iconUrl: string | null = null;
     if (identity.iconKey) {
-      const appUrl = (this.configService.get<string>('app.url') ?? '').replace(/\/$/, '');
       const version = identity.updatedAt.getTime();
-      iconUrl = `${appUrl}/api/v1/site-identity/icon?v=${version}`;
+      iconUrl = `/api/v1/site-identity/icon?v=${version}`;
     }
     let faviconUrl: string | null = null;
     if (identity.faviconKey) {
-      const appUrl = (this.configService.get<string>('app.url') ?? '').replace(/\/$/, '');
       const version = identity.updatedAt.getTime();
-      faviconUrl = `${appUrl}/api/v1/site-identity/favicon?v=${version}`;
+      faviconUrl = `/api/v1/site-identity/favicon?v=${version}`;
     }
     let flyerUrl: string | null = null;
     if (identity.flyerKey) {
-      const appUrl = (this.configService.get<string>('app.url') ?? '').replace(/\/$/, '');
       const version = identity.updatedAt.getTime();
-      flyerUrl = `${appUrl}/api/v1/site-identity/flyer?v=${version}`;
+      flyerUrl = `/api/v1/site-identity/flyer?v=${version}`;
     }
     return {
       title: identity.title,
