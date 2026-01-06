@@ -65,7 +65,7 @@ export class HomeSummaryService {
 
       const row = zoneStandings.get(entry.clubId) ?? {
         clubId: entry.clubId,
-        clubName: entry.club.name,
+        clubName: entry.club.shortName ?? entry.club.name,
         points: 0,
         goalsFor: 0,
         goalsAgainst: 0,
