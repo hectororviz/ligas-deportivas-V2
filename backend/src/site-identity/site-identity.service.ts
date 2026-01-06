@@ -7,7 +7,8 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import { validateFlyerImage } from './flyer-template.utils';
 import { createHash } from 'crypto';
-import sharp from 'sharp';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const sharp = require('sharp');
 
 export interface SiteIdentityResponse {
   title: string;
@@ -271,6 +272,10 @@ export class SiteIdentityService {
   }
 
   private async validateFaviconFile(file: Express.Multer.File) {
+    if (!file?.buffer) {
+      throw new BadRequestException('Missing uploaded file buffer');
+    }
+
     const maxSize = 5 * 1024 * 1024;
     if (file.size > maxSize) {
       throw new BadRequestException('El favicon supera el tamaño máximo permitido de 5 MB.');
@@ -282,7 +287,12 @@ export class SiteIdentityService {
     }
 
     if (file.mimetype === 'image/png') {
-      const metadata = await sharp(file.buffer).metadata();
+      let metadata: { width?: number; height?: number };
+      try {
+        metadata = await sharp(file.buffer).metadata();
+      } catch {
+        throw new BadRequestException('Invalid image file');
+      }
       if (!metadata.width || !metadata.height) {
         throw new BadRequestException('No se pudieron leer las dimensiones del PNG.');
       }
