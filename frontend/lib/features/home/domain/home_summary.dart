@@ -21,6 +21,7 @@ class HomeSummary {
 class HomeTournamentSummary {
   HomeTournamentSummary({
     required this.id,
+    required this.leagueName,
     required this.name,
     required this.year,
     required this.zones,
@@ -30,6 +31,7 @@ class HomeTournamentSummary {
     final zonesJson = json['zones'] as List<dynamic>? ?? [];
     return HomeTournamentSummary(
       id: json['id'] as int? ?? 0,
+      leagueName: json['leagueName'] as String? ?? 'Liga',
       name: json['name'] as String? ?? 'Torneo',
       year: json['year'] as int? ?? 0,
       zones: zonesJson
@@ -40,6 +42,7 @@ class HomeTournamentSummary {
   }
 
   final int id;
+  final String leagueName;
   final String name;
   final int year;
   final List<HomeZoneSummary> zones;

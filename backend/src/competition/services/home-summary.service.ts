@@ -17,6 +17,7 @@ export class HomeSummaryService {
         }
       },
       include: {
+        league: true,
         zones: {
           where: { status: { not: ZoneStatus.FINISHED } },
           include: {
@@ -88,6 +89,7 @@ export class HomeSummaryService {
         );
         return {
           id: tournament.id,
+          leagueName: tournament.league.name,
           name: tournament.name,
           year: tournament.year,
           zones: zones.map((zone) => {
