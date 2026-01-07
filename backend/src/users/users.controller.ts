@@ -53,4 +53,10 @@ export class UsersController {
   removeRole(@Param('assignmentId', ParseIntPipe) assignmentId: number) {
     return this.usersService.removeRole(assignmentId);
   }
+
+  @Delete(':id')
+  @Permissions({ module: Module.USUARIOS, action: Action.DELETE })
+  delete(@Param('id', ParseIntPipe) id: number) {
+    return this.usersService.deleteUser(id);
+  }
 }

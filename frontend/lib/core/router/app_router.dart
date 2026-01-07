@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/auth/presentation/login_page.dart';
 import '../../features/auth/presentation/register_page.dart';
+import '../../features/auth/presentation/reset_password_page.dart';
 import '../../features/auth/presentation/verify_email_page.dart';
 import '../../features/fixtures/presentation/fixtures_page.dart';
 import '../../features/home/home_page.dart';
@@ -56,6 +57,7 @@ bool _isPublicRoute(String location) {
     '/login',
     '/register',
     '/verify-email',
+    '/reset-password',
   };
 
   if (publicRoutes.any((route) => location == route || location.startsWith('$route/'))) {
@@ -90,6 +92,12 @@ GoRouter createRouter(Ref ref) {
       GoRoute(
         path: '/verify-email',
         builder: (context, state) => VerifyEmailPage(
+          token: state.uri.queryParameters['token'],
+        ),
+      ),
+      GoRoute(
+        path: '/reset-password',
+        builder: (context, state) => ResetPasswordPage(
           token: state.uri.queryParameters['token'],
         ),
       ),
