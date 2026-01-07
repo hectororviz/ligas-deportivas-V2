@@ -48,3 +48,9 @@ Thumbs.db
 infra/.env
 backend/.env
 **/.env
+
+# Mail server secrets / state
+infra/mail/cloudflare.ini
+infra/mail/docker-data/
+infra/mail/*.env
+infra/mail/**/*.env
