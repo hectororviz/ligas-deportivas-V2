@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/auth/presentation/login_page.dart';
 import '../../features/auth/presentation/register_page.dart';
+import '../../features/auth/presentation/verify_email_page.dart';
 import '../../features/fixtures/presentation/fixtures_page.dart';
 import '../../features/home/home_page.dart';
 import '../../features/leagues/presentation/leagues_page.dart';
@@ -54,6 +55,7 @@ bool _isPublicRoute(String location) {
     '/standings',
     '/login',
     '/register',
+    '/verify-email',
   };
 
   if (publicRoutes.any((route) => location == route || location.startsWith('$route/'))) {
@@ -85,6 +87,12 @@ GoRouter createRouter(Ref ref) {
     routes: [
       GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
       GoRoute(path: '/register', builder: (context, state) => const RegisterPage()),
+      GoRoute(
+        path: '/verify-email',
+        builder: (context, state) => VerifyEmailPage(
+          token: state.uri.queryParameters['token'],
+        ),
+      ),
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),
         routes: [

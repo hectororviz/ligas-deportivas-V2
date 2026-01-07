@@ -168,6 +168,11 @@ class AuthController extends StateNotifier<AuthState> {
     await loadProfile();
   }
 
+  Future<void> verifyEmail(String token) async {
+    final api = ref.read(apiClientProvider);
+    await api.post('/auth/verify-email', data: {'token': token});
+  }
+
   Future<void> updateProfileSettings({required String name, String? language}) async {
     final api = ref.read(apiClientProvider);
     final response = await api.put<Map<String, dynamic>>('/me', data: {
