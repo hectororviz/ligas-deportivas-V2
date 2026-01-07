@@ -88,16 +88,9 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Container(
-                      height: 64,
-                      width: 64,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                      ),
-                      clipBehavior: Clip.antiAlias,
+                    Center(
                       child: iconUrl != null
-                          ? Image.network(iconUrl, fit: BoxFit.cover)
+                          ? Image.network(iconUrl)
                           : const FlutterLogo(size: 64),
                     ),
                     const SizedBox(height: 16),
