@@ -21,7 +21,8 @@ export class UsersService {
     const pageSize = query.pageSize ?? 20;
     const skip = (page - 1) * pageSize;
     const search = query.search?.trim();
-    const where = search
+    const hiddenEmail = 'admin@ligas.local';
+    const searchFilter = search
       ? {
           OR: [
             { email: { contains: search, mode: 'insensitive' as const } },
@@ -30,6 +31,10 @@ export class UsersService {
           ],
         }
       : undefined;
+    const where = {
+      ...(searchFilter ? { AND: [searchFilter] } : {}),
+      NOT: { email: hiddenEmail },
+    };
 
     const [total, users] = await this.prisma.$transaction([
       this.prisma.user.count({ where }),
