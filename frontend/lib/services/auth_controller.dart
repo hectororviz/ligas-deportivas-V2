@@ -157,6 +157,14 @@ class AuthController extends StateNotifier<AuthState> {
     await api.post('/auth/password/request-reset', data: {'email': email});
   }
 
+  Future<void> resetPassword({required String token, required String password}) async {
+    final api = ref.read(apiClientProvider);
+    await api.post('/auth/password/reset', data: {
+      'token': token,
+      'password': password,
+    });
+  }
+
   Future<void> requestEmailChange(String newEmail) async {
     final api = ref.read(apiClientProvider);
     await api.post('/me/email/request-change', data: {'newEmail': newEmail});
