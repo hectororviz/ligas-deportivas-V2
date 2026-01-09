@@ -166,30 +166,32 @@ class _StatsPageState extends ConsumerState<StatsPage> {
         return ListView(
           padding: padding,
           children: [
-            _StatsFiltersBar(
-              tournaments: tournaments,
-              zones: tournamentZones,
-              detailAsync: detailAsync,
-              selectedTournamentId: tournamentId,
-              selectedZoneId: _selectedZoneId,
-              selectedCategoryId: _selectedCategoryId,
-              onTournamentChanged: (value) {
-                setState(() {
-                  _selectedTournamentId = value;
-                  _selectedZoneId = null;
-                  _selectedCategoryId = null;
-                });
-              },
-              onZoneChanged: (value) {
-                setState(() {
-                  _selectedZoneId = value;
-                });
-              },
-              onCategoryChanged: (value) {
-                setState(() {
-                  _selectedCategoryId = value;
-                });
-              },
+            _StatsFiltersCollapsible(
+              child: _StatsFiltersBar(
+                tournaments: tournaments,
+                zones: tournamentZones,
+                detailAsync: detailAsync,
+                selectedTournamentId: tournamentId,
+                selectedZoneId: _selectedZoneId,
+                selectedCategoryId: _selectedCategoryId,
+                onTournamentChanged: (value) {
+                  setState(() {
+                    _selectedTournamentId = value;
+                    _selectedZoneId = null;
+                    _selectedCategoryId = null;
+                  });
+                },
+                onZoneChanged: (value) {
+                  setState(() {
+                    _selectedZoneId = value;
+                  });
+                },
+                onCategoryChanged: (value) {
+                  setState(() {
+                    _selectedCategoryId = value;
+                  });
+                },
+              ),
             ),
             const SizedBox(height: 24),
             if (tournamentId == null)
@@ -247,6 +249,7 @@ class _StatsFiltersBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return TableFiltersBar(
+      showContainer: false,
       children: [
         TableFilterField(
           label: 'Torneo',
@@ -327,6 +330,41 @@ class _StatsFiltersBar extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _StatsFiltersCollapsible extends StatelessWidget {
+  const _StatsFiltersCollapsible({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final borderColor = theme.colorScheme.outlineVariant;
+
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: borderColor),
+      ),
+      child: ExpansionTile(
+        title: const Text('Busqueda'),
+        initiallyExpanded: false,
+        collapsedBackgroundColor: theme.colorScheme.surface,
+        backgroundColor: theme.colorScheme.surface,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+        ),
+        collapsedShape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+        ),
+        childrenPadding: EdgeInsets.zero,
+        children: [child],
+      ),
     );
   }
 }
@@ -570,9 +608,11 @@ class _StatsLeaderboardGrid extends StatelessWidget {
       builder: (context, constraints) {
         final maxWidth = constraints.maxWidth;
         final cardWidth = min(360.0, maxWidth);
+        final isMobile = Responsive.isMobile(context);
         return Wrap(
           spacing: 16,
           runSpacing: 16,
+          alignment: isMobile ? WrapAlignment.center : WrapAlignment.start,
           children: cards
               .map((card) => SizedBox(
                     width: cardWidth,

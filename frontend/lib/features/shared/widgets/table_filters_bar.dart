@@ -4,11 +4,13 @@ class TableFiltersBar extends StatelessWidget {
   const TableFiltersBar({
     required this.children,
     this.trailing,
+    this.showContainer = true,
     super.key,
   });
 
   final List<Widget> children;
   final Widget? trailing;
+  final bool showContainer;
 
   @override
   Widget build(BuildContext context) {
@@ -16,32 +18,38 @@ class TableFiltersBar extends StatelessWidget {
     final backgroundColor = theme.colorScheme.surface;
     final borderColor = theme.colorScheme.outlineVariant;
 
+    final content = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Wrap(
+              spacing: 24,
+              runSpacing: 12,
+              crossAxisAlignment: WrapCrossAlignment.start,
+              children: children,
+            ),
+          ),
+          if (trailing != null) ...[
+            const SizedBox(width: 16),
+            trailing!,
+          ]
+        ],
+      ),
+    );
+
+    if (!showContainer) {
+      return content;
+    }
+
     return DecoratedBox(
       decoration: BoxDecoration(
         color: backgroundColor,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: borderColor),
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Wrap(
-                spacing: 24,
-                runSpacing: 12,
-                crossAxisAlignment: WrapCrossAlignment.start,
-                children: children,
-              ),
-            ),
-            if (trailing != null) ...[
-              const SizedBox(width: 16),
-              trailing!,
-            ]
-          ],
-        ),
-      ),
+      child: content,
     );
   }
 }
