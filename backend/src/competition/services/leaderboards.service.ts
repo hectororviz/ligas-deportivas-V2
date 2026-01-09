@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { MatchdayStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LeaderboardsDto } from '../dto/leaderboards.dto';
 
@@ -32,34 +33,26 @@ export class LeaderboardsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getLeaderboards(filters: LeaderboardsFilters): Promise<LeaderboardsDto> {
-    const goals = await this.prisma.goal.findMany({
+    const playedMatchdays = await this.prisma.zoneMatchday.findMany({
       where: {
-        matchCategory: {
-          match: {
-            tournamentId: filters.tournamentId,
-            ...(filters.zoneId ? { zoneId: filters.zoneId } : {}),
-          },
-          ...(filters.categoryId
-            ? { tournamentCategory: { categoryId: filters.categoryId } }
-            : {}),
+        status: MatchdayStatus.PLAYED,
+        zone: {
+          tournamentId: filters.tournamentId,
+          ...(filters.zoneId ? { id: filters.zoneId } : {}),
         },
       },
-      include: {
-        player: {
-          select: {
-            firstName: true,
-            lastName: true,
-          },
-        },
-        club: {
-          select: {
-            id: true,
-            name: true,
-            shortName: true,
-          },
-        },
+      select: {
+        zoneId: true,
+        matchday: true,
       },
     });
+
+    const playedMatchdaysByZone = new Map<number, Set<number>>();
+    for (const matchday of playedMatchdays) {
+      const existing = playedMatchdaysByZone.get(matchday.zoneId) ?? new Set<number>();
+      existing.add(matchday.matchday);
+      playedMatchdaysByZone.set(matchday.zoneId, existing);
+    }
 
     const matchCategories = await this.prisma.matchCategory.findMany({
       where: {
@@ -102,6 +95,36 @@ export class LeaderboardsService {
                 name: true,
               },
             },
+          },
+        },
+      },
+    });
+
+    const playedMatchCategories = matchCategories.filter((matchCategory) => {
+      const matchdaySet = playedMatchdaysByZone.get(matchCategory.match.zoneId);
+      return matchdaySet?.has(matchCategory.match.matchday) ?? false;
+    });
+
+    const matchCategoryIds = playedMatchCategories.map((entry) => entry.id);
+
+    const goals = await this.prisma.goal.findMany({
+      where: {
+        matchCategoryId: {
+          in: matchCategoryIds,
+        },
+      },
+      include: {
+        player: {
+          select: {
+            firstName: true,
+            lastName: true,
+          },
+        },
+        club: {
+          select: {
+            id: true,
+            name: true,
+            shortName: true,
           },
         },
       },
@@ -189,7 +212,7 @@ export class LeaderboardsService {
     const matchEntries = [];
     const biggestWinsEntries = [];
 
-    for (const matchCategory of matchCategories) {
+    for (const matchCategory of playedMatchCategories) {
       const homeClub = matchCategory.match.homeClub;
       const awayClub = matchCategory.match.awayClub;
       if (!homeClub || !awayClub) {

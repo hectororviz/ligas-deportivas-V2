@@ -707,15 +707,17 @@ class _StatsLeaderboardRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final medal = _medalForRank(rank);
+    final rankLabel = medal == null ? '$rank.' : '$rank. $medal';
     return Padding(
       padding: EdgeInsets.symmetric(vertical: dense ? 4 : 6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 24,
+            width: 36,
             child: Text(
-              '$rank.',
+              rankLabel,
               style: theme.textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w600,
               ),
@@ -744,6 +746,19 @@ class _StatsLeaderboardRow extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  static String? _medalForRank(int rank) {
+    switch (rank) {
+      case 1:
+        return '🥇';
+      case 2:
+        return '🥈';
+      case 3:
+        return '🥉';
+      default:
+        return null;
+    }
   }
 }
 

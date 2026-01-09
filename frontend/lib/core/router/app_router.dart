@@ -55,6 +55,7 @@ bool _isPublicRoute(String location) {
     '/club',
     '/fixtures',
     '/standings',
+    '/stats',
     '/login',
     '/register',
     '/verify-email',
