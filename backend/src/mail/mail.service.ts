@@ -14,7 +14,7 @@ export class MailService {
 
   async sendEmailVerification(email: string, token: string, firstName: string) {
     const frontend = this.configService.get<string>('app.frontendUrl');
-    const verificationUrl = `${frontend}/verify-email?token=${token}`;
+    const verificationUrl = this.buildFrontendUrl(frontend, '/verify-email', { token });
     await this.sendMail({
       to: email,
       subject: 'Verifica tu correo electrónico',
@@ -24,7 +24,7 @@ export class MailService {
 
   async sendPasswordReset(email: string, token: string, firstName: string) {
     const frontend = this.configService.get<string>('app.frontendUrl');
-    const resetUrl = `${frontend}/reset-password?token=${token}`;
+    const resetUrl = this.buildFrontendUrl(frontend, '/reset-password', { token });
     await this.sendMail({
       to: email,
       subject: 'Recuperación de contraseña',
@@ -34,7 +34,7 @@ export class MailService {
 
   async sendEmailChangeConfirmation(currentEmail: string, newEmail: string, token: string, firstName: string) {
     const frontend = this.configService.get<string>('app.frontendUrl');
-    const confirmUrl = `${frontend}/confirm-email?token=${token}`;
+    const confirmUrl = this.buildFrontendUrl(frontend, '/confirm-email', { token });
     await this.sendMail({
       to: currentEmail,
       subject: 'Confirmación de cambio de correo',
@@ -103,6 +103,24 @@ export class MailService {
     }
 
     return options;
+  }
+
+  private buildFrontendUrl(frontend: string | undefined, route: string, query: Record<string, string>) {
+    const normalizedFrontend = frontend ?? '';
+    if (!normalizedFrontend) {
+      return '';
+    }
+    const baseUrl = new URL(normalizedFrontend);
+    const normalizedRoute = route.startsWith('/') ? route : `/${route}`;
+    const fragmentBase = baseUrl.hash ? baseUrl.hash.replace(/^#/, '') : '';
+    const cleanedFragment = fragmentBase.replace(/\/$/, '');
+    const fragmentPath = cleanedFragment ? `${cleanedFragment}${normalizedRoute}` : normalizedRoute;
+    const fragmentUrl = new URL(`http://fragment${fragmentPath}`);
+    Object.entries(query).forEach(([key, value]) => {
+      fragmentUrl.searchParams.set(key, value);
+    });
+    baseUrl.hash = `${fragmentUrl.pathname}${fragmentUrl.search}`;
+    return baseUrl.toString();
   }
 
   private resolveAuth() {

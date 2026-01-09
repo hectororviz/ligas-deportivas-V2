@@ -345,9 +345,17 @@ class _UsersTableHeader extends StatelessWidget {
           Expanded(flex: 2, child: Text('Perfil', style: style)),
           Expanded(flex: 2, child: Text('Club', style: style)),
           SizedBox(
-            width: 170,
+            width: 160,
             child: Text(
               'Restablecer clave',
+              style: style,
+              textAlign: TextAlign.center,
+            ),
+          ),
+          SizedBox(
+            width: 56,
+            child: Text(
+              'Eliminar',
               style: style,
               textAlign: TextAlign.center,
             ),
@@ -371,6 +379,7 @@ class _UserRowState extends ConsumerState<_UserRow> {
   bool _isSendingReset = false;
   bool _isUpdatingRole = false;
   bool _isUpdatingClub = false;
+  bool _isDeleting = false;
   int? _selectedClubId;
   String? _selectedRoleKey;
   int? _currentRoleAssignmentId;
@@ -446,6 +455,45 @@ class _UserRowState extends ConsumerState<_UserRow> {
     } finally {
       if (mounted) {
         setState(() => _isSendingReset = false);
+      }
+    }
+  }
+
+  Future<void> _handleDeleteUser() async {
+    if (_isDeleting) {
+      return;
+    }
+
+    final confirmed = await _showConfirmationDialog(
+      title: 'Eliminar usuario',
+      message:
+          '¿Deseas eliminar la cuenta de ${widget.user.fullName}? Esta acción no se puede deshacer.',
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setState(() => _isDeleting = true);
+    try {
+      await ref.read(apiClientProvider).delete('/users/${widget.user.id}');
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Se eliminó la cuenta de ${widget.user.email}.')),
+      );
+      ref.invalidate(usersProvider);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo eliminar la cuenta: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isDeleting = false);
       }
     }
   }
@@ -726,7 +774,7 @@ class _UserRowState extends ConsumerState<_UserRow> {
             ),
           ),
           SizedBox(
-            width: 170,
+            width: 160,
             child: Align(
               alignment: Alignment.center,
               child: TextButton.icon(
@@ -743,6 +791,22 @@ class _UserRowState extends ConsumerState<_UserRow> {
                       )
                     : const Icon(Icons.lock_reset),
                 label: Text(_isSendingReset ? 'Enviando...' : 'Restablecer'),
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 56,
+            child: Center(
+              child: IconButton(
+                tooltip: 'Eliminar cuenta',
+                onPressed: _isDeleting ? null : _handleDeleteUser,
+                icon: _isDeleting
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.delete_outline),
               ),
             ),
           ),
