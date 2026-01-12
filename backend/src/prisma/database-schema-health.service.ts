@@ -13,10 +13,12 @@ type MigrationRow = {
 export class DatabaseSchemaHealthService implements OnModuleInit {
   private readonly logger = new Logger(DatabaseSchemaHealthService.name);
   private dbReady = true;
+  private enforcementMode: 'strict' | 'soft' = 'strict';
 
   constructor(private readonly prisma: PrismaService) {}
 
   async onModuleInit(): Promise<void> {
+    this.enforcementMode = this.resolveEnforcementMode();
     this.logDatabaseTarget();
     const errors = await this.checkSchema();
     if (errors.length === 0) {
@@ -27,15 +29,17 @@ export class DatabaseSchemaHealthService implements OnModuleInit {
     this.logger.error('El esquema de la base de datos no está listo:');
     errors.forEach((error) => this.logger.error(`- ${error}`));
 
-    if (process.env.ALLOW_UNMIGRATED_DB === '1') {
+    if (this.enforcementMode === 'soft') {
       this.logger.warn(
-        'ALLOW_UNMIGRATED_DB=1 activo: la aplicación continuará sin migraciones completas.',
+        'DB_SCHEMA_ENFORCEMENT=soft activo: la aplicación continuará sin migraciones completas.',
       );
       return;
     }
 
-    this.logger.error('Abortando inicio. Ejecuta el job de migraciones antes del backend.');
-    process.exit(1);
+    this.logger.error(
+      'DB_SCHEMA_ENFORCEMENT=strict: abortando inicio. Ejecuta el job de migraciones antes del backend.',
+    );
+    process.exit(2);
   }
 
   isReady(): boolean {
@@ -60,6 +64,14 @@ export class DatabaseSchemaHealthService implements OnModuleInit {
     } catch (error) {
       this.logger.warn('DATABASE_URL no se pudo parsear.');
     }
+  }
+
+  private resolveEnforcementMode(): 'strict' | 'soft' {
+    const raw = process.env.DB_SCHEMA_ENFORCEMENT?.trim().toLowerCase();
+    if (raw === 'soft') {
+      return 'soft';
+    }
+    return 'strict';
   }
 
   private getMigrationNames(): { names: string[]; error?: string } {
