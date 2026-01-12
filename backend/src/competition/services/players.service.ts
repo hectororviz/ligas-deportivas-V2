@@ -7,8 +7,15 @@ import { CreatePlayerDto } from '../dto/create-player.dto';
 import { ListPlayersDto } from '../dto/list-players.dto';
 import { UpdatePlayerDto } from '../dto/update-player.dto';
 
-type PlayerWithClub = Prisma.PlayerGetPayload<{
-  include: { club: { select: { id: true; name: true } } };
+type PlayerWithMemberships = Prisma.PlayerGetPayload<{
+  include: {
+    playerTournamentClubs: {
+      select: {
+        tournamentId: true;
+        club: { select: { id: true; name: true } };
+      };
+    };
+  };
 }>;
 
 @Injectable()
@@ -16,10 +23,15 @@ export class PlayersService {
   constructor(private readonly prisma: PrismaService) {}
 
   private readonly include = {
-    club: {
+    playerTournamentClubs: {
       select: {
-        id: true,
-        name: true,
+        tournamentId: true,
+        club: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
       },
     },
   } satisfies Prisma.PlayerInclude;
@@ -36,7 +48,6 @@ export class PlayersService {
           birthDate: new Date(dto.birthDate),
           gender: dto.gender,
           active: dto.active ?? true,
-          clubId: dto.clubId ?? null,
           addressStreet: this.normalizeNullable(dto.address?.street),
           addressNumber: this.normalizeNullable(dto.address?.number),
           addressCity: this.normalizeNullable(dto.address?.city),
@@ -201,7 +212,7 @@ export class PlayersService {
     ]);
 
     return {
-      data: players.map((player) => this.mapPlayer(player)),
+      data: players.map((player) => this.mapPlayer(player, tournamentId)),
       total,
       page,
       pageSize,
@@ -299,9 +310,6 @@ export class PlayersService {
     if (dto.active !== undefined) {
       data.active = dto.active;
     }
-    if (dto.clubId !== undefined) {
-      data.club = dto.clubId === null ? { disconnect: true } : { connect: { id: dto.clubId } };
-    }
     if (dto.address !== undefined) {
       data.addressStreet = this.normalizeNullable(dto.address?.street);
       data.addressNumber = this.normalizeNullable(dto.address?.number);
@@ -325,7 +333,7 @@ export class PlayersService {
     }
   }
 
-  private mapPlayer(player: PlayerWithClub) {
+  private mapPlayer(player: PlayerWithMemberships, tournamentId?: number) {
     const addressFields = [player.addressStreet, player.addressNumber, player.addressCity];
     const hasAddress = addressFields.some((value) => value && value.trim().length > 0);
     const emergencyFields = [
@@ -334,6 +342,14 @@ export class PlayersService {
       player.emergencyPhone,
     ];
     const hasEmergency = emergencyFields.some((value) => value && value.trim().length > 0);
+    const memberships = player.playerTournamentClubs ?? [];
+    const membership =
+      tournamentId !== undefined
+        ? memberships.find((entry) => entry.tournamentId === tournamentId)
+        : memberships.length === 1
+          ? memberships[0]
+          : undefined;
+    const club = membership?.club ?? null;
 
     return {
       id: player.id,
@@ -343,7 +359,7 @@ export class PlayersService {
       birthDate: player.birthDate.toISOString(),
       gender: player.gender,
       active: player.active,
-      club: player.club ? { id: player.club.id, name: player.club.name } : null,
+      club: club ? { id: club.id, name: club.name } : null,
       address: hasAddress
         ? {
             street: player.addressStreet,

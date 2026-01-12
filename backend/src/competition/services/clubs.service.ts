@@ -350,7 +350,7 @@ export class ClubsService {
     const endDate = new Date(Date.UTC(category.birthYearMax, 11, 31, 23, 59, 59, 999));
 
     const where: Prisma.PlayerWhereInput = {
-      memberships: {
+      playerTournamentClubs: {
         some: {
           clubId,
           tournamentId: tournamentCategory.tournamentId,
@@ -449,7 +449,7 @@ export class ClubsService {
       const players = await this.prisma.player.findMany({
         where: {
           id: { in: uniquePlayerIds },
-          memberships: {
+          playerTournamentClubs: {
             some: {
               clubId,
               tournamentId: tournamentCategory.tournamentId,
