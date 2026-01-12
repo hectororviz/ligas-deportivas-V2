@@ -127,9 +127,10 @@ model Tournament {
   league          League                 @relation(fields: [leagueId], references: [id])
   zones           Zone[]
   categories      TournamentCategory[]
-  matches         Match[]
-  flyerTemplate  FlyerTemplate?
-  posterTemplate TournamentPosterTemplate?
+  matches               Match[]
+  flyerTemplate         FlyerTemplate?
+  posterTemplate        TournamentPosterTemplate?
+  playerTournamentClubs PlayerTournamentClub[]
 }
 
 model Zone {
@@ -168,17 +169,17 @@ model Club {
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   league            League?            @relation(fields: [leagueId], references: [id])
-  zones             ClubZone[]
-  rosters           Roster[]
-  players           Player[]
-  homeMatches       Match[]            @relation("homeClub")
-  awayMatches       Match[]            @relation("awayClub")
-  otherGoals        OtherGoal[]
-  goals             Goal[]
-  userRoles         UserRole[]
-  users             User[]
-  categoryStandings CategoryStanding[]
-  teams             Team[]
+  zones                 ClubZone[]
+  rosters               Roster[]
+  homeMatches           Match[]            @relation("homeClub")
+  awayMatches           Match[]            @relation("awayClub")
+  otherGoals            OtherGoal[]
+  goals                 Goal[]
+  userRoles             UserRole[]
+  users                 User[]
+  categoryStandings     CategoryStanding[]
+  teams                 Team[]
+  playerTournamentClubs PlayerTournamentClub[]
 }
 
 model SiteIdentity {
@@ -272,7 +273,6 @@ model Roster {
 
 model Player {
   id                    Int            @id @default(autoincrement())
-  clubId                Int?
   firstName             String
   lastName              String
   birthDate             DateTime
@@ -287,9 +287,22 @@ model Player {
   emergencyPhone        String?
   createdAt             DateTime       @default(now())
   updatedAt             DateTime       @updatedAt
-  club                  Club?          @relation(fields: [clubId], references: [id])
   goals                 Goal[]
   rosters               RosterPlayer[]
+  playerTournamentClubs PlayerTournamentClub[]
+}
+
+model PlayerTournamentClub {
+  id           Int      @id @default(autoincrement())
+  playerId     Int
+  clubId       Int
+  tournamentId Int
+  createdAt    DateTime @default(now())
+  player       Player   @relation(fields: [playerId], references: [id])
+  club         Club     @relation(fields: [clubId], references: [id])
+  tournament   Tournament @relation(fields: [tournamentId], references: [id])
+
+  @@unique([playerId, tournamentId])
 }
 
 model RosterPlayer {
