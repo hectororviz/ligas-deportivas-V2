@@ -1521,6 +1521,7 @@ class _PlayerFormDialogState extends ConsumerState<_PlayerFormDialog> {
     final readOnly = widget.readOnly;
     final clubsAsync = ref.watch(clubsCatalogProvider);
     final age = _age;
+    final showClubField = widget.player != null;
 
     return Form(
       key: _formKey,
@@ -1780,47 +1781,49 @@ class _PlayerFormDialogState extends ConsumerState<_PlayerFormDialog> {
                       });
                     },
             ),
-            const SizedBox(height: 16),
-            clubsAsync.when(
-              data: (clubs) {
-                return DropdownButtonFormField<int?>(
-                  value: _selectedClubId,
-                  items: [
-                    const DropdownMenuItem<int?>(
-                      value: null,
-                      child: Text('Sin club asignado'),
-                    ),
-                    ...clubs.map(
-                      (club) => DropdownMenuItem<int?>(
-                        value: club.id,
-                        child: Text(club.name),
+            if (showClubField) ...[
+              const SizedBox(height: 16),
+              clubsAsync.when(
+                data: (clubs) {
+                  return DropdownButtonFormField<int?>(
+                    value: _selectedClubId,
+                    items: [
+                      const DropdownMenuItem<int?>(
+                        value: null,
+                        child: Text('Sin club asignado'),
                       ),
+                      ...clubs.map(
+                        (club) => DropdownMenuItem<int?>(
+                          value: club.id,
+                          child: Text(club.name),
+                        ),
+                      ),
+                    ],
+                    onChanged: readOnly
+                        ? null
+                        : (value) {
+                            setState(() {
+                              _selectedClubId = value;
+                            });
+                          },
+                    decoration: const InputDecoration(
+                      labelText: 'Club',
                     ),
-                  ],
-                  onChanged: readOnly
-                      ? null
-                      : (value) {
-                          setState(() {
-                            _selectedClubId = value;
-                          });
-                        },
-                  decoration: const InputDecoration(
-                    labelText: 'Club',
-                  ),
-                );
-              },
-              loading: () => const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
-                child: LinearProgressIndicator(),
+                  );
+                },
+                loading: () => const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: LinearProgressIndicator(),
+                ),
+                error: (error, stackTrace) => Text(
+                  'No se pudieron cargar los clubes: $error',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: Theme.of(context).colorScheme.error),
+                ),
               ),
-              error: (error, stackTrace) => Text(
-                'No se pudieron cargar los clubes: $error',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: Theme.of(context).colorScheme.error),
-              ),
-            ),
+            ],
             const SizedBox(height: 16),
             Text(
               'Contacto de emergencia (opcional)',
