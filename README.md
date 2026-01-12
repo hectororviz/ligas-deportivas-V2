@@ -219,15 +219,36 @@ cd infra
 ./deploy.sh
 ```
 
-#### Recover failed migrations
+#### Failed migrations recovery
 
 Si el deploy falla con migraciones fallidas en `_prisma_migrations` (por ejemplo cuando una migración fue corregida en el repo pero quedó marcada como failed en una DB existente), primero resuelve el estado y luego vuelve a correr el deploy.
 
-Para cada migración fallida, ejecuta el comando de resolución (elige `--rolled-back` o `--applied` según corresponda):
+**Cómo detectar migraciones fallidas**
+
+- El job `migrate` imprime las migraciones con `finished_at` y `rolled_back_at` en `NULL`.
+- También puedes listarlas manualmente con el helper:
+  ```bash
+  cd infra
+  ./recover_failed_migrations.sh
+  ```
+
+**Qué significa rolled-back vs applied**
+
+- `--rolled-back`: úsalo si la migración falló y **no** aplicaste cambios manualmente en la DB. Marca la migración como rollback para que puedas reintentar el deploy.
+- `--applied`: úsalo solo si **ya aplicaste manualmente** los cambios de esa migración y quieres marcarla como aplicada.
+
+**Ejemplos con recover_failed_migrations.sh**
 
 ```bash
-docker compose run --rm --entrypoint sh migrate -lc 'npx prisma migrate resolve --rolled-back <migration_name>'
-docker compose run --rm --entrypoint sh migrate -lc 'npx prisma migrate resolve --applied <migration_name>'
+# Listar migraciones fallidas y comandos recomendados
+cd infra
+./recover_failed_migrations.sh
+
+# Marcar una migración como rolled-back
+./recover_failed_migrations.sh --rollback 20240101000000_example_migration
+
+# Marcar una migración como applied (si ya aplicaste cambios manualmente)
+./recover_failed_migrations.sh --apply 20240101000000_example_migration
 ```
 
 Luego vuelve a ejecutar:

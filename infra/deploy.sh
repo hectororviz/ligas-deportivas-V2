@@ -142,17 +142,29 @@ wait_for_db_health() {
 wait_for_db_health
 
 log "Ejecutando migraciones..."
+set +e
 if [ "$run_seed" = "true" ]; then
-  log "RUN_SEED habilitado: se ejecutará el seed." 
-  if ! RUN_SEED=true docker compose run --rm migrate; then
-    echo "El job de migraciones falló; abortando deploy." >&2
-    exit 1
-  fi
+  log "RUN_SEED habilitado: se ejecutará el seed."
+  RUN_SEED=true docker compose run --rm migrate
+  migrate_status=$?
 else
-  if ! docker compose run --rm migrate; then
-    echo "El job de migraciones falló; abortando deploy." >&2
-    exit 1
+  docker compose run --rm migrate
+  migrate_status=$?
+fi
+set -e
+
+if [ "$migrate_status" -ne 0 ]; then
+  if [ "$migrate_status" -eq 2 ]; then
+    echo "" >&2
+    echo "RECOVERY STEPS" >&2
+    echo "1) Resuelve las migraciones fallidas (copiar/pegar):" >&2
+    ./recover_failed_migrations.sh >&2 || true
+    echo "" >&2
+    echo "2) Re-run: ./deploy.sh" >&2
+    exit 2
   fi
+  echo "El job de migraciones falló; abortando deploy." >&2
+  exit 1
 fi
 
 log "Levantando backend y frontend..."
