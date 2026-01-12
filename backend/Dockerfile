@@ -35,10 +35,12 @@ COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/entrypoint-backend.sh ./entrypoint-backend.sh
 COPY --from=builder /app/entrypoint-migrate.sh ./entrypoint-migrate.sh
+COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/wait-for-migrations.sh ./wait-for-migrations.sh
 
 RUN npm prune --omit=dev
 
-RUN chmod +x /app/entrypoint-backend.sh /app/entrypoint-migrate.sh
+RUN chmod +x /app/entrypoint-backend.sh /app/entrypoint-migrate.sh /app/wait-for-migrations.sh
 
 ENTRYPOINT ["/app/entrypoint-backend.sh"]
 CMD ["node", "dist/main.js"]

@@ -157,11 +157,10 @@ Las variables de entorno del contenedor `backend` se basan en los mismos nombres
 
 En producción/staging las migraciones se ejecutan **antes** de levantar el backend, usando un servicio separado llamado `migrate`. Esto evita loops de reinicio ante errores y te permite controlar los despliegues de esquema.
 
-Flujo recomendado:
+Flujo recomendado (orden correcto):
 
 ```bash
 cd infra
-docker compose up -d db
 docker compose run --rm migrate
 docker compose up -d backend frontend proxy
 ```
