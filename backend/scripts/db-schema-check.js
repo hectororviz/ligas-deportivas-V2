@@ -48,14 +48,23 @@ function readMigrationNames() {
 
 async function checkSchema() {
   const errors = [];
-  const tableResult = await prisma.$queryRaw`SELECT to_regclass('public._prisma_migrations') as name;`;
-  const migrationsTable = Array.isArray(tableResult) ? tableResult[0]?.name : null;
-  if (!migrationsTable) {
+  const migrationsTableResult = await prisma.$queryRaw`
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name = '_prisma_migrations'
+    ) AS "exists";
+  `;
+  const migrationsTableExists = Array.isArray(migrationsTableResult)
+    ? migrationsTableResult[0]?.exists
+    : false;
+  if (!migrationsTableExists) {
     errors.push('La tabla _prisma_migrations no existe. Ejecuta el job de migraciones.');
   }
 
   let appliedMigrations = [];
-  if (migrationsTable) {
+  if (migrationsTableExists) {
     appliedMigrations = await prisma.$queryRaw`
       SELECT migration_name, finished_at, rolled_back_at
       FROM _prisma_migrations
@@ -96,12 +105,19 @@ async function checkSchema() {
   }
 
   const coreTables = [
-    { name: 'tournament', ref: 'public.tournament' },
-    { name: 'SiteIdentity', ref: 'public."SiteIdentity"' },
+    { name: 'tournament', schema: 'public', tableName: 'tournament' },
+    { name: 'SiteIdentity', schema: 'public', tableName: 'SiteIdentity' },
   ];
   for (const table of coreTables) {
-    const result = await prisma.$queryRaw`SELECT to_regclass(${table.ref}) as name;`;
-    const exists = Array.isArray(result) ? result[0]?.name : null;
+    const result = await prisma.$queryRaw`
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = ${table.schema}
+          AND table_name = ${table.tableName}
+      ) AS "exists";
+    `;
+    const exists = Array.isArray(result) ? result[0]?.exists : false;
     if (!exists) {
       errors.push(`La tabla ${table.name} no existe en la base.`);
     }
@@ -145,7 +161,8 @@ async function main() {
       for (const error of errors) {
         console.error(`- ${error}`);
       }
-      process.exitCode = 1;
+      process.exitCode = 2;
+      return;
     }
   } catch (error) {
     console.error('No se pudo validar el esquema de la base.', error);
