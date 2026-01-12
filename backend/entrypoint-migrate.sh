@@ -3,6 +3,9 @@ set -e
 
 node /app/scripts/db-schema-check.js --log-only
 
+echo "Verificando migraciones fallidas..."
+node /app/scripts/prisma-preflight.js
+
 echo "Running Prisma migrations..."
 npx prisma migrate deploy
 

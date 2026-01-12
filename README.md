@@ -157,26 +157,41 @@ Las variables de entorno del contenedor `backend` se basan en los mismos nombres
 
 En producción/staging las migraciones se ejecutan **antes** de levantar el backend, usando un servicio separado llamado `migrate`. Esto evita loops de reinicio ante errores y te permite controlar los despliegues de esquema.
 
+#### Despliegue recomendado (único camino soportado)
+
+El flujo obligatorio y automatizable es ejecutar `infra/deploy.sh`, que realiza en orden:
+
+1. `docker compose up -d db`
+2. `docker compose run --rm migrate`
+3. `docker compose up -d backend frontend`
+
+```bash
+cd infra
+./deploy.sh
+```
+
+Si necesitas poblar datos base en entornos no productivos, agrega `--seed` para ejecutar el seed dentro del job de migraciones:
+
+```bash
+cd infra
+./deploy.sh --seed
+```
+
 Flujo recomendado (orden correcto):
 
 ```bash
 cd infra
-docker compose run --rm migrate
-docker compose up -d backend frontend proxy
+./deploy.sh
 ```
 
 En CI/CD, ejecuta el job de migraciones como paso previo al despliegue del backend:
 
 ```bash
-docker compose run --rm migrate
-docker compose up -d backend
+cd infra
+./deploy.sh
 ```
 
-Si necesitas poblar datos base en entornos no productivos, habilita el seed con la variable `RUN_SEED=true`:
-
-```bash
-RUN_SEED=true docker compose run --rm migrate
-```
+En CI/CD, el stage/job `migrate` debe ser obligatorio y el despliegue del backend debe depender de que las migraciones finalicen con éxito. Si el job `migrate` falla, **no** se debe iniciar el backend.
 
 El contenedor `backend` **no** ejecuta migraciones automáticamente, por lo que `docker compose run --rm backend <comando>` ejecuta el comando solicitado sin interceptarlo.
 
