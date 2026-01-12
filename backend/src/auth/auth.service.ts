@@ -28,6 +28,7 @@ export interface AuthTokens {
 @Injectable()
 export class AuthService {
   private readonly refreshTtlSeconds: number;
+  private readonly disabledEmails: Set<string>;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -38,6 +39,8 @@ export class AuthService {
     private readonly mailService: MailService
   ) {
     this.refreshTtlSeconds = configService.get<number>('auth.refreshTtl') ?? 604800;
+    const disabled = configService.get<string[]>('auth.disabledEmails') ?? [];
+    this.disabledEmails = new Set(disabled.map((email) => email.toLowerCase()));
   }
 
   async register(dto: RegisterDto) {
@@ -99,6 +102,10 @@ export class AuthService {
 
     if (!user) {
       throw new UnauthorizedException('Credenciales inválidas');
+    }
+
+    if (this.isDisabledEmail(user.email)) {
+      throw new UnauthorizedException('Usuario deshabilitado.');
     }
 
     if (!(await argon2.verify(user.passwordHash, password))) {
@@ -291,6 +298,10 @@ export class AuthService {
       throw new UnauthorizedException();
     }
 
+    if (this.isDisabledEmail(user.email)) {
+      throw new UnauthorizedException();
+    }
+
     return this.mapToRequestUser(user);
   }
 
@@ -315,6 +326,14 @@ export class AuthService {
           }
         : null
     };
+  }
+
+  private isDisabledEmail(email?: string | null): boolean {
+    if (!email) {
+      return false;
+    }
+
+    return this.disabledEmails.has(email.toLowerCase());
   }
 
   private async createEmailVerificationToken(userId: number) {

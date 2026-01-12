@@ -85,6 +85,11 @@ const _navigationItems = <NavigationItem>[
     requiredPermission: _NavigationPermission(module: 'TABLAS'),
   ),
   NavigationItem(
+    label: 'Estadísticas',
+    icon: Icons.query_stats_outlined,
+    route: '/stats',
+  ),
+  NavigationItem(
     label: 'Configuración',
     icon: Icons.settings_outlined,
     route: '/settings',

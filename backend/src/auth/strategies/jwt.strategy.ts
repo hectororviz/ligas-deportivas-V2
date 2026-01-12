@@ -13,6 +13,8 @@ interface JwtPayload {
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
+  private readonly disabledEmails: Set<string>;
+
   constructor(
     configService: ConfigService,
     private readonly prisma: PrismaService,
@@ -23,6 +25,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       ignoreExpiration: false,
       secretOrKey: configService.get<string>('auth.accessSecret')
     });
+
+    const disabled = configService.get<string[]>('auth.disabledEmails') ?? [];
+    this.disabledEmails = new Set(disabled.map((email) => email.toLowerCase()));
   }
 
   async validate(payload: JwtPayload): Promise<RequestUser> {
@@ -53,6 +58,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
 
     if (!user) {
+      throw new UnauthorizedException();
+    }
+
+    if (this.disabledEmails.has(user.email.toLowerCase())) {
       throw new UnauthorizedException();
     }
 

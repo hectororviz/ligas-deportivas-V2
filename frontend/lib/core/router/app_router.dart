@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/auth/presentation/login_page.dart';
 import '../../features/auth/presentation/register_page.dart';
+import '../../features/auth/presentation/reset_password_page.dart';
+import '../../features/auth/presentation/verify_email_page.dart';
 import '../../features/fixtures/presentation/fixtures_page.dart';
 import '../../features/home/home_page.dart';
 import '../../features/leagues/presentation/leagues_page.dart';
@@ -20,6 +22,7 @@ import '../../features/settings/site_identity_page.dart';
 import '../../features/settings/settings_page.dart';
 import '../../features/settings/user_management_page.dart';
 import '../../features/shared/widgets/app_shell.dart';
+import '../../features/stats/presentation/stats_page.dart';
 import '../../features/standings/presentation/standings_page.dart';
 import '../../features/standings/presentation/zone_standings_page.dart';
 import '../../features/tournaments/presentation/tournaments_page.dart';
@@ -52,8 +55,11 @@ bool _isPublicRoute(String location) {
     '/club',
     '/fixtures',
     '/standings',
+    '/stats',
     '/login',
     '/register',
+    '/verify-email',
+    '/reset-password',
   };
 
   if (publicRoutes.any((route) => location == route || location.startsWith('$route/'))) {
@@ -85,6 +91,18 @@ GoRouter createRouter(Ref ref) {
     routes: [
       GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
       GoRoute(path: '/register', builder: (context, state) => const RegisterPage()),
+      GoRoute(
+        path: '/verify-email',
+        builder: (context, state) => VerifyEmailPage(
+          token: state.uri.queryParameters['token'],
+        ),
+      ),
+      GoRoute(
+        path: '/reset-password',
+        builder: (context, state) => ResetPasswordPage(
+          token: state.uri.queryParameters['token'],
+        ),
+      ),
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),
         routes: [
@@ -193,6 +211,7 @@ GoRouter createRouter(Ref ref) {
           ),
           GoRoute(path: '/fixtures', builder: (context, state) => const FixturesPage()),
           GoRoute(path: '/standings', builder: (context, state) => const StandingsPage()),
+          GoRoute(path: '/stats', builder: (context, state) => const StatsPage()),
           GoRoute(
             path: '/settings',
             builder: (context, state) => const SettingsPage(),

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { AssignRoleDto } from './dto/assign-role.dto';
@@ -21,7 +21,8 @@ export class UsersService {
     const pageSize = query.pageSize ?? 20;
     const skip = (page - 1) * pageSize;
     const search = query.search?.trim();
-    const where = search
+    const hiddenEmail = 'admin@ligas.local';
+    const searchFilter = search
       ? {
           OR: [
             { email: { contains: search, mode: 'insensitive' as const } },
@@ -30,6 +31,10 @@ export class UsersService {
           ],
         }
       : undefined;
+    const where = {
+      ...(searchFilter ? { AND: [searchFilter] } : {}),
+      NOT: { email: hiddenEmail },
+    };
 
     const [total, users] = await this.prisma.$transaction([
       this.prisma.user.count({ where }),
@@ -111,6 +116,64 @@ export class UsersService {
     });
 
     await this.mailService.sendPasswordReset(user.email, token, user.firstName);
+    return { success: true };
+  }
+
+  async deleteUser(userId: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        roles: {
+          include: {
+            role: true,
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    const isAdmin = user.roles.some((role) => role.role.key === RoleKey.ADMIN);
+    if (isAdmin) {
+      const adminCount = await this.prisma.userRole.count({
+        where: {
+          role: {
+            key: RoleKey.ADMIN,
+          },
+        },
+      });
+      if (adminCount <= 1) {
+        throw new BadRequestException('Debe quedar al menos un usuario con rol administrador.');
+      }
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.matchCategory.updateMany({
+        where: { closedById: userId },
+        data: { closedById: null },
+      }),
+      this.prisma.matchLog.updateMany({
+        where: { userId },
+        data: { userId: null },
+      }),
+      this.prisma.auditLog.updateMany({
+        where: { userId },
+        data: { userId: null },
+      }),
+      this.prisma.matchAttachment.deleteMany({
+        where: { uploadedById: userId },
+      }),
+      this.prisma.userRole.deleteMany({ where: { userId } }),
+      this.prisma.userToken.deleteMany({ where: { userId } }),
+      this.prisma.emailVerificationToken.deleteMany({ where: { userId } }),
+      this.prisma.passwordResetToken.deleteMany({ where: { userId } }),
+      this.prisma.passwordChangeRequest.deleteMany({ where: { userId } }),
+      this.prisma.emailChangeRequest.deleteMany({ where: { userId } }),
+      this.prisma.user.delete({ where: { id: userId } }),
+    ]);
+
     return { success: true };
   }
 }

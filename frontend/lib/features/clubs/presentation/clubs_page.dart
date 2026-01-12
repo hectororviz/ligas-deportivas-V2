@@ -241,61 +241,66 @@ class _ClubsPageState extends ConsumerState<ClubsPage> {
                 ),
                 const SizedBox(height: 24),
                 Card(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
-                    child: TableFiltersBar(
-                      children: [
-                        TableFilterField(
-                          label: 'Buscar',
-                          width: filterFieldWidth,
-                          child: TableFilterSearchField(
-                            controller: _searchController,
-                            placeholder: 'Buscar por nombre o liga',
-                            showClearButton: filters.query.isNotEmpty,
-                            onClear: () {
-                              _searchController.clear();
-                              ref.read(clubsFiltersProvider.notifier).setQuery('');
-                            },
-                          ),
-                        ),
-                        TableFilterField(
-                          label: 'Estado',
-                          width: statusFieldWidth,
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<ClubStatusFilter>(
-                              value: filters.status,
-                              isExpanded: true,
-                              items: ClubStatusFilter.values
-                                  .map(
-                                    (value) => DropdownMenuItem(
-                                      value: value,
-                                      child: Text(value.label),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: (value) {
-                                if (value != null) {
-                                  ref
-                                      .read(clubsFiltersProvider.notifier)
-                                      .setStatus(value);
-                                }
+                  child: ExpansionTile(
+                    title: const Text('Búsqueda'),
+                    childrenPadding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                    children: [
+                      TableFiltersBar(
+                        children: [
+                          TableFilterField(
+                            label: 'Buscar',
+                            width: filterFieldWidth,
+                            child: TableFilterSearchField(
+                              controller: _searchController,
+                              placeholder: 'Buscar por nombre o liga',
+                              showClearButton: filters.query.isNotEmpty,
+                              onClear: () {
+                                _searchController.clear();
+                                ref
+                                    .read(clubsFiltersProvider.notifier)
+                                    .setQuery('');
                               },
                             ),
                           ),
+                          TableFilterField(
+                            label: 'Estado',
+                            width: statusFieldWidth,
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<ClubStatusFilter>(
+                                value: filters.status,
+                                isExpanded: true,
+                                items: ClubStatusFilter.values
+                                    .map(
+                                      (value) => DropdownMenuItem(
+                                        value: value,
+                                        child: Text(value.label),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    ref
+                                        .read(clubsFiltersProvider.notifier)
+                                        .setStatus(value);
+                                  }
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
+                        trailing: TextButton.icon(
+                          onPressed: filters.query.isEmpty &&
+                                  filters.status == ClubStatusFilter.all
+                              ? null
+                              : () {
+                                  _searchController.clear();
+                                  ref.read(clubsFiltersProvider.notifier).reset();
+                                },
+                          icon: const Icon(Icons.filter_alt_off_outlined),
+                          label: const Text('Limpiar filtros'),
                         ),
-                      ],
-                      trailing: TextButton.icon(
-                        onPressed: filters.query.isEmpty &&
-                                filters.status == ClubStatusFilter.all
-                            ? null
-                            : () {
-                                _searchController.clear();
-                                ref.read(clubsFiltersProvider.notifier).reset();
-                              },
-                        icon: const Icon(Icons.filter_alt_off_outlined),
-                        label: const Text('Limpiar filtros'),
                       ),
-                    ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 16),

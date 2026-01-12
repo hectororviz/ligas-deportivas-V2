@@ -18,6 +18,20 @@ const normalizeOptionalString = (value?: string) => {
   return trimmed;
 };
 
+const resolveDisabledEmails = () => {
+  const raw = normalizeOptionalString(process.env.AUTH_DISABLED_EMAILS);
+  if (!raw) {
+    return [];
+  }
+
+  const emails = raw
+    .split(/[,\n;]/)
+    .map((email) => email.trim().toLowerCase())
+    .filter((email) => email.length > 0);
+
+  return Array.from(new Set(emails));
+};
+
 const normalizeString = (value?: string, fallback = '') => {
   if (value === undefined || value === null) {
     return fallback;
@@ -148,7 +162,8 @@ export default () => {
       accessSecret: process.env.JWT_ACCESS_SECRET ?? 'access-secret',
       refreshSecret: process.env.JWT_REFRESH_SECRET ?? 'refresh-secret',
       accessTtl: parseInt(process.env.JWT_ACCESS_TTL ?? '900', 10),
-      refreshTtl: parseInt(process.env.JWT_REFRESH_TTL ?? '604800', 10)
+      refreshTtl: parseInt(process.env.JWT_REFRESH_TTL ?? '604800', 10),
+      disabledEmails: resolveDisabledEmails()
     },
     captcha: {
       provider: resolveCaptchaProvider(),

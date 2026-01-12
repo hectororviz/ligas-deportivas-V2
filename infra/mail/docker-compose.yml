@@ -1,0 +1,18 @@
+services:
+  mailserver:
+    image: mailserver/docker-mailserver:latest
+    container_name: mailserver
+    hostname: mail
+    domainname: csdsoler.com.ar
+    env_file: ./mailserver.env
+    ports:
+      - "25:25"
+      - "587:587"
+      - "993:993"
+    volumes:
+      - ./docker-data/letsencrypt:/etc/letsencrypt
+      - ./docker-data/mail-data:/var/mail
+      - ./docker-data/mail-state:/var/mail-state
+      - ./docker-data/config:/tmp/docker-mailserver
+      - /etc/localtime:/etc/localtime:ro
+    restart: unless-stopped

@@ -5,7 +5,7 @@ import { SiteIdentity } from '@prisma/client';
 import { UpdateSiteIdentityDto } from './dto/update-site-identity.dto';
 import { promises as fs } from 'fs';
 import * as path from 'path';
-import { validateFlyerImage } from './flyer-template.utils';
+import { validateLoginImage } from './flyer-template.utils';
 import { createHash } from 'crypto';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const sharp = require('sharp');
@@ -68,7 +68,7 @@ export class SiteIdentityService {
     }
 
     if (flyerFile) {
-      validateFlyerImage(flyerFile);
+      validateLoginImage(flyerFile);
       if (existing.flyerKey && !dto.removeFlyer) {
         await this.storageService.deleteAttachment(existing.flyerKey);
       }

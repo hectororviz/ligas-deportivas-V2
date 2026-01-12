@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../services/auth_controller.dart';
+import '../../settings/site_identity_provider.dart';
 
 class RegisterPage extends ConsumerStatefulWidget {
   const RegisterPage({super.key});
@@ -68,6 +69,11 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
 
   @override
   Widget build(BuildContext context) {
+    final siteIdentityAsync = ref.watch(siteIdentityProvider);
+    final siteIdentity = siteIdentityAsync.valueOrNull;
+    final title = siteIdentity?.title ?? 'Ligas Deportivas';
+    final iconUrl = siteIdentity?.iconUrl;
+
     return Scaffold(
       body: Center(
         child: ConstrainedBox(
@@ -82,14 +88,22 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const FlutterLogo(size: 64),
+                    Center(
+                      child: iconUrl != null
+                          ? Image.network(iconUrl)
+                          : const FlutterLogo(size: 64),
+                    ),
                     const SizedBox(height: 16),
-                    Text('Crear cuenta',
+                    Text(title,
                         textAlign: TextAlign.center,
                         style: Theme.of(context)
                             .textTheme
                             .headlineSmall
                             ?.copyWith(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    Text('Crear cuenta',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyMedium),
                     const SizedBox(height: 24),
                     Row(
                       children: [

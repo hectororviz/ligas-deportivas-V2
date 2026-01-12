@@ -19,6 +19,7 @@
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="A new Flutter project.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -31,8 +32,120 @@
 
   <title>ligas_app</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      font-family: "Helvetica Neue", Arial, sans-serif;
+      background: #ffffff;
+      color: #1f1f1f;
+    }
+
+    #initial-loader {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #ffffff;
+      z-index: 9999;
+    }
+
+    .loader-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      text-align: center;
+      padding: 24px;
+    }
+
+    .lottie-container {
+      width: clamp(110px, 28vw, 180px);
+      height: clamp(110px, 28vw, 180px);
+    }
+
+    #loader-error {
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      font-size: clamp(14px, 2.6vw, 18px);
+      color: #6b2c2c;
+    }
+
+    #loader-error button {
+      border: none;
+      background: #1f1f1f;
+      color: #ffffff;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    #loader-error button:hover {
+      background: #000000;
+    }
+  </style>
 </head>
 <body>
+  <div id="initial-loader" aria-label="Cargando aplicación">
+    <div class="loader-content">
+      <div id="lottie-loader" class="lottie-container" aria-label="Cargando"></div>
+      <div id="loader-error">
+        <div>Esto está tardando más de lo normal.</div>
+        <div>Revisá tu conexión.</div>
+        <button type="button" id="loader-retry">Reintentar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+  <script>
+    (function () {
+      const loader = document.getElementById('initial-loader');
+      const errorBlock = document.getElementById('loader-error');
+      const retryButton = document.getElementById('loader-retry');
+      const lottieContainer = document.getElementById('lottie-loader');
+      let anim;
+
+      if (window.lottie && lottieContainer) {
+        anim = window.lottie.loadAnimation({
+          container: lottieContainer,
+          renderer: 'svg',
+          loop: true,
+          autoplay: true,
+          path: 'assets/brand/ball-loading.json'
+        });
+      }
+
+      const timeoutId = window.setTimeout(() => {
+        if (errorBlock) {
+          errorBlock.style.display = 'flex';
+        }
+      }, 60000);
+
+      const hideLoader = () => {
+        if (loader) {
+          loader.style.display = 'none';
+        }
+        if (anim) {
+          anim.destroy();
+        }
+        window.clearTimeout(timeoutId);
+      };
+
+      window.addEventListener('flutter-first-frame', hideLoader, { once: true });
+
+      if (retryButton) {
+        retryButton.addEventListener('click', () => window.location.reload());
+      }
+    })();
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

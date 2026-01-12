@@ -99,21 +99,23 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           ),
                         ),
                       ),
-                    Container(
-                      height: 64,
-                      width: 64,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        color: Theme.of(context)
-                            .colorScheme
-                            .surfaceContainerHighest,
+                    if (loginImageUrl == null) ...[
+                      Container(
+                        height: 64,
+                        width: 64,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest,
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: iconUrl != null
+                            ? Image.network(iconUrl, fit: BoxFit.cover)
+                            : const FlutterLogo(size: 64),
                       ),
-                      clipBehavior: Clip.antiAlias,
-                      child: iconUrl != null
-                          ? Image.network(iconUrl, fit: BoxFit.cover)
-                          : const FlutterLogo(size: 64),
-                    ),
-                    const SizedBox(height: 16),
+                      const SizedBox(height: 16),
+                    ],
                     Text(title,
                         textAlign: TextAlign.center,
                         style: Theme.of(context)
