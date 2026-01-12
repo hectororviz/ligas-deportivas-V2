@@ -131,6 +131,8 @@ model Tournament {
   flyerTemplate         FlyerTemplate?
   posterTemplate        TournamentPosterTemplate?
   playerTournamentClubs PlayerTournamentClub[]
+
+  @@map("tournament")
 }
 
 model Zone {

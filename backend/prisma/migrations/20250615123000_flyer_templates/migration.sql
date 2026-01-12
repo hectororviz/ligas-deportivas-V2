@@ -13,4 +13,4 @@ CREATE TABLE "FlyerTemplate" (
 CREATE UNIQUE INDEX "FlyerTemplate_competitionId_key" ON "FlyerTemplate"("competitionId");
 
 -- AddForeignKey
-ALTER TABLE "FlyerTemplate" ADD CONSTRAINT "FlyerTemplate_competitionId_fkey" FOREIGN KEY ("competitionId") REFERENCES "Tournament"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "FlyerTemplate" ADD CONSTRAINT "FlyerTemplate_competitionId_fkey" FOREIGN KEY ("competitionId") REFERENCES "tournament"("id") ON DELETE CASCADE ON UPDATE CASCADE;
