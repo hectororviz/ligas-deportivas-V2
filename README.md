@@ -219,6 +219,24 @@ cd infra
 ./deploy.sh
 ```
 
+#### Recover failed migrations
+
+Si el deploy falla con migraciones fallidas en `_prisma_migrations` (por ejemplo cuando una migración fue corregida en el repo pero quedó marcada como failed en una DB existente), primero resuelve el estado y luego vuelve a correr el deploy.
+
+Para cada migración fallida, ejecuta el comando de resolución (elige `--rolled-back` o `--applied` según corresponda):
+
+```bash
+docker compose run --rm --entrypoint sh migrate -lc 'npx prisma migrate resolve --rolled-back <migration_name>'
+docker compose run --rm --entrypoint sh migrate -lc 'npx prisma migrate resolve --applied <migration_name>'
+```
+
+Luego vuelve a ejecutar:
+
+```bash
+cd infra
+./deploy.sh
+```
+
 En CI/CD, el stage/job `migrate` debe ser obligatorio y el despliegue del backend debe depender de que las migraciones finalicen con éxito. Si el job `migrate` falla, **no** se debe iniciar el backend.
 
 El contenedor `backend` **no** ejecuta migraciones automáticamente, por lo que `docker compose run --rm backend <comando>` ejecuta el comando solicitado sin interceptarlo.
