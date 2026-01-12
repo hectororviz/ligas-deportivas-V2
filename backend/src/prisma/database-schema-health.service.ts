@@ -95,10 +95,10 @@ export class DatabaseSchemaHealthService implements OnModuleInit {
   private async checkSchema(): Promise<string[]> {
     const errors: string[] = [];
 
-    const migrationsTable = await this.prisma.$queryRaw<{ name: string | null }[]>`
-      SELECT to_regclass('public._prisma_migrations') as name;
+    const migrationsTable = await this.prisma.$queryRaw<{ exists: boolean }[]>`
+      SELECT (to_regclass('public._prisma_migrations') IS NOT NULL) AS exists;
     `;
-    if (!migrationsTable[0]?.name) {
+    if (!migrationsTable[0]?.exists) {
       errors.push('La tabla _prisma_migrations no existe.');
       return errors;
     }
@@ -142,23 +142,24 @@ export class DatabaseSchemaHealthService implements OnModuleInit {
       { name: 'SiteIdentity', ref: 'public."SiteIdentity"' },
     ];
     for (const table of coreTables) {
-      const tableResult = await this.prisma.$queryRaw<{ name: string | null }[]>`
-        SELECT to_regclass(${table.ref}) as name;
+      const tableResult = await this.prisma.$queryRaw<{ exists: boolean }[]>`
+        SELECT (to_regclass(${table.ref}) IS NOT NULL) AS exists;
       `;
-      if (!tableResult[0]?.name) {
+      if (!tableResult[0]?.exists) {
         errors.push(`La tabla ${table.name} no existe.`);
       }
     }
 
-    const columnResult = await this.prisma.$queryRaw<{ exists: number }[]>`
-      SELECT 1 as exists
-      FROM information_schema.columns
-      WHERE table_schema = 'public'
-        AND table_name = 'SiteIdentity'
-        AND column_name = 'faviconHash'
-      LIMIT 1
+    const columnResult = await this.prisma.$queryRaw<{ exists: boolean }[]>`
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'SiteIdentity'
+          AND column_name = 'faviconHash'
+      ) AS exists
     `;
-    if (columnResult.length === 0) {
+    if (!columnResult[0]?.exists) {
       errors.push('La columna SiteIdentity.faviconHash no existe.');
     }
 
