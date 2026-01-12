@@ -59,6 +59,19 @@ docs/      → Documentación técnica y funcional
    ```
    Todos los endpoints quedan disponibles bajo `http://localhost:3000/api/v1` y comparten tuberías globales de validación y CORS configurados para el frontend. ([backend/src/main.ts](backend/src/main.ts))
 
+### Migraciones Prisma (dev vs prod)
+
+- **Local/desarrollo:** usa `npx prisma migrate dev` para aplicar cambios y mantener el historial de migraciones en tu entorno.
+- **Producción/staging:** usa `npx prisma migrate deploy` (sin generar nuevas migraciones).
+- **Bases antiguas/inconsistentes:** las migraciones ahora crean y alteran la tabla `"SiteIdentity"` de forma defensiva. Si necesitas simular un estado viejo, puedes eliminarla y volver a correr el deploy:
+  ```bash
+  psql "$DATABASE_URL" -c 'DROP TABLE IF EXISTS "SiteIdentity";'
+  npx prisma migrate deploy
+  ```
+- **Bootstrap desde cero:** en producción/staging, el flujo recomendado es crear la base vacía y ejecutar `npx prisma migrate deploy`. En local, `npx prisma migrate dev` es el camino recomendado para recrear y evolucionar el esquema.
+
+> Nota sobre naming: la tabla se llama `"SiteIdentity"` (PascalCase con comillas). Si ejecutas SQL manual, respeta el nombre con comillas para evitar conflictos con `siteidentity` o `site_identity`.
+
 ### Correo SMTP sin Docker
 
 Si ejecutas el backend directamente desde Visual Studio Code o desde la raíz del repositorio (por ejemplo con `npm run start:dev --prefix backend`), NestJS ahora carga automáticamente el archivo `backend/.env` además de cualquier `.env` ubicado en la raíz. Aun así, necesitas reemplazar los valores de Mailhog por las credenciales reales del proveedor SMTP que vayas a usar.
@@ -134,6 +147,8 @@ La base de datos y los archivos subidos se persisten en volúmenes (`postgres-da
 La base de datos y los archivos subidos se persisten en volúmenes (`postgres-data`, `backend-storage`) definidos en el Compose.
 
 Las variables de entorno del contenedor `backend` se basan en los mismos nombres definidos en `backend/.env`, por lo que puedes adaptarlas para entornos de staging o producción. ([infra/docker-compose.yml](infra/docker-compose.yml))
+
+El contenedor del backend ejecuta `prisma migrate deploy` al iniciar. Si deseas manejar migraciones en un job separado, define `SKIP_MIGRATIONS=1` y ejecuta el comando manualmente (por ejemplo, `docker compose run --rm backend npx prisma migrate deploy`). Si una migración falla, el entrypoint deja el contenedor en modo espera para evitar reinicios en loop; puedes forzar salida inmediata con `MIGRATION_FAILURE_ACTION=exit`.
 
 ## Datos de ejemplo
 

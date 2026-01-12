@@ -1,1 +1,2 @@
-ALTER TABLE "SiteIdentity" ADD COLUMN "faviconKey" TEXT;
+ALTER TABLE IF EXISTS "SiteIdentity"
+  ADD COLUMN IF NOT EXISTS "faviconKey" TEXT;
