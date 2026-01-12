@@ -1,10 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Action, Module, Prisma, Scope } from '@prisma/client';
+import { Action, Gender, Module, Prisma, Scope } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { RequestUser } from '../../common/interfaces/request-user.interface';
 import { CreatePlayerDto } from '../dto/create-player.dto';
 import { ListPlayersDto } from '../dto/list-players.dto';
+import { SearchPlayersDto } from '../dto/search-players.dto';
 import { UpdatePlayerDto } from '../dto/update-player.dto';
 
 type PlayerWithMemberships = Prisma.PlayerGetPayload<{
@@ -217,6 +218,74 @@ export class PlayersService {
       page,
       pageSize,
     };
+  }
+
+  async searchByDniAndCategory(query: SearchPlayersDto) {
+    const trimmedDni = query.dni.trim();
+    const [category, tournamentCategory] = await Promise.all([
+      this.prisma.category.findUnique({
+        where: { id: query.categoryId },
+      }),
+      this.prisma.tournamentCategory.findFirst({
+        where: {
+          tournamentId: query.tournamentId,
+          categoryId: query.categoryId,
+          enabled: true,
+        },
+        select: { id: true },
+      }),
+    ]);
+
+    if (!category || !category.active) {
+      throw new BadRequestException('Categoría inválida o inactiva.');
+    }
+    if (!tournamentCategory) {
+      throw new BadRequestException('La categoría no está habilitada en el torneo.');
+    }
+
+    const startDate = new Date(Date.UTC(category.birthYearMin, 0, 1));
+    const endDate = new Date(Date.UTC(category.birthYearMax, 11, 31, 23, 59, 59, 999));
+
+    const where: Prisma.PlayerWhereInput = {
+      dni: trimmedDni,
+      active: true,
+      birthDate: {
+        gte: startDate,
+        lte: endDate,
+      },
+    };
+
+    if (category.gender !== Gender.MIXTO) {
+      where.gender = category.gender;
+    }
+
+    const players = await this.prisma.player.findMany({
+      where,
+      include: {
+        playerTournamentClubs: {
+          where: { tournamentId: query.tournamentId },
+          select: {
+            clubId: true,
+            club: { select: { id: true, name: true } },
+            tournamentId: true,
+          },
+        },
+      },
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+    });
+
+    return players.map((player) => {
+      const assignment = player.playerTournamentClubs[0];
+      return {
+        id: player.id,
+        firstName: player.firstName,
+        lastName: player.lastName,
+        dni: player.dni,
+        birthDate: player.birthDate.toISOString(),
+        assignedClubId: assignment?.clubId ?? null,
+        assignedClubName: assignment?.club?.name ?? null,
+      };
+    });
   }
 
   private getRestrictedClubIds(user?: RequestUser): number[] | null {

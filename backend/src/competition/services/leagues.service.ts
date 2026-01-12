@@ -19,8 +19,28 @@ export class LeaguesService {
     });
   }
 
-  findAll() {
+  findAll(status?: string) {
+    const now = new Date();
+    const where =
+      status === 'active'
+        ? {
+            tournaments: {
+              some: {
+                AND: [
+                  {
+                    OR: [{ startDate: null }, { startDate: { lte: now } }],
+                  },
+                  {
+                    OR: [{ endDate: null }, { endDate: { gte: now } }],
+                  },
+                ],
+              },
+            },
+          }
+        : undefined;
+
     return this.prisma.league.findMany({
+      where,
       orderBy: { name: 'asc' },
     });
   }
