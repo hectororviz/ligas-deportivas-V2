@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  Query,
+  UseGuards
+} from '@nestjs/common';
 import { LeaguesService } from '../services/leagues.service';
 import { CreateLeagueDto } from '../dto/create-league.dto';
 import { UpdateLeagueDto } from '../dto/update-league.dto';
@@ -12,8 +22,8 @@ export class LeaguesController {
   constructor(private readonly leaguesService: LeaguesService) {}
 
   @Get()
-  findAll() {
-    return this.leaguesService.findAll();
+  findAll(@Query('status') status?: string) {
+    return this.leaguesService.findAll(status);
   }
 
   @Get(':id')

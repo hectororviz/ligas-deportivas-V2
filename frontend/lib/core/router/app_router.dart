@@ -26,6 +26,7 @@ import '../../features/stats/presentation/stats_page.dart';
 import '../../features/standings/presentation/standings_page.dart';
 import '../../features/standings/presentation/zone_standings_page.dart';
 import '../../features/tournaments/presentation/tournaments_page.dart';
+import '../../features/tournaments/presentation/tournament_players_page.dart';
 import '../../features/tournaments/presentation/poster_template_page.dart';
 import '../../features/zones/presentation/zones_page.dart';
 import '../../features/zones/domain/zone_match_models.dart';
@@ -122,6 +123,23 @@ GoRouter createRouter(Ref ref) {
             path: '/tournaments',
             builder: (context, state) => const TournamentsPage(),
             routes: [
+              GoRoute(
+                path: ':tournamentId/players',
+                builder: (context, state) {
+                  final id = int.tryParse(state.pathParameters['tournamentId'] ?? '');
+                  final tournament =
+                      state.extra is TournamentSummary ? state.extra as TournamentSummary : null;
+                  if (id == null) {
+                    return const Scaffold(
+                      body: Center(child: Text('Torneo inválido para jugadores.')),
+                    );
+                  }
+                  return TournamentPlayersPage(
+                    initialTournamentId: id,
+                    initialTournament: tournament,
+                  );
+                },
+              ),
               GoRoute(
                 path: ':tournamentId/poster-template',
                 builder: (context, state) {

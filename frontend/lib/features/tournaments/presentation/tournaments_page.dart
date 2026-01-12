@@ -772,6 +772,14 @@ class _TournamentsDataTable extends StatelessWidget {
                       icon: const Icon(Icons.visibility_outlined),
                       label: const Text('Detalles'),
                     ),
+                    OutlinedButton.icon(
+                      onPressed: () => context.go(
+                        '/tournaments/${tournaments[index].id}/players',
+                        extra: tournaments[index],
+                      ),
+                      icon: const Icon(Icons.people_alt_outlined),
+                      label: const Text('Jugadores'),
+                    ),
                     FilledButton.tonalIcon(
                       onPressed:
                           canEdit(tournaments[index]) ? () => onEdit(tournaments[index]) : null,
