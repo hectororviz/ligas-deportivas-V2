@@ -1,3 +1,3 @@
 ALTER TABLE "SiteIdentity"
-  DROP COLUMN "faviconKey",
-  ADD COLUMN "faviconHash" TEXT;
+  DROP COLUMN IF EXISTS "faviconKey",
+  ADD COLUMN IF NOT EXISTS "faviconHash" TEXT;
