@@ -167,35 +167,50 @@ if [ "$migrate_status" -ne 0 ]; then
   exit 1
 fi
 
-log "Levantando backend y frontend..."
-docker compose up -d backend frontend
+log "Levantando stack completo..."
+docker compose up -d --build --remove-orphans
 
 log "Estado final de servicios:"
 docker compose ps
 
 report_unhealthy() {
-  local container_id
-  container_id=$(docker compose ps -q db)
-  if [ -n "$container_id" ]; then
-    local status
-    status=$(docker inspect -f '{{.State.Health.Status}}' "$container_id" 2>/dev/null || true)
-    if [ "$status" != "healthy" ]; then
-      echo "La DB no está healthy (estado: ${status:-desconocido})." >&2
-      docker compose logs --tail=50 db || true
-    fi
+  local services
+  services=$(docker compose config --services 2>/dev/null || true)
+  if [ -z "$services" ]; then
+    echo "No se pudieron obtener los servicios desde docker compose." >&2
+    return
   fi
 
-  for service in backend frontend; do
+  while IFS= read -r service; do
+    [ -z "$service" ] && continue
+    local container_id
     container_id=$(docker compose ps -q "$service")
-    if [ -n "$container_id" ]; then
-      local runtime_status
-      runtime_status=$(docker inspect -f '{{.State.Status}}' "$container_id" 2>/dev/null || true)
-      if [ "$runtime_status" != "running" ]; then
-        echo "Servicio $service no está corriendo (estado: ${runtime_status:-desconocido})." >&2
-        docker compose logs --tail=50 "$service" || true
-      fi
+    if [ -z "$container_id" ]; then
+      echo "Servicio $service no tiene contenedor en ejecución." >&2
+      docker compose logs --tail=50 "$service" || true
+      continue
     fi
-  done
+
+    local runtime_status
+    local health_status
+    local unhealthy=false
+    runtime_status=$(docker inspect -f '{{.State.Status}}' "$container_id" 2>/dev/null || true)
+    health_status=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' "$container_id" 2>/dev/null || true)
+
+    if [ "$runtime_status" != "running" ]; then
+      echo "Servicio $service no está corriendo (estado: ${runtime_status:-desconocido})." >&2
+      unhealthy=true
+    fi
+
+    if [ -n "$health_status" ] && [ "$health_status" != "healthy" ]; then
+      echo "Servicio $service no está healthy (estado: $health_status)." >&2
+      unhealthy=true
+    fi
+
+    if [ "$unhealthy" = "true" ]; then
+      docker compose logs --tail=50 "$service" || true
+    fi
+  done <<< "$services"
 }
 
 report_unhealthy
