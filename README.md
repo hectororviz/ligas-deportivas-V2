@@ -75,7 +75,9 @@ docs/      → Documentación técnica y funcional
   ```
 - **Bootstrap desde cero:** en producción/staging, el flujo recomendado es crear la base vacía y ejecutar `npx prisma migrate deploy`. En local, `npx prisma migrate dev` es el camino recomendado para recrear y evolucionar el esquema.
 
-> Nota sobre naming: la tabla de torneos usa `tournament` (minúsculas) por compatibilidad legacy, mientras que `"SiteIdentity"` mantiene PascalCase con comillas. Si ejecutas SQL manual, respeta los nombres para evitar conflictos con variaciones en minúsculas.
+> Nota sobre naming: para tablas nuevas usa snake_case en minúsculas sin comillas. La tabla de torneos usa `tournament` (minúsculas) por compatibilidad legacy, mientras que `"SiteIdentity"` mantiene PascalCase con comillas por compatibilidad histórica. Si ejecutas SQL manual, respeta los nombres exactos para evitar conflictos con variaciones en minúsculas.
+
+> Migración baseline: `backend/prisma/migrations/20250101000000_baseline_init` crea el esquema core (incluye `tournament`, `"SiteIdentity"` y el resto de las tablas base). `prisma migrate deploy` sobre una DB vacía debe aplicarla antes de las migraciones incrementales.
 
 ### Correo SMTP sin Docker
 
@@ -138,6 +140,7 @@ JWT_ACCESS_SECRET=8c50d5110a7a4f1c8f3b1c86b5e8a4f3
 JWT_REFRESH_SECRET=2e94f8c2d7c44109b7f3f71c49c5d9ad
 APP_URL=http://ligas.local
 FRONTEND_URL=http://ligas.local
+# DB_SCHEMA_ENFORCEMENT=strict
 # SMTP_HOST=mailhog
 # SMTP_PORT=1025
 # SMTP_USER=
@@ -153,6 +156,8 @@ La base de datos y los archivos subidos se persisten en volúmenes (`postgres-da
 
 Las variables de entorno del contenedor `backend` se basan en los mismos nombres definidos en `backend/.env`, por lo que puedes adaptarlas para entornos de staging o producción. ([infra/docker-compose.yml](infra/docker-compose.yml))
 
+Para controlar el enforcement del esquema, define `DB_SCHEMA_ENFORCEMENT=strict|soft` (por defecto `strict`). En `strict`, el backend aborta el arranque si la DB no está migrada; en `soft`, la API inicia pero responde 503 en `/api/v1/health/db` y en endpoints dependientes de la DB hasta que se ejecuten las migraciones.
+
 ### Migraciones Prisma en despliegues
 
 En producción/staging las migraciones se ejecutan **antes** de levantar el backend, usando un servicio separado llamado `migrate`. Esto evita loops de reinicio ante errores y te permite controlar los despliegues de esquema.
@@ -161,9 +166,12 @@ En producción/staging las migraciones se ejecutan **antes** de levantar el back
 
 El flujo obligatorio y automatizable es ejecutar `infra/deploy.sh`, que realiza en orden:
 
-1. `docker compose up -d db`
-2. `docker compose run --rm migrate`
-3. `docker compose up -d backend frontend`
+1. `docker compose down` (sin `-v` por defecto, con opción para resetear DB).
+2. `git fetch --all` + `git pull` (opcionalmente checkout de una rama).
+3. `docker compose up -d db` y espera el healthcheck.
+4. `docker compose run --rm migrate` (si falla, el deploy se aborta).
+5. `docker compose up -d backend frontend`.
+6. `docker compose ps` y logs resumidos si algo queda unhealthy.
 
 ```bash
 cd infra
@@ -175,6 +183,26 @@ Si necesitas poblar datos base en entornos no productivos, agrega `--seed` para 
 ```bash
 cd infra
 ./deploy.sh --seed
+```
+
+También puedes ejecutar el seed con `RUN_SEED=1`:
+
+```bash
+cd infra
+RUN_SEED=1 ./deploy.sh
+```
+
+Ejemplos adicionales:
+
+```bash
+# Resetear DB (Peligroso: elimina volúmenes)
+./deploy.sh --reset-db
+
+# Evitar down previo (debug)
+./deploy.sh --no-down
+
+# Deploy de una rama específica
+./deploy.sh --branch feature/nueva
 ```
 
 Flujo recomendado (orden correcto):
@@ -194,6 +222,17 @@ cd infra
 En CI/CD, el stage/job `migrate` debe ser obligatorio y el despliegue del backend debe depender de que las migraciones finalicen con éxito. Si el job `migrate` falla, **no** se debe iniciar el backend.
 
 El contenedor `backend` **no** ejecuta migraciones automáticamente, por lo que `docker compose run --rm backend <comando>` ejecuta el comando solicitado sin interceptarlo.
+
+#### Validación automatizable de migraciones
+
+Para validar que `prisma migrate deploy` funciona en una DB limpia, puedes ejecutar:
+
+```bash
+cd infra
+./validate-migrations.sh
+```
+
+El script recrea el volumen de PostgreSQL, levanta la DB, corre `migrate` y limpia los recursos. Úsalo en CI/CD o en local antes de despliegues críticos.
 
 ## Datos de ejemplo
 

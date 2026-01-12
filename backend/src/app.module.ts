@@ -16,6 +16,7 @@ import { CaptchaModule } from './captcha/captcha.module';
 import { MeModule } from './me/me.module';
 import { SiteIdentityModule } from './site-identity/site-identity.module';
 import { DatabaseReadyGuard } from './prisma/database-ready.guard';
+import { HealthModule } from './health/health.module';
 
 const envFileCandidates = [
   '.env.local',
@@ -50,6 +51,7 @@ const envFilePath = envFileCandidates
     CompetitionModule,
     MeModule,
     SiteIdentityModule,
+    HealthModule,
   ],
   providers: [
     {
