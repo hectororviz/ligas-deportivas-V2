@@ -25,5 +25,6 @@ export const validationSchema = Joi.object({
   STORAGE_BASE_URL: Joi.string().allow(''),
   STORAGE_BUCKET: Joi.string().allow(''),
   STORAGE_ACCESS_KEY: Joi.string().allow(''),
-  STORAGE_SECRET_KEY: Joi.string().allow('')
+  STORAGE_SECRET_KEY: Joi.string().allow(''),
+  ALLOW_UNMIGRATED_DB: Joi.boolean().optional()
 });

@@ -1,5 +1,6 @@
 import { existsSync } from 'fs';
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { resolve } from 'path';
 import configuration from './config/configuration';
@@ -14,6 +15,7 @@ import { MailModule } from './mail/mail.module';
 import { CaptchaModule } from './captcha/captcha.module';
 import { MeModule } from './me/me.module';
 import { SiteIdentityModule } from './site-identity/site-identity.module';
+import { DatabaseReadyGuard } from './prisma/database-ready.guard';
 
 const envFileCandidates = [
   '.env.local',
@@ -48,6 +50,12 @@ const envFilePath = envFileCandidates
     CompetitionModule,
     MeModule,
     SiteIdentityModule,
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: DatabaseReadyGuard,
+    },
   ],
 })
 export class AppModule {}

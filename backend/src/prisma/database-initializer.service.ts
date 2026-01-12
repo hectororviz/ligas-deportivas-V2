@@ -1,17 +1,21 @@
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { seedBaseData } from './base-seed';
 import { PrismaService } from './prisma.service';
+import { DatabaseSchemaHealthService } from './database-schema-health.service';
 
 @Injectable()
 export class DatabaseInitializerService implements OnApplicationBootstrap {
   private readonly logger = new Logger(DatabaseInitializerService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly schemaHealth: DatabaseSchemaHealthService,
+  ) {}
 
   async onApplicationBootstrap(): Promise<void> {
-    if (process.env.MIGRATIONS_APPLIED !== 'true') {
+    if (!this.schemaHealth.isReady()) {
       this.logger.warn(
-        'Seed inicial omitido: las migraciones no se han ejecutado antes del arranque.',
+        'Seed inicial omitido: el esquema de la base no está listo antes del arranque.',
       );
       return;
     }
