@@ -153,7 +153,33 @@ La base de datos y los archivos subidos se persisten en volúmenes (`postgres-da
 
 Las variables de entorno del contenedor `backend` se basan en los mismos nombres definidos en `backend/.env`, por lo que puedes adaptarlas para entornos de staging o producción. ([infra/docker-compose.yml](infra/docker-compose.yml))
 
-El contenedor del backend ejecuta `prisma migrate deploy` al iniciar. Si deseas manejar migraciones en un job separado, define `SKIP_MIGRATIONS=1` y ejecuta el comando manualmente (por ejemplo, `docker compose run --rm backend npx prisma migrate deploy`). Si una migración falla, el entrypoint deja el contenedor en modo espera para evitar reinicios en loop; puedes forzar salida inmediata con `MIGRATION_FAILURE_ACTION=exit`.
+### Migraciones Prisma en despliegues
+
+En producción/staging las migraciones se ejecutan **antes** de levantar el backend, usando un servicio separado llamado `migrate`. Esto evita loops de reinicio ante errores y te permite controlar los despliegues de esquema.
+
+Flujo recomendado:
+
+```bash
+cd infra
+docker compose up -d db
+docker compose run --rm migrate
+docker compose up -d backend frontend proxy
+```
+
+En CI/CD, ejecuta el job de migraciones como paso previo al despliegue del backend:
+
+```bash
+docker compose run --rm migrate
+docker compose up -d backend
+```
+
+Si necesitas poblar datos base en entornos no productivos, habilita el seed con la variable `RUN_SEED=true`:
+
+```bash
+RUN_SEED=true docker compose run --rm migrate
+```
+
+El contenedor `backend` **no** ejecuta migraciones automáticamente, por lo que `docker compose run --rm backend <comando>` ejecuta el comando solicitado sin interceptarlo.
 
 ## Datos de ejemplo
 
