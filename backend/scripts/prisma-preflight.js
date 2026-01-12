@@ -35,9 +35,19 @@ async function main() {
       console.error(`- ${names}`);
       console.error('');
       console.error('Resuelve el estado con los siguientes comandos:');
+      console.error(
+        'Usa --rolled-back si la migración falló y NO aplicaste cambios manualmente en la DB.',
+      );
+      console.error(
+        'Usa --applied solo si ya aplicaste manualmente los cambios de esa migración.',
+      );
+      console.error('');
       failedMigrations.forEach((row) => {
         console.error(
           `docker compose run --rm --entrypoint sh migrate -lc 'npx prisma migrate resolve --rolled-back ${row.migration_name}'`,
+        );
+        console.error(
+          `docker compose run --rm --entrypoint sh migrate -lc 'npx prisma migrate resolve --applied ${row.migration_name}'`,
         );
       });
       console.error('');
