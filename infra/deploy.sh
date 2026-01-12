@@ -144,9 +144,15 @@ wait_for_db_health
 log "Ejecutando migraciones..."
 if [ "$run_seed" = "true" ]; then
   log "RUN_SEED habilitado: se ejecutará el seed." 
-  RUN_SEED=true docker compose run --rm migrate
+  if ! RUN_SEED=true docker compose run --rm migrate; then
+    echo "El job de migraciones falló; abortando deploy." >&2
+    exit 1
+  fi
 else
-  docker compose run --rm migrate
+  if ! docker compose run --rm migrate; then
+    echo "El job de migraciones falló; abortando deploy." >&2
+    exit 1
+  fi
 fi
 
 log "Levantando backend y frontend..."
