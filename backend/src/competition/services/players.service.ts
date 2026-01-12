@@ -221,7 +221,7 @@ export class PlayersService {
   }
 
   async searchByDniAndCategory(query: SearchPlayersDto) {
-    const trimmedDni = query.dni.trim();
+    const trimmedDni = query.dni?.trim();
     const [category, tournamentCategory] = await Promise.all([
       this.prisma.category.findUnique({
         where: { id: query.categoryId },
@@ -247,13 +247,16 @@ export class PlayersService {
     const endDate = new Date(Date.UTC(category.birthYearMax, 11, 31, 23, 59, 59, 999));
 
     const where: Prisma.PlayerWhereInput = {
-      dni: trimmedDni,
       active: true,
       birthDate: {
         gte: startDate,
         lte: endDate,
       },
     };
+
+    if (trimmedDni) {
+      where.dni = trimmedDni;
+    }
 
     if (category.gender !== Gender.MIXTO) {
       where.gender = category.gender;
