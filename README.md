@@ -63,6 +63,11 @@ docs/      → Documentación técnica y funcional
 
 - **Local/desarrollo:** usa `npx prisma migrate dev` para aplicar cambios y mantener el historial de migraciones en tu entorno.
 - **Producción/staging:** usa `npx prisma migrate deploy` (sin generar nuevas migraciones).
+- **Validación legacy/limpia:** confirma que la tabla real de torneos es `tournament` (minúsculas sin comillas) antes de aplicar migraciones recientes:
+  ```bash
+  psql "$DATABASE_URL" -c "SELECT to_regclass('public.tournament') AS tournament_table;"
+  ```
+  En bases legacy debería devolver `tournament`; en bases limpias asegúrate de tener el esquema base aplicado antes de correr migraciones nuevas (por ejemplo, generando una migración inicial o restaurando un dump).
 - **Bases antiguas/inconsistentes:** las migraciones ahora crean y alteran la tabla `"SiteIdentity"` de forma defensiva. Si necesitas simular un estado viejo, puedes eliminarla y volver a correr el deploy:
   ```bash
   psql "$DATABASE_URL" -c 'DROP TABLE IF EXISTS "SiteIdentity";'
@@ -70,7 +75,7 @@ docs/      → Documentación técnica y funcional
   ```
 - **Bootstrap desde cero:** en producción/staging, el flujo recomendado es crear la base vacía y ejecutar `npx prisma migrate deploy`. En local, `npx prisma migrate dev` es el camino recomendado para recrear y evolucionar el esquema.
 
-> Nota sobre naming: la tabla se llama `"SiteIdentity"` (PascalCase con comillas). Si ejecutas SQL manual, respeta el nombre con comillas para evitar conflictos con `siteidentity` o `site_identity`.
+> Nota sobre naming: la tabla de torneos usa `tournament` (minúsculas) por compatibilidad legacy, mientras que `"SiteIdentity"` mantiene PascalCase con comillas. Si ejecutas SQL manual, respeta los nombres para evitar conflictos con variaciones en minúsculas.
 
 ### Correo SMTP sin Docker
 
