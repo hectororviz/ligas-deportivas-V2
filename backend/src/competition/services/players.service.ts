@@ -61,6 +61,7 @@ export class PlayersService {
       page,
       pageSize,
       clubId,
+      tournamentId,
       gender,
       birthYear,
       birthYearMin,
@@ -68,6 +69,10 @@ export class PlayersService {
     } = query;
 
     const where: Prisma.PlayerWhereInput = {};
+
+    if (clubId !== undefined && clubId !== null && tournamentId === undefined) {
+      throw new BadRequestException('El filtro por club requiere un torneo.');
+    }
 
     const trimmedDni = dni?.trim();
     if (trimmedDni) {
@@ -146,24 +151,40 @@ export class PlayersService {
     }
 
     const restrictedClubIds = this.getRestrictedClubIds(user);
+    const membershipFilters: Prisma.PlayerTournamentClubWhereInput[] = [];
+    const buildMembershipCriteria = (
+      filters: Prisma.PlayerTournamentClubWhereInput[],
+    ): Prisma.PlayerTournamentClubWhereInput => (filters.length ? { AND: filters } : {});
+
+    if (tournamentId !== undefined) {
+      membershipFilters.push({ tournamentId });
+    }
 
     if (restrictedClubIds !== null) {
       if (clubId !== undefined) {
         if (clubId === null) {
-          where.clubId = { in: [] };
+          where.playerTournamentClubs = { none: buildMembershipCriteria(membershipFilters) };
         } else if (restrictedClubIds.includes(clubId)) {
-          where.clubId = clubId;
+          membershipFilters.push({ clubId });
+          where.playerTournamentClubs = { some: buildMembershipCriteria(membershipFilters) };
         } else {
-          where.clubId = { in: [] };
+          where.playerTournamentClubs = {
+            some: { AND: [...membershipFilters, { clubId: { in: [] } }] },
+          };
         }
       } else {
-        where.clubId = {
-          in: restrictedClubIds,
-          not: null,
-        };
+        membershipFilters.push({ clubId: { in: restrictedClubIds } });
+        where.playerTournamentClubs = { some: buildMembershipCriteria(membershipFilters) };
       }
     } else if (clubId !== undefined) {
-      where.clubId = clubId;
+      if (clubId === null) {
+        where.playerTournamentClubs = { none: buildMembershipCriteria(membershipFilters) };
+      } else {
+        membershipFilters.push({ clubId });
+        where.playerTournamentClubs = { some: buildMembershipCriteria(membershipFilters) };
+      }
+    } else if (membershipFilters.length) {
+      where.playerTournamentClubs = { some: buildMembershipCriteria(membershipFilters) };
     }
 
     const skip = (page - 1) * pageSize;
