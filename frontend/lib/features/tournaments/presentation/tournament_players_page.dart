@@ -236,12 +236,6 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
       });
       return;
     }
-    if (dni.isEmpty) {
-      setState(() {
-        _playersError = 'Ingresa un DNI para buscar.';
-      });
-      return;
-    }
 
     setState(() {
       _searchingPlayers = true;
@@ -254,7 +248,7 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
       final response = await api.get<List<dynamic>>(
         '/players/search',
         queryParameters: {
-          'dni': dni,
+          if (dni.isNotEmpty) 'dni': dni,
           'categoryId': categoryId,
           'tournamentId': tournamentId,
         },
@@ -499,7 +493,7 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             decoration: const InputDecoration(
-              hintText: 'Ingresar DNI',
+              hintText: 'Ingresar DNI (opcional)',
             ),
             onSubmitted: (_) => _searchPlayers(),
           ),
@@ -596,14 +590,14 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
                                 child: Text(
                                   _searchingPlayers
                                       ? 'Buscando jugadores...'
-                                      : 'Ingresa un DNI para mostrar jugadores.',
+                                      : 'Selecciona liga, torneo y categoría para mostrar jugadores.',
                                   style: theme.textTheme.bodyMedium,
                                 ),
                               )
                             : dataSource.rows.isEmpty
                                 ? Center(
                                     child: Text(
-                                      'No se encontraron jugadores para el DNI indicado.',
+                                      'No se encontraron jugadores para los filtros seleccionados.',
                                       style: theme.textTheme.bodyMedium,
                                     ),
                                   )
