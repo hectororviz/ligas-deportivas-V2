@@ -33,11 +33,12 @@ COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/docker-entrypoint.sh ./docker-entrypoint.sh
+COPY --from=builder /app/entrypoint-backend.sh ./entrypoint-backend.sh
+COPY --from=builder /app/entrypoint-migrate.sh ./entrypoint-migrate.sh
 
 RUN npm prune --omit=dev
 
-RUN chmod +x /app/docker-entrypoint.sh
+RUN chmod +x /app/entrypoint-backend.sh /app/entrypoint-migrate.sh
 
-ENTRYPOINT ["/app/docker-entrypoint.sh"]
+ENTRYPOINT ["/app/entrypoint-backend.sh"]
 CMD ["node", "dist/main.js"]
