@@ -84,6 +84,32 @@ Si la API no puede conectarse al servidor SMTP, el panel te mostrará el error y
 - `npm test` corre las pruebas unitarias con Jest.
 - `npm run test:cov` genera el reporte de cobertura. ([backend/package.json](backend/package.json))
 
+### Migraciones Prisma (prod vs dev)
+
+- **Producción / staging**: aplica migraciones ya generadas con `npx prisma migrate deploy`. Este comando es idempotente y es el recomendado para entornos reales.
+- **Desarrollo local**: usa `npx prisma migrate dev` para generar y aplicar migraciones mientras iteras sobre el esquema.
+
+Flujos recomendados:
+
+```bash
+# Producción / staging
+cd backend
+npx prisma migrate deploy
+
+# Desarrollo local
+cd backend
+npx prisma migrate dev
+```
+
+Si el backend corre en contenedor, puedes ejecutar el deploy desde Compose:
+
+```bash
+cd infra
+docker compose run --rm backend npx prisma migrate deploy
+```
+
+Si una base quedó en un estado antiguo (por ejemplo, le faltaban tablas de `SiteIdentity`), basta con ejecutar `prisma migrate deploy` con las migraciones actualizadas: las migraciones ahora son defensivas y crean/ajustan la tabla cuando falta. Para una base completamente nueva, aplica `migrate dev` o `migrate deploy` y luego ejecuta el seed correspondiente (`npm run seed`). En producción, si quieres evitar que el contenedor reintente migraciones en cada inicio, define `SKIP_MIGRATIONS=1` y corre las migraciones como un job separado.
+
 ## Configuración del frontend
 
 1. Instala dependencias y genera código:

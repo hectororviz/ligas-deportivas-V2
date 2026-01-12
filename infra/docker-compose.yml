@@ -23,7 +23,7 @@ services:
   backend:
     build:
       context: ../backend
-    restart: unless-stopped
+    restart: on-failure:3
     environment:
       APP_URL: ${APP_URL}
       FRONTEND_URL: ${FRONTEND_URL}
