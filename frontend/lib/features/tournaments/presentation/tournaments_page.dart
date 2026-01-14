@@ -312,6 +312,16 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
     );
   }
 
+  Future<void> _openTournamentClubs(TournamentSummary tournament) async {
+    if (!mounted) {
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (context) => _TournamentClubsDialog(tournament: tournament),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tournamentsAsync = ref.watch(tournamentsProvider);
@@ -495,6 +505,7 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
                               tournaments: tournaments,
                               onDetails: _showTournamentDetails,
                               onEdit: _openEditTournament,
+                              onClubs: _openTournamentClubs,
                               canEdit: (tournament) => user?.hasPermission(
                                     module: _moduleTorneos,
                                     action: _actionUpdate,
@@ -552,6 +563,288 @@ class _DetailRow extends StatelessWidget {
       ),
     );
   }
+}
+
+class _TournamentClubsDialog extends ConsumerStatefulWidget {
+  const _TournamentClubsDialog({required this.tournament});
+
+  final TournamentSummary tournament;
+
+  @override
+  ConsumerState<_TournamentClubsDialog> createState() => _TournamentClubsDialogState();
+}
+
+class _TournamentClubsDialogState extends ConsumerState<_TournamentClubsDialog> {
+  bool _isLoading = true;
+  Object? _error;
+  List<_ClubAssignment> _clubs = const [];
+  Set<int> _selectedClubIds = <int>{};
+  Set<int> _savingClubIds = <int>{};
+  List<int> _tournamentCategoryIds = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final api = ref.read(apiClientProvider);
+      final responses = await Future.wait([
+        api.get<Map<String, dynamic>>(
+          '/clubs',
+          queryParameters: const {
+            'page': 1,
+            'pageSize': 500,
+            'status': 'active',
+          },
+        ),
+        api.get<List<dynamic>>('/tournaments/${widget.tournament.id}/participating-clubs'),
+        api.get<List<dynamic>>('/tournaments/${widget.tournament.id}/categories'),
+      ]);
+
+      final clubsJson = responses[0].data?['data'] as List<dynamic>? ?? [];
+      final clubs = clubsJson
+          .map((item) => _ClubAssignment.fromJson(item as Map<String, dynamic>))
+          .toList()
+        ..sort((a, b) => a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()));
+
+      final participatingJson = responses[1].data ?? [];
+      final participatingIds = participatingJson
+          .map((item) => (item as Map<String, dynamic>)['id'] as int)
+          .toSet();
+
+      final categoriesJson = responses[2].data ?? [];
+      final categoryIds = categoriesJson
+          .map((item) => (item as Map<String, dynamic>)['tournamentCategoryId'] as int)
+          .toList();
+
+      setState(() {
+        _clubs = clubs;
+        _selectedClubIds = participatingIds;
+        _tournamentCategoryIds = categoryIds;
+        _isLoading = false;
+      });
+    } catch (error) {
+      setState(() {
+        _error = error;
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _toggleClub(_ClubAssignment club, bool selected) async {
+    if (_savingClubIds.contains(club.id)) {
+      return;
+    }
+
+    final wasSelected = _selectedClubIds.contains(club.id);
+    if (wasSelected == selected) {
+      return;
+    }
+
+    setState(() {
+      if (selected) {
+        _selectedClubIds.add(club.id);
+      } else {
+        _selectedClubIds.remove(club.id);
+      }
+      _savingClubIds = {..._savingClubIds, club.id};
+    });
+
+    try {
+      final api = ref.read(apiClientProvider);
+      if (selected) {
+        if (_tournamentCategoryIds.isEmpty) {
+          throw StateError('El torneo no tiene categorías habilitadas.');
+        }
+        await api.post(
+          '/clubs/${club.id}/available-tournaments',
+          data: {
+            'tournamentId': widget.tournament.id,
+            'tournamentCategoryIds': _tournamentCategoryIds,
+          },
+        );
+      } else {
+        await api.delete('/clubs/${club.id}/tournaments/${widget.tournament.id}');
+      }
+    } catch (error) {
+      setState(() {
+        if (selected) {
+          _selectedClubIds.remove(club.id);
+        } else {
+          _selectedClubIds.add(club.id);
+        }
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo actualizar el club: $error')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _savingClubIds = _savingClubIds.where((id) => id != club.id).toSet();
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Widget content;
+    if (_isLoading) {
+      content = const SizedBox(
+        height: 220,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    } else if (_error != null) {
+      content = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.error_outline, size: 48),
+          const SizedBox(height: 12),
+          Text(
+            'No se pudieron cargar los clubes.',
+            style: Theme.of(context).textTheme.titleMedium,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text('$_error', textAlign: TextAlign.center),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: _loadData,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Reintentar'),
+          ),
+        ],
+      );
+    } else if (_clubs.isEmpty) {
+      content = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.groups_outlined, size: 48),
+          const SizedBox(height: 12),
+          Text(
+            'No hay clubes activos para asociar.',
+            style: Theme.of(context).textTheme.titleMedium,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          TextButton(
+            onPressed: () => Navigator.of(context).maybePop(),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      );
+    } else {
+      content = SizedBox(
+        height: 520,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Clubes activos · ${widget.tournament.name}',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Seleccioná los clubes que participan en este torneo.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            if (_tournamentCategoryIds.isEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Este torneo no tiene categorías habilitadas, no es posible asociar clubes.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final width = constraints.maxWidth;
+                  int columns = 1;
+                  if (width >= 960) {
+                    columns = 4;
+                  } else if (width >= 720) {
+                    columns = 3;
+                  } else if (width >= 480) {
+                    columns = 2;
+                  }
+
+                  return GridView.builder(
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: columns,
+                      childAspectRatio: 4.2,
+                    ),
+                    itemCount: _clubs.length,
+                    itemBuilder: (context, index) {
+                      final club = _clubs[index];
+                      final selected = _selectedClubIds.contains(club.id);
+                      final isSaving = _savingClubIds.contains(club.id);
+                      return CheckboxListTile(
+                        value: selected,
+                        onChanged: isSaving ? null : (value) => _toggleClub(club, value ?? false),
+                        title: Text(club.displayName),
+                        subtitle: isSaving ? const Text('Actualizando...') : null,
+                        dense: true,
+                        controlAffinity: ListTileControlAffinity.leading,
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => Navigator.of(context).maybePop(),
+                child: const Text('Cerrar'),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return AlertDialog(
+      contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      content: SizedBox(width: 760, child: content),
+    );
+  }
+}
+
+class _ClubAssignment {
+  const _ClubAssignment({
+    required this.id,
+    required this.name,
+    required this.shortName,
+  });
+
+  factory _ClubAssignment.fromJson(Map<String, dynamic> json) {
+    return _ClubAssignment(
+      id: json['id'] as int,
+      name: json['name'] as String,
+      shortName: json['shortName'] as String?,
+    );
+  }
+
+  final int id;
+  final String name;
+  final String? shortName;
+
+  String get displayName => (shortName?.trim().isNotEmpty ?? false) ? shortName!.trim() : name;
 }
 
 class _EmptyTournamentsState extends StatelessWidget {
@@ -618,12 +911,14 @@ class _TournamentsDataTable extends StatelessWidget {
     required this.tournaments,
     required this.onDetails,
     required this.onEdit,
+    required this.onClubs,
     required this.canEdit,
   });
 
   final List<TournamentSummary> tournaments;
   final ValueChanged<TournamentSummary> onDetails;
   final ValueChanged<TournamentSummary> onEdit;
+  final ValueChanged<TournamentSummary> onClubs;
   final bool Function(TournamentSummary tournament) canEdit;
 
   @override
@@ -720,6 +1015,11 @@ class _TournamentsDataTable extends StatelessWidget {
                       ),
                       icon: const Icon(Icons.people_alt_outlined),
                       label: const Text('Jugadores'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => onClubs(tournaments[index]),
+                      icon: const Icon(Icons.groups_outlined),
+                      label: const Text('Clubes'),
                     ),
                     FilledButton.tonalIcon(
                       onPressed:
