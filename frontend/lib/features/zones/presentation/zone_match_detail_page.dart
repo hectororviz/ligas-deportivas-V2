@@ -9,7 +9,7 @@ import 'package:url_launcher/url_launcher_string.dart';
 
 import '../../clubs/presentation/widgets/authenticated_image.dart';
 import '../domain/zone_match_models.dart';
-import 'zone_fixture_page.dart' show zoneMatchesProvider;
+import 'zone_providers.dart';
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
 

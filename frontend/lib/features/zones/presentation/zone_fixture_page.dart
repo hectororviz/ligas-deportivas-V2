@@ -9,30 +9,19 @@ import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
 import '../domain/zone_models.dart';
 import '../domain/zone_match_models.dart';
+import 'zone_providers.dart';
 import 'zones_page.dart';
 
 const _moduleFixture = 'FIXTURE';
 const _actionUpdate = 'UPDATE';
+
+enum FixtureGenerationMode { automatic, manual }
 
 class ZoneFixturePageArgs {
   const ZoneFixturePageArgs({this.viewOnly = false});
 
   final bool viewOnly;
 }
-
-final zoneDetailProvider = FutureProvider.autoDispose.family<ZoneDetail, int>((ref, zoneId) async {
-  final api = ref.read(apiClientProvider);
-  final response = await api.get<Map<String, dynamic>>('/zones/$zoneId');
-  final data = response.data ?? <String, dynamic>{};
-  return ZoneDetail.fromJson(data);
-});
-
-final zoneMatchesProvider = FutureProvider.autoDispose.family<ZoneMatchesData, int>((ref, zoneId) async {
-  final api = ref.read(apiClientProvider);
-  final response = await api.get<Map<String, dynamic>>('/zones/$zoneId/matches');
-  final data = response.data ?? <String, dynamic>{};
-  return ZoneMatchesData.fromJson(data);
-});
 
 class ZoneFixturePage extends ConsumerStatefulWidget {
   const ZoneFixturePage({super.key, required this.zoneId, this.viewOnly = false});
@@ -52,6 +41,7 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
   String? _previewError;
   final Set<int> _finalizingMatchdays = <int>{};
   final Set<int> _updatingMatchdays = <int>{};
+  FixtureGenerationMode _generationMode = FixtureGenerationMode.automatic;
 
   bool _isFinalizing(int matchday) => _finalizingMatchdays.contains(matchday);
   bool _isUpdatingDate(int matchday) => _updatingMatchdays.contains(matchday);
@@ -91,6 +81,14 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
   void dispose() {
     _contentScrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _openManualBuilder(ZoneDetail zone) async {
+    setState(() => _generationMode = FixtureGenerationMode.manual);
+    await GoRouter.of(context).push('/zones/${zone.id}/fixture/manual');
+    if (mounted) {
+      setState(() => _generationMode = FixtureGenerationMode.automatic);
+    }
   }
 
   Future<void> _finalizeMatchday(int matchday) async {
@@ -469,6 +467,32 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 8),
+                SegmentedButton<FixtureGenerationMode>(
+                  segments: const [
+                    ButtonSegment(
+                      value: FixtureGenerationMode.automatic,
+                      label: Text('Automático'),
+                      icon: Icon(Icons.auto_mode_outlined),
+                    ),
+                    ButtonSegment(
+                      value: FixtureGenerationMode.manual,
+                      label: Text('Manual (Drag & Drop)'),
+                      icon: Icon(Icons.drag_indicator),
+                    ),
+                  ],
+                  selected: {_generationMode},
+                  onSelectionChanged: canGenerate
+                      ? (selection) {
+                          final next = selection.first;
+                          if (next == FixtureGenerationMode.manual) {
+                            _openManualBuilder(zone);
+                          } else {
+                            setState(() => _generationMode = next);
+                          }
+                        }
+                      : null,
+                ),
+                const SizedBox(height: 12),
                 Text(
                   'Se generará un fixture ida y vuelta siguiendo el método de todos contra todos, '
                   'respetando descansos (BYE) cuando la cantidad de clubes sea impar.',
