@@ -116,6 +116,19 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
     } while (result?.type == _PlayerFormResultType.savedAndAddAnother);
   }
 
+  Future<void> _openMassivePlayers() async {
+    final created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const _MassivePlayersPage()),
+    );
+    if (!mounted || created != true) {
+      return;
+    }
+    ref.invalidate(playersProvider);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Jugadores guardados correctamente.')),
+    );
+  }
+
   Future<void> _openPlayerDetails(Player player) async {
     await showDialog<void>(
       context: context,
@@ -270,10 +283,9 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
     return PageScaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: canCreate
-          ? FloatingActionButton.extended(
-              onPressed: _openCreatePlayer,
-              icon: const Icon(Icons.add),
-              label: const Text('Agregar jugador'),
+          ? _PlayersFloatingActions(
+              onCreate: _openCreatePlayer,
+              onMassive: _openMassivePlayers,
             )
           : null,
       builder: (context, scrollController) {
@@ -539,6 +551,7 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
                     return _PlayersEmptyState(
                       canCreate: canCreate,
                       onCreate: _openCreatePlayer,
+                      onMassive: _openMassivePlayers,
                     );
                   }
 
@@ -1055,10 +1068,15 @@ class _PlayersPaginationFooter extends StatelessWidget {
 }
 
 class _PlayersEmptyState extends StatelessWidget {
-  const _PlayersEmptyState({required this.canCreate, required this.onCreate});
+  const _PlayersEmptyState({
+    required this.canCreate,
+    required this.onCreate,
+    required this.onMassive,
+  });
 
   final bool canCreate;
   final VoidCallback onCreate;
+  final VoidCallback onMassive;
 
   @override
   Widget build(BuildContext context) {
@@ -1086,14 +1104,59 @@ class _PlayersEmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             if (canCreate)
-              FilledButton.icon(
-                onPressed: onCreate,
-                icon: const Icon(Icons.add),
-                label: const Text('Agregar jugador'),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                alignment: WrapAlignment.center,
+                children: [
+                  FilledButton.icon(
+                    onPressed: onCreate,
+                    icon: const Icon(Icons.add),
+                    label: const Text('Agregar jugador'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: onMassive,
+                    icon: const Icon(Icons.table_chart_outlined),
+                    label: const Text('Masivo'),
+                  ),
+                ],
               ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _PlayersFloatingActions extends StatelessWidget {
+  const _PlayersFloatingActions({
+    required this.onCreate,
+    required this.onMassive,
+  });
+
+  final VoidCallback onCreate;
+  final VoidCallback onMassive;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        FloatingActionButton.extended(
+          heroTag: 'players-massive',
+          onPressed: onMassive,
+          icon: const Icon(Icons.table_chart_outlined),
+          label: const Text('Masivo'),
+        ),
+        const SizedBox(height: 12),
+        FloatingActionButton.extended(
+          heroTag: 'players-add',
+          onPressed: onCreate,
+          icon: const Icon(Icons.add),
+          label: const Text('Agregar jugador'),
+        ),
+      ],
     );
   }
 }
@@ -1144,6 +1207,527 @@ class _PlayersErrorState extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _MassivePlayersPage extends ConsumerStatefulWidget {
+  const _MassivePlayersPage();
+
+  @override
+  ConsumerState<_MassivePlayersPage> createState() =>
+      _MassivePlayersPageState();
+}
+
+class _MassivePlayersPageState extends ConsumerState<_MassivePlayersPage> {
+  final _formKey = GlobalKey<FormState>();
+  final List<_MassivePlayerRow> _rows = [];
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    for (var i = 0; i < 10; i++) {
+      _rows.add(_MassivePlayerRow.empty());
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final row in _rows) {
+      row.dispose();
+    }
+    super.dispose();
+  }
+
+  void _addRow() {
+    setState(() {
+      _rows.add(_MassivePlayerRow.empty());
+    });
+  }
+
+  bool _rowIsBlank(_MassivePlayerRow row) {
+    return row.isBlank;
+  }
+
+  String? _requiredValidator(
+    String? value,
+    _MassivePlayerRow row,
+    String message,
+  ) {
+    if (_rowIsBlank(row)) {
+      return null;
+    }
+    if (value == null || value.trim().isEmpty) {
+      return message;
+    }
+    return null;
+  }
+
+  String? _birthDateValidator(String? value, _MassivePlayerRow row) {
+    if (_rowIsBlank(row)) {
+      return null;
+    }
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) {
+      return 'Obligatorio';
+    }
+    final parsed = _parseBirthDate(text);
+    if (parsed == null) {
+      return 'Fecha inválida';
+    }
+    return null;
+  }
+
+  Future<void> _saveRows() async {
+    if (_isSaving) {
+      return;
+    }
+    final isValid = _formKey.currentState?.validate() ?? false;
+    if (!isValid) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Revisá los datos obligatorios.')),
+      );
+      return;
+    }
+
+    final playersToSave = _rows.where((row) => !row.isBlank).toList();
+    if (playersToSave.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cargá al menos un jugador.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    final api = ref.read(apiClientProvider);
+
+    try {
+      for (final row in playersToSave) {
+        final birthDate = _parseBirthDate(row.birthDateController.text.trim());
+        final payload = {
+          'firstName': row.firstNameController.text.trim(),
+          'lastName': row.lastNameController.text.trim(),
+          'dni': row.dniController.text.trim(),
+          'birthDate': birthDate != null
+              ? DateFormat('yyyy-MM-dd').format(birthDate)
+              : null,
+          'gender': row.gender,
+          'active': row.active,
+          'address': {
+            'street': row.streetController.text.trim(),
+            'number': row.streetNumberController.text.trim(),
+            'city': row.cityController.text.trim(),
+          },
+          'emergencyContact': {
+            'name': row.emergencyNameController.text.trim(),
+            'relationship': row.emergencyRelationshipController.text.trim(),
+            'phone': row.emergencyPhoneController.text.trim(),
+          },
+        };
+
+        await api.post('/players', data: payload);
+      }
+
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop(true);
+    } on DioException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error.response?.data is Map<String, dynamic>
+                ? (error.response?.data['message'] ?? error.message)
+                : error.message ?? 'No se pudo guardar.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo guardar: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = AppDataTableColors.standard(theme);
+    final headerStyle = theme.textTheme.titleSmall?.copyWith(
+      fontWeight: FontWeight.w700,
+      color: colors.headerText,
+    );
+
+    final table = DataTable(
+      columns: const [
+        DataColumn(label: Text('Apellido')),
+        DataColumn(label: Text('Nombre')),
+        DataColumn(label: Text('Fecha de nacimiento')),
+        DataColumn(label: Text('Género')),
+        DataColumn(label: Text('DNI')),
+        DataColumn(label: Text('Calle')),
+        DataColumn(label: Text('Número')),
+        DataColumn(label: Text('Localidad')),
+        DataColumn(label: Text('Activo')),
+        DataColumn(label: Text('Nombre emergencia')),
+        DataColumn(label: Text('Vínculo')),
+        DataColumn(label: Text('Teléfono')),
+      ],
+      dataRowMinHeight: 60,
+      dataRowMaxHeight: 88,
+      headingRowColor: buildHeaderColor(colors.headerBackground),
+      headingTextStyle: headerStyle,
+      rows: [
+        for (var index = 0; index < _rows.length; index++)
+          DataRow(
+            color: buildStripedRowColor(index: index, colors: colors),
+            cells: [
+              DataCell(
+                SizedBox(
+                  width: 160,
+                  child: TextFormField(
+                    controller: _rows[index].lastNameController,
+                    decoration: const InputDecoration(
+                      hintText: 'Apellido',
+                    ),
+                    validator: (value) => _requiredValidator(
+                      value,
+                      _rows[index],
+                      'Obligatorio',
+                    ),
+                  ),
+                ),
+              ),
+              DataCell(
+                SizedBox(
+                  width: 160,
+                  child: TextFormField(
+                    controller: _rows[index].firstNameController,
+                    decoration: const InputDecoration(
+                      hintText: 'Nombre',
+                    ),
+                    validator: (value) => _requiredValidator(
+                      value,
+                      _rows[index],
+                      'Obligatorio',
+                    ),
+                  ),
+                ),
+              ),
+              DataCell(
+                SizedBox(
+                  width: 150,
+                  child: TextFormField(
+                    controller: _rows[index].birthDateController,
+                    decoration: const InputDecoration(
+                      hintText: 'DD/MM/AAAA',
+                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9/]')),
+                    ],
+                    validator: (value) =>
+                        _birthDateValidator(value, _rows[index]),
+                  ),
+                ),
+              ),
+              DataCell(
+                SizedBox(
+                  width: 140,
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _rows[index].gender,
+                      isExpanded: true,
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'MASCULINO',
+                          child: Text('Masculino'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'FEMENINO',
+                          child: Text('Femenino'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value == null) {
+                          return;
+                        }
+                        setState(() {
+                          _rows[index].gender = value;
+                        });
+                      },
+                    ),
+                  ),
+                ),
+              ),
+              DataCell(
+                SizedBox(
+                  width: 130,
+                  child: TextFormField(
+                    controller: _rows[index].dniController,
+                    decoration: const InputDecoration(
+                      hintText: 'DNI',
+                    ),
+                    keyboardType: TextInputType.number,
+                    validator: (value) => _requiredValidator(
+                      value,
+                      _rows[index],
+                      'Obligatorio',
+                    ),
+                  ),
+                ),
+              ),
+              DataCell(
+                SizedBox(
+                  width: 180,
+                  child: TextFormField(
+                    controller: _rows[index].streetController,
+                    decoration: const InputDecoration(
+                      hintText: 'Calle',
+                    ),
+                    validator: (value) => _requiredValidator(
+                      value,
+                      _rows[index],
+                      'Obligatorio',
+                    ),
+                  ),
+                ),
+              ),
+              DataCell(
+                SizedBox(
+                  width: 110,
+                  child: TextFormField(
+                    controller: _rows[index].streetNumberController,
+                    decoration: const InputDecoration(
+                      hintText: 'N°',
+                    ),
+                    validator: (value) => _requiredValidator(
+                      value,
+                      _rows[index],
+                      'Obligatorio',
+                    ),
+                  ),
+                ),
+              ),
+              DataCell(
+                SizedBox(
+                  width: 160,
+                  child: TextFormField(
+                    controller: _rows[index].cityController,
+                    decoration: const InputDecoration(
+                      hintText: 'Localidad',
+                    ),
+                    validator: (value) => _requiredValidator(
+                      value,
+                      _rows[index],
+                      'Obligatorio',
+                    ),
+                  ),
+                ),
+              ),
+              DataCell(
+                Switch.adaptive(
+                  value: _rows[index].active,
+                  onChanged: (value) {
+                    setState(() {
+                      _rows[index].active = value;
+                    });
+                  },
+                ),
+              ),
+              DataCell(
+                SizedBox(
+                  width: 180,
+                  child: TextFormField(
+                    controller: _rows[index].emergencyNameController,
+                    decoration: const InputDecoration(
+                      hintText: 'Nombre completo',
+                    ),
+                  ),
+                ),
+              ),
+              DataCell(
+                SizedBox(
+                  width: 140,
+                  child: TextFormField(
+                    controller: _rows[index].emergencyRelationshipController,
+                    decoration: const InputDecoration(
+                      hintText: 'Vínculo',
+                    ),
+                  ),
+                ),
+              ),
+              DataCell(
+                SizedBox(
+                  width: 140,
+                  child: TextFormField(
+                    controller: _rows[index].emergencyPhoneController,
+                    decoration: const InputDecoration(
+                      hintText: 'Teléfono',
+                    ),
+                    keyboardType: TextInputType.phone,
+                  ),
+                ),
+              ),
+            ],
+          ),
+      ],
+    );
+
+    return PageScaffold(
+      backgroundColor: Colors.transparent,
+      builder: (context, scrollController) {
+        return ListView(
+          controller: scrollController,
+          padding: const EdgeInsets.all(24.0),
+          children: [
+            Text(
+              'Carga masiva de jugadores',
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Completá la tabla con los datos requeridos para cada jugador.',
+              style: theme.textTheme.bodyLarge,
+            ),
+            const SizedBox(height: 24),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Scrollbar(
+                        thumbVisibility: true,
+                        notificationPredicate: (notification) =>
+                            notification.metrics.axis == Axis.horizontal,
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(minWidth: 1200),
+                            child: table,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: _isSaving ? null : _addRow,
+                            icon: const Icon(Icons.add),
+                            label: const Text('+'),
+                          ),
+                          const SizedBox(width: 12),
+                          FilledButton(
+                            onPressed: _isSaving ? null : _saveRows,
+                            child: _isSaving
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : const Text('Guardar'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _MassivePlayerRow {
+  _MassivePlayerRow({
+    required this.firstNameController,
+    required this.lastNameController,
+    required this.dniController,
+    required this.birthDateController,
+    required this.streetController,
+    required this.streetNumberController,
+    required this.cityController,
+    required this.emergencyNameController,
+    required this.emergencyRelationshipController,
+    required this.emergencyPhoneController,
+    this.gender = 'MASCULINO',
+    this.active = true,
+  });
+
+  factory _MassivePlayerRow.empty() => _MassivePlayerRow(
+        firstNameController: TextEditingController(),
+        lastNameController: TextEditingController(),
+        dniController: TextEditingController(),
+        birthDateController: TextEditingController(),
+        streetController: TextEditingController(),
+        streetNumberController: TextEditingController(),
+        cityController: TextEditingController(),
+        emergencyNameController: TextEditingController(),
+        emergencyRelationshipController: TextEditingController(),
+        emergencyPhoneController: TextEditingController(),
+      );
+
+  final TextEditingController firstNameController;
+  final TextEditingController lastNameController;
+  final TextEditingController dniController;
+  final TextEditingController birthDateController;
+  final TextEditingController streetController;
+  final TextEditingController streetNumberController;
+  final TextEditingController cityController;
+  final TextEditingController emergencyNameController;
+  final TextEditingController emergencyRelationshipController;
+  final TextEditingController emergencyPhoneController;
+  String gender;
+  bool active;
+
+  bool get isBlank {
+    return firstNameController.text.trim().isEmpty &&
+        lastNameController.text.trim().isEmpty &&
+        dniController.text.trim().isEmpty &&
+        birthDateController.text.trim().isEmpty &&
+        streetController.text.trim().isEmpty &&
+        streetNumberController.text.trim().isEmpty &&
+        cityController.text.trim().isEmpty &&
+        emergencyNameController.text.trim().isEmpty &&
+        emergencyRelationshipController.text.trim().isEmpty &&
+        emergencyPhoneController.text.trim().isEmpty;
+  }
+
+  void dispose() {
+    firstNameController.dispose();
+    lastNameController.dispose();
+    dniController.dispose();
+    birthDateController.dispose();
+    streetController.dispose();
+    streetNumberController.dispose();
+    cityController.dispose();
+    emergencyNameController.dispose();
+    emergencyRelationshipController.dispose();
+    emergencyPhoneController.dispose();
   }
 }
 
@@ -2172,6 +2756,18 @@ class EmergencyContact {
   final String? name;
   final String? relationship;
   final String? phone;
+}
+
+DateTime? _parseBirthDate(String value) {
+  final text = value.trim();
+  if (text.isEmpty) {
+    return null;
+  }
+  try {
+    return DateFormat('dd/MM/yyyy').parseStrict(text);
+  } catch (_) {
+    return null;
+  }
 }
 
 DateTime? _parseDate(dynamic value) {
