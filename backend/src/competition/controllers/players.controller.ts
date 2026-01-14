@@ -21,6 +21,7 @@ import { CreatePlayerDto } from '../dto/create-player.dto';
 import { ListPlayersDto } from '../dto/list-players.dto';
 import { UpdatePlayerDto } from '../dto/update-player.dto';
 import { PlayersService } from '../services/players.service';
+import { SearchPlayersDto } from '../dto/search-players.dto';
 
 @Controller('players')
 export class PlayersController {
@@ -30,6 +31,13 @@ export class PlayersController {
   @UseGuards(JwtOptionalAuthGuard)
   findAll(@Query() query: ListPlayersDto, @CurrentUser() user?: RequestUser) {
     return this.playersService.findAll(query, user);
+  }
+
+  @Get('search')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @Permissions({ module: Module.JUGADORES, action: Action.VIEW })
+  search(@Query() query: SearchPlayersDto) {
+    return this.playersService.searchByDniAndCategory(query);
   }
 
   @Get(':id')

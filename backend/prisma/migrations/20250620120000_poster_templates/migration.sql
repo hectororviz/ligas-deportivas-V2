@@ -26,7 +26,7 @@ CREATE UNIQUE INDEX "TournamentPosterTemplate_tournamentId_key" ON "TournamentPo
 CREATE UNIQUE INDEX "MatchPosterCache_matchId_key" ON "MatchPosterCache"("matchId");
 
 -- AddForeignKey
-ALTER TABLE "TournamentPosterTemplate" ADD CONSTRAINT "TournamentPosterTemplate_tournamentId_fkey" FOREIGN KEY ("tournamentId") REFERENCES "Tournament"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "TournamentPosterTemplate" ADD CONSTRAINT "TournamentPosterTemplate_tournamentId_fkey" FOREIGN KEY ("tournamentId") REFERENCES "tournament"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "MatchPosterCache" ADD CONSTRAINT "MatchPosterCache_matchId_fkey" FOREIGN KEY ("matchId") REFERENCES "Match"("id") ON DELETE CASCADE ON UPDATE CASCADE;

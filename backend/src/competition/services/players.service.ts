@@ -1,14 +1,22 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Action, Module, Prisma, Scope } from '@prisma/client';
+import { Action, Gender, Module, Prisma, Scope } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { RequestUser } from '../../common/interfaces/request-user.interface';
 import { CreatePlayerDto } from '../dto/create-player.dto';
 import { ListPlayersDto } from '../dto/list-players.dto';
+import { SearchPlayersDto } from '../dto/search-players.dto';
 import { UpdatePlayerDto } from '../dto/update-player.dto';
 
-type PlayerWithClub = Prisma.PlayerGetPayload<{
-  include: { club: { select: { id: true; name: true } } };
+type PlayerWithMemberships = Prisma.PlayerGetPayload<{
+  include: {
+    playerTournamentClubs: {
+      select: {
+        tournamentId: true;
+        club: { select: { id: true; name: true } };
+      };
+    };
+  };
 }>;
 
 @Injectable()
@@ -16,10 +24,15 @@ export class PlayersService {
   constructor(private readonly prisma: PrismaService) {}
 
   private readonly include = {
-    club: {
+    playerTournamentClubs: {
       select: {
-        id: true,
-        name: true,
+        tournamentId: true,
+        club: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
       },
     },
   } satisfies Prisma.PlayerInclude;
@@ -36,7 +49,6 @@ export class PlayersService {
           birthDate: new Date(dto.birthDate),
           gender: dto.gender,
           active: dto.active ?? true,
-          clubId: dto.clubId ?? null,
           addressStreet: this.normalizeNullable(dto.address?.street),
           addressNumber: this.normalizeNullable(dto.address?.number),
           addressCity: this.normalizeNullable(dto.address?.city),
@@ -61,6 +73,7 @@ export class PlayersService {
       page,
       pageSize,
       clubId,
+      tournamentId,
       gender,
       birthYear,
       birthYearMin,
@@ -68,6 +81,10 @@ export class PlayersService {
     } = query;
 
     const where: Prisma.PlayerWhereInput = {};
+
+    if (clubId !== undefined && clubId !== null && tournamentId === undefined) {
+      throw new BadRequestException('El filtro por club requiere un torneo.');
+    }
 
     const trimmedDni = dni?.trim();
     if (trimmedDni) {
@@ -146,24 +163,40 @@ export class PlayersService {
     }
 
     const restrictedClubIds = this.getRestrictedClubIds(user);
+    const membershipFilters: Prisma.PlayerTournamentClubWhereInput[] = [];
+    const buildMembershipCriteria = (
+      filters: Prisma.PlayerTournamentClubWhereInput[],
+    ): Prisma.PlayerTournamentClubWhereInput => (filters.length ? { AND: filters } : {});
+
+    if (tournamentId !== undefined) {
+      membershipFilters.push({ tournamentId });
+    }
 
     if (restrictedClubIds !== null) {
       if (clubId !== undefined) {
         if (clubId === null) {
-          where.clubId = { in: [] };
+          where.playerTournamentClubs = { none: buildMembershipCriteria(membershipFilters) };
         } else if (restrictedClubIds.includes(clubId)) {
-          where.clubId = clubId;
+          membershipFilters.push({ clubId });
+          where.playerTournamentClubs = { some: buildMembershipCriteria(membershipFilters) };
         } else {
-          where.clubId = { in: [] };
+          where.playerTournamentClubs = {
+            some: { AND: [...membershipFilters, { clubId: { in: [] } }] },
+          };
         }
       } else {
-        where.clubId = {
-          in: restrictedClubIds,
-          not: null,
-        };
+        membershipFilters.push({ clubId: { in: restrictedClubIds } });
+        where.playerTournamentClubs = { some: buildMembershipCriteria(membershipFilters) };
       }
     } else if (clubId !== undefined) {
-      where.clubId = clubId;
+      if (clubId === null) {
+        where.playerTournamentClubs = { none: buildMembershipCriteria(membershipFilters) };
+      } else {
+        membershipFilters.push({ clubId });
+        where.playerTournamentClubs = { some: buildMembershipCriteria(membershipFilters) };
+      }
+    } else if (membershipFilters.length) {
+      where.playerTournamentClubs = { some: buildMembershipCriteria(membershipFilters) };
     }
 
     const skip = (page - 1) * pageSize;
@@ -180,11 +213,89 @@ export class PlayersService {
     ]);
 
     return {
-      data: players.map((player) => this.mapPlayer(player)),
+      data: players.map((player) => this.mapPlayer(player, tournamentId)),
       total,
       page,
       pageSize,
     };
+  }
+
+  async searchByDniAndCategory(query: SearchPlayersDto) {
+    const trimmedDni = query.dni?.trim();
+    const [category, tournamentCategory] = await Promise.all([
+      this.prisma.category.findUnique({
+        where: { id: query.categoryId },
+      }),
+      this.prisma.tournamentCategory.findFirst({
+        where: {
+          tournamentId: query.tournamentId,
+          categoryId: query.categoryId,
+          enabled: true,
+        },
+        select: { id: true },
+      }),
+    ]);
+
+    if (!category || !category.active) {
+      throw new BadRequestException('Categoría inválida o inactiva.');
+    }
+    if (!tournamentCategory) {
+      throw new BadRequestException('La categoría no está habilitada en el torneo.');
+    }
+
+    const startDate = new Date(Date.UTC(category.birthYearMin, 0, 1));
+    const endDate = new Date(Date.UTC(category.birthYearMax, 11, 31, 23, 59, 59, 999));
+
+    const where: Prisma.PlayerWhereInput = {
+      active: true,
+      birthDate: {
+        gte: startDate,
+        lte: endDate,
+      },
+    };
+
+    if (trimmedDni) {
+      where.dni = trimmedDni;
+    }
+
+    if (category.gender !== Gender.MIXTO) {
+      where.gender = category.gender;
+    }
+
+    const onlyFree = query.onlyFree === true;
+    if (onlyFree) {
+      where.playerTournamentClubs = {
+        none: { tournamentId: query.tournamentId },
+      };
+    }
+
+    const players = await this.prisma.player.findMany({
+      where,
+      include: {
+        playerTournamentClubs: {
+          where: { tournamentId: query.tournamentId },
+          select: {
+            clubId: true,
+            club: { select: { id: true, name: true } },
+            tournamentId: true,
+          },
+        },
+      },
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+    });
+
+    return players.map((player) => {
+      const assignment = player.playerTournamentClubs[0];
+      return {
+        id: player.id,
+        firstName: player.firstName,
+        lastName: player.lastName,
+        dni: player.dni,
+        birthDate: player.birthDate.toISOString(),
+        assignedClubId: assignment?.clubId ?? null,
+        assignedClubName: assignment?.club?.name ?? null,
+      };
+    });
   }
 
   private getRestrictedClubIds(user?: RequestUser): number[] | null {
@@ -278,9 +389,6 @@ export class PlayersService {
     if (dto.active !== undefined) {
       data.active = dto.active;
     }
-    if (dto.clubId !== undefined) {
-      data.club = dto.clubId === null ? { disconnect: true } : { connect: { id: dto.clubId } };
-    }
     if (dto.address !== undefined) {
       data.addressStreet = this.normalizeNullable(dto.address?.street);
       data.addressNumber = this.normalizeNullable(dto.address?.number);
@@ -304,7 +412,7 @@ export class PlayersService {
     }
   }
 
-  private mapPlayer(player: PlayerWithClub) {
+  private mapPlayer(player: PlayerWithMemberships, tournamentId?: number) {
     const addressFields = [player.addressStreet, player.addressNumber, player.addressCity];
     const hasAddress = addressFields.some((value) => value && value.trim().length > 0);
     const emergencyFields = [
@@ -313,6 +421,14 @@ export class PlayersService {
       player.emergencyPhone,
     ];
     const hasEmergency = emergencyFields.some((value) => value && value.trim().length > 0);
+    const memberships = player.playerTournamentClubs ?? [];
+    const membership =
+      tournamentId !== undefined
+        ? memberships.find((entry) => entry.tournamentId === tournamentId)
+        : memberships.length === 1
+          ? memberships[0]
+          : undefined;
+    const club = membership?.club ?? null;
 
     return {
       id: player.id,
@@ -322,7 +438,7 @@ export class PlayersService {
       birthDate: player.birthDate.toISOString(),
       gender: player.gender,
       active: player.active,
-      club: player.club ? { id: player.club.id, name: player.club.name } : null,
+      club: club ? { id: club.id, name: club.name } : null,
       address: hasAddress
         ? {
             street: player.addressStreet,

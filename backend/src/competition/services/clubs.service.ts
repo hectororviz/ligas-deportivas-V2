@@ -8,6 +8,7 @@ import { CreateClubDto } from '../dto/create-club.dto';
 import { ListClubsDto } from '../dto/list-clubs.dto';
 import { UpdateClubDto } from '../dto/update-club.dto';
 import { UpdateClubTeamsDto } from '../dto/update-club-teams.dto';
+import { ListAssignedPlayersDto } from '../dto/list-assigned-players.dto';
 import { ListRosterPlayersDto } from '../dto/list-roster-players.dto';
 import { UpdateRosterPlayersDto } from '../dto/update-roster-players.dto';
 import { JoinTournamentDto } from '../dto/join-tournament.dto';
@@ -137,23 +138,6 @@ export class ClubsService {
       ],
     });
 
-    const rosterList = await this.prisma.roster.findMany({
-      where: { clubId: club.id },
-      include: {
-        _count: {
-          select: { players: true },
-        },
-      },
-    });
-
-    const rosterMap = new Map<number, { id: number; playerCount: number }>();
-    rosterList.forEach((roster) => {
-      rosterMap.set(roster.tournamentCategoryId, {
-        id: roster.id,
-        playerCount: roster._count.players,
-      });
-    });
-
     const clubZones = await this.prisma.clubZone.findMany({
       where: { clubId: club.id },
       include: {
@@ -189,6 +173,15 @@ export class ClubsService {
     }
 
     const processedCategories = new Set<number>();
+    const tournamentCategoryMeta = new Map<
+      number,
+      {
+        tournamentId: number;
+        birthYearMin: number;
+        birthYearMax: number;
+        gender: Gender;
+      }
+    >();
     const tournamentsMap = new Map<
       number,
       {
@@ -240,7 +233,12 @@ export class ClubsService {
       }
 
       const category = tournamentCategory.category;
-      const rosterInfo = rosterMap.get(tournamentCategory.id);
+      tournamentCategoryMeta.set(tournamentCategory.id, {
+        tournamentId: tournament.id,
+        birthYearMin: category.birthYearMin,
+        birthYearMax: category.birthYearMax,
+        gender: category.gender,
+      });
       tournamentEntry.categories.push({
         tournamentCategoryId: tournamentCategory.id,
         categoryId: category.id,
@@ -250,9 +248,21 @@ export class ClubsService {
         gender: category.gender,
         minPlayers: category.minPlayers,
         mandatory: category.mandatory,
-        enabledCount: rosterInfo?.playerCount ?? 0,
+        enabledCount: 0,
       });
     }
+
+    const assignedCounts = await this.buildAssignedCounts(
+      club.id,
+      Array.from(tournamentCategoryMeta.entries()),
+    );
+
+    tournamentsMap.forEach((tournament) => {
+      tournament.categories = tournament.categories.map((category) => ({
+        ...category,
+        enabledCount: assignedCounts.get(category.tournamentCategoryId) ?? 0,
+      }));
+    });
 
     const tournaments = Array.from(tournamentsMap.values())
       .map((tournament) => ({
@@ -296,6 +306,84 @@ export class ClubsService {
         longitude: club.longitude,
       },
       tournaments,
+    };
+  }
+
+  async listAssignedPlayers(
+    clubId: number,
+    tournamentCategoryId: number,
+    query: ListAssignedPlayersDto,
+  ) {
+    await this.prisma.club.findUniqueOrThrow({ where: { id: clubId } });
+
+    const tournamentCategory = await this.prisma.tournamentCategory.findUnique({
+      where: { id: tournamentCategoryId },
+      include: {
+        category: true,
+        teams: {
+          where: { clubId },
+          select: { id: true },
+        },
+      },
+    });
+
+    if (!tournamentCategory) {
+      throw new NotFoundException('Categoría del torneo no encontrada');
+    }
+
+    if (!tournamentCategory.teams.length) {
+      throw new BadRequestException('El club no participa en esta categoría del torneo.');
+    }
+
+    const { page = 1, pageSize = 20 } = query;
+    const skip = (page - 1) * pageSize;
+
+    const category = tournamentCategory.category;
+    const startDate = new Date(Date.UTC(category.birthYearMin, 0, 1));
+    const endDate = new Date(Date.UTC(category.birthYearMax, 11, 31, 23, 59, 59, 999));
+
+    const where: Prisma.PlayerWhereInput = {
+      playerTournamentClubs: {
+        some: {
+          clubId,
+          tournamentId: tournamentCategory.tournamentId,
+        },
+      },
+      active: true,
+      birthDate: {
+        gte: startDate,
+        lte: endDate,
+      },
+    };
+
+    if (category.gender !== Gender.MIXTO) {
+      where.gender = category.gender;
+    }
+
+    const [total, players] = await this.prisma.$transaction([
+      this.prisma.player.count({ where }),
+      this.prisma.player.findMany({
+        where,
+        orderBy: [
+          { lastName: 'asc' },
+          { firstName: 'asc' },
+        ],
+        skip,
+        take: pageSize,
+      }),
+    ]);
+
+    return {
+      page,
+      pageSize,
+      total,
+      players: players.map((player) => ({
+        id: player.id,
+        firstName: player.firstName,
+        lastName: player.lastName,
+        birthDate: player.birthDate,
+        gender: player.gender,
+      })),
     };
   }
 
@@ -350,7 +438,12 @@ export class ClubsService {
     const endDate = new Date(Date.UTC(category.birthYearMax, 11, 31, 23, 59, 59, 999));
 
     const where: Prisma.PlayerWhereInput = {
-      clubId,
+      playerTournamentClubs: {
+        some: {
+          clubId,
+          tournamentId: tournamentCategory.tournamentId,
+        },
+      },
       active: true,
       birthDate: {
         gte: startDate,
@@ -444,7 +537,12 @@ export class ClubsService {
       const players = await this.prisma.player.findMany({
         where: {
           id: { in: uniquePlayerIds },
-          clubId,
+          playerTournamentClubs: {
+            some: {
+              clubId,
+              tournamentId: tournamentCategory.tournamentId,
+            },
+          },
           active: true,
           birthDate: {
             gte: startDate,
@@ -951,6 +1049,91 @@ export class ClubsService {
   private normalizeLogoUrl(value?: string | null) {
     const trimmed = value?.trim();
     return trimmed && trimmed.length > 0 ? trimmed : null;
+  }
+
+  private async buildAssignedCounts(
+    clubId: number,
+    tournamentCategoryEntries: Array<
+      [
+        number,
+        {
+          tournamentId: number;
+          birthYearMin: number;
+          birthYearMax: number;
+          gender: Gender;
+        },
+      ]
+    >,
+  ) {
+    if (!tournamentCategoryEntries.length) {
+      return new Map<number, number>();
+    }
+
+    const categoriesByTournament = new Map<
+      number,
+      Array<{
+        tournamentCategoryId: number;
+        birthYearMin: number;
+        birthYearMax: number;
+        gender: Gender;
+      }>
+    >();
+
+    for (const [tournamentCategoryId, meta] of tournamentCategoryEntries) {
+      if (!categoriesByTournament.has(meta.tournamentId)) {
+        categoriesByTournament.set(meta.tournamentId, []);
+      }
+      categoriesByTournament.get(meta.tournamentId)!.push({
+        tournamentCategoryId,
+        birthYearMin: meta.birthYearMin,
+        birthYearMax: meta.birthYearMax,
+        gender: meta.gender,
+      });
+    }
+
+    const tournamentIds = Array.from(categoriesByTournament.keys());
+    const assignments = await this.prisma.playerTournamentClub.findMany({
+      where: {
+        clubId,
+        tournamentId: { in: tournamentIds },
+      },
+      include: {
+        player: {
+          select: {
+            birthDate: true,
+            gender: true,
+          },
+        },
+      },
+    });
+
+    const counts = new Map<number, number>();
+
+    for (const assignment of assignments) {
+      const categories = categoriesByTournament.get(assignment.tournamentId);
+      if (!categories) {
+        continue;
+      }
+      for (const category of categories) {
+        const player = assignment.player;
+        const startDate = new Date(Date.UTC(category.birthYearMin, 0, 1));
+        const endDate = new Date(
+          Date.UTC(category.birthYearMax, 11, 31, 23, 59, 59, 999),
+        );
+        if (player.birthDate < startDate || player.birthDate > endDate) {
+          continue;
+        }
+        if (category.gender !== Gender.MIXTO && player.gender !== category.gender) {
+          continue;
+        }
+        counts.set(
+          category.tournamentCategoryId,
+          (counts.get(category.tournamentCategoryId) ?? 0) + 1,
+        );
+      }
+    }
+
+    return counts;
   }
 
   private async ensureUniqueName(name: string, leagueId?: number | null, excludeId?: number) {

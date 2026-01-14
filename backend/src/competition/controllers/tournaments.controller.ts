@@ -18,6 +18,7 @@ import { Action, Module } from '@prisma/client';
 import { CreateZoneDto } from '../dto/create-zone.dto';
 import { AddTournamentCategoryDto } from '../dto/add-tournament-category.dto';
 import { UpdateTournamentDto } from '../dto/update-tournament.dto';
+import { AssignPlayerClubDto } from '../dto/assign-player-club.dto';
 
 @Controller()
 export class TournamentsController {
@@ -36,6 +37,16 @@ export class TournamentsController {
   @Get('tournaments/:id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.tournamentsService.getTournament(id);
+  }
+
+  @Get('tournaments/:id/categories')
+  listCategories(@Param('id', ParseIntPipe) id: number) {
+    return this.tournamentsService.listCategories(id);
+  }
+
+  @Get('tournaments/:id/participating-clubs')
+  listParticipatingClubs(@Param('id', ParseIntPipe) id: number) {
+    return this.tournamentsService.listParticipatingClubs(id);
   }
 
   @Get('tournaments/:id/zones/clubs')
@@ -68,6 +79,16 @@ export class TournamentsController {
     @Body() dto: UpdateTournamentDto,
   ) {
     return this.tournamentsService.update(id, dto);
+  }
+
+  @Put('tournaments/:id/player-club')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @Permissions({ module: Module.JUGADORES, action: Action.UPDATE })
+  assignPlayerClub(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AssignPlayerClubDto,
+  ) {
+    return this.tournamentsService.assignPlayerClub(id, dto);
   }
 
   @Post('tournaments/:id/zones')

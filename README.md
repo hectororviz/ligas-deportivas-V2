@@ -59,6 +59,26 @@ docs/      → Documentación técnica y funcional
    ```
    Todos los endpoints quedan disponibles bajo `http://localhost:3000/api/v1` y comparten tuberías globales de validación y CORS configurados para el frontend. ([backend/src/main.ts](backend/src/main.ts))
 
+### Migraciones Prisma (dev vs prod)
+
+- **Local/desarrollo:** usa `npx prisma migrate dev` para aplicar cambios y mantener el historial de migraciones en tu entorno.
+- **Producción/staging:** usa `npx prisma migrate deploy` (sin generar nuevas migraciones).
+- **Validación legacy/limpia:** confirma que la tabla real de torneos es `tournament` (minúsculas sin comillas) antes de aplicar migraciones recientes:
+  ```bash
+  psql "$DATABASE_URL" -c "SELECT to_regclass('public.tournament') AS tournament_table;"
+  ```
+  En bases legacy debería devolver `tournament`; en bases limpias asegúrate de tener el esquema base aplicado antes de correr migraciones nuevas (por ejemplo, generando una migración inicial o restaurando un dump).
+- **Bases antiguas/inconsistentes:** las migraciones ahora crean y alteran la tabla `"SiteIdentity"` de forma defensiva. Si necesitas simular un estado viejo, puedes eliminarla y volver a correr el deploy:
+  ```bash
+  psql "$DATABASE_URL" -c 'DROP TABLE IF EXISTS "SiteIdentity";'
+  npx prisma migrate deploy
+  ```
+- **Bootstrap desde cero:** en producción/staging, el flujo recomendado es crear la base vacía y ejecutar `npx prisma migrate deploy`. En local, `npx prisma migrate dev` es el camino recomendado para recrear y evolucionar el esquema.
+
+> Nota sobre naming: para tablas nuevas usa snake_case en minúsculas sin comillas. La tabla de torneos usa `tournament` (minúsculas) por compatibilidad legacy, mientras que `"SiteIdentity"` mantiene PascalCase con comillas por compatibilidad histórica. Si ejecutas SQL manual, respeta los nombres exactos para evitar conflictos con variaciones en minúsculas.
+
+> Migración baseline: `backend/prisma/migrations/20250101000000_baseline_init` crea el esquema core (incluye `tournament`, `"SiteIdentity"` y el resto de las tablas base). `prisma migrate deploy` sobre una DB vacía debe aplicarla antes de las migraciones incrementales.
+
 ### Correo SMTP sin Docker
 
 Si ejecutas el backend directamente desde Visual Studio Code o desde la raíz del repositorio (por ejemplo con `npm run start:dev --prefix backend`), NestJS ahora carga automáticamente el archivo `backend/.env` además de cualquier `.env` ubicado en la raíz. Aun así, necesitas reemplazar los valores de Mailhog por las credenciales reales del proveedor SMTP que vayas a usar.
@@ -120,6 +140,7 @@ JWT_ACCESS_SECRET=8c50d5110a7a4f1c8f3b1c86b5e8a4f3
 JWT_REFRESH_SECRET=2e94f8c2d7c44109b7f3f71c49c5d9ad
 APP_URL=http://ligas.local
 FRONTEND_URL=http://ligas.local
+# DB_SCHEMA_ENFORCEMENT=strict
 # SMTP_HOST=mailhog
 # SMTP_PORT=1025
 # SMTP_USER=
@@ -134,6 +155,123 @@ La base de datos y los archivos subidos se persisten en volúmenes (`postgres-da
 La base de datos y los archivos subidos se persisten en volúmenes (`postgres-data`, `backend-storage`) definidos en el Compose.
 
 Las variables de entorno del contenedor `backend` se basan en los mismos nombres definidos en `backend/.env`, por lo que puedes adaptarlas para entornos de staging o producción. ([infra/docker-compose.yml](infra/docker-compose.yml))
+
+Para controlar el enforcement del esquema, define `DB_SCHEMA_ENFORCEMENT=strict|soft` (por defecto `strict`). En `strict`, el backend aborta el arranque si la DB no está migrada; en `soft`, la API inicia pero responde 503 en `/api/v1/health/db` y en endpoints dependientes de la DB hasta que se ejecuten las migraciones.
+
+### Migraciones Prisma en despliegues
+
+En producción/staging las migraciones se ejecutan **antes** de levantar el backend, usando un servicio separado llamado `migrate`. Esto evita loops de reinicio ante errores y te permite controlar los despliegues de esquema.
+
+#### Despliegue recomendado (único camino soportado)
+
+El flujo obligatorio y automatizable es ejecutar `infra/deploy.sh`, que realiza en orden:
+
+1. `docker compose down` (sin `-v` por defecto, con opción para resetear DB).
+2. `git fetch --all` + `git pull` (opcionalmente checkout de una rama).
+3. `docker compose up -d db` y espera el healthcheck.
+4. `docker compose run --rm migrate` (si falla, el deploy se aborta).
+5. `docker compose up -d backend frontend`.
+6. `docker compose ps` y logs resumidos si algo queda unhealthy.
+
+```bash
+cd infra
+./deploy.sh
+```
+
+Si necesitas poblar datos base en entornos no productivos, agrega `--seed` para ejecutar el seed dentro del job de migraciones:
+
+```bash
+cd infra
+./deploy.sh --seed
+```
+
+También puedes ejecutar el seed con `RUN_SEED=1`:
+
+```bash
+cd infra
+RUN_SEED=1 ./deploy.sh
+```
+
+Ejemplos adicionales:
+
+```bash
+# Resetear DB (Peligroso: elimina volúmenes)
+./deploy.sh --reset-db
+
+# Evitar down previo (debug)
+./deploy.sh --no-down
+
+# Deploy de una rama específica
+./deploy.sh --branch feature/nueva
+```
+
+Flujo recomendado (orden correcto):
+
+```bash
+cd infra
+./deploy.sh
+```
+
+En CI/CD, ejecuta el job de migraciones como paso previo al despliegue del backend:
+
+```bash
+cd infra
+./deploy.sh
+```
+
+#### Failed migrations recovery
+
+Si el deploy falla con migraciones fallidas en `_prisma_migrations` (por ejemplo cuando una migración fue corregida en el repo pero quedó marcada como failed en una DB existente), primero resuelve el estado y luego vuelve a correr el deploy.
+
+**Cómo detectar migraciones fallidas**
+
+- El job `migrate` imprime las migraciones con `finished_at` y `rolled_back_at` en `NULL`.
+- También puedes listarlas manualmente con el helper:
+  ```bash
+  cd infra
+  ./recover_failed_migrations.sh
+  ```
+
+**Qué significa rolled-back vs applied**
+
+- `--rolled-back`: úsalo si la migración falló y **no** aplicaste cambios manualmente en la DB. Marca la migración como rollback para que puedas reintentar el deploy.
+- `--applied`: úsalo solo si **ya aplicaste manualmente** los cambios de esa migración y quieres marcarla como aplicada.
+
+**Ejemplos con recover_failed_migrations.sh**
+
+```bash
+# Listar migraciones fallidas y comandos recomendados
+cd infra
+./recover_failed_migrations.sh
+
+# Marcar una migración como rolled-back
+./recover_failed_migrations.sh --rollback 20240101000000_example_migration
+
+# Marcar una migración como applied (si ya aplicaste cambios manualmente)
+./recover_failed_migrations.sh --apply 20240101000000_example_migration
+```
+
+Luego vuelve a ejecutar:
+
+```bash
+cd infra
+./deploy.sh
+```
+
+En CI/CD, el stage/job `migrate` debe ser obligatorio y el despliegue del backend debe depender de que las migraciones finalicen con éxito. Si el job `migrate` falla, **no** se debe iniciar el backend.
+
+El contenedor `backend` **no** ejecuta migraciones automáticamente, por lo que `docker compose run --rm backend <comando>` ejecuta el comando solicitado sin interceptarlo.
+
+#### Validación automatizable de migraciones
+
+Para validar que `prisma migrate deploy` funciona en una DB limpia, puedes ejecutar:
+
+```bash
+cd infra
+./validate-migrations.sh
+```
+
+El script recrea el volumen de PostgreSQL, levanta la DB, corre `migrate` y limpia los recursos. Úsalo en CI/CD o en local antes de despliegues críticos.
 
 ## Datos de ejemplo
 

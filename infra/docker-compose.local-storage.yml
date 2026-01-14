@@ -24,6 +24,7 @@ services:
       APP_URL: http://localhost:3000
       FRONTEND_URL: http://localhost:8080
       DATABASE_URL: postgres://postgres:postgres@db:5432/ligas
+      DB_SCHEMA_ENFORCEMENT: ${DB_SCHEMA_ENFORCEMENT:-strict}
       JWT_ACCESS_SECRET: change-me-access
       JWT_REFRESH_SECRET: change-me-refresh
       SMTP_HOST: ${SMTP_HOST:-mailhog}

@@ -1,2 +1,2 @@
-ALTER TABLE "SiteIdentity"
+ALTER TABLE IF EXISTS "SiteIdentity"
   ADD COLUMN IF NOT EXISTS "flyerKey" TEXT;

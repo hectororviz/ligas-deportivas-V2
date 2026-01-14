@@ -1,12 +1,18 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
-import { SiteIdentity } from '@prisma/client';
+import { Prisma, SiteIdentity } from '@prisma/client';
 import { UpdateSiteIdentityDto } from './dto/update-site-identity.dto';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { validateLoginImage } from './flyer-template.utils';
 import { createHash } from 'crypto';
+import { DatabaseSchemaHealthService } from '../prisma/database-schema-health.service';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const sharp = require('sharp');
 
@@ -30,6 +36,7 @@ export class SiteIdentityService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storageService: StorageService,
+    private readonly schemaHealth: DatabaseSchemaHealthService,
   ) {}
 
   async getIdentity(): Promise<SiteIdentityResponse> {
@@ -231,18 +238,29 @@ export class SiteIdentityService {
   }
 
   private async ensureIdentity(): Promise<SiteIdentity> {
-    const existing = await this.prisma.siteIdentity.findUnique({ where: { id: 1 } });
-    if (existing) {
-      return existing;
+    if (!this.schemaHealth.isReady()) {
+      throw new ServiceUnavailableException('DB not migrated');
     }
-    return this.prisma.siteIdentity.create({
-      data: {
-        id: 1,
-        title: 'Ligas Deportivas',
-        flyerKey: null,
-        faviconHash: null,
-      },
-    });
+
+    try {
+      const existing = await this.prisma.siteIdentity.findUnique({ where: { id: 1 } });
+      if (existing) {
+        return existing;
+      }
+      return this.prisma.siteIdentity.create({
+        data: {
+          id: 1,
+          title: 'Ligas Deportivas',
+          flyerKey: null,
+          faviconHash: null,
+        },
+      });
+    } catch (error) {
+      if (this.isSchemaMismatchError(error)) {
+        throw new ServiceUnavailableException('DB schema mismatch. Ejecutar migrate job.');
+      }
+      throw error;
+    }
   }
 
   private toResponse(identity: SiteIdentity): SiteIdentityResponse {
@@ -371,6 +389,23 @@ export class SiteIdentityService {
       default:
         return 'application/octet-stream';
     }
+  }
+
+  private isSchemaMismatchError(error: unknown): boolean {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      return error.code === 'P2021' || error.code === 'P2022';
+    }
+
+    if (error instanceof Error) {
+      const message = error.message.toLowerCase();
+      return (
+        message.includes('column') ||
+        message.includes('relation') ||
+        message.includes('does not exist')
+      );
+    }
+
+    return false;
   }
 
 }

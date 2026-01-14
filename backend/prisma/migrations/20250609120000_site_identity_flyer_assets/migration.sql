@@ -1,4 +1,13 @@
-ALTER TABLE "SiteIdentity"
-  ADD COLUMN "backgroundImage" TEXT,
-  ADD COLUMN "layoutSvg" TEXT,
-  ADD COLUMN "tokenConfig" JSONB;
+CREATE TABLE IF NOT EXISTS "SiteIdentity" (
+    "id" INTEGER NOT NULL DEFAULT 1,
+    "title" TEXT NOT NULL DEFAULT 'Ligas Deportivas',
+    "iconKey" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "SiteIdentity_pkey" PRIMARY KEY ("id")
+);
+
+ALTER TABLE IF EXISTS "SiteIdentity"
+  ADD COLUMN IF NOT EXISTS "backgroundImage" TEXT,
+  ADD COLUMN IF NOT EXISTS "layoutSvg" TEXT,
+  ADD COLUMN IF NOT EXISTS "tokenConfig" JSONB;
