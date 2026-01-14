@@ -44,6 +44,8 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
   bool _loadingClubs = false;
   bool _searchingPlayers = false;
 
+  bool _onlyFree = false;
+
   String? _loadError;
   String? _categoriesError;
   String? _clubsError;
@@ -249,6 +251,7 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
         '/players/search',
         queryParameters: {
           if (dni.isNotEmpty) 'dni': dni,
+          if (_onlyFree) 'onlyFree': true,
           'categoryId': categoryId,
           'tournamentId': tournamentId,
         },
@@ -481,16 +484,9 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
             ),
           ),
         ),
-      ],
-    );
-  }
-
-  Widget _buildSearchBar() {
-    return TableFiltersBar(
-      children: [
         TableFilterField(
           label: 'DNI',
-          width: 240,
+          width: 220,
           child: TextField(
             controller: _dniController,
             keyboardType: TextInputType.number,
@@ -501,6 +497,36 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
             onSubmitted: (_) => _searchPlayers(),
           ),
         ),
+        TableFilterField(
+          label: ' ',
+          width: 160,
+          child: SizedBox(
+            height: 48,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Checkbox(
+                  value: _onlyFree,
+                  onChanged: (value) {
+                    setState(() {
+                      _onlyFree = value ?? false;
+                      _playersError = null;
+                      _dataSource = null;
+                    });
+                  },
+                ),
+                const Text('Libres'),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return TableFiltersBar(
+      children: [
         TableFilterField(
           label: ' ',
           width: 160,
