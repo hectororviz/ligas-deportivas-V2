@@ -882,7 +882,6 @@ class _PlayersDataTable extends StatelessWidget {
       columns: const [
         DataColumn(label: Text('Apellido')),
         DataColumn(label: Text('Nombre')),
-        DataColumn(label: Text('Club')),
         DataColumn(label: Text('Género')),
         DataColumn(label: Text('Nacimiento')),
         DataColumn(label: Text('Estado')),
@@ -900,7 +899,6 @@ class _PlayersDataTable extends StatelessWidget {
             cells: [
               DataCell(Text(players[index].lastName)),
               DataCell(Text(players[index].firstName)),
-              DataCell(Text(players[index].club?.name ?? 'Sin club asignado')),
               DataCell(Text(players[index].genderLabel)),
               DataCell(Text(players[index].formattedBirthDateWithAge)),
               DataCell(
