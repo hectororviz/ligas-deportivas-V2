@@ -148,9 +148,8 @@ export class TournamentsService {
       throw new NotFoundException('Torneo inexistente');
     }
 
-    const [player, club, category, tournamentCategory] = await Promise.all([
+    const [player, category, tournamentCategory] = await Promise.all([
       this.prisma.player.findUnique({ where: { id: dto.playerId } }),
-      this.prisma.club.findUnique({ where: { id: dto.clubId } }),
       this.prisma.category.findUnique({ where: { id: dto.categoryId } }),
       this.prisma.tournamentCategory.findFirst({
         where: {
@@ -165,14 +164,31 @@ export class TournamentsService {
     if (!player) {
       throw new NotFoundException('Jugador inexistente');
     }
-    if (!club) {
-      throw new NotFoundException('Club inexistente');
-    }
     if (!category || !category.active) {
       throw new BadRequestException('Categoría inválida o inactiva.');
     }
     if (!tournamentCategory) {
       throw new BadRequestException('La categoría no está habilitada en el torneo.');
+    }
+
+    if (dto.clubId == null) {
+      await this.prisma.playerTournamentClub.deleteMany({
+        where: {
+          playerId: dto.playerId,
+          tournamentId,
+        },
+      });
+
+      return {
+        playerId: dto.playerId,
+        clubId: null,
+        tournamentId,
+      };
+    }
+
+    const club = await this.prisma.club.findUnique({ where: { id: dto.clubId } });
+    if (!club) {
+      throw new NotFoundException('Club inexistente');
     }
 
     const startDate = new Date(Date.UTC(category.birthYearMin, 0, 1));

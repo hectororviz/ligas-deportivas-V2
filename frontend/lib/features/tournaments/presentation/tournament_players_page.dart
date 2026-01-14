@@ -281,9 +281,6 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
   }
 
   Future<void> _handleClubSelection(PlayerAssignmentRow row, int? clubId) async {
-    if (clubId == null) {
-      return;
-    }
     if (row.selectedClubId == clubId) {
       return;
     }
@@ -305,14 +302,13 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
   }
 
   Future<void> _retryAssignment(PlayerAssignmentRow row) async {
-    final pendingClubId = row.pendingClubId;
-    if (pendingClubId == null) {
+    if (!row.hasPendingClubChange) {
       return;
     }
-    await _saveAssignment(row, pendingClubId);
+    await _saveAssignment(row, row.pendingClubId);
   }
 
-  Future<void> _saveAssignment(PlayerAssignmentRow row, int clubId) async {
+  Future<void> _saveAssignment(PlayerAssignmentRow row, int? clubId) async {
     final tournamentId = _selectedTournamentId;
     final categoryId = _selectedCategoryId;
     if (tournamentId == null || categoryId == null) {
@@ -322,6 +318,7 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
     row.status = PlayerAssignmentStatus.saving;
     row.errorMessage = null;
     row.pendingClubId = clubId;
+    row.hasPendingClubChange = true;
     _dataSource?.notifyListeners();
 
     try {
@@ -338,6 +335,7 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
       row.selectedClubId = clubId;
       row.status = PlayerAssignmentStatus.saved;
       row.pendingClubId = null;
+      row.hasPendingClubChange = false;
     } catch (error) {
       row.status = PlayerAssignmentStatus.error;
       row.errorMessage = _formatError(error);
@@ -346,15 +344,17 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
     }
   }
 
-  Future<bool> _confirmReplace(PlayerAssignmentRow row, int clubId) async {
+  Future<bool> _confirmReplace(PlayerAssignmentRow row, int? clubId) async {
     final currentClub = _clubs.firstWhere(
       (club) => club.id == row.assignedClubId,
       orElse: () => ClubOption(id: 0, name: 'Sin club', shortName: null),
     );
-    final nextClub = _clubs.firstWhere(
-      (club) => club.id == clubId,
-      orElse: () => ClubOption(id: clubId, name: 'Nuevo club', shortName: null),
-    );
+    final nextClub = clubId == null
+        ? ClubOption(id: 0, name: 'Sin club', shortName: null)
+        : _clubs.firstWhere(
+            (club) => club.id == clubId,
+            orElse: () => ClubOption(id: clubId, name: 'Nuevo club', shortName: null),
+          );
 
     final result = await showDialog<bool>(
       context: context,
@@ -362,8 +362,11 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
         return AlertDialog(
           title: const Text('Confirmar cambio'),
           content: Text(
-            'Este jugador estaba asignado a ${currentClub.displayName}. '
-            '¿Reemplazar por ${nextClub.displayName}?',
+            clubId == null
+                ? 'Este jugador estaba asignado a ${currentClub.displayName}. '
+                    '¿Quitar la asignación del club?'
+                : 'Este jugador estaba asignado a ${currentClub.displayName}. '
+                    '¿Reemplazar por ${nextClub.displayName}?',
           ),
           actions: [
             TextButton(
@@ -372,7 +375,7 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Reemplazar'),
+              child: Text(clubId == null ? 'Quitar' : 'Reemplazar'),
             ),
           ],
         );
@@ -677,20 +680,25 @@ class _PlayerAssignmentDataSource extends DataTableSource {
         DataCell(Text(dateFormatter.format(row.birthDate))),
         DataCell(
           DropdownButtonHideUnderline(
-            child: DropdownButton<int>(
+            child: DropdownButton<int?>(
               isExpanded: true,
               value: row.selectedClubId,
               hint: const Text('Sin club'),
-              items: clubs
-                  .map(
-                    (club) => DropdownMenuItem<int>(
-                      value: club.id,
-                      child: Text(club.displayName),
-                    ),
-                  )
-                  .toList(),
-              onChanged:
-                  row.status == PlayerAssignmentStatus.saving ? null : (value) => onClubSelected(row, value),
+              items: [
+                const DropdownMenuItem<int?>(
+                  value: null,
+                  child: Text('Sin club'),
+                ),
+                ...clubs.map(
+                  (club) => DropdownMenuItem<int?>(
+                    value: club.id,
+                    child: Text(club.displayName),
+                  ),
+                ),
+              ],
+              onChanged: row.status == PlayerAssignmentStatus.saving
+                  ? null
+                  : (value) => onClubSelected(row, value),
             ),
           ),
         ),
@@ -727,7 +735,7 @@ class _PlayerAssignmentDataSource extends DataTableSource {
               style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
             ),
             TextButton(
-              onPressed: row.pendingClubId == null ? null : () => onRetry(row),
+              onPressed: row.hasPendingClubChange ? () => onRetry(row) : null,
               child: const Text('Reintentar'),
             ),
           ],
@@ -894,6 +902,7 @@ class PlayerAssignmentRow {
   int? assignedClubId;
   int? selectedClubId;
   int? pendingClubId;
+  bool hasPendingClubChange = false;
   PlayerAssignmentStatus status = PlayerAssignmentStatus.idle;
   String? errorMessage;
 }

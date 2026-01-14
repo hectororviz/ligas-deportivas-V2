@@ -1,14 +1,15 @@
-import { Type } from 'class-transformer';
-import { IsInt } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { IsInt, ValidateIf } from 'class-validator';
 
 export class AssignPlayerClubDto {
   @Type(() => Number)
   @IsInt()
   playerId!: number;
 
-  @Type(() => Number)
+  @Transform(({ value }) => (value === null || value === undefined || value === '' ? null : Number(value)))
+  @ValidateIf((_, value) => value !== null && value !== undefined)
   @IsInt()
-  clubId!: number;
+  clubId!: number | null;
 
   @Type(() => Number)
   @IsInt()
