@@ -1221,6 +1221,7 @@ class _MassivePlayersPage extends ConsumerStatefulWidget {
 class _MassivePlayersPageState extends ConsumerState<_MassivePlayersPage> {
   final _formKey = GlobalKey<FormState>();
   final List<_MassivePlayerRow> _rows = [];
+  final ScrollController _horizontalScrollController = ScrollController();
   bool _isSaving = false;
 
   @override
@@ -1236,6 +1237,7 @@ class _MassivePlayersPageState extends ConsumerState<_MassivePlayersPage> {
     for (final row in _rows) {
       row.dispose();
     }
+    _horizontalScrollController.dispose();
     super.dispose();
   }
 
@@ -1617,11 +1619,13 @@ class _MassivePlayersPageState extends ConsumerState<_MassivePlayersPage> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Scrollbar(
+                        controller: _horizontalScrollController,
                         thumbVisibility: true,
                         notificationPredicate: (notification) =>
                             notification.metrics.axis == Axis.horizontal,
                         child: SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
+                          controller: _horizontalScrollController,
                           child: ConstrainedBox(
                             constraints: const BoxConstraints(minWidth: 1200),
                             child: table,
@@ -1635,7 +1639,7 @@ class _MassivePlayersPageState extends ConsumerState<_MassivePlayersPage> {
                           OutlinedButton.icon(
                             onPressed: _isSaving ? null : _addRow,
                             icon: const Icon(Icons.add),
-                            label: const Text('+'),
+                            label: const Text('Agregar fila'),
                           ),
                           const SizedBox(width: 12),
                           FilledButton(
