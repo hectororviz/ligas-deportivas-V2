@@ -596,33 +596,53 @@ class _TournamentClubsDialogState extends ConsumerState<_TournamentClubsDialog> 
 
     try {
       final api = ref.read(apiClientProvider);
-      final responses = await Future.wait([
-        api.get<Map<String, dynamic>>(
-          '/clubs',
-          queryParameters: const {
-            'page': 1,
-            'pageSize': 500,
-            'status': 'active',
-          },
-        ),
-        api.get<List<dynamic>>('/tournaments/${widget.tournament.id}/participating-clubs'),
-        api.get<List<dynamic>>('/tournaments/${widget.tournament.id}/categories'),
+      final clubsResponseFuture = api.get<Map<String, dynamic>>(
+        '/clubs',
+        queryParameters: const {
+          'page': 1,
+          'pageSize': 500,
+          'status': 'active',
+        },
+      );
+      final participatingResponseFuture =
+          api.get<List<dynamic>>('/tournaments/${widget.tournament.id}/participating-clubs');
+      final categoriesResponseFuture =
+          api.get<List<dynamic>>('/tournaments/${widget.tournament.id}/categories');
+
+      await Future.wait([
+        clubsResponseFuture,
+        participatingResponseFuture,
+        categoriesResponseFuture,
       ]);
 
-      final clubsJson = responses[0].data?['data'] as List<dynamic>? ?? [];
+      final clubsResponse = await clubsResponseFuture;
+      final participatingResponse = await participatingResponseFuture;
+      final categoriesResponse = await categoriesResponseFuture;
+
+      final clubsData = clubsResponse.data?['data'];
+      final clubsJson = (clubsData is List) ? clubsData : <dynamic>[];
       final clubs = clubsJson
-          .map((item) => _ClubAssignment.fromJson(item as Map<String, dynamic>))
+          .whereType<Map<String, dynamic>>()
+          .map(_ClubAssignment.fromJson)
           .toList()
         ..sort((a, b) => a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()));
 
-      final participatingJson = responses[1].data ?? [];
+      final participatingData = participatingResponse.data;
+      final participatingJson = (participatingData is List) ? participatingData : <dynamic>[];
       final participatingIds = participatingJson
-          .map((item) => (item as Map<String, dynamic>)['id'] as int)
+          .whereType<Map>()
+          .map((item) => item['id'])
+          .whereType<num>()
+          .map((id) => id.toInt())
           .toSet();
 
-      final categoriesJson = responses[2].data ?? [];
+      final categoriesData = categoriesResponse.data;
+      final categoriesJson = (categoriesData is List) ? categoriesData : <dynamic>[];
       final categoryIds = categoriesJson
-          .map((item) => (item as Map<String, dynamic>)['tournamentCategoryId'] as int)
+          .whereType<Map>()
+          .map((item) => item['tournamentCategoryId'])
+          .whereType<num>()
+          .map((id) => id.toInt())
           .toList();
 
       setState(() {
