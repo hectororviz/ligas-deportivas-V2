@@ -866,7 +866,7 @@ class _ClubTournamentsAccordionState extends State<_ClubTournamentsAccordion> {
                 final iconColor = isGreen ? Colors.green : Colors.red;
                 final tooltipMessage = isGreen
                     ? 'Todas las categorías obligatorias cumplen con el mínimo de jugadores.'
-                    : 'Hay categorías obligatorias con menos jugadores habilitados que el mínimo.';
+                    : 'Hay categorías obligatorias con menos jugadores marcados que el mínimo.';
                 return ListTile(
                   leading: Tooltip(
                     message: tooltipMessage,
@@ -1018,9 +1018,9 @@ class _CategoryRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final iconColor = category.isCompliant ? Colors.green : Colors.red;
     final tooltip = category.isCompliant
-        ? 'Habilitados suficientes para cumplir el mínimo.'
+        ? 'Marcados suficientes para cumplir el mínimo.'
         : category.mandatory
-            ? 'Faltan jugadores habilitados para alcanzar el mínimo requerido.'
+            ? 'Faltan jugadores marcados para alcanzar el mínimo requerido.'
             : 'Categoría opcional con menos del mínimo configurado.';
 
     return Card(
@@ -1052,7 +1052,7 @@ class _CategoryRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Habilitados: ${category.enabledCount} · Mínimo requerido: ${category.minPlayers}' +
+                    'Marcados: ${category.enabledCount} · Mínimo requerido: ${category.minPlayers}' +
                         (category.mandatory ? ' · Obligatoria' : ' · Opcional'),
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
@@ -1352,11 +1352,10 @@ class _ClubRosterViewerDialogState extends ConsumerState<ClubRosterViewerDialog>
       final clubId = widget.club.id;
       final categoryId = widget.category.tournamentCategoryId;
       final response = await api.get<Map<String, dynamic>>(
-        '/clubs/$clubId/tournament-categories/$categoryId/eligible-players',
+        '/clubs/$clubId/tournament-categories/$categoryId/assigned-players',
         queryParameters: {
           'page': 1,
           'pageSize': 200,
-          'onlyEnabled': true,
         },
       );
       final data = response.data ?? <String, dynamic>{};
@@ -1385,7 +1384,7 @@ class _ClubRosterViewerDialogState extends ConsumerState<ClubRosterViewerDialog>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Habilitados · ${widget.category.categoryName}',
+              'Marcados · ${widget.category.categoryName}',
               style: Theme.of(context)
                   .textTheme
                   .titleLarge
@@ -1393,7 +1392,7 @@ class _ClubRosterViewerDialogState extends ConsumerState<ClubRosterViewerDialog>
             ),
             const SizedBox(height: 4),
             Text(
-              'Listado de jugadores habilitados para la categoría.',
+              'Listado de jugadores marcados para la categoría.',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 16),
@@ -1411,7 +1410,7 @@ class _ClubRosterViewerDialogState extends ConsumerState<ClubRosterViewerDialog>
                     const Icon(Icons.error_outline, size: 48),
                     const SizedBox(height: 12),
                     Text(
-                      'No se pudieron cargar los jugadores habilitados.',
+                      'No se pudieron cargar los jugadores marcados.',
                       style: Theme.of(context).textTheme.titleMedium,
                       textAlign: TextAlign.center,
                     ),
@@ -1431,7 +1430,7 @@ class _ClubRosterViewerDialogState extends ConsumerState<ClubRosterViewerDialog>
                 padding: const EdgeInsets.symmetric(vertical: 32),
                 child: Center(
                   child: Text(
-                    'No hay jugadores habilitados en esta categoría.',
+                    'No hay jugadores marcados en esta categoría.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                 ),
