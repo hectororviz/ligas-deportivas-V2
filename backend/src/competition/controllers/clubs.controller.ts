@@ -22,6 +22,7 @@ import { Action, Module } from '@prisma/client';
 import { UpdateClubTeamsDto } from '../dto/update-club-teams.dto';
 import { ListClubsDto } from '../dto/list-clubs.dto';
 import { UpdateClubDto } from '../dto/update-club.dto';
+import { ListAssignedPlayersDto } from '../dto/list-assigned-players.dto';
 import { ListRosterPlayersDto } from '../dto/list-roster-players.dto';
 import { UpdateRosterPlayersDto } from '../dto/update-roster-players.dto';
 import { JoinTournamentDto } from '../dto/join-tournament.dto';
@@ -54,6 +55,15 @@ export class ClubsController {
     @Query() query: ListRosterPlayersDto,
   ) {
     return this.clubsService.listEligibleRosterPlayers(clubId, tournamentCategoryId, query);
+  }
+
+  @Get('clubs/:clubId/tournament-categories/:tournamentCategoryId/assigned-players')
+  listAssignedPlayers(
+    @Param('clubId', ParseIntPipe) clubId: number,
+    @Param('tournamentCategoryId', ParseIntPipe) tournamentCategoryId: number,
+    @Query() query: ListAssignedPlayersDto,
+  ) {
+    return this.clubsService.listAssignedPlayers(clubId, tournamentCategoryId, query);
   }
 
   @Put('clubs/:clubId/tournament-categories/:tournamentCategoryId/eligible-players')
