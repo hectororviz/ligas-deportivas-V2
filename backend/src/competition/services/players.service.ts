@@ -262,6 +262,13 @@ export class PlayersService {
       where.gender = category.gender;
     }
 
+    const onlyFree = query.onlyFree === true;
+    if (onlyFree) {
+      where.playerTournamentClubs = {
+        none: { tournamentId: query.tournamentId },
+      };
+    }
+
     const players = await this.prisma.player.findMany({
       where,
       include: {
