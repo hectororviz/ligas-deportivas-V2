@@ -2066,7 +2066,10 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
 
     return WillPopScope(
       onWillPop: _onWillPop,
-      child: SingleChildScrollView(child: content),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.only(right: 12),
+        child: content,
+      ),
     );
   }
 

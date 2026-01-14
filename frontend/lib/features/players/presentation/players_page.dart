@@ -1527,6 +1527,7 @@ class _PlayerFormDialogState extends ConsumerState<_PlayerFormDialog> {
       key: _formKey,
       autovalidateMode: AutovalidateMode.onUserInteraction,
       child: SingleChildScrollView(
+        padding: const EdgeInsets.only(right: 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
