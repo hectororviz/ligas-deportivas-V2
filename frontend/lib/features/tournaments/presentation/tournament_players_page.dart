@@ -520,13 +520,6 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
             ),
           ),
         ),
-      ],
-    );
-  }
-
-  Widget _buildSearchBar() {
-    return TableFiltersBar(
-      children: [
         TableFilterField(
           label: ' ',
           width: 160,
@@ -601,8 +594,6 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
                                 ?.copyWith(color: theme.colorScheme.error),
                           ),
                         ),
-                      const SizedBox(height: 12),
-                      _buildSearchBar(),
                       if (_playersError != null)
                         Padding(
                           padding: const EdgeInsets.only(top: 8),
