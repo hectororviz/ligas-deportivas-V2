@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:characters/characters.dart';
@@ -57,35 +56,6 @@ class _ClubAdminPageState extends ConsumerState<ClubAdminPage> {
       }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Club agregado al torneo correctamente.')),
-      );
-    }
-  }
-
-  Future<void> _openRosterEditor(
-    ClubAdminOverview overview,
-    ClubAdminTournament tournament,
-    ClubAdminCategory category,
-  ) async {
-    final result = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => ClubRosterEditorDialog(
-        club: overview.club,
-        tournament: tournament,
-        category: category,
-      ),
-    );
-    if (result == true) {
-      ref.invalidate(clubAdminOverviewProvider(widget.slug));
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Habilitaciones actualizadas para ${category.categoryName}.',
-          ),
-        ),
       );
     }
   }
@@ -203,8 +173,6 @@ class _ClubAdminPageState extends ConsumerState<ClubAdminPage> {
               isAdmin: isAdmin,
               isAuthenticated: isAuthenticated,
               leavingTournamentId: _leavingTournamentId,
-              onEditCategory: (tournament, category) =>
-                  _openRosterEditor(overview, tournament, category),
               onViewCategory: (tournament, category) =>
                   _openRosterViewer(overview, tournament, category),
               onRemoveTournament: (tournament) =>
@@ -228,7 +196,6 @@ class _ClubAdminContent extends StatelessWidget {
     required this.isAdmin,
     required this.isAuthenticated,
     required this.leavingTournamentId,
-    required this.onEditCategory,
     required this.onViewCategory,
     required this.onRemoveTournament,
   });
@@ -237,8 +204,6 @@ class _ClubAdminContent extends StatelessWidget {
   final bool isAdmin;
   final bool isAuthenticated;
   final int? leavingTournamentId;
-  final void Function(ClubAdminTournament tournament, ClubAdminCategory category)
-      onEditCategory;
   final void Function(ClubAdminTournament tournament, ClubAdminCategory category)
       onViewCategory;
   final void Function(ClubAdminTournament tournament) onRemoveTournament;
@@ -259,7 +224,7 @@ class _ClubAdminContent extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Revisá la información del club y gestioná las habilitaciones por categoría en cada torneo.',
+            'Revisá la información del club y consultá los jugadores por categoría en cada torneo.',
             style: Theme.of(context).textTheme.bodyLarge,
           ),
           const SizedBox(height: 24),
@@ -273,7 +238,6 @@ class _ClubAdminContent extends StatelessWidget {
               isAdmin: isAdmin,
               isAuthenticated: isAuthenticated,
               leavingTournamentId: leavingTournamentId,
-              onEditCategory: onEditCategory,
               onViewCategory: onViewCategory,
               onRemoveTournament: onRemoveTournament,
             ),
@@ -337,7 +301,7 @@ class _ClubAdminEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final description = isAdmin
-        ? 'Sumá al club a un torneo desde el botón flotante para comenzar a gestionar las habilitaciones.'
+        ? 'Sumá al club a un torneo desde el botón flotante para comenzar a revisar sus categorías.'
         : 'Aún no hay torneos asociados a este club.';
     return Card(
       child: Padding(
@@ -867,7 +831,6 @@ class _ClubTournamentsAccordion extends StatefulWidget {
     required this.isAdmin,
     required this.isAuthenticated,
     required this.leavingTournamentId,
-    required this.onEditCategory,
     required this.onViewCategory,
     required this.onRemoveTournament,
   });
@@ -876,8 +839,6 @@ class _ClubTournamentsAccordion extends StatefulWidget {
   final bool isAdmin;
   final bool isAuthenticated;
   final int? leavingTournamentId;
-  final void Function(ClubAdminTournament tournament, ClubAdminCategory category)
-      onEditCategory;
   final void Function(ClubAdminTournament tournament, ClubAdminCategory category)
       onViewCategory;
   final void Function(ClubAdminTournament tournament) onRemoveTournament;
@@ -926,7 +887,6 @@ class _ClubTournamentsAccordionState extends State<_ClubTournamentsAccordion> {
                 isAdmin: widget.isAdmin,
                 isAuthenticated: widget.isAuthenticated,
                 isRemoving: widget.leavingTournamentId == widget.tournaments[i].id,
-                onEditCategory: widget.onEditCategory,
                 onViewCategory: widget.onViewCategory,
                 onRemoveTournament: widget.onRemoveTournament,
               ),
@@ -943,7 +903,6 @@ class _TournamentCategoriesList extends StatelessWidget {
     required this.isAdmin,
     required this.isAuthenticated,
     required this.isRemoving,
-    required this.onEditCategory,
     required this.onViewCategory,
     required this.onRemoveTournament,
   });
@@ -952,8 +911,6 @@ class _TournamentCategoriesList extends StatelessWidget {
   final bool isAdmin;
   final bool isAuthenticated;
   final bool isRemoving;
-  final void Function(ClubAdminTournament tournament, ClubAdminCategory category)
-      onEditCategory;
   final void Function(ClubAdminTournament tournament, ClubAdminCategory category)
       onViewCategory;
   final void Function(ClubAdminTournament tournament) onRemoveTournament;
@@ -1034,9 +991,7 @@ class _TournamentCategoriesList extends StatelessWidget {
               _CategoryRow(
                 tournament: tournament,
                 category: category,
-                isAdmin: isAdmin,
                 isAuthenticated: isAuthenticated,
-                onEditCategory: onEditCategory,
                 onViewCategory: onViewCategory,
               ),
         ],
@@ -1049,18 +1004,13 @@ class _CategoryRow extends StatelessWidget {
   const _CategoryRow({
     required this.tournament,
     required this.category,
-    required this.isAdmin,
     required this.isAuthenticated,
-    required this.onEditCategory,
     required this.onViewCategory,
   });
 
   final ClubAdminTournament tournament;
   final ClubAdminCategory category;
-  final bool isAdmin;
   final bool isAuthenticated;
-  final void Function(ClubAdminTournament tournament, ClubAdminCategory category)
-      onEditCategory;
   final void Function(ClubAdminTournament tournament, ClubAdminCategory category)
       onViewCategory;
 
@@ -1117,11 +1067,6 @@ class _CategoryRow extends StatelessWidget {
                   OutlinedButton(
                     onPressed: () => onViewCategory(tournament, category),
                     child: const Text('Ver'),
-                  ),
-                if (isAdmin)
-                  FilledButton(
-                    onPressed: () => onEditCategory(tournament, category),
-                    child: const Text('Editar'),
                   ),
               ],
             ),
@@ -1369,247 +1314,6 @@ double? _parseCoordinate(dynamic value) {
     return double.tryParse(value);
   }
   return null;
-}
-
-class ClubRosterEditorDialog extends ConsumerStatefulWidget {
-  const ClubRosterEditorDialog({
-    required this.club,
-    required this.tournament,
-    required this.category,
-  });
-
-  final ClubAdminSummary club;
-  final ClubAdminTournament tournament;
-  final ClubAdminCategory category;
-
-  @override
-  ConsumerState<ClubRosterEditorDialog> createState() => _ClubRosterEditorDialogState();
-}
-
-class _ClubRosterEditorDialogState extends ConsumerState<ClubRosterEditorDialog> {
-  final Set<int> _selectedPlayers = <int>{};
-  List<EligiblePlayer> _players = const [];
-  int _page = 1;
-  int _pageSize = 20;
-  int _total = 0;
-  bool _isSaving = false;
-  bool _isLoading = true;
-  Object? _error;
-  bool _initialSelectionLoaded = false;
-
-  @override
-  void initState() {
-    super.initState();
-    unawaited(_loadPlayers());
-  }
-
-  Future<void> _loadPlayers({int page = 1}) async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-    try {
-      final api = ref.read(apiClientProvider);
-      final clubId = widget.club.id;
-      final categoryId = widget.category.tournamentCategoryId;
-
-      final response = await api.get<Map<String, dynamic>>(
-        '/clubs/$clubId/tournament-categories/$categoryId/eligible-players',
-        queryParameters: {
-          'page': page,
-          'pageSize': _pageSize,
-        },
-      );
-      final data = response.data ?? <String, dynamic>{};
-      final result = EligiblePlayersPage.fromJson(data);
-
-      final enabledResponse = await api.get<Map<String, dynamic>>(
-        '/clubs/$clubId/tournament-categories/$categoryId/eligible-players',
-        queryParameters: {
-          'page': 1,
-          'pageSize': 500,
-          'onlyEnabled': true,
-        },
-      );
-      final enabledData = enabledResponse.data ?? <String, dynamic>{};
-      final enabledPage = EligiblePlayersPage.fromJson(enabledData);
-
-      if (!_initialSelectionLoaded) {
-        _selectedPlayers
-          ..clear()
-          ..addAll(enabledPage.players.map((player) => player.id));
-        _initialSelectionLoaded = true;
-      }
-
-      setState(() {
-        _players = result.players;
-        _page = result.page;
-        _pageSize = result.pageSize;
-        _total = result.total;
-        _isLoading = false;
-      });
-    } catch (error) {
-      setState(() {
-        _error = error;
-        _isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _toggleSelection(bool? selected, int playerId) async {
-    setState(() {
-      if (selected == true) {
-        _selectedPlayers.add(playerId);
-      } else {
-        _selectedPlayers.remove(playerId);
-      }
-    });
-  }
-
-  Future<void> _save() async {
-    if (_isSaving) {
-      return;
-    }
-    setState(() {
-      _isSaving = true;
-    });
-    try {
-      final api = ref.read(apiClientProvider);
-      final clubId = widget.club.id;
-      final categoryId = widget.category.tournamentCategoryId;
-      await api.put(
-        '/clubs/$clubId/tournament-categories/$categoryId/eligible-players',
-        data: {
-          'playerIds': _selectedPlayers.toList(),
-        },
-      );
-      if (!mounted) {
-        return;
-      }
-      Navigator.of(context).pop(true);
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudieron guardar los cambios: $error')),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      content: SizedBox(
-        width: 720,
-        height: 520,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Editar habilitados · ${widget.category.categoryName}',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Seleccioná los jugadores elegibles del club para habilitarlos en esta categoría.',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: _buildContent(context),
-            ),
-            const SizedBox(height: 16),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Seleccionados: ${_selectedPlayers.length} · Mínimo requerido: ${widget.category.minPlayers}',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: _isSaving ? null : () => Navigator.of(context).maybePop(false),
-                  child: const Text('Cancelar'),
-                ),
-                const SizedBox(width: 12),
-                FilledButton(
-                  onPressed: _isSaving ? null : _save,
-                  child: _isSaving
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Guardar'),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildContent(BuildContext context) {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (_error != null) {
-      return Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.error_outline, size: 48),
-          const SizedBox(height: 12),
-          Text(
-            'No se pudieron cargar los jugadores elegibles.',
-            style: Theme.of(context).textTheme.titleMedium,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-          Text('$_error', textAlign: TextAlign.center),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: () => _loadPlayers(page: _page),
-            icon: const Icon(Icons.refresh),
-            label: const Text('Reintentar'),
-          ),
-        ],
-      );
-    }
-    return Column(
-      children: [
-        Expanded(
-          child: _EligiblePlayersTable(
-            players: _players,
-            selectedPlayers: _selectedPlayers,
-            onSelectionChanged: _toggleSelection,
-          ),
-        ),
-        const SizedBox(height: 12),
-        _PaginationControls(
-          page: _page,
-          pageSize: _pageSize,
-          total: _total,
-          onChanged: (page) => _loadPlayers(page: page),
-        ),
-      ],
-    );
-  }
 }
 
 class ClubRosterViewerDialog extends ConsumerStatefulWidget {
@@ -1863,42 +1567,6 @@ class _EligiblePlayersTable extends StatelessWidget {
           controlAffinity: ListTileControlAffinity.leading,
         );
       },
-    );
-  }
-}
-
-class _PaginationControls extends StatelessWidget {
-  const _PaginationControls({
-    required this.page,
-    required this.pageSize,
-    required this.total,
-    required this.onChanged,
-  });
-
-  final int page;
-  final int pageSize;
-  final int total;
-  final ValueChanged<int> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final totalPages = (total / pageSize).ceil();
-    if (totalPages <= 1) {
-      return const SizedBox.shrink();
-    }
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        IconButton(
-          onPressed: page > 1 ? () => onChanged(page - 1) : null,
-          icon: const Icon(Icons.chevron_left),
-        ),
-        Text('Página $page de $totalPages'),
-        IconButton(
-          onPressed: page < totalPages ? () => onChanged(page + 1) : null,
-          icon: const Icon(Icons.chevron_right),
-        ),
-      ],
     );
   }
 }
