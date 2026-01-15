@@ -853,19 +853,17 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
         '/matches/${widget.match.id}/categories/${widget.category.tournamentCategoryId}/result',
       );
       final homePlayersFuture = api.get<Map<String, dynamic>>(
-        '/clubs/$homeClubId/tournament-categories/${widget.category.tournamentCategoryId}/eligible-players',
+        '/clubs/$homeClubId/tournament-categories/${widget.category.tournamentCategoryId}/assigned-players',
         queryParameters: {
           'page': 1,
           'pageSize': 200,
-          'onlyEnabled': true,
         },
       );
       final awayPlayersFuture = api.get<Map<String, dynamic>>(
-        '/clubs/$awayClubId/tournament-categories/${widget.category.tournamentCategoryId}/eligible-players',
+        '/clubs/$awayClubId/tournament-categories/${widget.category.tournamentCategoryId}/assigned-players',
         queryParameters: {
           'page': 1,
           'pageSize': 200,
-          'onlyEnabled': true,
         },
       );
 
