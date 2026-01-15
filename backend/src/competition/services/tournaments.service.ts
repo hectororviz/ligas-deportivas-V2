@@ -320,22 +320,36 @@ export class TournamentsService {
     }
 
     const tournamentCategoryIds = assignments.map((assignment) => assignment.id);
-    const rosters = await this.prisma.roster.findMany({
+    const players = await this.prisma.player.findMany({
       where: {
-        clubId: { in: clubIds },
-        tournamentCategoryId: { in: tournamentCategoryIds },
+        active: true,
+        playerTournamentClubs: {
+          some: {
+            tournamentId,
+            clubId: { in: clubIds },
+          },
+        },
       },
-      include: {
-        players: {
-          select: { playerId: true },
+      select: {
+        birthDate: true,
+        gender: true,
+        playerTournamentClubs: {
+          where: { tournamentId },
+          select: { clubId: true },
         },
       },
     });
 
-    const rosterCounts = new Map<string, number>();
-    for (const roster of rosters) {
-      const key = this.buildRosterKey(roster.clubId, roster.tournamentCategoryId);
-      rosterCounts.set(key, roster.players.length);
+    const playersByClub = new Map<number, Array<{ birthDate: Date; gender: Gender }>>();
+    for (const player of players) {
+      const clubId = player.playerTournamentClubs[0]?.clubId;
+      if (!clubId) {
+        continue;
+      }
+      if (!playersByClub.has(clubId)) {
+        playersByClub.set(clubId, []);
+      }
+      playersByClub.get(clubId)!.push({ birthDate: player.birthDate, gender: player.gender });
     }
 
     const sortedClubs = clubIds
@@ -347,8 +361,10 @@ export class TournamentsService {
       const teamSet = clubTeams.get(club.id) ?? new Set<number>();
       const categories = assignments.map((assignment) => {
         const hasTeam = teamSet.has(assignment.id);
-        const rosterKey = this.buildRosterKey(club.id, assignment.id);
-        const playersCount = rosterCounts.get(rosterKey) ?? 0;
+        const clubPlayers = playersByClub.get(club.id) ?? [];
+        const playersCount = clubPlayers.filter((player) =>
+          this.isPlayerEligibleForCategory(player, assignment.category),
+        ).length;
         const meetsMinPlayers = hasTeam
           ? playersCount >= assignment.category.minPlayers
           : !assignment.category.mandatory;
@@ -384,8 +400,15 @@ export class TournamentsService {
     });
   }
 
-  private buildRosterKey(clubId: number, tournamentCategoryId: number) {
-    return `${clubId}-${tournamentCategoryId}`;
+  private isPlayerEligibleForCategory(
+    player: { birthDate: Date; gender: Gender },
+    category: { birthYearMin: number; birthYearMax: number; gender: Gender },
+  ) {
+    if (category.gender !== Gender.MIXTO && player.gender !== category.gender) {
+      return false;
+    }
+    const birthYear = player.birthDate.getUTCFullYear();
+    return birthYear >= category.birthYearMin && birthYear <= category.birthYearMax;
   }
 
   async addCategory(tournamentId: number, dto: AddTournamentCategoryDto) {
