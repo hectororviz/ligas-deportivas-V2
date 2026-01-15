@@ -122,7 +122,13 @@ export class ClubsService {
     }
 
     const teams = await this.prisma.team.findMany({
-      where: { clubId: club.id },
+      where: {
+        clubId: club.id,
+        tournamentCategory: {
+          enabled: true,
+          category: { active: true },
+        },
+      },
       include: {
         tournamentCategory: {
           include: {

@@ -506,12 +506,14 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
                               onDetails: _showTournamentDetails,
                               onEdit: _openEditTournament,
                               onClubs: _openTournamentClubs,
-                              canEdit: (tournament) => user?.hasPermission(
-                                    module: _moduleTorneos,
-                                    action: _actionUpdate,
-                                    leagueId: tournament.leagueId,
-                                  ) ??
-                                  false,
+                              canEdit: (tournament) =>
+                                  (user?.hasPermission(
+                                        module: _moduleTorneos,
+                                        action: _actionUpdate,
+                                        leagueId: tournament.leagueId,
+                                      ) ??
+                                      false) &&
+                                  !tournament.hasLockedZones,
                             );
                           },
                           loading: () => const Center(child: CircularProgressIndicator()),
@@ -1800,12 +1802,14 @@ class TournamentSummary {
     required this.startDate,
     required this.endDate,
     required this.championMode,
+    required this.hasLockedZones,
   });
 
   factory TournamentSummary.fromJson(
     Map<String, dynamic> json,
     League league,
   ) {
+    final zones = (json['zones'] as List<dynamic>? ?? []);
     final categories = (json['categories'] as List<dynamic>? ?? [])
         .map((entry) => TournamentCategoryAssignment.fromJson(
             entry as Map<String, dynamic>))
@@ -1817,7 +1821,7 @@ class TournamentSummary {
       leagueId: league.id,
       leagueName: league.name,
       gender: json['gender'] as String? ?? 'MIXTO',
-      zonesCount: (json['zones'] as List<dynamic>? ?? []).length,
+      zonesCount: zones.length,
       categories: categories,
       startDate: json['startDate'] != null
           ? DateTime.tryParse(json['startDate'] as String)
@@ -1826,6 +1830,12 @@ class TournamentSummary {
           ? DateTime.tryParse(json['endDate'] as String)
           : null,
       championMode: json['championMode'] as String? ?? 'GLOBAL',
+      hasLockedZones: zones.any((zone) {
+        if (zone is Map<String, dynamic>) {
+          return zone['status'] != 'OPEN';
+        }
+        return false;
+      }),
     );
   }
 
@@ -1840,6 +1850,7 @@ class TournamentSummary {
   final DateTime? startDate;
   final DateTime? endDate;
   final String championMode;
+  final bool hasLockedZones;
 
   int get enabledCategoriesCount =>
       categories.where((category) => category.enabled).length;
