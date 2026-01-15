@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 
 import '../../../services/api_client.dart';
 import '../../shared/widgets/app_data_table_style.dart';
+import '../../shared/widgets/page_scaffold.dart';
 import '../../shared/widgets/table_filters_bar.dart';
 import 'tournaments_page.dart';
 
@@ -548,12 +549,12 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
     final tableColors = AppDataTableColors.standard(theme);
     final dataSource = _dataSource;
 
-    return Scaffold(
+    return PageScaffold(
       backgroundColor: Colors.transparent,
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      builder: (context, scrollController) {
+        return ListView(
+          controller: scrollController,
+          padding: const EdgeInsets.all(24),
           children: [
             Text(
               'Jugadores por torneo',
@@ -565,100 +566,103 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
               style: theme.textTheme.bodyLarge,
             ),
             const SizedBox(height: 24),
-            Expanded(
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (_loadError != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: Text(
-                            _loadError!,
-                            style: theme.textTheme.bodyMedium
-                                ?.copyWith(color: theme.colorScheme.error),
-                          ),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (_loadError != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Text(
+                          _loadError!,
+                          style: theme.textTheme.bodyMedium
+                              ?.copyWith(color: theme.colorScheme.error),
                         ),
-                      _buildSelectors(),
-                      if (_categoriesError != null || _clubsError != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Text(
-                            [
-                              if (_categoriesError != null) _categoriesError,
-                              if (_clubsError != null) _clubsError,
-                            ].join(' · '),
-                            style: theme.textTheme.bodySmall
-                                ?.copyWith(color: theme.colorScheme.error),
-                          ),
-                        ),
-                      if (_playersError != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Text(
-                            _playersError!,
-                            style: theme.textTheme.bodySmall
-                                ?.copyWith(color: theme.colorScheme.error),
-                          ),
-                        ),
-                      const SizedBox(height: 16),
-                      Expanded(
-                        child: dataSource == null
-                            ? Center(
-                                child: Text(
-                                  _searchingPlayers
-                                      ? 'Buscando jugadores...'
-                                      : 'Selecciona liga, torneo y categoría para mostrar jugadores.',
-                                  style: theme.textTheme.bodyMedium,
-                                ),
-                              )
-                            : dataSource.rows.isEmpty
-                                ? Center(
-                                    child: Text(
-                                      'No se encontraron jugadores para los filtros seleccionados.',
-                                      style: theme.textTheme.bodyMedium,
-                                    ),
-                                  )
-                                : DataTableTheme(
-                                    data: DataTableTheme.of(context).copyWith(
-                                      headingRowColor: buildHeaderColor(tableColors.headerBackground),
-                                      headingTextStyle: theme.textTheme.titleSmall?.copyWith(
-                                        color: tableColors.headerText,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    child: PaginatedDataTable(
-                                      rowsPerPage: _rowsPerPage,
-                                      onRowsPerPageChanged: (value) {
-                                        if (value == null) {
-                                          return;
-                                        }
-                                        setState(() {
-                                          _rowsPerPage = value;
-                                        });
-                                      },
-                                      columns: const [
-                                        DataColumn(label: Text('Apellido')),
-                                        DataColumn(label: Text('Nombre')),
-                                        DataColumn(label: Text('DNI')),
-                                        DataColumn(label: Text('Fecha de Nacimiento')),
-                                        DataColumn(label: Text('Club')),
-                                        DataColumn(label: Text('Estado')),
-                                      ],
-                                      source: dataSource,
-                                    ),
-                                  ),
                       ),
-                    ],
-                  ),
+                    _buildSelectors(),
+                    if (_categoriesError != null || _clubsError != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          [
+                            if (_categoriesError != null) _categoriesError,
+                            if (_clubsError != null) _clubsError,
+                          ].join(' · '),
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(color: theme.colorScheme.error),
+                        ),
+                      ),
+                    if (_playersError != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          _playersError!,
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(color: theme.colorScheme.error),
+                        ),
+                      ),
+                    const SizedBox(height: 16),
+                    if (dataSource == null)
+                      SizedBox(
+                        height: 200,
+                        child: Center(
+                          child: Text(
+                            _searchingPlayers
+                                ? 'Buscando jugadores...'
+                                : 'Selecciona liga, torneo y categoría para mostrar jugadores.',
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                        ),
+                      )
+                    else if (dataSource.rows.isEmpty)
+                      SizedBox(
+                        height: 200,
+                        child: Center(
+                          child: Text(
+                            'No se encontraron jugadores para los filtros seleccionados.',
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                        ),
+                      )
+                    else
+                      DataTableTheme(
+                        data: DataTableTheme.of(context).copyWith(
+                          headingRowColor: buildHeaderColor(tableColors.headerBackground),
+                          headingTextStyle: theme.textTheme.titleSmall?.copyWith(
+                            color: tableColors.headerText,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        child: PaginatedDataTable(
+                          rowsPerPage: _rowsPerPage,
+                          onRowsPerPageChanged: (value) {
+                            if (value == null) {
+                              return;
+                            }
+                            setState(() {
+                              _rowsPerPage = value;
+                            });
+                          },
+                          columns: const [
+                            DataColumn(label: Text('Apellido')),
+                            DataColumn(label: Text('Nombre')),
+                            DataColumn(label: Text('DNI')),
+                            DataColumn(label: Text('Fecha de Nacimiento')),
+                            DataColumn(label: Text('Club')),
+                            DataColumn(label: Text('Estado')),
+                          ],
+                          source: dataSource,
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 }
