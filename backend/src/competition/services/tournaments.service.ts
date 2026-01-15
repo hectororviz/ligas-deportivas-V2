@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Gender } from '@prisma/client';
+import { Gender, ZoneStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AssignPlayerClubDto } from '../dto/assign-player-club.dto';
 import { CreateTournamentDto } from '../dto/create-tournament.dto';
@@ -241,7 +241,7 @@ export class TournamentsService {
       where: { id: tournamentId },
       include: {
         categories: {
-          where: { enabled: true },
+          where: { enabled: true, category: { active: true } },
           orderBy: { category: { name: 'asc' } },
           include: {
             category: true,
@@ -450,10 +450,22 @@ export class TournamentsService {
       throw new BadRequestException('Selecciona al menos una categoría participante.');
     }
 
-    const tournament = await this.prisma.tournament.findUnique({ where: { id } });
+    const tournament = await this.prisma.tournament.findUnique({
+      where: { id },
+      include: {
+        zones: {
+          select: { status: true },
+        },
+      },
+    });
 
     if (!tournament) {
       throw new BadRequestException('Torneo inexistente');
+    }
+    if (tournament.zones.some((zone) => zone.status !== ZoneStatus.OPEN)) {
+      throw new BadRequestException(
+        'No se puede editar el torneo mientras alguna de sus zonas no esté abierta.',
+      );
     }
 
     const categoryIds = dto.categories.map((category) => category.categoryId);
