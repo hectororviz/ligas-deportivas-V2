@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, ZoneStatus } from '@prisma/client';
+import { Gender, Prisma, ZoneStatus } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -281,35 +281,42 @@ export class ZonesService {
       );
     }
 
-    const rosters = await tx.roster.findMany({
+    const players = await tx.player.findMany({
       where: {
-        clubId,
-        tournamentCategoryId: { in: tournamentCategoryIds },
-      },
-      include: {
-        players: {
-          select: { playerId: true },
+        active: true,
+        playerTournamentClubs: {
+          some: {
+            clubId,
+            tournamentId: zone.tournamentId,
+          },
         },
+      },
+      select: {
+        birthDate: true,
+        gender: true,
       },
     });
 
-    const rosterCounts = new Map<number, number>();
-    for (const roster of rosters) {
-      rosterCounts.set(roster.tournamentCategoryId, roster.players.length);
+    const eligibleCounts = new Map<number, number>();
+    for (const assignment of enabledCategories) {
+      const count = players.filter((player) =>
+        this.isPlayerEligibleForCategory(player, assignment.category),
+      ).length;
+      eligibleCounts.set(assignment.id, count);
     }
 
     const insufficient = enabledCategories.filter((assignment) => {
       if (!teamCategoryIds.has(assignment.id)) {
         return false;
       }
-      const playersCount = rosterCounts.get(assignment.id) ?? 0;
+      const playersCount = eligibleCounts.get(assignment.id) ?? 0;
       return playersCount < assignment.category.minPlayers;
     });
 
     if (insufficient.length) {
       const details = insufficient
         .map((assignment) => {
-          const playersCount = rosterCounts.get(assignment.id) ?? 0;
+          const playersCount = eligibleCounts.get(assignment.id) ?? 0;
           return `${assignment.category.name} (${playersCount}/${assignment.category.minPlayers})`;
         })
         .join(', ');
@@ -317,5 +324,16 @@ export class ZonesService {
         `El club no cumple con el mínimo de jugadores requerido en: ${details}`,
       );
     }
+  }
+
+  private isPlayerEligibleForCategory(
+    player: { birthDate: Date; gender: Gender },
+    category: { birthYearMin: number; birthYearMax: number; gender: Gender },
+  ) {
+    if (category.gender !== Gender.MIXTO && player.gender !== category.gender) {
+      return false;
+    }
+    const birthYear = player.birthDate.getUTCFullYear();
+    return birthYear >= category.birthYearMin && birthYear <= category.birthYearMax;
   }
 }
