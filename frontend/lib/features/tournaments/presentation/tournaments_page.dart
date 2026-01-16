@@ -147,7 +147,6 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
     final allowedLeagues = _filterLeaguesForPermission(leagues, user, _actionUpdate);
     final allowedLeagueIds =
         user?.allowedLeaguesFor(module: _moduleTorneos, action: _actionUpdate);
-    final canConfigurePoster = user?.roles.contains('ADMIN') ?? false;
 
     if (!mounted) {
       return;
@@ -159,7 +158,6 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
       leagues: allowedLeagues.isEmpty ? leagues : allowedLeagues,
       readOnly: false,
       allowedLeagueIds: allowedLeagueIds,
-      canConfigurePoster: canConfigurePoster,
     );
 
     if (!mounted || result == null) {
@@ -180,7 +178,6 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
     required List<League> leagues,
     required bool readOnly,
     Set<int>? allowedLeagueIds,
-    required bool canConfigurePoster,
   }) {
     final size = MediaQuery.sizeOf(context);
     final isCompact = size.width < 640;
@@ -196,7 +193,6 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
       readOnly: readOnly,
       allowedLeagueIds: allowedLeagueIds,
       maxContentWidth: estimatedContentWidth,
-      canConfigurePoster: canConfigurePoster,
     );
     if (isCompact) {
       return showModalBottomSheet<_TournamentFormResult>(
@@ -322,11 +318,19 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
     );
   }
 
+  void _openPosterTemplate(TournamentSummary tournament) {
+    context.go(
+      '/tournaments/${tournament.id}/poster-template',
+      extra: tournament,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tournamentsAsync = ref.watch(tournamentsProvider);
     final authState = ref.watch(authControllerProvider);
     final user = authState.user;
+    final canConfigurePoster = user?.roles.contains('ADMIN') ?? false;
     final years = ref.watch(availableTournamentYearsProvider);
     final leaguesAsync = ref.watch(leaguesProvider);
     final filters = ref.watch(tournamentFiltersProvider);
@@ -506,6 +510,8 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
                               onDetails: _showTournamentDetails,
                               onEdit: _openEditTournament,
                               onClubs: _openTournamentClubs,
+                              onPosterTemplate: _openPosterTemplate,
+                              canConfigurePoster: canConfigurePoster,
                               canEdit: (tournament) =>
                                   (user?.hasPermission(
                                         module: _moduleTorneos,
@@ -934,6 +940,8 @@ class _TournamentsDataTable extends StatelessWidget {
     required this.onDetails,
     required this.onEdit,
     required this.onClubs,
+    required this.onPosterTemplate,
+    required this.canConfigurePoster,
     required this.canEdit,
   });
 
@@ -941,6 +949,8 @@ class _TournamentsDataTable extends StatelessWidget {
   final ValueChanged<TournamentSummary> onDetails;
   final ValueChanged<TournamentSummary> onEdit;
   final ValueChanged<TournamentSummary> onClubs;
+  final ValueChanged<TournamentSummary> onPosterTemplate;
+  final bool canConfigurePoster;
   final bool Function(TournamentSummary tournament) canEdit;
 
   @override
@@ -1049,6 +1059,16 @@ class _TournamentsDataTable extends StatelessWidget {
                       icon: const Icon(Icons.edit_outlined),
                       label: const Text('Editar'),
                     ),
+                    if (canConfigurePoster)
+                      Tooltip(
+                        message:
+                            'Abre el editor de plantilla para el poster promocional del torneo.',
+                        child: OutlinedButton.icon(
+                          onPressed: () => onPosterTemplate(tournaments[index]),
+                          icon: const Icon(Icons.wallpaper_outlined),
+                          label: const Text('Poster'),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -1090,7 +1110,6 @@ class _TournamentFormDialog extends ConsumerStatefulWidget {
     required this.readOnly,
     this.allowedLeagueIds,
     required this.maxContentWidth,
-    required this.canConfigurePoster,
   });
 
   final List<League> leagues;
@@ -1098,7 +1117,6 @@ class _TournamentFormDialog extends ConsumerStatefulWidget {
   final bool readOnly;
   final Set<int>? allowedLeagueIds;
   final double maxContentWidth;
-  final bool canConfigurePoster;
 
   @override
   ConsumerState<_TournamentFormDialog> createState() => _TournamentFormDialogState();
@@ -1116,19 +1134,6 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
   bool _showCategoryErrors = false;
   List<_CategorySelection> _selections = [];
   bool _categoriesInitialized = false;
-
-  void _openPosterTemplate() {
-    final tournament = widget.tournament;
-    if (tournament == null) {
-      return;
-    }
-    final router = GoRouter.of(context);
-    Navigator.of(context).pop();
-    router.push(
-      '/tournaments/${tournament.id}/poster-template',
-      extra: tournament,
-    );
-  }
 
   @override
   void initState() {
@@ -1374,28 +1379,6 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
                   : 'Actualiza los datos esenciales del torneo.',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
-            if (widget.canConfigurePoster) ...[
-              const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Wrap(
-                  spacing: 12,
-                  runSpacing: 8,
-                  children: [
-                    Tooltip(
-                      message: widget.tournament == null
-                          ? 'Guarda el torneo para habilitar la configuración del poster.'
-                          : 'Abre el editor de plantilla para el poster promocional del torneo.',
-                      child: FilledButton.tonalIcon(
-                        onPressed: widget.tournament == null ? null : _openPosterTemplate,
-                        icon: const Icon(Icons.wallpaper_outlined),
-                        label: const Text('Configurar poster'),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
             const SizedBox(height: 20),
             Builder(
               builder: (context) {
