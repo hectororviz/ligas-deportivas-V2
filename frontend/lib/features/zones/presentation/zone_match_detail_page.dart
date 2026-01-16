@@ -825,11 +825,26 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
   List<_PlayerGoalInput> _awayEntries = const <_PlayerGoalInput>[];
   int _homeOtherGoals = 0;
   int _awayOtherGoals = 0;
+  final Map<String, TextEditingController> _goalControllers = {};
+  late final TextEditingController _homeOtherGoalsController;
+  late final TextEditingController _awayOtherGoalsController;
 
   @override
   void initState() {
     super.initState();
+    _homeOtherGoalsController = TextEditingController(text: '0');
+    _awayOtherGoalsController = TextEditingController(text: '0');
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _goalControllers.values) {
+      controller.dispose();
+    }
+    _homeOtherGoalsController.dispose();
+    _awayOtherGoalsController.dispose();
+    super.dispose();
   }
 
   int get _homeTotal => _homeEntries.fold<int>(0, (sum, entry) => sum + entry.goals) + _homeOtherGoals;
@@ -888,6 +903,9 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
         _awayOtherGoals = awayOther;
         _loading = false;
       });
+      _homeOtherGoalsController.text = homeOther.toString();
+      _awayOtherGoalsController.text = awayOther.toString();
+      _syncGoalControllers([...homeEntries, ...awayEntries]);
     } on DioException catch (error) {
       if (!mounted) {
         return;
@@ -968,14 +986,79 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
 
   void _updateHomeOtherGoals(int value) {
     setState(() {
-      _homeOtherGoals = value;
+      _homeOtherGoals = math.max(0, value);
     });
   }
 
   void _updateAwayOtherGoals(int value) {
     setState(() {
-      _awayOtherGoals = value;
+      _awayOtherGoals = math.max(0, value);
     });
+  }
+
+  void _setEntryGoals(_PlayerGoalInput entry, int value, {bool updateController = false}) {
+    final clamped = math.max(0, value);
+    setState(() {
+      entry.goals = clamped;
+      if (updateController) {
+        _goalControllerFor(entry).text = clamped.toString();
+      }
+    });
+  }
+
+  void _setOtherGoals({
+    required bool isHome,
+    required int value,
+    bool updateController = false,
+  }) {
+    final clamped = math.max(0, value);
+    setState(() {
+      if (isHome) {
+        _homeOtherGoals = clamped;
+        if (updateController) {
+          _homeOtherGoalsController.text = clamped.toString();
+        }
+      } else {
+        _awayOtherGoals = clamped;
+        if (updateController) {
+          _awayOtherGoalsController.text = clamped.toString();
+        }
+      }
+    });
+  }
+
+  Widget _buildGoalInput({
+    required TextEditingController controller,
+    required bool enableEditing,
+    required VoidCallback onIncrement,
+    required VoidCallback onDecrement,
+    required ValueChanged<int> onChanged,
+  }) {
+    return SizedBox(
+      width: 108,
+      child: TextFormField(
+        controller: controller,
+        textAlign: TextAlign.center,
+        keyboardType: TextInputType.number,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        enabled: enableEditing,
+        decoration: InputDecoration(
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+          border: const OutlineInputBorder(),
+          suffixIcon: _GoalStepper(
+            onIncrement: enableEditing ? onIncrement : null,
+            onDecrement: enableEditing ? onDecrement : null,
+          ),
+        ),
+        onChanged: !enableEditing
+            ? null
+            : (value) {
+                final parsed = int.tryParse(value) ?? 0;
+                onChanged(parsed);
+              },
+      ),
+    );
   }
 
   Future<void> _onSave() async {
@@ -1062,12 +1145,44 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
     }
   }
 
+  String _controllerKey(_PlayerGoalInput entry) => '${entry.clubId}-${entry.playerId}';
+
+  TextEditingController _goalControllerFor(_PlayerGoalInput entry) {
+    final key = _controllerKey(entry);
+    return _goalControllers.putIfAbsent(
+      key,
+      () => TextEditingController(text: entry.goals.toString()),
+    );
+  }
+
+  void _syncGoalControllers(List<_PlayerGoalInput> entries) {
+    final activeKeys = <String>{};
+    for (final entry in entries) {
+      final key = _controllerKey(entry);
+      activeKeys.add(key);
+      final controller = _goalControllers.putIfAbsent(
+        key,
+        () => TextEditingController(text: entry.goals.toString()),
+      );
+      final textValue = entry.goals.toString();
+      if (controller.text != textValue) {
+        controller.text = textValue;
+      }
+    }
+
+    final obsoleteKeys = _goalControllers.keys.where((key) => !activeKeys.contains(key)).toList();
+    for (final key in obsoleteKeys) {
+      _goalControllers.remove(key)?.dispose();
+    }
+  }
+
   Widget _buildGoalsColumn({
     required String title,
     required List<_PlayerGoalInput> entries,
     required int otherGoals,
     required ValueChanged<int> onOtherGoalsChanged,
     required bool enableEditing,
+    required bool isHome,
   }) {
     final theme = Theme.of(context);
     final listHeight = math.min(280.0, entries.length * 48.0);
@@ -1091,7 +1206,7 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
                 child: Row(
                   children: const [
                     Expanded(child: Text('Jugador')),
-                    SizedBox(width: 80, child: Text('Goles', textAlign: TextAlign.center)),
+                    SizedBox(width: 108, child: Text('Goles', textAlign: TextAlign.center)),
                   ],
                 ),
               ),
@@ -1107,54 +1222,42 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
               else
                 SizedBox(
                   height: listHeight,
-                  child: ListView.separated(
-                    padding: EdgeInsets.zero,
-                    itemCount: entries.length,
-                    separatorBuilder: (context, index) => Divider(
-                      height: 1,
-                      thickness: 1,
-                      color: theme.colorScheme.outlineVariant.withOpacity(0.6),
-                    ),
-                    itemBuilder: (context, index) {
-                      final entry = entries[index];
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                entry.fullName,
-                                style: theme.textTheme.bodyMedium,
-                              ),
-                            ),
-                            SizedBox(
-                              width: 80,
-                              child: TextFormField(
-                                key: ValueKey('${entry.clubId}-${entry.playerId}'),
-                                initialValue: entry.goals.toString(),
-                                textAlign: TextAlign.center,
-                                keyboardType: TextInputType.number,
-                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                                enabled: enableEditing,
-                                decoration: const InputDecoration(
-                                  isDense: true,
-                                  contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                                  border: OutlineInputBorder(),
-                                ),
-                                onChanged: !enableEditing
-                                    ? null
-                                    : (value) {
-                                        final parsed = int.tryParse(value) ?? 0;
-                                        setState(() {
-                                          entry.goals = parsed;
-                                        });
-                                      },
-                              ),
-                            ),
-                          ],
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: Scrollbar(
+                      child: ListView.separated(
+                        padding: EdgeInsets.zero,
+                        itemCount: entries.length,
+                        separatorBuilder: (context, index) => Divider(
+                          height: 1,
+                          thickness: 1,
+                          color: theme.colorScheme.outlineVariant.withOpacity(0.6),
                         ),
-                      );
-                    },
+                        itemBuilder: (context, index) {
+                          final entry = entries[index];
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    entry.fullName,
+                                    style: theme.textTheme.bodyMedium,
+                                  ),
+                                ),
+                                _buildGoalInput(
+                                  controller: _goalControllerFor(entry),
+                                  enableEditing: enableEditing,
+                                  onIncrement: () => _setEntryGoals(entry, entry.goals + 1, updateController: true),
+                                  onDecrement: () => _setEntryGoals(entry, entry.goals - 1, updateController: true),
+                                  onChanged: (value) => _setEntryGoals(entry, value),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
                   ),
                 ),
               Container(
@@ -1170,27 +1273,20 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
                         style: theme.textTheme.bodyMedium,
                       ),
                     ),
-                    SizedBox(
-                      width: 80,
-                      child: TextFormField(
-                        key: ValueKey('${title}_other_goals'),
-                        initialValue: otherGoals.toString(),
-                        textAlign: TextAlign.center,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                        enabled: enableEditing,
-                        decoration: const InputDecoration(
-                          isDense: true,
-                          contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                          border: OutlineInputBorder(),
-                        ),
-                        onChanged: !enableEditing
-                            ? null
-                            : (value) {
-                                final parsed = int.tryParse(value) ?? 0;
-                                onOtherGoalsChanged(parsed);
-                              },
+                    _buildGoalInput(
+                      controller: isHome ? _homeOtherGoalsController : _awayOtherGoalsController,
+                      enableEditing: enableEditing,
+                      onIncrement: () => _setOtherGoals(
+                        isHome: isHome,
+                        value: otherGoals + 1,
+                        updateController: true,
                       ),
+                      onDecrement: () => _setOtherGoals(
+                        isHome: isHome,
+                        value: otherGoals - 1,
+                        updateController: true,
+                      ),
+                      onChanged: onOtherGoalsChanged,
                     ),
                   ],
                 ),
@@ -1233,6 +1329,7 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
                             otherGoals: _homeOtherGoals,
                             onOtherGoalsChanged: _updateHomeOtherGoals,
                             enableEditing: widget.canEdit,
+                            isHome: true,
                           ),
                         ),
                         const SizedBox(width: 16),
@@ -1243,6 +1340,7 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
                             otherGoals: _awayOtherGoals,
                             onOtherGoalsChanged: _updateAwayOtherGoals,
                             enableEditing: widget.canEdit,
+                            isHome: false,
                           ),
                         ),
                       ],
@@ -1279,6 +1377,40 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
                 : const Text('Guardar'),
           ),
       ],
+    );
+  }
+}
+
+class _GoalStepper extends StatelessWidget {
+  const _GoalStepper({
+    required this.onIncrement,
+    required this.onDecrement,
+  });
+
+  final VoidCallback? onIncrement;
+  final VoidCallback? onDecrement;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 26,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.keyboard_arrow_up, size: 18),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(width: 26, height: 18),
+            onPressed: onIncrement,
+          ),
+          IconButton(
+            icon: const Icon(Icons.keyboard_arrow_down, size: 18),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(width: 26, height: 18),
+            onPressed: onDecrement,
+          ),
+        ],
+      ),
     );
   }
 }
