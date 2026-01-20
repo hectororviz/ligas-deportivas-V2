@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/utils/responsive.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
@@ -231,6 +232,7 @@ class _LeaguesDataTable extends StatelessWidget {
     final colors = AppDataTableColors.standard(theme);
     final headerStyle =
         theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: colors.headerText);
+    final isMobile = Responsive.isMobile(context);
 
     final table = DataTable(
       headingRowHeight: 48,
@@ -238,12 +240,12 @@ class _LeaguesDataTable extends StatelessWidget {
       dataRowMaxHeight: 60,
       headingRowColor: buildHeaderColor(colors.headerBackground),
       headingTextStyle: headerStyle,
-      columns: const [
-        DataColumn(label: Text('Liga')),
-        DataColumn(label: Text('Identificador')),
-        DataColumn(label: Text('Día de juego')),
-        DataColumn(label: Text('Color distintivo')),
-        DataColumn(label: Text('Acciones')),
+      columns: [
+        const DataColumn(label: Text('Liga')),
+        if (!isMobile) const DataColumn(label: Text('Identificador')),
+        if (!isMobile) const DataColumn(label: Text('Día de juego')),
+        if (!isMobile) const DataColumn(label: Text('Color distintivo')),
+        const DataColumn(label: Text('Acciones')),
       ],
       rows: [
         for (var index = 0; index < leagues.length; index++)
@@ -270,9 +272,15 @@ class _LeaguesDataTable extends StatelessWidget {
                   ),
                 ],
               )),
-              DataCell(Text(leagues[index].slug ?? '—')),
-              DataCell(Text(leagues[index].gameDay.label)),
-              DataCell(_ColorPreview(color: leagues[index].color, colorHex: leagues[index].colorHex)),
+              if (!isMobile) DataCell(Text(leagues[index].slug ?? '—')),
+              if (!isMobile) DataCell(Text(leagues[index].gameDay.label)),
+              if (!isMobile)
+                DataCell(
+                  _ColorPreview(
+                    color: leagues[index].color,
+                    colorHex: leagues[index].colorHex,
+                  ),
+                ),
               DataCell(
                 FilledButton.tonalIcon(
                   onPressed: isAdmin ? () => onEdit(leagues[index]) : null,

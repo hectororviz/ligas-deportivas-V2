@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/utils/responsive.dart';
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
 import '../../shared/widgets/app_data_table_style.dart';
@@ -361,181 +362,185 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage> {
             ),
             const SizedBox(height: 24),
             Card(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
-                child: TableFiltersBar(
-                  children: [
-                    TableFilterField(
-                      label: 'Buscar',
-                      width: 320,
-                      child: TableFilterSearchField(
-                        controller: _searchController,
-                        placeholder: 'Buscar por nombre, años o género',
-                        showClearButton: filters.query.isNotEmpty,
-                        onChanged: (value) =>
-                            ref.read(categoryFiltersProvider.notifier).setQuery(value),
-                        onClear: () {
-                          _searchController.clear();
-                          ref.read(categoryFiltersProvider.notifier).clear();
-                        },
-                      ),
-                    ),
-                    TableFilterField(
-                      label: 'Año desde',
-                      width: 160,
-                      child: allCategoriesAsync.when(
-                        data: (categories) {
-                          final options = _buildYearOptions(categories, filters);
-                          final items = [
-                            const DropdownMenuItem<int?>(
-                              value: null,
-                              child: Text('Todos'),
-                            ),
-                            ...options.map(
-                              (year) => DropdownMenuItem<int?>(
-                                value: year,
-                                child: Text('$year'),
-                              ),
-                            ),
-                          ];
-                          return DropdownButtonHideUnderline(
-                            child: DropdownButton<int?>(
-                              value: filters.birthYearFrom,
-                              isExpanded: true,
-                              items: items,
-                              onChanged: (value) {
-                                ref
-                                    .read(categoryFiltersProvider.notifier)
-                                    .setBirthYearFrom(value);
-                              },
-                            ),
-                          );
-                        },
-                        loading: () => const Center(
-                          child: SizedBox(
-                            height: 24,
-                            width: 24,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        ),
-                        error: (error, _) => Center(
-                          child: Tooltip(
-                            message: 'No se pudieron cargar las categorías: $error',
-                            child:
-                                const Icon(Icons.error_outline, color: Colors.redAccent),
-                          ),
-                        ),
-                      ),
-                    ),
-                    TableFilterField(
-                      label: 'Año hasta',
-                      width: 160,
-                      child: allCategoriesAsync.when(
-                        data: (categories) {
-                          final options = _buildYearOptions(categories, filters);
-                          final items = [
-                            const DropdownMenuItem<int?>(
-                              value: null,
-                              child: Text('Todos'),
-                            ),
-                            ...options.map(
-                              (year) => DropdownMenuItem<int?>(
-                                value: year,
-                                child: Text('$year'),
-                              ),
-                            ),
-                          ];
-                          return DropdownButtonHideUnderline(
-                            child: DropdownButton<int?>(
-                              value: filters.birthYearTo,
-                              isExpanded: true,
-                              items: items,
-                              onChanged: (value) {
-                                ref
-                                    .read(categoryFiltersProvider.notifier)
-                                    .setBirthYearTo(value);
-                              },
-                            ),
-                          );
-                        },
-                        loading: () => const Center(
-                          child: SizedBox(
-                            height: 24,
-                            width: 24,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        ),
-                        error: (error, _) => Center(
-                          child: Tooltip(
-                            message: 'No se pudieron cargar las categorías: $error',
-                            child:
-                                const Icon(Icons.error_outline, color: Colors.redAccent),
-                          ),
-                        ),
-                      ),
-                    ),
-                    TableFilterField(
-                      label: 'Género',
-                      width: 200,
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<CategoryGenderFilter>(
-                          value: filters.gender,
-                          isExpanded: true,
-                          items: CategoryGenderFilter.values
-                              .map(
-                                (value) => DropdownMenuItem(
-                                  value: value,
-                                  child: Text(value.label),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) {
-                            if (value != null) {
-                              ref
-                                  .read(categoryFiltersProvider.notifier)
-                                  .setGender(value);
-                            }
-                          },
-                        ),
-                      ),
-                    ),
-                    TableFilterField(
-                      label: 'Estado',
-                      width: 200,
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<CategoryStatusFilter>(
-                          value: filters.status,
-                          isExpanded: true,
-                          items: CategoryStatusFilter.values
-                              .map(
-                                (value) => DropdownMenuItem(
-                                  value: value,
-                                  child: Text(value.label),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) {
-                            if (value != null) {
-                              ref
-                                  .read(categoryFiltersProvider.notifier)
-                                  .setStatus(value);
-                            }
-                          },
-                        ),
-                      ),
-                    ),
-                  ],
-                  trailing: filters.isEmpty
-                      ? null
-                      : TextButton.icon(
-                          onPressed: () {
+              child: ExpansionTile(
+                title: const Text('Búsqueda'),
+                initiallyExpanded: false,
+                childrenPadding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                children: [
+                  TableFiltersBar(
+                    children: [
+                      TableFilterField(
+                        label: 'Buscar',
+                        width: 320,
+                        child: TableFilterSearchField(
+                          controller: _searchController,
+                          placeholder: 'Buscar por nombre, años o género',
+                          showClearButton: filters.query.isNotEmpty,
+                          onChanged: (value) =>
+                              ref.read(categoryFiltersProvider.notifier).setQuery(value),
+                          onClear: () {
                             _searchController.clear();
                             ref.read(categoryFiltersProvider.notifier).clear();
                           },
-                          icon: const Icon(Icons.filter_alt_off_outlined),
-                          label: const Text('Limpiar filtros'),
                         ),
-                ),
+                      ),
+                      TableFilterField(
+                        label: 'Año desde',
+                        width: 160,
+                        child: allCategoriesAsync.when(
+                          data: (categories) {
+                            final options = _buildYearOptions(categories, filters);
+                            final items = [
+                              const DropdownMenuItem<int?>(
+                                value: null,
+                                child: Text('Todos'),
+                              ),
+                              ...options.map(
+                                (year) => DropdownMenuItem<int?>(
+                                  value: year,
+                                  child: Text('$year'),
+                                ),
+                              ),
+                            ];
+                            return DropdownButtonHideUnderline(
+                              child: DropdownButton<int?>(
+                                value: filters.birthYearFrom,
+                                isExpanded: true,
+                                items: items,
+                                onChanged: (value) {
+                                  ref
+                                      .read(categoryFiltersProvider.notifier)
+                                      .setBirthYearFrom(value);
+                                },
+                              ),
+                            );
+                          },
+                          loading: () => const Center(
+                            child: SizedBox(
+                              height: 24,
+                              width: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
+                          error: (error, _) => Center(
+                            child: Tooltip(
+                              message: 'No se pudieron cargar las categorías: $error',
+                              child:
+                                  const Icon(Icons.error_outline, color: Colors.redAccent),
+                            ),
+                          ),
+                        ),
+                      ),
+                      TableFilterField(
+                        label: 'Año hasta',
+                        width: 160,
+                        child: allCategoriesAsync.when(
+                          data: (categories) {
+                            final options = _buildYearOptions(categories, filters);
+                            final items = [
+                              const DropdownMenuItem<int?>(
+                                value: null,
+                                child: Text('Todos'),
+                              ),
+                              ...options.map(
+                                (year) => DropdownMenuItem<int?>(
+                                  value: year,
+                                  child: Text('$year'),
+                                ),
+                              ),
+                            ];
+                            return DropdownButtonHideUnderline(
+                              child: DropdownButton<int?>(
+                                value: filters.birthYearTo,
+                                isExpanded: true,
+                                items: items,
+                                onChanged: (value) {
+                                  ref
+                                      .read(categoryFiltersProvider.notifier)
+                                      .setBirthYearTo(value);
+                                },
+                              ),
+                            );
+                          },
+                          loading: () => const Center(
+                            child: SizedBox(
+                              height: 24,
+                              width: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
+                          error: (error, _) => Center(
+                            child: Tooltip(
+                              message: 'No se pudieron cargar las categorías: $error',
+                              child:
+                                  const Icon(Icons.error_outline, color: Colors.redAccent),
+                            ),
+                          ),
+                        ),
+                      ),
+                      TableFilterField(
+                        label: 'Género',
+                        width: 200,
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<CategoryGenderFilter>(
+                            value: filters.gender,
+                            isExpanded: true,
+                            items: CategoryGenderFilter.values
+                                .map(
+                                  (value) => DropdownMenuItem(
+                                    value: value,
+                                    child: Text(value.label),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (value) {
+                              if (value != null) {
+                                ref
+                                    .read(categoryFiltersProvider.notifier)
+                                    .setGender(value);
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                      TableFilterField(
+                        label: 'Estado',
+                        width: 200,
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<CategoryStatusFilter>(
+                            value: filters.status,
+                            isExpanded: true,
+                            items: CategoryStatusFilter.values
+                                .map(
+                                  (value) => DropdownMenuItem(
+                                    value: value,
+                                    child: Text(value.label),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (value) {
+                              if (value != null) {
+                                ref
+                                    .read(categoryFiltersProvider.notifier)
+                                    .setStatus(value);
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                    trailing: filters.isEmpty
+                        ? null
+                        : TextButton.icon(
+                            onPressed: () {
+                              _searchController.clear();
+                              ref.read(categoryFiltersProvider.notifier).clear();
+                            },
+                            icon: const Icon(Icons.filter_alt_off_outlined),
+                            label: const Text('Limpiar filtros'),
+                          ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 16),
@@ -658,6 +663,7 @@ class _CategoriesDataTable extends StatelessWidget {
     final colors = AppDataTableColors.standard(theme);
     final headerStyle =
         theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: colors.headerText);
+    final isMobile = Responsive.isMobile(context);
 
     final table = DataTable(
       headingRowHeight: 48,
@@ -665,14 +671,14 @@ class _CategoriesDataTable extends StatelessWidget {
       dataRowMaxHeight: 60,
       headingRowColor: buildHeaderColor(colors.headerBackground),
       headingTextStyle: headerStyle,
-      columns: const [
-        DataColumn(label: Text('Nombre')),
-        DataColumn(label: Text('Años de nacimiento')),
-        DataColumn(label: Text('Género')),
-        DataColumn(label: Text('Mín. jugadores')),
-        DataColumn(label: Text('Obligatoria')),
-        DataColumn(label: Text('Activo')),
-        DataColumn(label: Text('Acciones')),
+      columns: [
+        const DataColumn(label: Text('Nombre')),
+        const DataColumn(label: Text('Años de nacimiento')),
+        const DataColumn(label: Text('Género')),
+        if (!isMobile) const DataColumn(label: Text('Mín. jugadores')),
+        if (!isMobile) const DataColumn(label: Text('Obligatoria')),
+        if (!isMobile) const DataColumn(label: Text('Activo')),
+        const DataColumn(label: Text('Acciones')),
       ],
       rows: [
         for (var index = 0; index < categories.length; index++)
@@ -682,19 +688,18 @@ class _CategoriesDataTable extends StatelessWidget {
               DataCell(Text(categories[index].name)),
               DataCell(Text(categories[index].birthYearRangeLabel)),
               DataCell(Text(categories[index].genderLabel)),
-              DataCell(Text(categories[index].minPlayers.toString())),
-              DataCell(Text(categories[index].mandatory ? 'Sí' : 'No')),
-              DataCell(Text(categories[index].active ? 'Activo' : 'Inactivo')),
+              if (!isMobile) DataCell(Text(categories[index].minPlayers.toString())),
+              if (!isMobile) DataCell(Text(categories[index].mandatory ? 'Sí' : 'No')),
+              if (!isMobile) DataCell(Text(categories[index].active ? 'Activo' : 'Inactivo')),
               DataCell(
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                Row(
                   children: [
                     OutlinedButton.icon(
                       onPressed: () => onDetails(categories[index]),
                       icon: const Icon(Icons.visibility_outlined),
                       label: const Text('Detalles'),
                     ),
+                    const SizedBox(width: 8),
                     FilledButton.tonalIcon(
                       onPressed: canEdit ? () => onEdit(categories[index]) : null,
                       icon: const Icon(Icons.edit_outlined),

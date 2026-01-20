@@ -335,109 +335,113 @@ class _ZonesPageState extends ConsumerState<ZonesPage> {
                           ),
                         ),
                         const Divider(height: 1),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
-                          child: TableFiltersBar(
-                            trailing: TextButton.icon(
-                              onPressed: hasActiveFilters ? _clearFilters : null,
-                              icon: const Icon(Icons.filter_alt_off_outlined),
-                              label: const Text('Limpiar filtros'),
+                        ExpansionTile(
+                          title: const Text('Búsqueda'),
+                          initiallyExpanded: false,
+                          childrenPadding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                          children: [
+                            TableFiltersBar(
+                              trailing: TextButton.icon(
+                                onPressed: hasActiveFilters ? _clearFilters : null,
+                                icon: const Icon(Icons.filter_alt_off_outlined),
+                                label: const Text('Limpiar filtros'),
+                              ),
+                              children: [
+                                TableFilterField(
+                                  label: 'Buscar',
+                                  width: 280,
+                                  child: TableFilterSearchField(
+                                    controller: _searchController,
+                                    placeholder: 'Buscar por liga, torneo o zona',
+                                    showClearButton: filters.query.isNotEmpty,
+                                    onClear: () {
+                                      _searchController.clear();
+                                      ref.read(zonesFiltersProvider.notifier).setQuery('');
+                                    },
+                                  ),
+                                ),
+                                TableFilterField(
+                                  label: 'Liga',
+                                  width: 200,
+                                  child: DropdownButtonHideUnderline(
+                                    child: DropdownButton<String?>(
+                                      value: leagues.contains(filters.leagueName)
+                                          ? filters.leagueName
+                                          : null,
+                                      isExpanded: true,
+                                      items: [
+                                        const DropdownMenuItem<String?>(
+                                          value: null,
+                                          child: Text('Todas'),
+                                        ),
+                                        ...leagues.map(
+                                          (league) => DropdownMenuItem<String?>(
+                                            value: league,
+                                            child: Text(league),
+                                          ),
+                                        ),
+                                      ],
+                                      onChanged: (value) {
+                                        ref.read(zonesFiltersProvider.notifier).setLeague(value);
+                                      },
+                                    ),
+                                  ),
+                                ),
+                                TableFilterField(
+                                  label: 'Torneo',
+                                  width: 220,
+                                  child: DropdownButtonHideUnderline(
+                                    child: DropdownButton<int?>(
+                                      value: tournamentIds.contains(filters.tournamentId)
+                                          ? filters.tournamentId
+                                          : null,
+                                      isExpanded: true,
+                                      items: [
+                                        const DropdownMenuItem<int?>(
+                                          value: null,
+                                          child: Text('Todos'),
+                                        ),
+                                        ...tournamentOptions.map(
+                                          (_ZoneTournamentFilterOption option) => DropdownMenuItem<int?>(
+                                            value: option.id,
+                                            child: Text(option.label),
+                                          ),
+                                        ),
+                                      ],
+                                      onChanged: (value) {
+                                        ref.read(zonesFiltersProvider.notifier).setTournament(value);
+                                      },
+                                    ),
+                                  ),
+                                ),
+                                TableFilterField(
+                                  label: 'Estado',
+                                  width: 200,
+                                  child: DropdownButtonHideUnderline(
+                                    child: DropdownButton<ZoneStatus?>(
+                                      value: filters.status,
+                                      isExpanded: true,
+                                      items: [
+                                        const DropdownMenuItem<ZoneStatus?>(
+                                          value: null,
+                                          child: Text('Todos'),
+                                        ),
+                                        ...ZoneStatus.values.map(
+                                          (status) => DropdownMenuItem<ZoneStatus?>(
+                                            value: status,
+                                            child: Text(status.label),
+                                          ),
+                                        ),
+                                      ],
+                                      onChanged: (value) {
+                                        ref.read(zonesFiltersProvider.notifier).setStatus(value);
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                            children: [
-                              TableFilterField(
-                                label: 'Buscar',
-                                width: 280,
-                                child: TableFilterSearchField(
-                                  controller: _searchController,
-                                  placeholder: 'Buscar por liga, torneo o zona',
-                                  showClearButton: filters.query.isNotEmpty,
-                                  onClear: () {
-                                    _searchController.clear();
-                                    ref.read(zonesFiltersProvider.notifier).setQuery('');
-                                  },
-                                ),
-                              ),
-                              TableFilterField(
-                                label: 'Liga',
-                                width: 200,
-                                child: DropdownButtonHideUnderline(
-                                  child: DropdownButton<String?>(
-                                    value: leagues.contains(filters.leagueName)
-                                        ? filters.leagueName
-                                        : null,
-                                    isExpanded: true,
-                                    items: [
-                                      const DropdownMenuItem<String?>(
-                                        value: null,
-                                        child: Text('Todas'),
-                                      ),
-                                      ...leagues.map(
-                                        (league) => DropdownMenuItem<String?>(
-                                          value: league,
-                                          child: Text(league),
-                                        ),
-                                      ),
-                                    ],
-                                    onChanged: (value) {
-                                      ref.read(zonesFiltersProvider.notifier).setLeague(value);
-                                    },
-                                  ),
-                                ),
-                              ),
-                              TableFilterField(
-                                label: 'Torneo',
-                                width: 220,
-                                child: DropdownButtonHideUnderline(
-                                  child: DropdownButton<int?>(
-                                    value: tournamentIds.contains(filters.tournamentId)
-                                        ? filters.tournamentId
-                                        : null,
-                                    isExpanded: true,
-                                    items: [
-                                      const DropdownMenuItem<int?>(
-                                        value: null,
-                                        child: Text('Todos'),
-                                      ),
-                                      ...tournamentOptions.map(
-                                        (_ZoneTournamentFilterOption option) => DropdownMenuItem<int?>(
-                                          value: option.id,
-                                          child: Text(option.label),
-                                        ),
-                                      ),
-                                    ],
-                                    onChanged: (value) {
-                                      ref.read(zonesFiltersProvider.notifier).setTournament(value);
-                                    },
-                                  ),
-                                ),
-                              ),
-                              TableFilterField(
-                                label: 'Estado',
-                                width: 200,
-                                child: DropdownButtonHideUnderline(
-                                  child: DropdownButton<ZoneStatus?>(
-                                    value: filters.status,
-                                    isExpanded: true,
-                                    items: [
-                                      const DropdownMenuItem<ZoneStatus?>(
-                                        value: null,
-                                        child: Text('Todos'),
-                                      ),
-                                      ...ZoneStatus.values.map(
-                                        (status) => DropdownMenuItem<ZoneStatus?>(
-                                          value: status,
-                                          child: Text(status.label),
-                                        ),
-                                      ),
-                                    ],
-                                    onChanged: (value) {
-                                      ref.read(zonesFiltersProvider.notifier).setStatus(value);
-                                    },
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+                          ],
                         ),
                         const Divider(height: 1),
                         Expanded(
