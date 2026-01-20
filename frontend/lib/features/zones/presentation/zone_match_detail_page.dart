@@ -560,13 +560,13 @@ class _CategoriesTableState extends ConsumerState<_CategoriesTable> {
           theme,
           headerBackground,
           innerBorderColor,
-          label: isMobile ? 'L' : 'Goles Local',
+          label: isMobile ? 'L' : 'G.Local',
         ),
         _headerCell(
           theme,
           headerBackground,
           innerBorderColor,
-          label: isMobile ? 'V' : 'Goles Visitante',
+          label: isMobile ? 'V' : 'G.Visita',
           showRightBorder: !isMobile,
         ),
         if (!isMobile)
@@ -1185,7 +1185,9 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
     required bool isHome,
   }) {
     final theme = Theme.of(context);
-    final listHeight = math.min(280.0, entries.length * 48.0);
+    const rowHeight = 48.0;
+    final listHeight =
+        math.max(rowHeight * 5, math.min(280.0, entries.length * rowHeight));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

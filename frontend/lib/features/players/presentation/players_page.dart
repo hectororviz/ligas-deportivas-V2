@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/utils/responsive.dart';
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
 import '../../categories/providers/categories_catalog_provider.dart';
@@ -307,85 +308,116 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
             ),
             const SizedBox(height: 24),
             Card(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
-                child: TableFiltersBar(
-                  children: [
-                    TableFilterField(
-                      label: 'Buscar',
-                      width: 320,
-                      child: TableFilterSearchField(
-                        controller: _searchController,
-                        placeholder: 'Buscar por apellido, nombre o DNI',
-                        showClearButton: filters.query.isNotEmpty,
-                        onClear: () {
-                          _searchController.clear();
-                          ref
-                              .read(playersFiltersProvider.notifier)
-                              .setQuery('');
-                        },
+              child: ExpansionTile(
+                title: const Text('Búsqueda'),
+                initiallyExpanded: false,
+                childrenPadding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                children: [
+                  TableFiltersBar(
+                    children: [
+                      TableFilterField(
+                        label: 'Buscar',
+                        width: 320,
+                        child: TableFilterSearchField(
+                          controller: _searchController,
+                          placeholder: 'Buscar por apellido, nombre o DNI',
+                          showClearButton: filters.query.isNotEmpty,
+                          onClear: () {
+                            _searchController.clear();
+                            ref
+                                .read(playersFiltersProvider.notifier)
+                                .setQuery('');
+                          },
+                        ),
                       ),
-                    ),
-                    TableFilterField(
-                      label: 'Club',
-                      width: 240,
-                      child: clubsAsync.when(
-                        data: (clubs) {
-                          final notifier =
-                              ref.read(playersFiltersProvider.notifier);
-                          if (restrictToAssignedClubs) {
-                            final allowedIds =
-                                restrictedClubIds!.toList(growable: false);
-                            final allowedClubs = clubs
-                                .where(
-                                  (club) => allowedIds.contains(club.id),
-                                )
-                                .toList();
+                      TableFilterField(
+                        label: 'Club',
+                        width: 240,
+                        child: clubsAsync.when(
+                          data: (clubs) {
+                            final notifier =
+                                ref.read(playersFiltersProvider.notifier);
+                            if (restrictToAssignedClubs) {
+                              final allowedIds =
+                                  restrictedClubIds!.toList(growable: false);
+                              final allowedClubs = clubs
+                                  .where(
+                                    (club) => allowedIds.contains(club.id),
+                                  )
+                                  .toList();
 
-                            if (allowedClubs.isEmpty) {
-                              if (filters.clubId != null) {
+                              if (allowedClubs.isEmpty) {
+                                if (filters.clubId != null) {
+                                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                                    notifier.setClubId(null);
+                                  });
+                                }
+                                return const Text('Sin clubes asignados');
+                              }
+
+                              final hasMultipleAllowed = allowedClubs.length > 1;
+                              final validValues = <int?>{
+                                if (hasMultipleAllowed) null,
+                                ...allowedClubs.map((club) => club.id),
+                              };
+
+                              final desiredValue = validValues.contains(filters.clubId)
+                                  ? filters.clubId
+                                  : (hasMultipleAllowed
+                                      ? null
+                                      : allowedClubs.first.id);
+
+                              if (filters.clubId != desiredValue) {
                                 WidgetsBinding.instance.addPostFrameCallback((_) {
-                                  notifier.setClubId(null);
+                                  notifier.setClubId(desiredValue);
                                 });
                               }
-                              return const Text('Sin clubes asignados');
-                            }
 
-                            final hasMultipleAllowed = allowedClubs.length > 1;
-                            final validValues = <int?>{
-                              if (hasMultipleAllowed) null,
-                              ...allowedClubs.map((club) => club.id),
-                            };
+                              final items = [
+                                if (hasMultipleAllowed)
+                                  const DropdownMenuItem<int?>(
+                                    value: null,
+                                    child: Text('Todos mis clubes'),
+                                  ),
+                                ...allowedClubs.map(
+                                  (club) => DropdownMenuItem<int?>(
+                                    value: club.id,
+                                    child: Text(club.name),
+                                  ),
+                                ),
+                              ];
 
-                            final desiredValue = validValues.contains(filters.clubId)
-                                ? filters.clubId
-                                : (hasMultipleAllowed
-                                    ? null
-                                    : allowedClubs.first.id);
-
-                            if (filters.clubId != desiredValue) {
-                              WidgetsBinding.instance.addPostFrameCallback((_) {
-                                notifier.setClubId(desiredValue);
-                              });
+                              return DropdownButtonHideUnderline(
+                                child: DropdownButton<int?>(
+                                  value: desiredValue,
+                                  isExpanded: true,
+                                  items: items,
+                                  onChanged: (value) {
+                                    notifier.setClubId(value);
+                                  },
+                                ),
+                              );
                             }
 
                             final items = [
-                              if (hasMultipleAllowed)
-                                const DropdownMenuItem<int?>(
-                                  value: null,
-                                  child: Text('Todos mis clubes'),
-                                ),
-                              ...allowedClubs.map(
+                              const DropdownMenuItem<int?>(
+                                value: _noClubFilterValue,
+                                child: Text('Sin club asignado'),
+                              ),
+                              const DropdownMenuItem<int?>(
+                                value: null,
+                                child: Text('Todos'),
+                              ),
+                              ...clubs.map(
                                 (club) => DropdownMenuItem<int?>(
                                   value: club.id,
                                   child: Text(club.name),
                                 ),
                               ),
                             ];
-
                             return DropdownButtonHideUnderline(
                               child: DropdownButton<int?>(
-                                value: desiredValue,
+                                value: filters.clubId,
                                 isExpanded: true,
                                 items: items,
                                 onChanged: (value) {
@@ -393,149 +425,122 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
                                 },
                               ),
                             );
-                          }
-
-                          final items = [
-                            const DropdownMenuItem<int?>(
-                              value: _noClubFilterValue,
-                              child: Text('Sin club asignado'),
-                            ),
-                            const DropdownMenuItem<int?>(
-                              value: null,
-                              child: Text('Todos'),
-                            ),
-                            ...clubs.map(
-                              (club) => DropdownMenuItem<int?>(
-                                value: club.id,
-                                child: Text(club.name),
-                              ),
-                            ),
-                          ];
-                          return DropdownButtonHideUnderline(
-                            child: DropdownButton<int?>(
-                              value: filters.clubId,
-                              isExpanded: true,
-                              items: items,
-                              onChanged: (value) {
-                                notifier.setClubId(value);
-                              },
-                            ),
-                          );
-                        },
-                        loading: () => const Center(
-                          child: SizedBox(
-                            height: 24,
-                            width: 24,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        ),
-                        error: (error, _) => Center(
-                          child: Tooltip(
-                            message: 'No se pudieron cargar los clubes: $error',
-                            child: const Icon(Icons.error_outline, color: Colors.redAccent),
-                          ),
-                        ),
-                      ),
-                    ),
-                    TableFilterField(
-                      label: 'Género',
-                      width: 200,
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<PlayerGenderFilter>(
-                          value: filters.gender,
-                          isExpanded: true,
-                          items: PlayerGenderFilter.values
-                              .map(
-                                (value) => DropdownMenuItem(
-                                  value: value,
-                                  child: Text(value.label),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) {
-                            if (value != null) {
-                              ref
-                                  .read(playersFiltersProvider.notifier)
-                                  .setGender(value);
-                            }
                           },
+                          loading: () => const Center(
+                            child: SizedBox(
+                              height: 24,
+                              width: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
+                          error: (error, _) => Center(
+                            child: Tooltip(
+                              message: 'No se pudieron cargar los clubes: $error',
+                              child: const Icon(Icons.error_outline, color: Colors.redAccent),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                    TableFilterField(
-                      label: 'Categoría (año)',
-                      width: 200,
-                      child: categoriesAsync.when(
-                        data: (categories) {
-                          final options = [
-                            const _BirthYearFilterOption.all(),
-                            ...categories
-                                .where((category) =>
-                                    category.birthYearMin != category.birthYearMax)
+                      TableFilterField(
+                        label: 'Género',
+                        width: 200,
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<PlayerGenderFilter>(
+                            value: filters.gender,
+                            isExpanded: true,
+                            items: PlayerGenderFilter.values
                                 .map(
-                                  (category) => _BirthYearFilterOption.range(
-                                    label: category.name,
-                                    min: category.birthYearMin,
-                                    max: category.birthYearMax,
+                                  (value) => DropdownMenuItem(
+                                    value: value,
+                                    child: Text(value.label),
                                   ),
-                                ),
+                                )
+                                .toList(),
+                            onChanged: (value) {
+                              if (value != null) {
+                                ref
+                                    .read(playersFiltersProvider.notifier)
+                                    .setGender(value);
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                      TableFilterField(
+                        label: 'Categoría (año)',
+                        width: 200,
+                        child: categoriesAsync.when(
+                          data: (categories) {
+                            final options = [
+                              const _BirthYearFilterOption.all(),
+                              ...categories
+                                  .where((category) =>
+                                      category.birthYearMin != category.birthYearMax)
+                                  .map(
+                                    (category) => _BirthYearFilterOption.range(
+                                      label: category.name,
+                                      min: category.birthYearMin,
+                                      max: category.birthYearMax,
+                                    ),
+                                  ),
+                              ...birthYearOptions.map(
+                                (year) => _BirthYearFilterOption.year(year),
+                              ),
+                            ];
+                            return buildBirthYearDropdown(options);
+                          },
+                          loading: () => buildBirthYearDropdown([
+                            const _BirthYearFilterOption.all(),
                             ...birthYearOptions.map(
                               (year) => _BirthYearFilterOption.year(year),
                             ),
-                          ];
-                          return buildBirthYearDropdown(options);
-                        },
-                        loading: () => buildBirthYearDropdown([
-                          const _BirthYearFilterOption.all(),
-                          ...birthYearOptions.map(
-                            (year) => _BirthYearFilterOption.year(year),
-                          ),
-                        ]),
-                        error: (_, __) => buildBirthYearDropdown([
-                          const _BirthYearFilterOption.all(),
-                          ...birthYearOptions.map(
-                            (year) => _BirthYearFilterOption.year(year),
-                          ),
-                        ]),
-                      ),
-                    ),
-                    TableFilterField(
-                      label: 'Estado',
-                      width: 200,
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<PlayerStatusFilter>(
-                          value: filters.status,
-                          isExpanded: true,
-                          items: PlayerStatusFilter.values
-                              .map(
-                                (value) => DropdownMenuItem(
-                                  value: value,
-                                  child: Text(value.label),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) {
-                            if (value != null) {
-                              ref
-                                  .read(playersFiltersProvider.notifier)
-                                  .setStatus(value);
-                            }
-                          },
+                          ]),
+                          error: (_, __) => buildBirthYearDropdown([
+                            const _BirthYearFilterOption.all(),
+                            ...birthYearOptions.map(
+                              (year) => _BirthYearFilterOption.year(year),
+                            ),
+                          ]),
                         ),
                       ),
+                      TableFilterField(
+                        label: 'Estado',
+                        width: 200,
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<PlayerStatusFilter>(
+                            value: filters.status,
+                            isExpanded: true,
+                            items: PlayerStatusFilter.values
+                                .map(
+                                  (value) => DropdownMenuItem(
+                                    value: value,
+                                    child: Text(value.label),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (value) {
+                              if (value != null) {
+                                ref
+                                    .read(playersFiltersProvider.notifier)
+                                    .setStatus(value);
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                    trailing: TextButton.icon(
+                      onPressed: filters.hasActiveFilters
+                          ? () {
+                              _searchController.clear();
+                              ref.read(playersFiltersProvider.notifier).reset();
+                            }
+                          : null,
+                      icon: const Icon(Icons.filter_alt_off_outlined),
+                      label: const Text('Limpiar filtros'),
                     ),
-                  ],
-                  trailing: TextButton.icon(
-                    onPressed: filters.hasActiveFilters
-                        ? () {
-                            _searchController.clear();
-                            ref.read(playersFiltersProvider.notifier).reset();
-                          }
-                        : null,
-                    icon: const Icon(Icons.filter_alt_off_outlined),
-                    label: const Text('Limpiar filtros'),
                   ),
-                ),
+                ],
               ),
             ),
             const SizedBox(height: 16),
@@ -890,15 +895,16 @@ class _PlayersDataTable extends StatelessWidget {
     final colors = AppDataTableColors.standard(theme);
     final headerStyle =
         theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: colors.headerText);
+    final isMobile = Responsive.isMobile(context);
 
     final table = DataTable(
-      columns: const [
-        DataColumn(label: Text('Apellido')),
-        DataColumn(label: Text('Nombre')),
-        DataColumn(label: Text('Género')),
-        DataColumn(label: Text('Nacimiento')),
-        DataColumn(label: Text('Estado')),
-        DataColumn(label: Text('Acciones')),
+      columns: [
+        const DataColumn(label: Text('Apellido')),
+        const DataColumn(label: Text('Nombre')),
+        const DataColumn(label: Text('Género')),
+        const DataColumn(label: Text('Nacimiento')),
+        if (!isMobile) const DataColumn(label: Text('Estado')),
+        const DataColumn(label: Text('Acciones')),
       ],
       dataRowMinHeight: 44,
       dataRowMaxHeight: 60,
@@ -914,40 +920,41 @@ class _PlayersDataTable extends StatelessWidget {
               DataCell(Text(players[index].firstName)),
               DataCell(Text(players[index].genderLabel)),
               DataCell(Text(players[index].formattedBirthDateWithAge)),
-              DataCell(
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Chip(
-                    avatar: Icon(
-                      players[index].active ? Icons.check_circle : Icons.pause_circle,
-                      size: 18,
-                      color: players[index].active
-                          ? theme.colorScheme.onPrimary
-                          : theme.colorScheme.onSurfaceVariant,
-                    ),
-                    backgroundColor: players[index].active
-                        ? theme.colorScheme.primary
-                        : theme.colorScheme.surfaceVariant,
-                    label: Text(
-                      players[index].active ? 'Activo' : 'Inactivo',
-                      style: theme.textTheme.labelLarge?.copyWith(
+              if (!isMobile)
+                DataCell(
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Chip(
+                      avatar: Icon(
+                        players[index].active ? Icons.check_circle : Icons.pause_circle,
+                        size: 18,
                         color: players[index].active
                             ? theme.colorScheme.onPrimary
                             : theme.colorScheme.onSurfaceVariant,
                       ),
+                      backgroundColor: players[index].active
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.surfaceVariant,
+                      label: Text(
+                        players[index].active ? 'Activo' : 'Inactivo',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: players[index].active
+                              ? theme.colorScheme.onPrimary
+                              : theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
               DataCell(
-                Wrap(
-                  spacing: 8,
+                Row(
                   children: [
                     OutlinedButton.icon(
                       onPressed: () => onView(players[index]),
                       icon: const Icon(Icons.visibility_outlined),
                       label: const Text('Detalle'),
                     ),
+                    const SizedBox(width: 8),
                     FilledButton.tonalIcon(
                       onPressed: canEdit ? () => onEdit(players[index]) : null,
                       icon: const Icon(Icons.edit_outlined),
