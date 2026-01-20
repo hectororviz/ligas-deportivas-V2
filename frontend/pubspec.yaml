@@ -17,6 +17,7 @@ dependencies:
   intl: any
   file_picker: ^8.0.0
   flutter_map: ^6.1.0
+  google_fonts: ^6.2.1
   latlong2: ^0.9.1
   url_launcher: ^6.2.5
 

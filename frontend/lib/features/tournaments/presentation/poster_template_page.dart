@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:http_parser/http_parser.dart';
 
 import '../../../services/api_client.dart';
@@ -13,6 +14,20 @@ import 'poster_template_provider.dart';
 
 const _canvasWidth = 1080.0;
 const _canvasHeight = 1920.0;
+const _defaultFontLabel = 'Default';
+const _googleFonts = [
+  _defaultFontLabel,
+  'Roboto',
+  'Montserrat',
+  'Poppins',
+  'Oswald',
+  'Lato',
+  'Open Sans',
+  'Playfair Display',
+  'Merriweather',
+];
+const _fontWeights = ['normal', '500', '600', '700', '800', 'bold'];
+const _fontStyles = ['normal', 'italic'];
 
 class PosterTemplatePage extends ConsumerStatefulWidget {
   const PosterTemplatePage({super.key, required this.competitionId, this.tournamentName});
@@ -251,6 +266,16 @@ class _PosterTemplatePageState extends ConsumerState<PosterTemplatePage> {
       case 'text':
       default:
         final align = _mapAlignment(layer.align ?? 'left');
+        final baseStyle = TextStyle(
+          fontSize: layer.fontSize ?? 42,
+          color: _parseColor(layer.color) ?? Colors.white,
+          fontWeight: _parseFontWeight(layer.fontWeight),
+          fontStyle: _parseFontStyle(layer.fontStyle),
+        );
+        final fontFamily = layer.fontFamily;
+        final textStyle = fontFamily == null || fontFamily.isEmpty
+            ? baseStyle
+            : GoogleFonts.getFont(fontFamily, textStyle: baseStyle);
         child = Container(
           width: layer.width,
           height: layer.height,
@@ -258,11 +283,7 @@ class _PosterTemplatePageState extends ConsumerState<PosterTemplatePage> {
           child: Text(
             layer.text ?? '',
             textAlign: _mapTextAlign(layer.align ?? 'left'),
-            style: TextStyle(
-              fontSize: layer.fontSize ?? 42,
-              color: _parseColor(layer.color) ?? Colors.white,
-              fontWeight: _parseFontWeight(layer.fontWeight),
-            ),
+            style: textStyle,
           ),
         );
     }
@@ -450,6 +471,27 @@ class _PosterTemplatePageState extends ConsumerState<PosterTemplatePage> {
             layer.align ?? 'left',
             const ['left', 'center', 'right'],
             (value) => _updateLayer(layer, (l) => l.align = value),
+          ),
+          _buildDropdown(
+            'Tipografía',
+            layer.fontFamily ?? _defaultFontLabel,
+            _googleFonts,
+            (value) => _updateLayer(
+              layer,
+              (l) => l.fontFamily = value == _defaultFontLabel ? null : value,
+            ),
+          ),
+          _buildDropdown(
+            'Peso',
+            layer.fontWeight ?? 'normal',
+            _fontWeights,
+            (value) => _updateLayer(layer, (l) => l.fontWeight = value),
+          ),
+          _buildDropdown(
+            'Estilo',
+            layer.fontStyle ?? 'normal',
+            _fontStyles,
+            (value) => _updateLayer(layer, (l) => l.fontStyle = value),
           ),
         ],
         if (layer.type == 'image') ...[
@@ -832,13 +874,37 @@ class _PosterTemplatePageState extends ConsumerState<PosterTemplatePage> {
 
   FontWeight _parseFontWeight(String? value) {
     switch (value) {
-      case 'bold':
-      case '700':
-        return FontWeight.w700;
+      case '100':
+        return FontWeight.w100;
+      case '200':
+        return FontWeight.w200;
+      case '300':
+        return FontWeight.w300;
+      case '400':
+      case 'normal':
+        return FontWeight.w400;
+      case '500':
+        return FontWeight.w500;
       case '600':
         return FontWeight.w600;
+      case '700':
+      case 'bold':
+        return FontWeight.w700;
+      case '800':
+        return FontWeight.w800;
+      case '900':
+        return FontWeight.w900;
       default:
         return FontWeight.normal;
+    }
+  }
+
+  FontStyle _parseFontStyle(String? value) {
+    switch (value) {
+      case 'italic':
+        return FontStyle.italic;
+      default:
+        return FontStyle.normal;
     }
   }
 }
