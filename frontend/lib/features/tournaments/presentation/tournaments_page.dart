@@ -535,7 +535,7 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
                         ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
               ),
             ),
