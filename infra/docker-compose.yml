@@ -106,3 +106,7 @@ volumes:
   backend-storage:
   caddy_data:
   caddy_config:
+
+networks:
+  shared_proxy:
+    external: true
