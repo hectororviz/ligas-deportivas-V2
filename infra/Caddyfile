@@ -2,3 +2,7 @@ ligas.csdsoler.com.ar {
   reverse_proxy /api/* backend:3000
   reverse_proxy frontend:80
 }
+pos.csdsoler.com.ar {
+  reverse_proxy /api/* pos-backend:3000
+  reverse_proxy pos-frontend:80
+}
