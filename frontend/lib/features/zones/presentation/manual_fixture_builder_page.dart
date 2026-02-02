@@ -21,11 +21,15 @@ class ManualFixtureBuilderPage extends ConsumerStatefulWidget {
 class _ManualFixtureBuilderPageState extends ConsumerState<ManualFixtureBuilderPage> {
   FixtureMeta? _meta;
   List<ManualFixtureDate> _round1Dates = [];
-  int _selectedDateIndex = 0;
+  List<ManualFixtureDate> _round2Dates = [];
+  int _selectedDateIndexRound1 = 0;
+  int _selectedDateIndexRound2 = 0;
   String _searchText = '';
   bool _saving = false;
   String? _errorMessage;
   bool _riskAccepted = false;
+  bool _autoSecondRound = true;
+  int _selectedRoundIndex = 0;
 
   void _initializeFixture(ZoneDetail zone) {
     if (_meta != null && _round1Dates.isNotEmpty) {
@@ -45,19 +49,73 @@ class _ManualFixtureBuilderPageState extends ConsumerState<ManualFixtureBuilderP
     );
   }
 
+  void _ensureManualRound2() {
+    final meta = _meta;
+    if (meta == null || _round2Dates.isNotEmpty) {
+      return;
+    }
+    _round2Dates = List.generate(
+      meta.totalDates,
+      (index) => ManualFixtureDate(
+        dateNumber: index + 1,
+        matches: List.generate(
+          meta.matchesPerDate,
+          (matchIndex) => ManualFixtureMatchSlot(index: matchIndex),
+        ),
+      ),
+    );
+  }
+
+  int get _selectedDateIndex =>
+      _selectedRoundIndex == 0 ? _selectedDateIndexRound1 : _selectedDateIndexRound2;
+
+  List<ManualFixtureDate> get _activeDates =>
+      _selectedRoundIndex == 0 ? _round1Dates : _round2Dates;
+
+  void _updateSelectedDateIndex(int index) {
+    setState(() {
+      if (_selectedRoundIndex == 0) {
+        _selectedDateIndexRound1 = index;
+      } else {
+        _selectedDateIndexRound2 = index;
+      }
+    });
+  }
+
+  void _updateDatesAt(int dateIndex, ManualFixtureDate updated) {
+    if (_selectedRoundIndex == 0) {
+      _round1Dates[dateIndex] = updated;
+    } else {
+      _round2Dates[dateIndex] = updated;
+    }
+  }
+
   Future<void> _saveFixture(ZoneDetail zone) async {
     final meta = _meta;
     if (meta == null || _saving) {
       return;
     }
     final clubIds = zone.clubs.map((club) => club.id).toList();
-    final globalValidation = validateAll(_round1Dates, clubIds, meta);
-    final dateValidations = _round1Dates
+    final round1Validation = validateAll(_round1Dates, clubIds, meta);
+    final round1DateValidations = _round1Dates
         .map((date) => validateDate(date, clubIds, meta, _round1Dates))
         .toList();
-    final hasIncomplete = dateValidations.any((result) => !result.isComplete);
-    final hasInvalid = dateValidations.any((result) => !result.isValid);
-    if (hasIncomplete || ((!globalValidation.isValid || hasInvalid) && !_riskAccepted)) {
+    final round2Dates = _autoSecondRound ? buildRound2FromRound1(_round1Dates) : _round2Dates;
+    final round2Validation = _autoSecondRound
+        ? null
+        : validateAll(round2Dates, clubIds, meta);
+    final round2DateValidations = _autoSecondRound
+        ? <DateValidationResult>[]
+        : round2Dates.map((date) => validateDate(date, clubIds, meta, round2Dates)).toList();
+
+    final hasIncomplete = round1DateValidations.any((result) => !result.isComplete) ||
+        (!_autoSecondRound && round2DateValidations.any((result) => !result.isComplete));
+    final hasInvalid = round1DateValidations.any((result) => !result.isValid) ||
+        (!_autoSecondRound && round2DateValidations.any((result) => !result.isValid));
+    final hasGlobalInvalid = !round1Validation.isValid ||
+        (!_autoSecondRound && (round2Validation?.isValid == false));
+
+    if (hasIncomplete || ((hasGlobalInvalid || hasInvalid) && !_riskAccepted)) {
       setState(() {
         _errorMessage = 'Corregí los errores antes de guardar el fixture.';
       });
@@ -71,14 +129,13 @@ class _ManualFixtureBuilderPageState extends ConsumerState<ManualFixtureBuilderP
 
     try {
       final api = ref.read(apiClientProvider);
-      final round2 = buildRound2FromRound1(_round1Dates);
       final offset = meta.totalDates;
       final matchdays = <Map<String, dynamic>>[];
 
       for (final date in _round1Dates) {
         matchdays.add(_serializeMatchday(date, 'FIRST', date.dateNumber));
       }
-      for (final date in round2) {
+      for (final date in round2Dates) {
         matchdays.add(_serializeMatchday(date, 'SECOND', date.dateNumber + offset));
       }
 
@@ -160,10 +217,11 @@ class _ManualFixtureBuilderPageState extends ConsumerState<ManualFixtureBuilderP
     if (meta == null) {
       return;
     }
+    final dates = _activeDates;
     final validation = validateDrop(
       clubId: clubId,
       target: target,
-      dates: _round1Dates,
+      dates: dates,
       meta: meta,
     );
     var allowDrop = validation.ok;
@@ -191,9 +249,9 @@ class _ManualFixtureBuilderPageState extends ConsumerState<ManualFixtureBuilderP
       }
     }
     setState(() {
-      final date = _round1Dates[target.dateIndex];
+      final date = dates[target.dateIndex];
       if (target.type == ManualFixtureDropType.bye) {
-        _round1Dates[target.dateIndex] = date.copyWith(byeClubId: clubId);
+        _updateDatesAt(target.dateIndex, date.copyWith(byeClubId: clubId));
         _riskAccepted = _riskAccepted || !validation.ok;
         return;
       }
@@ -207,23 +265,23 @@ class _ManualFixtureBuilderPageState extends ConsumerState<ManualFixtureBuilderP
       } else {
         updatedMatches[target.matchIndex!] = match.copyWith(awayClubId: clubId);
       }
-      _round1Dates[target.dateIndex] = date.copyWith(matches: updatedMatches);
+      _updateDatesAt(target.dateIndex, date.copyWith(matches: updatedMatches));
       _riskAccepted = _riskAccepted || !validation.ok;
     });
   }
 
   void _clearMatch(int dateIndex, int matchIndex) {
     setState(() {
-      final date = _round1Dates[dateIndex];
+      final date = _activeDates[dateIndex];
       final updatedMatches = [...date.matches];
       updatedMatches[matchIndex] = ManualFixtureMatchSlot(index: matchIndex);
-      _round1Dates[dateIndex] = date.copyWith(matches: updatedMatches);
+      _updateDatesAt(dateIndex, date.copyWith(matches: updatedMatches));
     });
   }
 
   void _clearSlot(int dateIndex, int matchIndex, ManualFixtureDropType type) {
     setState(() {
-      final date = _round1Dates[dateIndex];
+      final date = _activeDates[dateIndex];
       final updatedMatches = [...date.matches];
       final match = updatedMatches[matchIndex];
       if (type == ManualFixtureDropType.home) {
@@ -231,27 +289,27 @@ class _ManualFixtureBuilderPageState extends ConsumerState<ManualFixtureBuilderP
       } else if (type == ManualFixtureDropType.away) {
         updatedMatches[matchIndex] = match.copyWith(awayClubId: null);
       }
-      _round1Dates[dateIndex] = date.copyWith(matches: updatedMatches);
+      _updateDatesAt(dateIndex, date.copyWith(matches: updatedMatches));
     });
   }
 
   void _clearBye(int dateIndex) {
     setState(() {
-      final date = _round1Dates[dateIndex];
-      _round1Dates[dateIndex] = date.copyWith(byeClubId: null);
+      final date = _activeDates[dateIndex];
+      _updateDatesAt(dateIndex, date.copyWith(byeClubId: null));
     });
   }
 
   void _swapMatch(int dateIndex, int matchIndex) {
     setState(() {
-      final date = _round1Dates[dateIndex];
+      final date = _activeDates[dateIndex];
       final updatedMatches = [...date.matches];
       final match = updatedMatches[matchIndex];
       updatedMatches[matchIndex] = match.copyWith(
         homeClubId: match.awayClubId,
         awayClubId: match.homeClubId,
       );
-      _round1Dates[dateIndex] = date.copyWith(matches: updatedMatches);
+      _updateDatesAt(dateIndex, date.copyWith(matches: updatedMatches));
     });
   }
 
@@ -271,7 +329,7 @@ class _ManualFixtureBuilderPageState extends ConsumerState<ManualFixtureBuilderP
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Generación Manual de Fixture – Ronda 1'),
+        title: const Text('Generación Manual de Fixture'),
       ),
       body: zoneAsync.when(
         data: (zone) {
@@ -280,15 +338,31 @@ class _ManualFixtureBuilderPageState extends ConsumerState<ManualFixtureBuilderP
           final clubs = zone.clubs;
           final clubIds = clubs.map((club) => club.id).toList();
           final filteredClubs = _filteredClubs(clubs);
-          final round2Dates = buildRound2FromRound1(_round1Dates);
-          final currentDate = _round1Dates[_selectedDateIndex];
-          final dateValidation = validateDate(currentDate, clubIds, meta, _round1Dates);
-          final globalValidation = validateAll(_round1Dates, clubIds, meta);
-          final dateValidations = _round1Dates
+          if (!_autoSecondRound) {
+            _ensureManualRound2();
+          }
+          final round2Dates = _autoSecondRound ? buildRound2FromRound1(_round1Dates) : _round2Dates;
+          final activeDates = _activeDates;
+          final currentDate = activeDates[_selectedDateIndex];
+          final activeValidation = validateDate(currentDate, clubIds, meta, activeDates);
+          final round1Validation = validateAll(_round1Dates, clubIds, meta);
+          final round2Validation =
+              _autoSecondRound ? null : validateAll(_round2Dates, clubIds, meta);
+          final round1DateValidations = _round1Dates
               .map((date) => validateDate(date, clubIds, meta, _round1Dates))
               .toList();
-          final allComplete = dateValidations.every((result) => result.isComplete);
-          final allValid = dateValidations.every((result) => result.isValid) && globalValidation.isValid;
+          final round2DateValidations = _autoSecondRound
+              ? <DateValidationResult>[]
+              : _round2Dates
+                  .map((date) => validateDate(date, clubIds, meta, _round2Dates))
+                  .toList();
+          final allComplete = round1DateValidations.every((result) => result.isComplete) &&
+              (_autoSecondRound || round2DateValidations.every((result) => result.isComplete));
+          final allValid = round1DateValidations.every((result) => result.isValid) &&
+              round1Validation.isValid &&
+              (_autoSecondRound ||
+                  (round2DateValidations.every((result) => result.isValid) &&
+                      (round2Validation?.isValid ?? true)));
           final canSave = allComplete && (allValid || _riskAccepted);
           final isWide = Responsive.isDesktop(context);
           final content = isWide
@@ -297,18 +371,32 @@ class _ManualFixtureBuilderPageState extends ConsumerState<ManualFixtureBuilderP
                   children: [
                     Expanded(child: _buildClubPanel(zone, filteredClubs, meta)),
                     const SizedBox(width: 16),
-                    Expanded(flex: 2, child: _buildDatePanel(zone, currentDate, dateValidation, meta)),
+                    Expanded(flex: 2, child: _buildDatePanel(zone, currentDate, activeValidation, meta)),
                     const SizedBox(width: 16),
-                    Expanded(child: _buildRoundPanel(globalValidation, round2Dates, meta, zone)),
+                    Expanded(
+                      child: _buildRoundPanel(
+                        round1Validation,
+                        round2Validation,
+                        round2Dates,
+                        meta,
+                        zone,
+                      ),
+                    ),
                   ],
                 )
               : Column(
                   children: [
                     _buildClubPanel(zone, filteredClubs, meta),
                     const SizedBox(height: 16),
-                    _buildDatePanel(zone, currentDate, dateValidation, meta),
+                    _buildDatePanel(zone, currentDate, activeValidation, meta),
                     const SizedBox(height: 16),
-                    _buildRoundPanel(globalValidation, round2Dates, meta, zone),
+                    _buildRoundPanel(
+                      round1Validation,
+                      round2Validation,
+                      round2Dates,
+                      meta,
+                      zone,
+                    ),
                   ],
                 );
 
@@ -319,7 +407,11 @@ class _ManualFixtureBuilderPageState extends ConsumerState<ManualFixtureBuilderP
                 children: [
                   _buildHeader(canSave, zone),
                   const SizedBox(height: 12),
-                  _buildTabs(dateValidations),
+                  if (!_autoSecondRound) ...[
+                    _buildRoundSelector(),
+                    const SizedBox(height: 8),
+                  ],
+                  _buildTabs(_selectedRoundIndex == 0 ? round1DateValidations : round2DateValidations),
                   const SizedBox(height: 16),
                   if (_errorMessage != null) ...[
                     _buildErrorBanner(_errorMessage!),
@@ -342,8 +434,31 @@ class _ManualFixtureBuilderPageState extends ConsumerState<ManualFixtureBuilderP
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Editás solo la Ronda 1. La Ronda 2 se genera invirtiendo localías.',
+          _autoSecondRound
+              ? 'Editás solo la Ronda 1. La Ronda 2 se genera invirtiendo localías.'
+              : 'Editás la Ronda 1 y la Ronda 2 manualmente.',
           style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Checkbox(
+              value: _autoSecondRound,
+              onChanged: (value) {
+                setState(() {
+                  _autoSecondRound = value ?? true;
+                  _selectedRoundIndex = 0;
+                  if (!_autoSecondRound) {
+                    _ensureManualRound2();
+                  }
+                });
+              },
+            ),
+            const SizedBox(width: 4),
+            const Expanded(
+              child: Text('Segunda ronda automática'),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
         Wrap(
@@ -399,15 +514,33 @@ class _ManualFixtureBuilderPageState extends ConsumerState<ManualFixtureBuilderP
                 Text('Fecha ${index + 1}'),
               ],
             ),
-            onSelected: (_) => setState(() => _selectedDateIndex = index),
+            onSelected: (_) => _updateSelectedDateIndex(index),
           );
         },
       ),
     );
   }
 
+  Widget _buildRoundSelector() {
+    return Row(
+      children: [
+        ChoiceChip(
+          label: const Text('Ronda 1'),
+          selected: _selectedRoundIndex == 0,
+          onSelected: (_) => setState(() => _selectedRoundIndex = 0),
+        ),
+        const SizedBox(width: 8),
+        ChoiceChip(
+          label: const Text('Ronda 2'),
+          selected: _selectedRoundIndex == 1,
+          onSelected: (_) => setState(() => _selectedRoundIndex = 1),
+        ),
+      ],
+    );
+  }
+
   Widget _buildClubPanel(ZoneDetail zone, List<ZoneClub> clubs, FixtureMeta meta) {
-    final currentDate = _round1Dates[_selectedDateIndex];
+    final currentDate = _activeDates[_selectedDateIndex];
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -432,7 +565,7 @@ class _ManualFixtureBuilderPageState extends ConsumerState<ManualFixtureBuilderP
                   final club = clubs[index];
                   final isAssigned = clubRoleForDate(currentDate, club.id) != null;
                   final previousRole = _selectedDateIndex > 0
-                      ? clubRoleForDate(_round1Dates[_selectedDateIndex - 1], club.id)
+                      ? clubRoleForDate(_activeDates[_selectedDateIndex - 1], club.id)
                       : null;
                   return Opacity(
                     opacity: isAssigned ? 0.4 : 1,
@@ -639,19 +772,20 @@ class _ManualFixtureBuilderPageState extends ConsumerState<ManualFixtureBuilderP
   }
 
   Widget _buildRoundPanel(
-    GlobalValidationResult validation,
+    GlobalValidationResult round1Validation,
+    GlobalValidationResult? round2Validation,
     List<ManualFixtureDate> round2Dates,
     FixtureMeta meta,
     ZoneDetail zone,
   ) {
     final totalPairs = zone.clubs.length * (zone.clubs.length - 1) ~/ 2;
-    final completedPairs = totalPairs - validation.missingPairs.length;
+    final completedPairs = totalPairs - round1Validation.missingPairs.length;
     final clubLookup = {for (final club in zone.clubs) club.id: club};
-    final duplicateLabels = validation.duplicatePairs.keys
+    final duplicateLabels = round1Validation.duplicatePairs.keys
         .map((key) => _pairLabel(key, clubLookup))
         .where((label) => label.isNotEmpty)
         .toList();
-    final missingLabels = validation.missingPairs
+    final missingLabels = round1Validation.missingPairs
         .map((key) => _pairLabel(key, clubLookup))
         .where((label) => label.isNotEmpty)
         .toList();
@@ -661,24 +795,24 @@ class _ManualFixtureBuilderPageState extends ConsumerState<ManualFixtureBuilderP
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Estado de la ronda', style: Theme.of(context).textTheme.titleMedium),
+            Text('Ronda 1', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             Text('Cruces completos: $completedPairs / $totalPairs'),
-            if (validation.duplicatePairs.isNotEmpty) ...[
+            if (round1Validation.duplicatePairs.isNotEmpty) ...[
               const SizedBox(height: 8),
               Text(
                 'Cruces duplicados: ${duplicateLabels.join(', ')}',
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ],
-            if (validation.missingPairs.isNotEmpty) ...[
+            if (round1Validation.missingPairs.isNotEmpty) ...[
               const SizedBox(height: 8),
               Text('Faltan cruces: ${missingLabels.join(', ')}'),
             ],
             if (meta.hasBye) ...[
               const SizedBox(height: 12),
               Text('Libres por equipo:'),
-              ...validation.byeCounts.entries.map((entry) {
+              ...round1Validation.byeCounts.entries.map((entry) {
                 final clubName = clubLookup[entry.key]?.shortName ?? clubLookup[entry.key]?.name ?? entry.key;
                 final value = entry.value;
                 final color = value == 1 ? Colors.green : Theme.of(context).colorScheme.error;
@@ -686,32 +820,66 @@ class _ManualFixtureBuilderPageState extends ConsumerState<ManualFixtureBuilderP
               }),
             ],
             const SizedBox(height: 16),
-            ExpansionTile(
-              title: const Text('Ver Ronda 2 (generada)'),
-              children: round2Dates
-                  .map(
-                    (date) => ListTile(
-                      title: Text('Fecha ${date.dateNumber}'),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          ...date.matches.map((match) {
-                            final homeName = clubLookup[match.homeClubId]?.shortName ??
-                                clubLookup[match.homeClubId]?.name ??
-                                'Club ${match.homeClubId ?? '-'}';
-                            final awayName = clubLookup[match.awayClubId]?.shortName ??
-                                clubLookup[match.awayClubId]?.name ??
-                                'Club ${match.awayClubId ?? '-'}';
-                            return Text('$homeName vs $awayName');
-                          }),
-                          if (meta.hasBye && date.byeClubId != null)
-                            Text('Libre: ${clubLookup[date.byeClubId]?.shortName ?? clubLookup[date.byeClubId]?.name}'),
-                        ],
+            if (_autoSecondRound)
+              ExpansionTile(
+                title: const Text('Ver Ronda 2 (generada)'),
+                children: round2Dates
+                    .map(
+                      (date) => ListTile(
+                        title: Text('Fecha ${date.dateNumber}'),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ...date.matches.map((match) {
+                              final homeName = clubLookup[match.homeClubId]?.shortName ??
+                                  clubLookup[match.homeClubId]?.name ??
+                                  'Club ${match.homeClubId ?? '-'}';
+                              final awayName = clubLookup[match.awayClubId]?.shortName ??
+                                  clubLookup[match.awayClubId]?.name ??
+                                  'Club ${match.awayClubId ?? '-'}';
+                              return Text('$homeName vs $awayName');
+                            }),
+                            if (meta.hasBye && date.byeClubId != null)
+                              Text(
+                                'Libre: ${clubLookup[date.byeClubId]?.shortName ?? clubLookup[date.byeClubId]?.name}',
+                              ),
+                          ],
+                        ),
                       ),
-                    ),
-                  )
-                  .toList(),
-            ),
+                    )
+                    .toList(),
+              ),
+            if (!_autoSecondRound && round2Validation != null) ...[
+              const Divider(height: 24),
+              Text('Ronda 2', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              Text(
+                'Cruces completos: ${totalPairs - round2Validation.missingPairs.length} / $totalPairs',
+              ),
+              if (round2Validation.duplicatePairs.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Cruces duplicados: ${round2Validation.duplicatePairs.keys.map((key) => _pairLabel(key, clubLookup)).join(', ')}',
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ],
+              if (round2Validation.missingPairs.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Faltan cruces: ${round2Validation.missingPairs.map((key) => _pairLabel(key, clubLookup)).join(', ')}',
+                ),
+              ],
+              if (meta.hasBye) ...[
+                const SizedBox(height: 12),
+                Text('Libres por equipo:'),
+                ...round2Validation.byeCounts.entries.map((entry) {
+                  final clubName = clubLookup[entry.key]?.shortName ?? clubLookup[entry.key]?.name ?? entry.key;
+                  final value = entry.value;
+                  final color = value == 1 ? Colors.green : Theme.of(context).colorScheme.error;
+                  return Text('$clubName: $value/1', style: TextStyle(color: color));
+                }),
+              ],
+            ],
           ],
         ),
       ),
