@@ -25,6 +25,7 @@ class _ManualFixtureBuilderPageState extends ConsumerState<ManualFixtureBuilderP
   String _searchText = '';
   bool _saving = false;
   String? _errorMessage;
+  bool _riskAccepted = false;
 
   void _initializeFixture(ZoneDetail zone) {
     if (_meta != null && _round1Dates.isNotEmpty) {
@@ -56,7 +57,7 @@ class _ManualFixtureBuilderPageState extends ConsumerState<ManualFixtureBuilderP
         .toList();
     final hasIncomplete = dateValidations.any((result) => !result.isComplete);
     final hasInvalid = dateValidations.any((result) => !result.isValid);
-    if (hasIncomplete || hasInvalid || !globalValidation.isValid) {
+    if (hasIncomplete || ((!globalValidation.isValid || hasInvalid) && !_riskAccepted)) {
       setState(() {
         _errorMessage = 'Corregí los errores antes de guardar el fixture.';
       });
@@ -154,7 +155,7 @@ class _ManualFixtureBuilderPageState extends ConsumerState<ManualFixtureBuilderP
     return error.message ?? 'Ocurrió un error inesperado.';
   }
 
-  void _handleDrop(int clubId, ManualFixtureDropTarget target) {
+  Future<void> _handleDrop(int clubId, ManualFixtureDropTarget target) async {
     final meta = _meta;
     if (meta == null) {
       return;
@@ -165,16 +166,35 @@ class _ManualFixtureBuilderPageState extends ConsumerState<ManualFixtureBuilderP
       dates: _round1Dates,
       meta: meta,
     );
-    if (!validation.ok) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(validation.reason ?? 'No se pudo asignar el club.')),
+    var allowDrop = validation.ok;
+    if (!allowDrop) {
+      final accepted = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Advertencia de fixture'),
+          content: Text(validation.reason ?? 'No se pudo asignar el club.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Entendido'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Aceptar el riesgo'),
+            ),
+          ],
+        ),
       );
-      return;
+      allowDrop = accepted == true;
+      if (!allowDrop) {
+        return;
+      }
     }
     setState(() {
       final date = _round1Dates[target.dateIndex];
       if (target.type == ManualFixtureDropType.bye) {
         _round1Dates[target.dateIndex] = date.copyWith(byeClubId: clubId);
+        _riskAccepted = _riskAccepted || !validation.ok;
         return;
       }
       if (target.matchIndex == null) {
@@ -188,6 +208,7 @@ class _ManualFixtureBuilderPageState extends ConsumerState<ManualFixtureBuilderP
         updatedMatches[target.matchIndex!] = match.copyWith(awayClubId: clubId);
       }
       _round1Dates[target.dateIndex] = date.copyWith(matches: updatedMatches);
+      _riskAccepted = _riskAccepted || !validation.ok;
     });
   }
 
@@ -268,7 +289,7 @@ class _ManualFixtureBuilderPageState extends ConsumerState<ManualFixtureBuilderP
               .toList();
           final allComplete = dateValidations.every((result) => result.isComplete);
           final allValid = dateValidations.every((result) => result.isValid) && globalValidation.isValid;
-          final canSave = allComplete && allValid;
+          final canSave = allComplete && (allValid || _riskAccepted);
           final isWide = Responsive.isDesktop(context);
           final content = isWide
               ? Row(
@@ -756,17 +777,7 @@ class _DropSlot extends StatelessWidget {
         if (clubId == null || state == null) {
           return false;
         }
-        final meta = state._meta;
-        if (meta == null) {
-          return false;
-        }
-        final result = validateDrop(
-          clubId: clubId,
-          target: target,
-          dates: state._round1Dates,
-          meta: meta,
-        );
-        return result.ok;
+        return state._meta != null;
       },
       onAccept: (clubId) => onDrop(clubId, target),
       builder: (context, candidateData, rejectedData) {
