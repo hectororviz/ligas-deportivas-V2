@@ -15,6 +15,7 @@ import '../../shared/widgets/app_data_table_style.dart';
 import '../../shared/widgets/table_filters_bar.dart';
 
 const _moduleTorneos = 'TORNEOS';
+const _actionCreate = 'CREATE';
 const _actionUpdate = 'UPDATE';
 
 final tournamentFiltersProvider =
@@ -168,6 +169,36 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
       ref.invalidate(_tournamentsSourceProvider);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Torneo "${tournament.name}" actualizado.')),
+      );
+    }
+  }
+
+  Future<void> _openCreateTournament() async {
+    final leagues = await ref.read(leaguesProvider.future);
+    final user = ref.read(authControllerProvider).user;
+    final allowedLeagues = _filterLeaguesForPermission(leagues, user, _actionCreate);
+    final allowedLeagueIds =
+        user?.allowedLeaguesFor(module: _moduleTorneos, action: _actionCreate);
+
+    if (!mounted) {
+      return;
+    }
+
+    final result = await _showTournamentForm(
+      context,
+      leagues: allowedLeagues.isEmpty ? leagues : allowedLeagues,
+      readOnly: false,
+      allowedLeagueIds: allowedLeagueIds,
+    );
+
+    if (!mounted || result == null) {
+      return;
+    }
+
+    if (result == _TournamentFormResult.saved) {
+      ref.invalidate(_tournamentsSourceProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Torneo creado.')),
       );
     }
   }
@@ -331,12 +362,21 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
     final authState = ref.watch(authControllerProvider);
     final user = authState.user;
     final canConfigurePoster = user?.roles.contains('ADMIN') ?? false;
+    final canCreate =
+        user?.hasPermission(module: _moduleTorneos, action: _actionCreate) ?? false;
     final years = ref.watch(availableTournamentYearsProvider);
     final leaguesAsync = ref.watch(leaguesProvider);
     final filters = ref.watch(tournamentFiltersProvider);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
+      floatingActionButton: canCreate
+          ? FloatingActionButton.extended(
+              onPressed: _openCreateTournament,
+              icon: const Icon(Icons.add),
+              label: const Text('Agregar torneo'),
+            )
+          : null,
       body: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(
@@ -508,7 +548,9 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
                         child: tournamentsAsync.when(
                           data: (tournaments) {
                             if (tournaments.isEmpty) {
-                              return const _EmptyTournamentsState();
+                              return _EmptyTournamentsState(
+                                onCreate: canCreate ? _openCreateTournament : null,
+                              );
                             }
                             return _TournamentsDataTable(
                               tournaments: tournaments,
@@ -881,7 +923,9 @@ class _ClubAssignment {
 }
 
 class _EmptyTournamentsState extends StatelessWidget {
-  const _EmptyTournamentsState();
+  const _EmptyTournamentsState({this.onCreate});
+
+  final VoidCallback? onCreate;
 
   @override
   Widget build(BuildContext context) {
@@ -908,6 +952,14 @@ class _EmptyTournamentsState extends StatelessWidget {
               style: Theme.of(context).textTheme.bodyMedium,
               textAlign: TextAlign.center,
             ),
+            if (onCreate != null) ...[
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                onPressed: onCreate,
+                icon: const Icon(Icons.add),
+                label: const Text('Agregar torneo'),
+              ),
+            ],
           ],
         ),
       ),
@@ -1178,12 +1230,6 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
     if (_isSaving || widget.readOnly) {
       return;
     }
-    if (widget.tournament == null) {
-      setState(() {
-        _errorMessage = 'No se puede crear un torneo desde esta pantalla.';
-      });
-      return;
-    }
     final isValid = _formKey.currentState?.validate() ?? false;
     final categoriesValid = _validateCategories();
     if (!isValid || !categoriesValid) {
@@ -1225,13 +1271,33 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
         .toList();
 
     try {
-      await api.put(
-        '/tournaments/${widget.tournament!.id}',
-        data: {
-          ...payload,
-          'categories': categoriesPayload,
-        },
-      );
+      final tournamentId = widget.tournament?.id;
+      if (tournamentId == null) {
+        final response = await api.post<Map<String, dynamic>>(
+          '/tournaments',
+          data: payload,
+        );
+        final data = response.data ?? <String, dynamic>{};
+        final createdId = data['id'] as int? ?? 0;
+        if (createdId <= 0) {
+          throw StateError('No pudimos determinar el torneo creado. Intenta nuevamente.');
+        }
+        await api.put(
+          '/tournaments/$createdId',
+          data: {
+            ...payload,
+            'categories': categoriesPayload,
+          },
+        );
+      } else {
+        await api.put(
+          '/tournaments/$tournamentId',
+          data: {
+            ...payload,
+            'categories': categoriesPayload,
+          },
+        );
+      }
       if (!mounted) {
         return;
       }
@@ -1363,6 +1429,7 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
   Widget build(BuildContext context) {
     final categoriesAsync = ref.watch(categoriesCatalogProvider);
     final currentYear = DateTime.now().year;
+    final isCreate = widget.tournament == null;
     return Form(
       key: _formKey,
       child: SingleChildScrollView(
@@ -1371,7 +1438,7 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'Editar torneo',
+              isCreate ? 'Crear torneo' : 'Editar torneo',
               style: Theme.of(context)
                   .textTheme
                   .titleLarge
@@ -1381,7 +1448,9 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
             Text(
               widget.readOnly
                   ? 'Visualiza la configuración del torneo seleccionado.'
-                  : 'Actualiza los datos esenciales del torneo.',
+                  : isCreate
+                      ? 'Completa los datos esenciales para dar de alta un nuevo torneo.'
+                      : 'Actualiza los datos esenciales del torneo.',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 20),
@@ -1579,7 +1648,7 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
                           height: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('Guardar cambios'),
+                      : Text(isCreate ? 'Crear torneo' : 'Guardar cambios'),
                 ),
               ],
             )
