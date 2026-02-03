@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Gender, Prisma, ZoneStatus } from '@prisma/client';
+import { Gender, Prisma, TournamentStatus, ZoneStatus } from '@prisma/client';
 import { Express } from 'express';
 
 import { slugify } from '../../common/utils/slugify';
@@ -196,6 +196,7 @@ export class ClubsService {
         id: number;
         name: string;
         year: number;
+        status: TournamentStatus;
         leagueId: number;
         leagueName: string;
         categories: Array<{
@@ -233,6 +234,7 @@ export class ClubsService {
           id: tournament.id,
           name: tournament.name,
           year: tournament.year,
+          status: tournament.status,
           leagueId: tournament.leagueId,
           leagueName: tournament.league?.name ?? '—',
           categories: [],
