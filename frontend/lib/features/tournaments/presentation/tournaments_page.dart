@@ -281,7 +281,10 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
               children: [
                 _DetailRow(label: 'Liga', value: tournament.leagueName),
                 _DetailRow(label: 'Año', value: tournament.year.toString()),
-                _DetailRow(label: 'Estado', value: tournament.status.label),
+                _DetailRow(
+                  label: 'Estado',
+                  value: tournament.isInactive ? 'Inactivo' : tournament.status.label,
+                ),
                 const SizedBox(height: 16),
                 Text(
                   'Categorías participantes',
@@ -356,6 +359,65 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
       context: context,
       builder: (context) => _TournamentClubsDialog(tournament: tournament),
     );
+  }
+
+  Future<void> _confirmDeactivateTournament(TournamentSummary tournament) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Desactivar torneo'),
+          content: Text(
+            'Vas a desactivar el torneo "${tournament.name}". '
+            'Esta acción lo dejará inactivo y dejará de mostrarse en zonas, '
+            'fixture, tabla y home.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error,
+                foregroundColor: Theme.of(context).colorScheme.onError,
+              ),
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Desactivar'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    await _deactivateTournament(tournament);
+  }
+
+  Future<void> _deactivateTournament(TournamentSummary tournament) async {
+    try {
+      final api = ref.read(apiClientProvider);
+      await api.put(
+        '/tournaments/${tournament.id}/status',
+        data: const {'status': 'INACTIVE'},
+      );
+      ref.invalidate(_tournamentsSourceProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Torneo "${tournament.name}" desactivado.')),
+        );
+      }
+    } on DioException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo desactivar el torneo: $error')),
+        );
+      }
+    }
   }
 
   void _openPosterTemplate(TournamentSummary tournament) {
@@ -580,6 +642,7 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
                               onEdit: _openEditTournament,
                               onClubs: _openTournamentClubs,
                               onPosterTemplate: _openPosterTemplate,
+                              onDeactivate: _confirmDeactivateTournament,
                               canConfigurePoster: canConfigurePoster,
                               canEdit: (tournament) =>
                                   (user?.hasPermission(
@@ -589,6 +652,13 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
                                       ) ??
                                       false) &&
                                   !tournament.hasLockedZones,
+                              canDeactivate: (tournament) =>
+                                  (user?.hasPermission(
+                                        module: _moduleTorneos,
+                                        action: _actionUpdate,
+                                        leagueId: tournament.leagueId,
+                                      ) ??
+                                      false),
                             );
                           },
                           loading: () => const Center(child: CircularProgressIndicator()),
@@ -1020,8 +1090,10 @@ class _TournamentsDataTable extends StatelessWidget {
     required this.onEdit,
     required this.onClubs,
     required this.onPosterTemplate,
+    required this.onDeactivate,
     required this.canConfigurePoster,
     required this.canEdit,
+    required this.canDeactivate,
   });
 
   final List<TournamentSummary> tournaments;
@@ -1029,8 +1101,10 @@ class _TournamentsDataTable extends StatelessWidget {
   final ValueChanged<TournamentSummary> onEdit;
   final ValueChanged<TournamentSummary> onClubs;
   final ValueChanged<TournamentSummary> onPosterTemplate;
+  final ValueChanged<TournamentSummary> onDeactivate;
   final bool canConfigurePoster;
   final bool Function(TournamentSummary tournament) canEdit;
+  final bool Function(TournamentSummary tournament) canDeactivate;
 
   @override
   Widget build(BuildContext context) {
@@ -1055,103 +1129,12 @@ class _TournamentsDataTable extends StatelessWidget {
       ],
       rows: [
         for (var index = 0; index < tournaments.length; index++)
-          DataRow(
-            color: buildStripedRowColor(index: index, colors: colors),
-            cells: [
-              DataCell(
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      tournaments[index].leagueName,
-                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-                    ),
-                    Text('ID ${tournaments[index].leagueId}',
-                        style: theme.textTheme.bodySmall),
-                  ],
-                ),
-              ),
-              DataCell(
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      tournaments[index].name,
-                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: switch (tournaments[index].status) {
-                          TournamentStatus.draft => theme.colorScheme.surfaceVariant,
-                          TournamentStatus.scheduled => theme.colorScheme.tertiaryContainer,
-                          TournamentStatus.inProgress => theme.colorScheme.primaryContainer,
-                          TournamentStatus.finished => theme.colorScheme.secondaryContainer,
-                        },
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        child: Text(
-                          tournaments[index].status.label,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              DataCell(Text(tournaments[index].year.toString())),
-              DataCell(Text('${tournaments[index].zonesCount}')),
-              DataCell(Text('${tournaments[index].enabledCategoriesCount}')),
-              DataCell(
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: () => onDetails(tournaments[index]),
-                      icon: const Icon(Icons.visibility_outlined),
-                      label: const Text('Detalles'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: () => context.go(
-                        '/tournaments/${tournaments[index].id}/players',
-                        extra: tournaments[index],
-                      ),
-                      icon: const Icon(Icons.people_alt_outlined),
-                      label: const Text('Jugadores'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: () => onClubs(tournaments[index]),
-                      icon: const Icon(Icons.groups_outlined),
-                      label: const Text('Clubes'),
-                    ),
-                    FilledButton.tonalIcon(
-                      onPressed:
-                          canEdit(tournaments[index]) ? () => onEdit(tournaments[index]) : null,
-                      icon: const Icon(Icons.edit_outlined),
-                      label: const Text('Editar'),
-                    ),
-                    if (canConfigurePoster)
-                      Tooltip(
-                        message:
-                            'Abre el editor de plantilla para el poster promocional del torneo.',
-                        child: OutlinedButton.icon(
-                          onPressed: () => onPosterTemplate(tournaments[index]),
-                          icon: const Icon(Icons.wallpaper_outlined),
-                          label: const Text('Poster'),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
+          _buildTournamentRow(
+            context: context,
+            colors: colors,
+            theme: theme,
+            index: index,
+            tournament: tournaments[index],
           ),
       ],
     );
@@ -1176,6 +1159,131 @@ class _TournamentsDataTable extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  DataRow _buildTournamentRow({
+    required BuildContext context,
+    required AppDataTableColors colors,
+    required ThemeData theme,
+    required int index,
+    required TournamentSummary tournament,
+  }) {
+    final isInactive = tournament.isInactive;
+    final statusLabel = isInactive ? 'Inactivo' : tournament.status.label;
+    final statusColor = isInactive
+        ? theme.colorScheme.errorContainer
+        : switch (tournament.status) {
+            TournamentStatus.draft => theme.colorScheme.surfaceVariant,
+            TournamentStatus.scheduled => theme.colorScheme.tertiaryContainer,
+            TournamentStatus.inProgress => theme.colorScheme.primaryContainer,
+            TournamentStatus.finished => theme.colorScheme.secondaryContainer,
+          };
+    final canDeactivateTournament = canDeactivate(tournament);
+    final canEditTournament = canEdit(tournament);
+
+    return DataRow(
+      color: buildStripedRowColor(index: index, colors: colors),
+      cells: [
+        DataCell(
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                tournament.leagueName,
+                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              Text('ID ${tournament.leagueId}', style: theme.textTheme.bodySmall),
+            ],
+          ),
+        ),
+        DataCell(
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                tournament.name,
+                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: statusColor,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: Text(
+                    statusLabel,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        DataCell(Text(tournament.year.toString())),
+        DataCell(Text('${tournament.zonesCount}')),
+        DataCell(Text('${tournament.enabledCategoriesCount}')),
+        DataCell(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () => onDetails(tournament),
+                icon: const Icon(Icons.visibility_outlined),
+                label: const Text('Detalles'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => context.go(
+                  '/tournaments/${tournament.id}/players',
+                  extra: tournament,
+                ),
+                icon: const Icon(Icons.people_alt_outlined),
+                label: const Text('Jugadores'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => onClubs(tournament),
+                icon: const Icon(Icons.groups_outlined),
+                label: const Text('Clubes'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: canEditTournament ? () => onEdit(tournament) : null,
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('Editar'),
+              ),
+              FilledButton.icon(
+                onPressed:
+                    (!isInactive && canDeactivateTournament) ? () => onDeactivate(tournament) : null,
+                style: FilledButton.styleFrom(
+                  backgroundColor: theme.colorScheme.error,
+                  foregroundColor: theme.colorScheme.onError,
+                  disabledBackgroundColor: theme.colorScheme.error.withOpacity(0.2),
+                  disabledForegroundColor: theme.colorScheme.onError.withOpacity(0.6),
+                ),
+                icon: const Icon(Icons.delete_outline),
+                label: const Text('Desactivar'),
+              ),
+              if (canConfigurePoster)
+                Tooltip(
+                  message:
+                      'Abre el editor de plantilla para el poster promocional del torneo.',
+                  child: OutlinedButton.icon(
+                    onPressed: () => onPosterTemplate(tournament),
+                    icon: const Icon(Icons.wallpaper_outlined),
+                    label: const Text('Poster'),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1882,6 +1990,7 @@ class TournamentSummary {
     required this.endDate,
     required this.championMode,
     required this.hasLockedZones,
+    required this.isInactive,
   });
 
   factory TournamentSummary.fromJson(
@@ -1893,6 +2002,7 @@ class TournamentSummary {
         .map((entry) => TournamentCategoryAssignment.fromJson(
             entry as Map<String, dynamic>))
         .toList();
+    final status = json['status'] as String?;
     return TournamentSummary(
       id: json['id'] as int,
       name: json['name'] as String,
@@ -1915,6 +2025,7 @@ class TournamentSummary {
         }
         return false;
       }),
+      isInactive: status == 'INACTIVE',
     );
   }
 
@@ -1930,6 +2041,7 @@ class TournamentSummary {
   final DateTime? endDate;
   final String championMode;
   final bool hasLockedZones;
+  final bool isInactive;
 
   int get enabledCategoriesCount =>
       categories.where((category) => category.enabled).length;
