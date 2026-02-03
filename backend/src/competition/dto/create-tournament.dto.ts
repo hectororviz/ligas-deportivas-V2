@@ -1,5 +1,5 @@
 import { IsDateString, IsEnum, IsInt, IsNotEmpty, IsOptional } from 'class-validator';
-import { Gender, TournamentChampionMode } from '@prisma/client';
+import { Gender, TournamentChampionMode, TournamentStatus } from '@prisma/client';
 
 export class CreateTournamentDto {
   @IsInt()
@@ -16,6 +16,10 @@ export class CreateTournamentDto {
 
   @IsEnum(TournamentChampionMode)
   championMode!: TournamentChampionMode;
+
+  @IsOptional()
+  @IsEnum(TournamentStatus)
+  status?: TournamentStatus;
 
   @IsOptional()
   @IsDateString()

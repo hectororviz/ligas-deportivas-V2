@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Gender, ZoneStatus } from '@prisma/client';
+import { Gender, TournamentStatus, ZoneStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AssignPlayerClubDto } from '../dto/assign-player-club.dto';
 import { CreateTournamentDto } from '../dto/create-tournament.dto';
@@ -11,8 +11,9 @@ import { UpdateTournamentDto } from '../dto/update-tournament.dto';
 export class TournamentsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll() {
+  findAll(includeInactive = false) {
     return this.prisma.tournament.findMany({
+      where: includeInactive ? undefined : { status: TournamentStatus.ACTIVE },
       include: {
         league: true,
       },
@@ -29,6 +30,7 @@ export class TournamentsService {
         leagueId: dto.leagueId,
         name: dto.name,
         year: dto.year,
+        status: dto.status ?? TournamentStatus.ACTIVE,
         gender: dto.gender,
         pointsWin: dto.pointsWin,
         pointsDraw: dto.pointsDraw,
@@ -40,9 +42,11 @@ export class TournamentsService {
     });
   }
 
-  findAllByLeague(leagueId: number) {
+  findAllByLeague(leagueId: number, includeInactive = false) {
     return this.prisma.tournament.findMany({
-      where: { leagueId },
+      where: includeInactive
+        ? { leagueId }
+        : { leagueId, status: TournamentStatus.ACTIVE },
       include: {
         zones: true,
         categories: {
@@ -521,6 +525,7 @@ export class TournamentsService {
           leagueId: dto.leagueId,
           name: dto.name,
           year: dto.year,
+          status: dto.status,
           gender: dto.gender,
           pointsWin: dto.pointsWin,
           pointsDraw: dto.pointsDraw,
@@ -577,6 +582,14 @@ export class TournamentsService {
       }
 
       return updated;
+    });
+  }
+
+  async updateStatus(id: number, status: TournamentStatus) {
+    await this.prisma.tournament.findUniqueOrThrow({ where: { id } });
+    return this.prisma.tournament.update({
+      where: { id },
+      data: { status },
     });
   }
 }

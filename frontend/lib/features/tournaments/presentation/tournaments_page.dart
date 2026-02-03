@@ -29,9 +29,16 @@ final _leagueFilterProvider = Provider<int?>((ref) {
   );
 });
 
+final _includeInactiveProvider = Provider<bool>((ref) {
+  return ref.watch(
+    tournamentFiltersProvider.select((value) => value.includeInactive),
+  );
+});
+
 final _tournamentsSourceProvider =
     FutureProvider<List<TournamentSummary>>((ref) async {
   final leagueFilter = ref.watch(_leagueFilterProvider);
+  final includeInactive = ref.watch(_includeInactiveProvider);
   final leagues = await ref.watch(leaguesProvider.future);
   if (leagues.isEmpty) {
     return [];
@@ -44,8 +51,10 @@ final _tournamentsSourceProvider =
     return [];
   }
   final futures = leaguesToFetch.map((league) async {
-    final response =
-        await api.get<List<dynamic>>('/leagues/${league.id}/tournaments');
+    final response = await api.get<List<dynamic>>(
+      '/leagues/${league.id}/tournaments',
+      queryParameters: includeInactive ? {'includeInactive': 'true'} : null,
+    );
     final data = response.data ?? [];
     return data
         .map(
@@ -523,6 +532,19 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
                                       .read(tournamentFiltersProvider.notifier)
                                       .updateStatus(value),
                                 ),
+                              ),
+                            ),
+                            TableFilterField(
+                              label: 'Visibilidad',
+                              width: 220,
+                              child: CheckboxListTile(
+                                contentPadding: EdgeInsets.zero,
+                                dense: true,
+                                title: const Text('Mostrar inactivos'),
+                                value: filters.includeInactive,
+                                onChanged: (value) => ref
+                                    .read(tournamentFiltersProvider.notifier)
+                                    .updateIncludeInactive(value ?? false),
                               ),
                             ),
                           ],
@@ -2024,15 +2046,21 @@ class TournamentFilters {
     this.leagueId,
     this.year,
     this.status,
+    this.includeInactive = false,
   });
 
   final String query;
   final int? leagueId;
   final int? year;
   final TournamentStatus? status;
+  final bool includeInactive;
 
   bool get isEmpty =>
-      query.isEmpty && leagueId == null && year == null && status == null;
+      query.isEmpty &&
+      leagueId == null &&
+      year == null &&
+      status == null &&
+      !includeInactive;
 }
 
 class TournamentFiltersController extends StateNotifier<TournamentFilters> {
@@ -2044,6 +2072,7 @@ class TournamentFiltersController extends StateNotifier<TournamentFilters> {
       leagueId: state.leagueId,
       year: state.year,
       status: state.status,
+      includeInactive: state.includeInactive,
     );
   }
 
@@ -2053,6 +2082,7 @@ class TournamentFiltersController extends StateNotifier<TournamentFilters> {
       leagueId: leagueId,
       year: state.year,
       status: state.status,
+      includeInactive: state.includeInactive,
     );
   }
 
@@ -2062,6 +2092,7 @@ class TournamentFiltersController extends StateNotifier<TournamentFilters> {
       leagueId: state.leagueId,
       year: year,
       status: state.status,
+      includeInactive: state.includeInactive,
     );
   }
 
@@ -2071,6 +2102,17 @@ class TournamentFiltersController extends StateNotifier<TournamentFilters> {
       leagueId: state.leagueId,
       year: state.year,
       status: status,
+      includeInactive: state.includeInactive,
+    );
+  }
+
+  void updateIncludeInactive(bool includeInactive) {
+    state = TournamentFilters(
+      query: state.query,
+      leagueId: state.leagueId,
+      year: state.year,
+      status: state.status,
+      includeInactive: includeInactive,
     );
   }
 

@@ -48,8 +48,12 @@ class StatsFilters {
 
 final statsTournamentsProvider =
     FutureProvider<List<StatsTournamentSummary>>((ref) async {
+  final includeInactive = ref.watch(statsIncludeInactiveProvider);
   final api = ref.read(apiClientProvider);
-  final response = await api.get<List<dynamic>>('/tournaments');
+  final response = await api.get<List<dynamic>>(
+    '/tournaments',
+    queryParameters: includeInactive ? {'includeInactive': 'true'} : null,
+  );
   final data = response.data ?? <dynamic>[];
   final tournaments = data
       .whereType<Map<String, dynamic>>()
@@ -73,14 +77,20 @@ final statsTournamentDetailProvider =
 });
 
 final statsZonesProvider = FutureProvider<List<ZoneSummary>>((ref) async {
+  final includeInactive = ref.watch(statsIncludeInactiveProvider);
   final api = ref.read(apiClientProvider);
-  final response = await api.get<List<dynamic>>('/zones');
+  final response = await api.get<List<dynamic>>(
+    '/zones',
+    queryParameters: includeInactive ? {'includeInactive': 'true'} : null,
+  );
   final data = response.data ?? <dynamic>[];
   return data
       .whereType<Map<String, dynamic>>()
       .map(ZoneSummary.fromJson)
       .toList();
 });
+
+final statsIncludeInactiveProvider = StateProvider<bool>((ref) => false);
 
 final statsLeaderboardsProvider =
     FutureProvider.family<StatsLeaderboardsResponse, StatsFilters>((ref, filters) async {
@@ -136,6 +146,7 @@ class _StatsPageState extends ConsumerState<StatsPage> {
   Widget build(BuildContext context) {
     final tournamentsAsync = ref.watch(statsTournamentsProvider);
     final zonesAsync = ref.watch(statsZonesProvider);
+    final includeInactive = ref.watch(statsIncludeInactiveProvider);
     final padding = Responsive.pagePadding(context);
 
     return tournamentsAsync.when(
@@ -174,6 +185,7 @@ class _StatsPageState extends ConsumerState<StatsPage> {
                 selectedTournamentId: tournamentId,
                 selectedZoneId: _selectedZoneId,
                 selectedCategoryId: _selectedCategoryId,
+                includeInactive: includeInactive,
                 onTournamentChanged: (value) {
                   setState(() {
                     _selectedTournamentId = value;
@@ -190,6 +202,9 @@ class _StatsPageState extends ConsumerState<StatsPage> {
                   setState(() {
                     _selectedCategoryId = value;
                   });
+                },
+                onIncludeInactiveChanged: (value) {
+                  ref.read(statsIncludeInactiveProvider.notifier).state = value ?? false;
                 },
               ),
             ),
@@ -231,9 +246,11 @@ class _StatsFiltersBar extends StatelessWidget {
     required this.selectedTournamentId,
     required this.selectedZoneId,
     required this.selectedCategoryId,
+    required this.includeInactive,
     required this.onTournamentChanged,
     required this.onZoneChanged,
     required this.onCategoryChanged,
+    required this.onIncludeInactiveChanged,
   });
 
   final List<StatsTournamentSummary> tournaments;
@@ -242,9 +259,11 @@ class _StatsFiltersBar extends StatelessWidget {
   final int? selectedTournamentId;
   final int? selectedZoneId;
   final int? selectedCategoryId;
+  final bool includeInactive;
   final ValueChanged<int?> onTournamentChanged;
   final ValueChanged<int?> onZoneChanged;
   final ValueChanged<int?> onCategoryChanged;
+  final ValueChanged<bool?> onIncludeInactiveChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -265,6 +284,17 @@ class _StatsFiltersBar extends StatelessWidget {
                     ))
                 .toList(),
             onChanged: (value) => onTournamentChanged(value),
+          ),
+        ),
+        TableFilterField(
+          label: 'Estado',
+          width: 220,
+          child: CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: const Text('Mostrar inactivos'),
+            value: includeInactive,
+            onChanged: onIncludeInactiveChanged,
           ),
         ),
         TableFilterField(

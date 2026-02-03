@@ -6,6 +6,7 @@ import {
   Param,
   ParseIntPipe,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 
@@ -27,8 +28,9 @@ export class ZonesController {
   ) {}
 
   @Get()
-  list() {
-    return this.zonesService.list();
+  list(@Query('includeInactive') includeInactive?: string) {
+    const includeInactiveFlag = includeInactive === 'true' || includeInactive === '1';
+    return this.zonesService.list(includeInactiveFlag);
   }
 
   @Get(':id')

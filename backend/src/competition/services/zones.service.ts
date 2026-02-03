@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Gender, Prisma, ZoneStatus } from '@prisma/client';
+import { Gender, Prisma, TournamentStatus, ZoneStatus } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -37,8 +37,11 @@ type ZoneDetail = Prisma.ZoneGetPayload<{
 export class ZonesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  list() {
+  list(includeInactive = false) {
     return this.prisma.zone.findMany({
+      where: includeInactive
+        ? undefined
+        : { tournament: { status: TournamentStatus.ACTIVE } },
       include: {
         tournament: {
           include: { league: true },
