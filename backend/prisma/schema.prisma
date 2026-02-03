@@ -166,6 +166,7 @@ model Club {
   logoUrl           String?
   instagramUrl      String?
   facebookUrl       String?
+  homeAddress       String?
   latitude          Decimal?           @db.Decimal(11, 8)
   longitude         Decimal?           @db.Decimal(11, 8)
   createdAt         DateTime           @default(now())

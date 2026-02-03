@@ -55,6 +55,7 @@ export class ClubsService {
           logoUrl: this.normalizeLogoUrl(dto.logoUrl),
           instagramUrl: this.normalizeSocial(dto.instagram, 'instagram'),
           facebookUrl: this.normalizeSocial(dto.facebook, 'facebook'),
+          homeAddress: dto.homeAddress?.trim(),
           latitude: dto.latitude,
           longitude: dto.longitude,
         },
@@ -884,6 +885,9 @@ export class ClubsService {
       }
       if (Object.prototype.hasOwnProperty.call(dto, 'facebook')) {
         data.facebookUrl = this.normalizeSocial(dto.facebook, 'facebook');
+      }
+      if (Object.prototype.hasOwnProperty.call(dto, 'homeAddress')) {
+        data.homeAddress = dto.homeAddress?.trim() ?? null;
       }
       if (Object.prototype.hasOwnProperty.call(dto, 'latitude')) {
         data.latitude = dto.latitude ?? null;
