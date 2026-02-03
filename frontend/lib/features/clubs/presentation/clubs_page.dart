@@ -1167,6 +1167,7 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
   late final TextEditingController _secondaryColorController;
   late final TextEditingController _instagramController;
   late final TextEditingController _facebookController;
+  late final TextEditingController _homeAddressController;
   late final TextEditingController _latitudeController;
   late final TextEditingController _longitudeController;
   late final TextEditingController _addressController;
@@ -1204,6 +1205,7 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
       text: club?.instagramUrl ?? '',
     );
     _facebookController = TextEditingController(text: club?.facebookUrl ?? '');
+    _homeAddressController = TextEditingController(text: club?.homeAddress ?? '');
     _latitudeController = TextEditingController(
       text: club?.latitude != null ? club!.latitude!.toStringAsFixed(6) : '',
     );
@@ -1226,6 +1228,7 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
       secondaryColor: _secondaryColorController.text,
       instagram: _instagramController.text,
       facebook: _facebookController.text,
+      homeAddress: _homeAddressController.text,
       latitude: _latitudeController.text,
       longitude: _longitudeController.text,
       active: _active,
@@ -1241,6 +1244,7 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
     _secondaryColorController.addListener(_handleFieldChanged);
     _instagramController.addListener(_handleFieldChanged);
     _facebookController.addListener(_handleFieldChanged);
+    _homeAddressController.addListener(_handleFieldChanged);
     _latitudeController.addListener(_handleFieldChanged);
     _longitudeController.addListener(_handleFieldChanged);
   }
@@ -1256,6 +1260,7 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
     _secondaryColorController.dispose();
     _instagramController.dispose();
     _facebookController.dispose();
+    _homeAddressController.dispose();
     _latitudeController.dispose();
     _longitudeController.dispose();
     _addressController.dispose();
@@ -1311,6 +1316,7 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
       secondaryColor: _secondaryColorController.text,
       instagram: _instagramController.text,
       facebook: _facebookController.text,
+      homeAddress: _homeAddressController.text,
       latitude: _latitudeController.text,
       longitude: _longitudeController.text,
       active: _active,
@@ -1356,6 +1362,9 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
       'facebook': _facebookController.text.trim().isEmpty
           ? null
           : _facebookController.text.trim(),
+      'homeAddress': _homeAddressController.text.trim().isEmpty
+          ? null
+          : _homeAddressController.text.trim(),
       'active': _active,
       'latitude': _latitudeController.text.trim().isEmpty
           ? null
@@ -1897,6 +1906,16 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
               ),
             ],
           ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _homeAddressController,
+            enabled: !readOnly,
+            decoration: const InputDecoration(
+              labelText: 'Dirección de localía',
+              hintText: 'Ej. Estadio Central · Av. Principal 123',
+            ),
+            textCapitalization: TextCapitalization.words,
+          ),
           const SizedBox(height: 20),
           Text('Geolocalización',
               style: Theme.of(context).textTheme.titleMedium),
@@ -2174,6 +2193,7 @@ class _ClubFormSnapshot {
     required this.secondaryColor,
     required this.instagram,
     required this.facebook,
+    required this.homeAddress,
     required this.latitude,
     required this.longitude,
     required this.active,
@@ -2190,6 +2210,7 @@ class _ClubFormSnapshot {
   final String secondaryColor;
   final String instagram;
   final String facebook;
+  final String homeAddress;
   final String latitude;
   final String longitude;
   final bool active;
@@ -2208,6 +2229,7 @@ class _ClubFormSnapshot {
         other.secondaryColor == secondaryColor &&
         other.instagram == instagram &&
         other.facebook == facebook &&
+        other.homeAddress == homeAddress &&
         other.latitude == latitude &&
         other.longitude == longitude &&
         other.active == active &&
@@ -2228,6 +2250,7 @@ class _ClubFormSnapshot {
       secondaryColor,
       instagram,
       facebook,
+      homeAddress,
       latitude,
       longitude,
       active,
@@ -2275,6 +2298,7 @@ class Club {
     this.secondaryHex,
     this.instagramUrl,
     this.facebookUrl,
+    this.homeAddress,
     this.latitude,
     this.longitude,
     this.logoUrl,
@@ -2293,6 +2317,7 @@ class Club {
       secondaryHex: secondary,
       instagramUrl: json['instagramUrl'] as String?,
       facebookUrl: json['facebookUrl'] as String?,
+      homeAddress: json['homeAddress'] as String?,
       latitude: _parseCoordinate(json['latitude']),
       longitude: _parseCoordinate(json['longitude']),
       logoUrl: json['logoUrl'] as String?,
@@ -2308,6 +2333,7 @@ class Club {
   final String? secondaryHex;
   final String? instagramUrl;
   final String? facebookUrl;
+  final String? homeAddress;
   final double? latitude;
   final double? longitude;
   final String? logoUrl;

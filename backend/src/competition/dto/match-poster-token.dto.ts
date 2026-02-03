@@ -46,6 +46,11 @@ export const MATCH_POSTER_TOKEN_DEFINITIONS: MatchPosterTokenDto[] = [
     example: 'Club Atlético Local',
   },
   {
+    token: 'homeClub.address',
+    description: 'Dirección de localía del club local.',
+    example: 'Estadio Central · Av. Principal 123',
+  },
+  {
     token: 'awayClub.name',
     description: 'Nombre del club visitante.',
     example: 'Club Deportivo Visitante',

@@ -64,6 +64,11 @@ export class CreateClubDto {
   facebook?: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  homeAddress?: string;
+
+  @IsOptional()
   @Transform(({ value }) => {
     if (value === undefined || value === null || value === '') {
       return undefined;

@@ -146,7 +146,13 @@ export class MatchPosterService {
       matchday: number;
       round: Round;
       tournament: { name: string; league?: { name: string } | null };
-      homeClub?: { name?: string | null; shortName?: string | null; logoKey?: string | null; logoUrl?: string | null } | null;
+      homeClub?: {
+        name?: string | null;
+        shortName?: string | null;
+        logoKey?: string | null;
+        logoUrl?: string | null;
+        homeAddress?: string | null;
+      } | null;
       awayClub?: { name?: string | null; shortName?: string | null; logoKey?: string | null; logoUrl?: string | null } | null;
       categories: {
         kickoffTime: string | null;
@@ -194,6 +200,7 @@ export class MatchPosterService {
       'match.dayName': dayNameNormalized,
       'tournament.timeSlots': timeSlots,
       'homeClub.name': homeName,
+      'homeClub.address': match.homeClub?.homeAddress ?? '',
       'awayClub.name': awayName,
       'venue.name': '',
       'venue.address': '',
@@ -214,6 +221,7 @@ export class MatchPosterService {
         timeSlots,
         homeName,
         awayName,
+        homeAddress: match.homeClub?.homeAddress ?? '',
         homeLogo: homeLogo ? homeLogo.slice(0, 64) : '',
         awayLogo: awayLogo ? awayLogo.slice(0, 64) : '',
       },
