@@ -24,6 +24,8 @@ const _moduleClubes = 'CLUBES';
 const _actionCreate = 'CREATE';
 const _actionUpdate = 'UPDATE';
 const double _clubLogoSize = 200;
+const int _clubLogoMinSize = 200;
+const int _clubLogoMaxSize = 500;
 
 Map<String, String> _buildImageHeaders(WidgetRef ref) {
   final token = ref.read(authControllerProvider).accessToken;
@@ -1522,10 +1524,17 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
       final frame = await codec.getNextFrame();
       final image = frame.image;
       codec.dispose();
-      if (image.width != _clubLogoSize || image.height != _clubLogoSize) {
+      final isSquare = image.width == image.height;
+      final isInRange =
+          image.width >= _clubLogoMinSize && image.width <= _clubLogoMaxSize;
+      if (!isSquare || !isInRange) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('El escudo debe medir 200x200 píxeles.')),
+          const SnackBar(
+            content: Text(
+              'El escudo debe ser cuadrado y medir entre 200x200 y 500x500 píxeles.',
+            ),
+          ),
         );
         return;
       }
@@ -1616,7 +1625,7 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
                 SizedBox(
                   width: 260,
                   child: Text(
-                    'Formato PNG cuadrado de ${_clubLogoSize.toInt()}×${_clubLogoSize.toInt()} píxeles.',
+                    'Formato PNG cuadrado entre ${_clubLogoMinSize}×${_clubLogoMinSize} y ${_clubLogoMaxSize}×${_clubLogoMaxSize} píxeles.',
                     style: theme.textTheme.bodySmall,
                   ),
                 ),
