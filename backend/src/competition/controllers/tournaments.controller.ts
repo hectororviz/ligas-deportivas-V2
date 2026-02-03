@@ -19,19 +19,29 @@ import { CreateZoneDto } from '../dto/create-zone.dto';
 import { AddTournamentCategoryDto } from '../dto/add-tournament-category.dto';
 import { UpdateTournamentDto } from '../dto/update-tournament.dto';
 import { AssignPlayerClubDto } from '../dto/assign-player-club.dto';
+import { UpdateTournamentStatusDto } from '../dto/update-tournament-status.dto';
+
+const parseIncludeInactive = (value?: string) =>
+  value === 'true' || value === '1';
 
 @Controller()
 export class TournamentsController {
   constructor(private readonly tournamentsService: TournamentsService) {}
 
   @Get('tournaments')
-  listAll() {
-    return this.tournamentsService.findAll();
+  listAll(@Query('includeInactive') includeInactive?: string) {
+    return this.tournamentsService.findAll(parseIncludeInactive(includeInactive));
   }
 
   @Get('leagues/:leagueId/tournaments')
-  listByLeague(@Param('leagueId', ParseIntPipe) leagueId: number) {
-    return this.tournamentsService.findAllByLeague(leagueId);
+  listByLeague(
+    @Param('leagueId', ParseIntPipe) leagueId: number,
+    @Query('includeInactive') includeInactive?: string,
+  ) {
+    return this.tournamentsService.findAllByLeague(
+      leagueId,
+      parseIncludeInactive(includeInactive),
+    );
   }
 
   @Get('tournaments/:id')
@@ -79,6 +89,16 @@ export class TournamentsController {
     @Body() dto: UpdateTournamentDto,
   ) {
     return this.tournamentsService.update(id, dto);
+  }
+
+  @Put('tournaments/:id/status')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @Permissions({ module: Module.TORNEOS, action: Action.UPDATE })
+  updateStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateTournamentStatusDto,
+  ) {
+    return this.tournamentsService.updateStatus(id, dto.status);
   }
 
   @Put('tournaments/:id/player-club')

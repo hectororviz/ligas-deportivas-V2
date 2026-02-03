@@ -61,6 +61,12 @@ enum TournamentChampionMode {
   GLOBAL
 }
 
+enum TournamentStatus {
+  ACTIVE
+  INACTIVE
+  FINISHED
+}
+
 enum ZoneStatus {
   OPEN
   IN_PROGRESS
@@ -114,6 +120,7 @@ model Tournament {
   leagueId        Int
   name            String
   year            Int
+  status          TournamentStatus       @default(ACTIVE)
   gender          Gender                 @default(MIXTO)
   pointsWin       Int                    @default(3)
   pointsDraw      Int                    @default(1)

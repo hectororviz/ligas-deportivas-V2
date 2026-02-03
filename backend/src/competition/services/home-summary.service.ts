@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { MatchdayStatus, ZoneStatus } from '@prisma/client';
+import { MatchdayStatus, TournamentStatus, ZoneStatus } from '@prisma/client';
 import { HomeSummaryDto, StandingRowDto } from '../dto/home-summary.dto';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -10,6 +10,7 @@ export class HomeSummaryService {
   async getSummary(): Promise<HomeSummaryDto> {
     const tournaments = await this.prisma.tournament.findMany({
       where: {
+        status: TournamentStatus.ACTIVE,
         zones: {
           some: {
             status: { not: ZoneStatus.FINISHED }
