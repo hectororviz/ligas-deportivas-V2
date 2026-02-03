@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/responsive.dart';
 import '../../../services/api_client.dart';
+import '../../leagues/presentation/leagues_page.dart';
 import '../../shared/widgets/table_filters_bar.dart';
 import '../../zones/domain/zone_models.dart';
 import '../domain/stats_models.dart';
@@ -122,9 +123,32 @@ class StatsPage extends ConsumerStatefulWidget {
 }
 
 class _StatsPageState extends ConsumerState<StatsPage> {
+  int? _selectedLeagueId;
   int? _selectedTournamentId;
   int? _selectedZoneId;
   int? _selectedCategoryId;
+
+  void _ensureLeagueSelected(List<League> leagues) {
+    if (leagues.isEmpty) {
+      return;
+    }
+    final leagueIds = leagues.map((league) => league.id).toSet();
+    final shouldSetLeague = _selectedLeagueId == null || !leagueIds.contains(_selectedLeagueId);
+    if (!shouldSetLeague) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _selectedLeagueId = leagues.first.id;
+        _selectedTournamentId = null;
+        _selectedZoneId = null;
+        _selectedCategoryId = null;
+      });
+    });
+  }
 
   void _ensureTournamentSelected(List<StatsTournamentSummary> tournaments) {
     if (_selectedTournamentId != null || tournaments.isEmpty) {
@@ -145,82 +169,119 @@ class _StatsPageState extends ConsumerState<StatsPage> {
   @override
   Widget build(BuildContext context) {
     final tournamentsAsync = ref.watch(statsTournamentsProvider);
+    final leaguesAsync = ref.watch(leaguesProvider);
     final zonesAsync = ref.watch(statsZonesProvider);
     final includeInactive = ref.watch(statsIncludeInactiveProvider);
     final padding = Responsive.pagePadding(context);
 
-    return tournamentsAsync.when(
-      data: (tournaments) {
-        _ensureTournamentSelected(tournaments);
-        final selectedTournament = tournaments.firstWhere(
-          (tournament) => tournament.id == _selectedTournamentId,
-          orElse: () => tournaments.isNotEmpty
-              ? tournaments.first
-              : StatsTournamentSummary(id: 0, name: '', year: 0, leagueName: ''),
-        );
-        final tournamentId = selectedTournament.id == 0 ? null : selectedTournament.id;
-        final detailAsync = tournamentId == null
-            ? const AsyncValue<StatsTournamentDetail>.loading()
-            : ref.watch(statsTournamentDetailProvider(tournamentId));
+    return leaguesAsync.when(
+      data: (leagues) {
+        _ensureLeagueSelected(leagues);
+        return tournamentsAsync.when(
+          data: (tournaments) {
+            final selectedLeagueId = _selectedLeagueId;
+            final filteredTournaments = selectedLeagueId == null
+                ? tournaments
+                : tournaments.where((tournament) => tournament.leagueId == selectedLeagueId).toList();
+            _ensureTournamentSelected(filteredTournaments);
+            final selectedTournament = filteredTournaments.firstWhere(
+              (tournament) => tournament.id == _selectedTournamentId,
+              orElse: () => filteredTournaments.isNotEmpty
+                  ? filteredTournaments.first
+                  : StatsTournamentSummary(
+                      id: 0,
+                      name: '',
+                      year: 0,
+                      leagueId: 0,
+                      leagueName: '',
+                    ),
+            );
+            final tournamentId = selectedTournament.id == 0 ? null : selectedTournament.id;
+            final detailAsync = tournamentId == null
+                ? const AsyncValue<StatsTournamentDetail>.loading()
+                : ref.watch(statsTournamentDetailProvider(tournamentId));
 
-        final zones = zonesAsync.valueOrNull ?? const <ZoneSummary>[];
-        final tournamentZones =
-            zones.where((zone) => zone.tournamentId == tournamentId).toList()
-              ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+            final zones = zonesAsync.valueOrNull ?? const <ZoneSummary>[];
+            final tournamentZones =
+                zones.where((zone) => zone.tournamentId == tournamentId).toList()
+                  ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
-        final filters = StatsFilters(
-          tournamentId: tournamentId,
-          zoneId: _selectedZoneId,
-          categoryId: _selectedCategoryId,
-        );
+            final filters = StatsFilters(
+              tournamentId: tournamentId,
+              zoneId: _selectedZoneId,
+              categoryId: _selectedCategoryId,
+            );
 
-        return ListView(
-          padding: padding,
-          children: [
-            _StatsFiltersCollapsible(
-              child: _StatsFiltersBar(
-                tournaments: tournaments,
-                zones: tournamentZones,
-                detailAsync: detailAsync,
-                selectedTournamentId: tournamentId,
-                selectedZoneId: _selectedZoneId,
-                selectedCategoryId: _selectedCategoryId,
-                includeInactive: includeInactive,
-                onTournamentChanged: (value) {
-                  setState(() {
-                    _selectedTournamentId = value;
-                    _selectedZoneId = null;
-                    _selectedCategoryId = null;
-                  });
-                },
-                onZoneChanged: (value) {
-                  setState(() {
-                    _selectedZoneId = value;
-                  });
-                },
-                onCategoryChanged: (value) {
-                  setState(() {
-                    _selectedCategoryId = value;
-                  });
-                },
-                onIncludeInactiveChanged: (value) {
-                  ref.read(statsIncludeInactiveProvider.notifier).state = value ?? false;
-                },
+            return ListView(
+              padding: padding,
+              children: [
+                _StatsFiltersCollapsible(
+                  child: _StatsFiltersBar(
+                    leagues: leagues,
+                    tournaments: filteredTournaments,
+                    zones: tournamentZones,
+                    detailAsync: detailAsync,
+                    selectedLeagueId: selectedLeagueId,
+                    selectedTournamentId: tournamentId,
+                    selectedZoneId: _selectedZoneId,
+                    selectedCategoryId: _selectedCategoryId,
+                    includeInactive: includeInactive,
+                    onLeagueChanged: (value) {
+                      setState(() {
+                        _selectedLeagueId = value;
+                        _selectedTournamentId = null;
+                        _selectedZoneId = null;
+                        _selectedCategoryId = null;
+                      });
+                    },
+                    onTournamentChanged: (value) {
+                      setState(() {
+                        _selectedTournamentId = value;
+                        _selectedZoneId = null;
+                        _selectedCategoryId = null;
+                      });
+                    },
+                    onZoneChanged: (value) {
+                      setState(() {
+                        _selectedZoneId = value;
+                      });
+                    },
+                    onCategoryChanged: (value) {
+                      setState(() {
+                        _selectedCategoryId = value;
+                      });
+                    },
+                    onIncludeInactiveChanged: (value) {
+                      ref.read(statsIncludeInactiveProvider.notifier).state = value ?? false;
+                    },
+                  ),
+                ),
+                const SizedBox(height: 24),
+                if (tournamentId == null)
+                  const _StatsEmptyState(
+                    icon: Icons.emoji_events_outlined,
+                    title: 'Selecciona un torneo para continuar.',
+                    message: 'Elegí un torneo en los filtros para ver estadísticas.',
+                  )
+                else
+                  _StatsContent(
+                    filters: filters,
+                    zones: tournamentZones,
+                  ),
+              ],
+            );
+          },
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, stackTrace) => Center(
+            child: Padding(
+              padding: padding,
+              child: _StatsErrorState(
+                message: 'No pudimos cargar los torneos disponibles.',
+                error: error.toString(),
+                onRetry: () => ref.invalidate(statsTournamentsProvider),
               ),
             ),
-            const SizedBox(height: 24),
-            if (tournamentId == null)
-              const _StatsEmptyState(
-                icon: Icons.emoji_events_outlined,
-                title: 'Selecciona un torneo para continuar.',
-                message: 'Elegí un torneo en los filtros para ver estadísticas.',
-              )
-            else
-              _StatsContent(
-                filters: filters,
-                zones: tournamentZones,
-              ),
-          ],
+          ),
         );
       },
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -228,9 +289,9 @@ class _StatsPageState extends ConsumerState<StatsPage> {
         child: Padding(
           padding: padding,
           child: _StatsErrorState(
-            message: 'No pudimos cargar los torneos disponibles.',
+            message: 'No pudimos cargar las ligas disponibles.',
             error: error.toString(),
-            onRetry: () => ref.invalidate(statsTournamentsProvider),
+            onRetry: () => ref.invalidate(leaguesProvider),
           ),
         ),
       ),
@@ -240,26 +301,32 @@ class _StatsPageState extends ConsumerState<StatsPage> {
 
 class _StatsFiltersBar extends StatelessWidget {
   const _StatsFiltersBar({
+    required this.leagues,
     required this.tournaments,
     required this.zones,
     required this.detailAsync,
+    required this.selectedLeagueId,
     required this.selectedTournamentId,
     required this.selectedZoneId,
     required this.selectedCategoryId,
     required this.includeInactive,
+    required this.onLeagueChanged,
     required this.onTournamentChanged,
     required this.onZoneChanged,
     required this.onCategoryChanged,
     required this.onIncludeInactiveChanged,
   });
 
+  final List<League> leagues;
   final List<StatsTournamentSummary> tournaments;
   final List<ZoneSummary> zones;
   final AsyncValue<StatsTournamentDetail> detailAsync;
+  final int? selectedLeagueId;
   final int? selectedTournamentId;
   final int? selectedZoneId;
   final int? selectedCategoryId;
   final bool includeInactive;
+  final ValueChanged<int?> onLeagueChanged;
   final ValueChanged<int?> onTournamentChanged;
   final ValueChanged<int?> onZoneChanged;
   final ValueChanged<int?> onCategoryChanged;
@@ -270,6 +337,22 @@ class _StatsFiltersBar extends StatelessWidget {
     return TableFiltersBar(
       showContainer: false,
       children: [
+        TableFilterField(
+          label: 'Liga',
+          width: 260,
+          child: DropdownButton<int?>(
+            value: selectedLeagueId,
+            isExpanded: true,
+            underline: const SizedBox.shrink(),
+            items: leagues
+                .map((league) => DropdownMenuItem<int?>(
+                      value: league.id,
+                      child: Text(league.name),
+                    ))
+                .toList(),
+            onChanged: (value) => onLeagueChanged(value),
+          ),
+        ),
         TableFilterField(
           label: 'Torneo',
           width: 260,
@@ -283,7 +366,7 @@ class _StatsFiltersBar extends StatelessWidget {
                       child: Text(tournament.displayName),
                     ))
                 .toList(),
-            onChanged: (value) => onTournamentChanged(value),
+            onChanged: tournaments.isEmpty ? null : (value) => onTournamentChanged(value),
           ),
         ),
         TableFilterField(

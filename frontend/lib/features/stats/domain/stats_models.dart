@@ -3,6 +3,7 @@ class StatsTournamentSummary {
     required this.id,
     required this.name,
     required this.year,
+    required this.leagueId,
     required this.leagueName,
   });
 
@@ -12,6 +13,7 @@ class StatsTournamentSummary {
       id: json['id'] as int,
       name: json['name'] as String? ?? 'Torneo',
       year: json['year'] as int? ?? 0,
+      leagueId: league['id'] as int? ?? 0,
       leagueName: league['name'] as String? ?? 'Liga',
     );
   }
@@ -19,6 +21,7 @@ class StatsTournamentSummary {
   final int id;
   final String name;
   final int year;
+  final int leagueId;
   final String leagueName;
 
   String get displayName => '$name $year';
