@@ -14,7 +14,8 @@ import { UpdateRosterPlayersDto } from '../dto/update-roster-players.dto';
 import { JoinTournamentDto } from '../dto/join-tournament.dto';
 import { StorageService } from '../../storage/storage.service';
 
-const CLUB_LOGO_SIZE = 200;
+const CLUB_LOGO_MIN_SIZE = 200;
+const CLUB_LOGO_MAX_SIZE = 500;
 const MAX_LOGO_BYTES = 512 * 1024;
 
 interface FindClubsInput extends ListClubsDto {}
@@ -1044,11 +1045,13 @@ export class ClubsService {
     const height = buffer.readUInt32BE(20);
 
     if (width !== height) {
-      throw new BadRequestException('El escudo debe ser una imagen cuadrada de 200x200 píxeles.');
+      throw new BadRequestException('El escudo debe ser una imagen cuadrada entre 200x200 y 500x500 píxeles.');
     }
 
-    if (width !== CLUB_LOGO_SIZE || height !== CLUB_LOGO_SIZE) {
-      throw new BadRequestException(`El escudo debe medir exactamente ${CLUB_LOGO_SIZE}x${CLUB_LOGO_SIZE} píxeles.`);
+    if (width < CLUB_LOGO_MIN_SIZE || width > CLUB_LOGO_MAX_SIZE) {
+      throw new BadRequestException(
+        `El escudo debe medir entre ${CLUB_LOGO_MIN_SIZE}x${CLUB_LOGO_MIN_SIZE} y ${CLUB_LOGO_MAX_SIZE}x${CLUB_LOGO_MAX_SIZE} píxeles.`,
+      );
     }
   }
 
