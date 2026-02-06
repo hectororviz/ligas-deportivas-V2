@@ -861,7 +861,8 @@ class _FixtureMatchdayCard extends StatelessWidget {
     final theme = Theme.of(context);
     final baseTitleStyle = theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600);
     final dateFormatter = DateFormat('dd/MM');
-    final dateLabel = date != null ? dateFormatter.format(date!) : 'Sin fecha';
+    final dateLabel =
+        date != null ? dateFormatter.format(date!.toLocal()) : 'Sin fecha';
     final isMobile = Responsive.isMobile(context);
     final dateField = _MatchdayDateField(
       date: date,
