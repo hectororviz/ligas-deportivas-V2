@@ -433,6 +433,9 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
     final authState = ref.watch(authControllerProvider);
     final user = authState.user;
     final canConfigurePoster = user?.roles.contains('ADMIN') ?? false;
+    final canOpenPlayers = user != null &&
+        user.roles.isNotEmpty &&
+        !user.hasAnyRole(const ['DELEGATE', 'COACH', 'USER']);
     final canCreate =
         user?.hasPermission(module: _moduleTorneos, action: _actionCreate) ?? false;
     final years = ref.watch(availableTournamentYearsProvider);
@@ -1241,10 +1244,12 @@ class _TournamentsDataTable extends StatelessWidget {
                 label: const Text('Detalles'),
               ),
               OutlinedButton.icon(
-                onPressed: () => context.go(
-                  '/tournaments/${tournament.id}/players',
-                  extra: tournament,
-                ),
+                onPressed: canOpenPlayers
+                    ? () => context.go(
+                          '/tournaments/${tournament.id}/players',
+                          extra: tournament,
+                        )
+                    : null,
                 icon: const Icon(Icons.people_alt_outlined),
                 label: const Text('Jugadores'),
               ),
