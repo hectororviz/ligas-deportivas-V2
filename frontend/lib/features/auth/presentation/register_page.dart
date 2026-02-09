@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:dio/dio.dart';
 
 import '../../../services/auth_controller.dart';
 import '../../settings/site_identity_provider.dart';
@@ -20,6 +21,37 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   final _lastNameController = TextEditingController();
   bool _loading = false;
   String? _error;
+
+  String _buildErrorMessage(Object error) {
+    if (error is DioException) {
+      final data = error.response?.data;
+      if (data is Map<String, dynamic>) {
+        final message = data['message'];
+        if (message is String && message.trim().isNotEmpty) {
+          return message.trim();
+        }
+        if (message is List) {
+          final messages = message
+              .whereType<String>()
+              .map((value) => value.trim())
+              .where((value) => value.isNotEmpty)
+              .toList();
+          if (messages.isNotEmpty) {
+            return messages.join('\n');
+          }
+        }
+        final errorLabel = data['error'];
+        if (errorLabel is String && errorLabel.trim().isNotEmpty) {
+          return errorLabel.trim();
+        }
+      }
+      final fallback = error.message;
+      if (fallback != null && fallback.trim().isNotEmpty) {
+        return fallback.trim();
+      }
+    }
+    return 'No se pudo crear la cuenta.';
+  }
 
   @override
   void dispose() {
@@ -54,9 +86,9 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
           _error = 'No se pudo crear la cuenta.';
         });
       }
-    } catch (_) {
+    } catch (error) {
       setState(() {
-        _error = 'No se pudo crear la cuenta.';
+        _error = _buildErrorMessage(error);
       });
     } finally {
       if (mounted) {
