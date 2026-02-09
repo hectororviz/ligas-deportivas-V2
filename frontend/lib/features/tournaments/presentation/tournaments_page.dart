@@ -647,6 +647,7 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
                               onPosterTemplate: _openPosterTemplate,
                               onDeactivate: _confirmDeactivateTournament,
                               canConfigurePoster: canConfigurePoster,
+                              canOpenPlayers: canOpenPlayers,
                               canEdit: (tournament) =>
                                   (user?.hasPermission(
                                         module: _moduleTorneos,
@@ -1095,6 +1096,7 @@ class _TournamentsDataTable extends StatelessWidget {
     required this.onPosterTemplate,
     required this.onDeactivate,
     required this.canConfigurePoster,
+    required this.canOpenPlayers,
     required this.canEdit,
     required this.canDeactivate,
   });
@@ -1106,6 +1108,7 @@ class _TournamentsDataTable extends StatelessWidget {
   final ValueChanged<TournamentSummary> onPosterTemplate;
   final ValueChanged<TournamentSummary> onDeactivate;
   final bool canConfigurePoster;
+  final bool canOpenPlayers;
   final bool Function(TournamentSummary tournament) canEdit;
   final bool Function(TournamentSummary tournament) canDeactivate;
 
