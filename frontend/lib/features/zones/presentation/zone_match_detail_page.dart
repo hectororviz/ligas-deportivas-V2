@@ -14,6 +14,7 @@ import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
 
 const _moduleMatches = 'PARTIDOS';
+const _moduleResults = 'RESULTADOS';
 const _actionUpdate = 'UPDATE';
 
 class ZoneMatchDetailPage extends ConsumerWidget {
@@ -33,8 +34,9 @@ class ZoneMatchDetailPage extends ConsumerWidget {
     final fixtureAsync = ref.watch(zoneMatchesProvider(zoneId));
     final authState = ref.watch(authControllerProvider);
     final user = authState.user;
-    final canEditScores =
-        (user?.roles.contains('ADMIN') ?? false) || (user?.hasPermission(module: _moduleMatches, action: _actionUpdate) ?? false);
+    final canEditScores = (user?.roles.contains('ADMIN') ?? false) ||
+        (user?.hasPermission(module: _moduleResults, action: _actionUpdate) ?? false) ||
+        (user?.hasPermission(module: _moduleMatches, action: _actionUpdate) ?? false);
     final canViewPlayerNames = authState.isAuthenticated;
 
     ZoneMatch? match = initialMatch;
