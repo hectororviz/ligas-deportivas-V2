@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Category, Gender } from '@prisma/client';
 import axios from 'axios';
 import { promises as fs } from 'node:fs';
@@ -6,6 +6,7 @@ import path from 'node:path';
 import sharp from 'sharp';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import { StorageService } from '../../storage/storage.service';
 
 const PAGE_WIDTH = 595.28;
 const PAGE_HEIGHT = 841.89;
@@ -26,6 +27,8 @@ interface SheetPageData {
   categoryName: string;
   homeClubName: string;
   awayClubName: string;
+  homeClubLogoKey: string | null;
+  awayClubLogoKey: string | null;
   homeClubLogoUrl: string | null;
   awayClubLogoUrl: string | null;
   homePlayers: SheetPlayer[];
@@ -46,7 +49,12 @@ interface PreparedPage {
 
 @Injectable()
 export class MatchSheetService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(MatchSheetService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storageService: StorageService,
+  ) {}
 
   async generate(
     matchId: number,
@@ -94,6 +102,8 @@ export class MatchSheetService {
         categoryName: category?.name ?? 'Categoría',
         homeClubName: match.homeClub?.name ?? 'Club local',
         awayClubName: match.awayClub?.name ?? 'Club visitante',
+        homeClubLogoKey: match.homeClub?.logoKey ?? null,
+        awayClubLogoKey: match.awayClub?.logoKey ?? null,
         homeClubLogoUrl: match.homeClub?.logoUrl ?? null,
         awayClubLogoUrl: match.awayClub?.logoUrl ?? null,
         homePlayers,
@@ -110,6 +120,8 @@ export class MatchSheetService {
         categoryName: 'Sin categorías',
         homeClubName: match.homeClub?.name ?? 'Club local',
         awayClubName: match.awayClub?.name ?? 'Club visitante',
+        homeClubLogoKey: match.homeClub?.logoKey ?? null,
+        awayClubLogoKey: match.awayClub?.logoKey ?? null,
         homeClubLogoUrl: match.homeClub?.logoUrl ?? null,
         awayClubLogoUrl: match.awayClub?.logoUrl ?? null,
         homePlayers: [],
@@ -237,8 +249,8 @@ export class MatchSheetService {
     const logoSize = 84;
 
     const [homeLogo, awayLogo] = await Promise.all([
-      this.loadLogoForPdf(data.homeClubLogoUrl, logoSize),
-      this.loadLogoForPdf(data.awayClubLogoUrl, logoSize),
+      this.loadLogoForPdf(data.homeClubLogoUrl, data.homeClubLogoKey, logoSize),
+      this.loadLogoForPdf(data.awayClubLogoUrl, data.awayClubLogoKey, logoSize),
     ]);
 
     const images: PdfImageObject[] = [];
@@ -372,12 +384,12 @@ export class MatchSheetService {
     return `<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter [/ASCIIHexDecode /DCTDecode] /Length ${jpegHex.length} >>\nstream\n${jpegHex}\nendstream`;
   }
 
-  private async loadLogoForPdf(logoUrl: string | null, maxSize: number) {
-    if (!logoUrl) {
+  private async loadLogoForPdf(logoUrl: string | null, logoKey: string | null, maxSize: number) {
+    if (!logoUrl && !logoKey) {
       return null;
     }
 
-    const logoBuffer = await this.readLogoBuffer(logoUrl);
+    const logoBuffer = await this.readLogoBuffer(logoUrl, logoKey);
     if (!logoBuffer) {
       return null;
     }
@@ -395,7 +407,22 @@ export class MatchSheetService {
     };
   }
 
-  private async readLogoBuffer(logoUrl: string) {
+  private async readLogoBuffer(logoUrl: string | null, logoKey: string | null) {
+    if (logoKey) {
+      try {
+        const filePath = this.storageService.resolveAttachmentPath(logoKey);
+        return await fs.readFile(filePath);
+      } catch (error) {
+        this.logger.warn(
+          `No se pudo leer el escudo desde storage key "${logoKey}": ${String(error)}`,
+        );
+      }
+    }
+
+    if (!logoUrl) {
+      return null;
+    }
+
     try {
       if (logoUrl.startsWith('http://') || logoUrl.startsWith('https://')) {
         const response = await axios.get<ArrayBuffer>(logoUrl, {
@@ -418,8 +445,10 @@ export class MatchSheetService {
         return await fs.readFile(filePath);
       }
 
+      this.logger.warn(`No se pudo resolver la ruta del escudo a partir de logoUrl="${logoUrl}".`);
       return null;
-    } catch {
+    } catch (error) {
+      this.logger.warn(`No se pudo cargar el escudo desde "${logoUrl}": ${String(error)}`);
       return null;
     }
   }
