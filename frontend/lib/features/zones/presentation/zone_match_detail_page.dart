@@ -34,10 +34,6 @@ class ZoneMatchDetailPage extends ConsumerWidget {
     final fixtureAsync = ref.watch(zoneMatchesProvider(zoneId));
     final authState = ref.watch(authControllerProvider);
     final user = authState.user;
-    final canEditScores = (user?.roles.contains('ADMIN') ?? false) ||
-        (user?.hasPermission(module: _moduleResults, action: _actionUpdate) ?? false) ||
-        (user?.hasPermission(module: _moduleMatches, action: _actionUpdate) ?? false);
-    final canViewPlayerNames = authState.isAuthenticated;
 
     ZoneMatch? match = initialMatch;
     final fixtureData = fixtureAsync.valueOrNull;
@@ -49,6 +45,28 @@ class ZoneMatchDetailPage extends ConsumerWidget {
         }
       }
     }
+
+
+    final isAdmin = user?.hasRole('ADMIN') ?? false;
+    final hasClubScopedRole = user?.hasRole('DELEGATE') ?? false;
+    var allowedClubsForMatches = user?.allowedClubsFor(module: _moduleMatches, action: 'VIEW');
+    if (allowedClubsForMatches == null && hasClubScopedRole && user?.clubId != null) {
+      allowedClubsForMatches = {user!.clubId!};
+    }
+
+    bool canDownloadSheetForMatch(ZoneMatch? value) {
+      final homeClubId = value?.homeClub?.id;
+      final awayClubId = value?.awayClub?.id;
+      return isAdmin ||
+          (allowedClubsForMatches != null &&
+              ((homeClubId != null && allowedClubsForMatches.contains(homeClubId)) ||
+                  (awayClubId != null && allowedClubsForMatches.contains(awayClubId))));
+    }
+
+    final canEditScores = (user?.roles.contains('ADMIN') ?? false) ||
+        (user?.hasPermission(module: _moduleResults, action: _actionUpdate) ?? false) ||
+        (user?.hasPermission(module: _moduleMatches, action: _actionUpdate) ?? false);
+    final canViewPlayerNames = authState.isAuthenticated;
 
     if (match == null) {
       return Scaffold(
@@ -71,6 +89,7 @@ class ZoneMatchDetailPage extends ConsumerWidget {
               zoneId: zoneId,
               canEditScores: canEditScores,
               canViewPlayerNames: canViewPlayerNames,
+              canDownloadSheet: canDownloadSheetForMatch(match),
             );
           },
           loading: () => const Center(child: CircularProgressIndicator()),
@@ -119,6 +138,7 @@ class ZoneMatchDetailPage extends ConsumerWidget {
             zoneId: zoneId,
             canEditScores: canEditScores,
             canViewPlayerNames: canViewPlayerNames,
+            canDownloadSheet: canDownloadSheetForMatch(match),
           ),
           if (fixtureAsync.isLoading)
             const Positioned(
@@ -180,12 +200,14 @@ class _ZoneMatchDetailContent extends ConsumerStatefulWidget {
     required this.zoneId,
     required this.canEditScores,
     required this.canViewPlayerNames,
+    required this.canDownloadSheet,
   });
 
   final ZoneMatch match;
   final int zoneId;
   final bool canEditScores;
   final bool canViewPlayerNames;
+  final bool canDownloadSheet;
 
   @override
   ConsumerState<_ZoneMatchDetailContent> createState() => _ZoneMatchDetailContentState();
@@ -270,7 +292,7 @@ class _ZoneMatchDetailContentState extends ConsumerState<_ZoneMatchDetailContent
                           label: const Text('Descargar placa (1080x1920)'),
                         ),
                         OutlinedButton.icon(
-                          onPressed: _downloadingSheet ? null : _downloadSheet,
+                          onPressed: widget.canDownloadSheet && !_downloadingSheet ? _downloadSheet : null,
                           icon: _downloadingSheet
                               ? const SizedBox(
                                   width: 16,
