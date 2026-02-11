@@ -42,6 +42,14 @@ interface PdfImageObject {
   object: string;
 }
 
+interface PreparedLogo {
+  jpeg: Buffer;
+  width: number;
+  height: number;
+  displayWidth: number;
+  displayHeight: number;
+}
+
 interface PreparedPage {
   stream: string;
   images: PdfImageObject[];
@@ -256,7 +264,6 @@ export class MatchSheetService {
     const images: PdfImageObject[] = [];
 
     let y = MARGIN;
-    const logoTop = y + (headerHeight - logoSize) / 2;
     if (homeLogo) {
       const imageName = 'ImHome';
       images.push({
@@ -265,7 +272,8 @@ export class MatchSheetService {
         height: homeLogo.height,
         object: this.buildImageObject(homeLogo.width, homeLogo.height, homeLogo.jpeg),
       });
-      draw.image(imageName, MARGIN + 4, logoTop, homeLogo.width, homeLogo.height);
+      const logoTop = y + (headerHeight - homeLogo.displayHeight) / 2;
+      draw.image(imageName, MARGIN + 4, logoTop, homeLogo.displayWidth, homeLogo.displayHeight);
     }
     if (awayLogo) {
       const imageName = 'ImAway';
@@ -275,12 +283,13 @@ export class MatchSheetService {
         height: awayLogo.height,
         object: this.buildImageObject(awayLogo.width, awayLogo.height, awayLogo.jpeg),
       });
+      const logoTop = y + (headerHeight - awayLogo.displayHeight) / 2;
       draw.image(
         imageName,
-        MARGIN + fullWidth - awayLogo.width - 4,
+        MARGIN + fullWidth - awayLogo.displayWidth - 4,
         logoTop,
-        awayLogo.width,
-        awayLogo.height,
+        awayLogo.displayWidth,
+        awayLogo.displayHeight,
       );
     }
     draw.textCentered(
@@ -384,7 +393,11 @@ export class MatchSheetService {
     return `<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter [/ASCIIHexDecode /DCTDecode] /Length ${jpegHex.length} >>\nstream\n${jpegHex}\nendstream`;
   }
 
-  private async loadLogoForPdf(logoUrl: string | null, logoKey: string | null, maxSize: number) {
+  private async loadLogoForPdf(
+    logoUrl: string | null,
+    logoKey: string | null,
+    maxSize: number,
+  ): Promise<PreparedLogo | null> {
     if (!logoUrl && !logoKey) {
       return null;
     }
@@ -396,14 +409,21 @@ export class MatchSheetService {
 
     const { data, info } = await sharp(logoBuffer)
       .flatten({ background: '#ffffff' })
-      .resize({ width: maxSize, height: maxSize, fit: 'inside' })
-      .jpeg({ quality: 85 })
+      .jpeg({ quality: 92, mozjpeg: true })
       .toBuffer({ resolveWithObject: true });
+
+    if (!info.width || !info.height) {
+      return null;
+    }
+
+    const scale = Math.min(maxSize / info.width, maxSize / info.height, 1);
 
     return {
       jpeg: data,
       width: info.width,
       height: info.height,
+      displayWidth: Number((info.width * scale).toFixed(2)),
+      displayHeight: Number((info.height * scale).toFixed(2)),
     };
   }
 
