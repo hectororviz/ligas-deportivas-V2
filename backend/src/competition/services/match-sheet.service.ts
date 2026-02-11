@@ -15,6 +15,7 @@ interface SheetPlayer {
 }
 
 interface SheetPageData {
+  leagueName: string;
   tournamentName: string;
   zoneName: string;
   categoryName: string;
@@ -33,7 +34,11 @@ export class MatchSheetService {
       where: { id: matchId },
       include: {
         zone: true,
-        tournament: true,
+        tournament: {
+          include: {
+            league: true,
+          },
+        },
         homeClub: true,
         awayClub: true,
         categories: {
@@ -61,6 +66,7 @@ export class MatchSheetService {
         this.findPlayersForSheet(match.awayClub, match.tournament.id, category),
       ]);
       pages.push({
+        leagueName: match.tournament.league?.name ?? 'Liga',
         tournamentName: match.tournament.name,
         zoneName: match.zone?.name ?? 'Sin zona',
         categoryName: category?.name ?? 'Categoría',
@@ -73,6 +79,7 @@ export class MatchSheetService {
 
     if (!pages.length) {
       pages.push({
+        leagueName: match.tournament.league?.name ?? 'Liga',
         tournamentName: match.tournament.name,
         zoneName: match.zone?.name ?? 'Sin zona',
         categoryName: 'Sin categorías',
@@ -177,15 +184,12 @@ export class MatchSheetService {
 
     let y = MARGIN;
     draw.rectTop(MARGIN, y, fullWidth, 32);
-    draw.textCentered(data.tournamentName, MARGIN, y + 8, fullWidth, 17, true);
+    draw.textCentered(`${data.leagueName} - ${data.tournamentName}`, MARGIN, y + 8, fullWidth, 17, true);
 
     y += 32;
     draw.rectTop(MARGIN, y, fullWidth, 22);
     draw.text(`Zona: ${data.zoneName}`, MARGIN + 8, y + 7, 10);
-
-    y += 22;
-    draw.rectTop(MARGIN, y, fullWidth, 22);
-    draw.text(`Categoría: ${data.categoryName}`, MARGIN + 8, y + 7, 10);
+    draw.textRight(`Categoría: ${data.categoryName}`, MARGIN + fullWidth - 8, y + 7, 10);
 
     y += 30;
     y = this.drawTeamTable(draw, y, data.homeClubName, data.homePlayers);
@@ -214,7 +218,9 @@ export class MatchSheetService {
     const titleHeight = 18;
     const headerHeight = 15;
     const rowHeight = 14;
-    const columns = [24, 56, 88, 88, 58, 104, 42, 21, 21];
+    const columns = [24, 56, 88, 88, 58, 104, 42, 21];
+    const usedWidth = columns.reduce((total, colWidth) => total + colWidth, 0);
+    columns.push(width - usedWidth);
     const labels = ['Nº', 'Número', 'Apellido', 'Nombre', 'DNI', 'Firma', 'Goles', 'A', 'R'];
 
     let y = startY;
@@ -223,7 +229,7 @@ export class MatchSheetService {
     draw.text('Resultado', x + width - 112, y + 5, 10, true);
     draw.rectTop(x + width - 54, y + 3, 44, titleHeight - 6);
 
-    y += titleHeight;
+    y += titleHeight + 4;
     let cursorX = x;
     for (let i = 0; i < columns.length; i += 1) {
       const colWidth = columns[i];
@@ -292,6 +298,15 @@ class PdfDraw {
     this.text(normalized, left, topY, size, bold);
   }
 
+
+  textRight(value: string, rightX: number, topY: number, size: number, bold = false) {
+    const normalized = this.normalizeText(value);
+    if (!normalized) {
+      return;
+    }
+    const approxWidth = normalized.length * size * 0.48;
+    this.text(normalized, rightX - approxWidth, topY, size, bold);
+  }
   build() {
     return this.commands.join('\n');
   }
