@@ -21,6 +21,7 @@ interface SheetPlayer {
 interface SheetPageData {
   leagueName: string;
   tournamentName: string;
+  tournamentYear: number;
   zoneName: string;
   categoryName: string;
   homeClubName: string;
@@ -88,6 +89,7 @@ export class MatchSheetService {
       pages.push({
         leagueName: match.tournament.league?.name ?? 'Liga',
         tournamentName: match.tournament.name,
+        tournamentYear: match.tournament.year,
         zoneName: match.zone?.name ?? 'Sin zona',
         categoryName: category?.name ?? 'Categoría',
         homeClubName: match.homeClub?.name ?? 'Club local',
@@ -103,6 +105,7 @@ export class MatchSheetService {
       pages.push({
         leagueName: match.tournament.league?.name ?? 'Liga',
         tournamentName: match.tournament.name,
+        tournamentYear: match.tournament.year,
         zoneName: match.zone?.name ?? 'Sin zona',
         categoryName: 'Sin categorías',
         homeClubName: match.homeClub?.name ?? 'Club local',
@@ -230,17 +233,18 @@ export class MatchSheetService {
   private async renderPageStream(data: SheetPageData): Promise<PreparedPage> {
     const draw = new PdfDraw();
     const fullWidth = PAGE_WIDTH - MARGIN * 2;
-    const headerHeight = 32;
+    const headerHeight = 90;
+    const logoSize = 84;
 
     const [homeLogo, awayLogo] = await Promise.all([
-      this.loadLogoForPdf(data.homeClubLogoUrl, 28),
-      this.loadLogoForPdf(data.awayClubLogoUrl, 28),
+      this.loadLogoForPdf(data.homeClubLogoUrl, logoSize),
+      this.loadLogoForPdf(data.awayClubLogoUrl, logoSize),
     ]);
 
     const images: PdfImageObject[] = [];
 
     let y = MARGIN;
-    const logoTop = y + 2;
+    const logoTop = y + (headerHeight - logoSize) / 2;
     if (homeLogo) {
       const imageName = 'ImHome';
       images.push({
@@ -268,11 +272,11 @@ export class MatchSheetService {
       );
     }
     draw.textCentered(
-      `${data.leagueName} - ${data.tournamentName}`,
-      MARGIN + 36,
-      y + 8,
-      fullWidth - 72,
-      17,
+      `${data.leagueName} - ${data.tournamentName} ${data.tournamentYear}`,
+      MARGIN + logoSize + 12,
+      y + 36,
+      fullWidth - (logoSize + 12) * 2,
+      18,
       true,
     );
 
