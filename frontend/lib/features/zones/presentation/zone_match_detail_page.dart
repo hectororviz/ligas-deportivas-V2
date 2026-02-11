@@ -193,6 +193,7 @@ class _ZoneMatchDetailContent extends ConsumerStatefulWidget {
 
 class _ZoneMatchDetailContentState extends ConsumerState<_ZoneMatchDetailContent> {
   bool _downloadingPoster = false;
+  bool _downloadingSheet = false;
 
   @override
   Widget build(BuildContext context) {
@@ -268,6 +269,17 @@ class _ZoneMatchDetailContentState extends ConsumerState<_ZoneMatchDetailContent
                               : const Icon(Icons.image_outlined),
                           label: const Text('Descargar placa (1080x1920)'),
                         ),
+                        OutlinedButton.icon(
+                          onPressed: _downloadingSheet ? null : _downloadSheet,
+                          icon: _downloadingSheet
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.picture_as_pdf_outlined),
+                          label: const Text('Descargar planilla'),
+                        ),
                       ],
                     ),
                   ),
@@ -333,6 +345,39 @@ class _ZoneMatchDetailContentState extends ConsumerState<_ZoneMatchDetailContent
       if (mounted) {
         setState(() {
           _downloadingPoster = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _downloadSheet() async {
+    setState(() {
+      _downloadingSheet = true;
+    });
+
+    try {
+      final api = ref.read(apiClientProvider);
+      final downloadUrl = '${api.baseUrl}/matches/${widget.match.id}/planilla';
+      final launched = await launchUrlString(
+        downloadUrl,
+        mode: LaunchMode.externalApplication,
+      );
+
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo iniciar la descarga de la planilla.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo descargar la planilla: $error')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _downloadingSheet = false;
         });
       }
     }
