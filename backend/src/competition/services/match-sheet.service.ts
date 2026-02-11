@@ -3,7 +3,7 @@ import { Category, Gender } from '@prisma/client';
 import axios from 'axios';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import sharp from 'sharp';
+import sharp = require('sharp');
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../storage/storage.service';
