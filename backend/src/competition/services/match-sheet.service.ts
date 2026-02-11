@@ -1,5 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Category, Gender } from '@prisma/client';
+import axios from 'axios';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
+import sharp from 'sharp';
 
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -21,15 +25,31 @@ interface SheetPageData {
   categoryName: string;
   homeClubName: string;
   awayClubName: string;
+  homeClubLogoUrl: string | null;
+  awayClubLogoUrl: string | null;
   homePlayers: SheetPlayer[];
   awayPlayers: SheetPlayer[];
+}
+
+interface PdfImageObject {
+  name: string;
+  width: number;
+  height: number;
+  object: string;
+}
+
+interface PreparedPage {
+  stream: string;
+  images: PdfImageObject[];
 }
 
 @Injectable()
 export class MatchSheetService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async generate(matchId: number): Promise<{ buffer: Buffer; contentType: string; fileExtension: string }> {
+  async generate(
+    matchId: number,
+  ): Promise<{ buffer: Buffer; contentType: string; fileExtension: string }> {
     const match = await this.prisma.match.findUnique({
       where: { id: matchId },
       include: {
@@ -72,6 +92,8 @@ export class MatchSheetService {
         categoryName: category?.name ?? 'Categoría',
         homeClubName: match.homeClub?.name ?? 'Club local',
         awayClubName: match.awayClub?.name ?? 'Club visitante',
+        homeClubLogoUrl: match.homeClub?.logoUrl ?? null,
+        awayClubLogoUrl: match.awayClub?.logoUrl ?? null,
         homePlayers,
         awayPlayers,
       });
@@ -85,13 +107,15 @@ export class MatchSheetService {
         categoryName: 'Sin categorías',
         homeClubName: match.homeClub?.name ?? 'Club local',
         awayClubName: match.awayClub?.name ?? 'Club visitante',
+        homeClubLogoUrl: match.homeClub?.logoUrl ?? null,
+        awayClubLogoUrl: match.awayClub?.logoUrl ?? null,
         homePlayers: [],
         awayPlayers: [],
       });
     }
 
     return {
-      buffer: this.buildPdf(pages),
+      buffer: await this.buildPdf(pages),
       contentType: 'application/pdf',
       fileExtension: 'pdf',
     };
@@ -130,14 +154,26 @@ export class MatchSheetService {
       take: ROWS_PER_TEAM,
     });
 
-    return players.map<SheetPlayer>((player) => ({
+    const sortedPlayers = [...players].sort((left, right) => {
+      const leftLastName = left.lastName.toLocaleLowerCase('es-AR');
+      const rightLastName = right.lastName.toLocaleLowerCase('es-AR');
+      if (leftLastName !== rightLastName) {
+        return leftLastName.localeCompare(rightLastName, 'es-AR');
+      }
+
+      const leftFirstName = left.firstName.toLocaleLowerCase('es-AR');
+      const rightFirstName = right.firstName.toLocaleLowerCase('es-AR');
+      return leftFirstName.localeCompare(rightFirstName, 'es-AR');
+    });
+
+    return sortedPlayers.map<SheetPlayer>((player) => ({
       firstName: player.firstName,
       lastName: player.lastName,
       dni: player.dni,
     }));
   }
 
-  private buildPdf(pages: SheetPageData[]) {
+  private async buildPdf(pages: SheetPageData[]) {
     const objects: string[] = [];
     objects.push('<< /Type /Catalog /Pages 2 0 R >>');
     objects.push('');
@@ -146,14 +182,27 @@ export class MatchSheetService {
     const pageObjectNumbers: number[] = [];
 
     for (const page of pages) {
-      const stream = this.renderPageStream(page);
+      const preparedPage = await this.renderPageStream(page);
+      const imageResourceRefs: string[] = [];
+      for (const image of preparedPage.images) {
+        const imageObjectNumber = objects.length + 1;
+        objects.push(image.object);
+        imageResourceRefs.push(`/${image.name} ${imageObjectNumber} 0 R`);
+      }
+
+      const xObjectResources = imageResourceRefs.length
+        ? ` /XObject << ${imageResourceRefs.join(' ')} >>`
+        : '';
+
       const contentObjectNumber = objects.length + 1;
-      objects.push(`<< /Length ${Buffer.byteLength(stream, 'utf8')} >>\nstream\n${stream}\nendstream`);
+      objects.push(
+        `<< /Length ${Buffer.byteLength(preparedPage.stream, 'utf8')} >>\nstream\n${preparedPage.stream}\nendstream`,
+      );
 
       const pageObjectNumber = objects.length + 1;
       pageObjectNumbers.push(pageObjectNumber);
       objects.push(
-        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentObjectNumber} 0 R >>`,
+        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}] /Resources << /Font << /F1 3 0 R >>${xObjectResources} >> /Contents ${contentObjectNumber} 0 R >>`,
       );
     }
 
@@ -178,15 +227,56 @@ export class MatchSheetService {
     return Buffer.from(pdf, 'utf8');
   }
 
-  private renderPageStream(data: SheetPageData) {
+  private async renderPageStream(data: SheetPageData): Promise<PreparedPage> {
     const draw = new PdfDraw();
     const fullWidth = PAGE_WIDTH - MARGIN * 2;
+    const headerHeight = 32;
+
+    const [homeLogo, awayLogo] = await Promise.all([
+      this.loadLogoForPdf(data.homeClubLogoUrl, 28),
+      this.loadLogoForPdf(data.awayClubLogoUrl, 28),
+    ]);
+
+    const images: PdfImageObject[] = [];
 
     let y = MARGIN;
-    draw.rectTop(MARGIN, y, fullWidth, 32);
-    draw.textCentered(`${data.leagueName} - ${data.tournamentName}`, MARGIN, y + 8, fullWidth, 17, true);
+    const logoTop = y + 2;
+    if (homeLogo) {
+      const imageName = 'ImHome';
+      images.push({
+        name: imageName,
+        width: homeLogo.width,
+        height: homeLogo.height,
+        object: this.buildImageObject(homeLogo.width, homeLogo.height, homeLogo.jpeg),
+      });
+      draw.image(imageName, MARGIN + 4, logoTop, homeLogo.width, homeLogo.height);
+    }
+    if (awayLogo) {
+      const imageName = 'ImAway';
+      images.push({
+        name: imageName,
+        width: awayLogo.width,
+        height: awayLogo.height,
+        object: this.buildImageObject(awayLogo.width, awayLogo.height, awayLogo.jpeg),
+      });
+      draw.image(
+        imageName,
+        MARGIN + fullWidth - awayLogo.width - 4,
+        logoTop,
+        awayLogo.width,
+        awayLogo.height,
+      );
+    }
+    draw.textCentered(
+      `${data.leagueName} - ${data.tournamentName}`,
+      MARGIN + 36,
+      y + 8,
+      fullWidth - 72,
+      17,
+      true,
+    );
 
-    y += 32;
+    y += headerHeight;
     draw.rectTop(MARGIN, y, fullWidth, 22);
     draw.text(`Zona: ${data.zoneName}`, MARGIN + 8, y + 7, 10);
     draw.textRight(`Categoría: ${data.categoryName}`, MARGIN + fullWidth - 8, y + 7, 10);
@@ -202,14 +292,17 @@ export class MatchSheetService {
 
     y += 54;
     const colWidth = fullWidth / 3;
-    draw.rectTop(MARGIN, y, colWidth, 42);
-    draw.rectTop(MARGIN + colWidth, y, colWidth, 42);
-    draw.rectTop(MARGIN + colWidth * 2, y, colWidth, 42);
+    draw.rectTop(MARGIN, y, colWidth, 54);
+    draw.rectTop(MARGIN + colWidth, y, colWidth, 54);
+    draw.rectTop(MARGIN + colWidth * 2, y, colWidth, 54);
     draw.text('Firma delegado local', MARGIN + 6, y + 6, 9);
     draw.text('Firma delegado visitante', MARGIN + colWidth + 6, y + 6, 9);
     draw.text('Observaciones', MARGIN + colWidth * 2 + 6, y + 6, 9);
 
-    return draw.build();
+    return {
+      stream: draw.build(),
+      images,
+    };
   }
 
   private drawTeamTable(draw: PdfDraw, startY: number, clubName: string, players: SheetPlayer[]) {
@@ -218,9 +311,9 @@ export class MatchSheetService {
     const titleHeight = 18;
     const headerHeight = 15;
     const rowHeight = 14;
-    const columns = [24, 56, 88, 88, 58, 104, 42, 21];
+    const columns = [24, 56, 88, 88, 58, 104, 63, 21, 21];
     const usedWidth = columns.reduce((total, colWidth) => total + colWidth, 0);
-    columns.push(width - usedWidth);
+    columns[6] += width - usedWidth;
     const labels = ['Nº', 'Número', 'Apellido', 'Nombre', 'DNI', 'Firma', 'Goles', 'A', 'R'];
 
     let y = startY;
@@ -269,6 +362,63 @@ export class MatchSheetService {
 
     return y;
   }
+
+  private buildImageObject(width: number, height: number, jpeg: Buffer) {
+    const jpegHex = `${jpeg.toString('hex')}>`;
+    return `<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter [/ASCIIHexDecode /DCTDecode] /Length ${jpegHex.length} >>\nstream\n${jpegHex}\nendstream`;
+  }
+
+  private async loadLogoForPdf(logoUrl: string | null, maxSize: number) {
+    if (!logoUrl) {
+      return null;
+    }
+
+    const logoBuffer = await this.readLogoBuffer(logoUrl);
+    if (!logoBuffer) {
+      return null;
+    }
+
+    const { data, info } = await sharp(logoBuffer)
+      .flatten({ background: '#ffffff' })
+      .resize({ width: maxSize, height: maxSize, fit: 'inside' })
+      .jpeg({ quality: 85 })
+      .toBuffer({ resolveWithObject: true });
+
+    return {
+      jpeg: data,
+      width: info.width,
+      height: info.height,
+    };
+  }
+
+  private async readLogoBuffer(logoUrl: string) {
+    try {
+      if (logoUrl.startsWith('http://') || logoUrl.startsWith('https://')) {
+        const response = await axios.get<ArrayBuffer>(logoUrl, {
+          responseType: 'arraybuffer',
+          timeout: 5000,
+        });
+        return Buffer.from(response.data);
+      }
+
+      const normalized = logoUrl.startsWith('/') ? logoUrl.slice(1) : logoUrl;
+      if (normalized.startsWith('uploads/')) {
+        const filePath = path.resolve(process.cwd(), 'storage', normalized);
+        return await fs.readFile(filePath);
+      }
+
+      const uploadIndex = normalized.indexOf('uploads/');
+      if (uploadIndex >= 0) {
+        const relativeUploadPath = normalized.slice(uploadIndex);
+        const filePath = path.resolve(process.cwd(), 'storage', relativeUploadPath);
+        return await fs.readFile(filePath);
+      }
+
+      return null;
+    } catch {
+      return null;
+    }
+  }
 }
 
 class PdfDraw {
@@ -285,7 +435,9 @@ class PdfDraw {
       return;
     }
     const y = this.toPdfY(topY + size);
-    this.commands.push(`BT /F1 ${bold ? this.f(size + 0.2) : this.f(size)} Tf ${this.f(x)} ${this.f(y)} Td (${normalized}) Tj ET`);
+    this.commands.push(
+      `BT /F1 ${bold ? this.f(size + 0.2) : this.f(size)} Tf ${this.f(x)} ${this.f(y)} Td (${normalized}) Tj ET`,
+    );
   }
 
   textCentered(value: string, x: number, topY: number, width: number, size: number, bold = false) {
@@ -298,6 +450,12 @@ class PdfDraw {
     this.text(normalized, left, topY, size, bold);
   }
 
+  image(name: string, x: number, topY: number, width: number, height: number) {
+    const y = this.toPdfY(topY + height);
+    this.commands.push(
+      `q ${this.f(width)} 0 0 ${this.f(height)} ${this.f(x)} ${this.f(y)} cm /${name} Do Q`,
+    );
+  }
 
   textRight(value: string, rightX: number, topY: number, size: number, bold = false) {
     const normalized = this.normalizeText(value);
