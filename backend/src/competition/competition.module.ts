@@ -26,6 +26,7 @@ import { MatchFlyerService } from './services/match-flyer.service';
 import { FlyerTemplatesService } from './services/flyer-templates.service';
 import { MatchPosterService } from './services/match-poster.service';
 import { PosterTemplatesService } from './services/poster-templates.service';
+import { MatchSheetService } from './services/match-sheet.service';
 import { CompetitionController } from './controllers/competition.controller';
 import { HomeSummaryController } from './controllers/home-summary.controller';
 import { HomeSummaryService } from './services/home-summary.service';
@@ -43,6 +44,7 @@ import { LeaderboardsController } from './controllers/leaderboards.controller';
     MatchesService,
     MatchFlyerService,
     MatchPosterService,
+    MatchSheetService,
     FlyerTemplatesService,
     PosterTemplatesService,
     StandingsService,
