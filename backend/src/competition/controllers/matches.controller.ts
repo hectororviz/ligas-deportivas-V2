@@ -24,6 +24,7 @@ import { RequestUser } from '../../common/interfaces/request-user.interface';
 import { UpdateMatchdayDto } from '../dto/update-matchday.dto';
 import { MatchFlyerService } from '../services/match-flyer.service';
 import { MatchPosterService } from '../services/match-poster.service';
+import { MatchSheetService } from '../services/match-sheet.service';
 import { Response } from 'express';
 import { MATCH_FLYER_TOKEN_DEFINITIONS } from '../dto/match-flyer-token.dto';
 import { MATCH_POSTER_TOKEN_DEFINITIONS } from '../dto/match-poster-token.dto';
@@ -34,6 +35,7 @@ export class MatchesController {
     private readonly matchesService: MatchesService,
     private readonly matchFlyerService: MatchFlyerService,
     private readonly matchPosterService: MatchPosterService,
+    private readonly matchSheetService: MatchSheetService,
   ) {}
 
   @Get('zones/:zoneId/matches')
@@ -108,6 +110,17 @@ export class MatchesController {
     res.setHeader('Content-Type', poster.contentType);
     res.setHeader('Content-Disposition', `attachment; filename=\"poster-${matchId}.${poster.fileExtension}\"`);
     return res.send(poster.buffer);
+  }
+
+  @Get('matches/:matchId/planilla')
+  async downloadSheet(
+    @Param('matchId', ParseIntPipe) matchId: number,
+    @Res() res: Response,
+  ) {
+    const sheet = await this.matchSheetService.generate(matchId);
+    res.setHeader('Content-Type', sheet.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="planilla-${matchId}.${sheet.fileExtension}"`);
+    return res.send(sheet.buffer);
   }
 
   @Patch('matches/:matchId')
