@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
 import * as cookieParser from 'cookie-parser';
@@ -13,6 +13,12 @@ async function bootstrap() {
   // Allow frontend (Flutter web) to call the API during development
   const configService = app.get(ConfigService);
   const frontendUrl = configService.get<string>('app.frontendUrl') ?? 'http://localhost:8080';
+
+  const scanDebugRaw =
+    configService.get<string>('SCAN_DEBUG') ?? configService.get<string>('DNI_SCAN_DEBUG');
+  const scanDebugValue = scanDebugRaw?.trim().toLowerCase();
+  const scanDebugEnabled = scanDebugValue === '1' || scanDebugValue === 'true';
+  Logger.log(`[DNI_SCAN] debugEnabled=${scanDebugEnabled}`, 'Bootstrap');
   const localhostRegex = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
   app.enableCors({
     origin: (origin, callback) => {
@@ -27,7 +33,7 @@ async function bootstrap() {
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
-    optionsSuccessStatus: 204
+    optionsSuccessStatus: 204,
   });
 
   app.setGlobalPrefix('api/v1');
@@ -56,8 +62,8 @@ async function bootstrap() {
     new ValidationPipe({
       whitelist: true,
       transform: true,
-      forbidNonWhitelisted: true
-    })
+      forbidNonWhitelisted: true,
+    }),
   );
 
   const port = process.env.PORT || 3000;
@@ -69,7 +75,7 @@ bootstrap().catch((error) => {
     const databaseLocation = describeDatabaseLocation(process.env.DATABASE_URL);
     const locationMessage = databaseLocation ? ` at ${databaseLocation}` : '';
     console.error(
-      `Failed to connect to the database${locationMessage}. Ensure your database is running and that the DATABASE_URL environment variable matches your local setup.`
+      `Failed to connect to the database${locationMessage}. Ensure your database is running and that the DATABASE_URL environment variable matches your local setup.`,
     );
   } else {
     console.error(error);

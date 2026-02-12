@@ -28,5 +28,6 @@ export const validationSchema = Joi.object({
   STORAGE_SECRET_KEY: Joi.string().allow(''),
   DB_SCHEMA_ENFORCEMENT: Joi.string().valid('strict', 'soft').default('strict'),
   DNI_SCAN_DEBUG: Joi.boolean().optional(),
-  DNI_SCAN_DECODER_COMMAND: Joi.string().allow('')
+  SCAN_DEBUG: Joi.boolean().optional(),
+  DNI_SCAN_DECODER_COMMAND: Joi.string().allow(''),
 });
