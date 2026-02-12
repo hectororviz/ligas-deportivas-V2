@@ -446,7 +446,7 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
       children: [
         TableFilterField(
           label: 'Liga',
-          width: 260,
+          width: 220,
           child: DropdownButtonFormField<int>(
             value: _selectedLeagueId,
             items: _leagues
@@ -472,7 +472,7 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
         ),
         TableFilterField(
           label: 'Torneo',
-          width: 280,
+          width: 240,
           child: DropdownButtonFormField<int>(
             value: _selectedTournamentId,
             items: _tournaments
@@ -498,17 +498,21 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
         ),
         TableFilterField(
           label: 'Categoría',
-          width: 260,
-          child: DropdownButtonFormField<int>(
+          width: 200,
+          child: DropdownButtonFormField<int?>(
             value: _selectedCategoryId,
-            items: _categories
-                .map(
-                  (category) => DropdownMenuItem<int>(
-                    value: category.id,
-                    child: Text(category.label),
-                  ),
-                )
-                .toList(),
+            items: [
+              const DropdownMenuItem<int?>(
+                value: null,
+                child: Text('Todas'),
+              ),
+              ..._categories.map(
+                (category) => DropdownMenuItem<int?>(
+                  value: category.id,
+                  child: Text(category.label),
+                ),
+              ),
+            ],
             onChanged: _loadingCategories || _selectedTournamentId == null
                 ? null
                 : (value) {
@@ -528,7 +532,7 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
         ),
         TableFilterField(
           label: 'DNI',
-          width: 220,
+          width: 180,
           child: TextField(
             controller: _dniController,
             keyboardType: TextInputType.number,
@@ -542,7 +546,7 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
         ),
         TableFilterField(
           label: 'Club asignado',
-          width: 260,
+          width: 220,
           child: DropdownButtonFormField<int>(
             value: _selectedAssignedClubFilter,
             items: [
@@ -576,19 +580,18 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
         ),
         TableFilterField(
           label: ' ',
-          width: 160,
+          width: 64,
           child: SizedBox(
             height: 48,
-            child: FilledButton.icon(
+            child: FilledButton(
               onPressed: _searchingPlayers ? null : _searchPlayers,
-              icon: _searchingPlayers
+              child: _searchingPlayers
                   ? const SizedBox(
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.search),
-              label: const Text('Buscar'),
             ),
           ),
         ),
