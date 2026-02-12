@@ -17,6 +17,7 @@ interface SheetPlayer {
   firstName: string;
   lastName: string;
   dni: string;
+  birthDate: string;
 }
 
 interface SheetPageData {
@@ -193,7 +194,15 @@ export class MatchSheetService {
       firstName: player.firstName,
       lastName: player.lastName,
       dni: player.dni,
+      birthDate: this.formatBirthDate(player.birthDate),
     }));
+  }
+
+  private formatBirthDate(birthDate: Date) {
+    const day = String(birthDate.getUTCDate()).padStart(2, '0');
+    const month = String(birthDate.getUTCMonth() + 1).padStart(2, '0');
+    const year = birthDate.getUTCFullYear();
+    return `${day}/${month}/${year}`;
   }
 
   private async buildPdf(pages: SheetPageData[]) {
@@ -336,10 +345,10 @@ export class MatchSheetService {
     const titleHeight = 18;
     const headerHeight = 15;
     const rowHeight = 14;
-    const columns = [24, 56, 88, 88, 58, 104, 63, 21, 21];
+    const columns = [24, 40, 82, 82, 64, 72, 64, 63, 21, 21];
     const usedWidth = columns.reduce((total, colWidth) => total + colWidth, 0);
-    columns[6] += width - usedWidth;
-    const labels = ['Nº', 'Número', 'Apellido', 'Nombre', 'DNI', 'Firma', 'Goles', 'A', 'R'];
+    columns[7] += width - usedWidth;
+    const labels = ['Nº', 'Número', 'Apellido', 'Nombre', 'DNI', 'F.Nac.', 'Firma', 'Goles', 'A', 'R'];
 
     let y = startY;
     draw.rectTop(x, y, width, titleHeight);
@@ -365,6 +374,7 @@ export class MatchSheetService {
         player?.lastName ?? '',
         player?.firstName ?? '',
         player?.dni ?? '',
+        player?.birthDate ?? '',
         '',
         '',
         '',
