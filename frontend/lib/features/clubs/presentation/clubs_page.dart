@@ -683,6 +683,13 @@ class _ClubRosterViewState extends ConsumerState<_ClubRosterView> {
       final response = await api.get<Map<String, dynamic>>(
         '/clubs/${widget.club.id}/roster',
         queryParameters: query,
+        options: Options(
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+          },
+        ),
       );
       final data = response.data ?? {};
       final selectedTournamentId = data['selectedTournamentId'] as int?;
