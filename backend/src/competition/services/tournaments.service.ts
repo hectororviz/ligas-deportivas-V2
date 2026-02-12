@@ -552,9 +552,12 @@ export class TournamentsService {
       for (const assignment of dto.categories) {
         const existingAssignment = existingAssignmentsByCategoryId.get(assignment.categoryId);
         if (!existingAssignment) {
-          throw new BadRequestException(
-            'Con zonas cerradas solo se pueden modificar los horarios de categorías ya asociadas.',
-          );
+          if (assignment.enabled) {
+            throw new BadRequestException(
+              'Con zonas cerradas solo se pueden modificar los horarios de categorías ya asociadas.',
+            );
+          }
+          continue;
         }
         if (
           assignment.enabled !== existingAssignment.enabled ||
