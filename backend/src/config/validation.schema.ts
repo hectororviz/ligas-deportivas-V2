@@ -29,5 +29,6 @@ export const validationSchema = Joi.object({
   DB_SCHEMA_ENFORCEMENT: Joi.string().valid('strict', 'soft').default('strict'),
   DNI_SCAN_DEBUG: Joi.boolean().optional(),
   SCAN_DEBUG: Joi.boolean().optional(),
+  SCAN_DEBUG_KEEP_TMP: Joi.boolean().optional(),
   DNI_SCAN_DECODER_COMMAND: Joi.string().allow(''),
 });
