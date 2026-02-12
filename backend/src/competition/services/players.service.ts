@@ -125,11 +125,6 @@ export class PlayersService {
       `[DNI_SCAN][t0] incoming file mimetype=${file.mimetype} size=${file.size} width=${metadata.width ?? 'unknown'} height=${metadata.height ?? 'unknown'}`,
     );
 
-    let tempPath: string | null = null;
-    if (debugEnabled) {
-      tempPath = await this.writeTempDebugFile(file.buffer, file.mimetype);
-    }
-
     try {
       const payload = await this.decodePdf417Payload(file.buffer, t0);
       const tokensCount = payload.split('@').length;
@@ -143,15 +138,12 @@ export class PlayersService {
       return parsed;
     } finally {
       this.logger.log(`[DNI_SCAN][tEnd] totalElapsedMs=${Date.now() - t0}`);
-      if (tempPath) {
-        await this.cleanupTempDebugFile(tempPath);
-      }
     }
   }
 
   async scanDniDiagnostic(file?: Express.Multer.File) {
     if (!this.isScanDebugEnabled()) {
-      throw new BadRequestException('El diagnóstico está disponible solo con SCAN_DEBUG=1.');
+      throw new NotFoundException('Not Found');
     }
 
     if (!file) {
@@ -166,13 +158,25 @@ export class PlayersService {
     const preprocessed = await this.preprocessDecodeImage(file.buffer);
     const strategies = await this.buildDecodeStrategies(preprocessed.roiBuffer);
     const report = [] as Array<Record<string, unknown>>;
+    let payloadRaw: string | null = null;
+    let decoderOutputRaw: string | null = null;
+    let payloadLength = 0;
+    let tokensCount = 0;
 
     for (const strategy of strategies) {
       const startedAt = Date.now();
       try {
         const result = await this.runDecoder(decoderSpec, strategy.buffer, DECODER_TIMEOUT_MS);
         const elapsedMs = Date.now() - startedAt;
-        const payload = result.stdout.trim();
+        const decoderStdout = result.stdout.trim();
+        const payload = this.extractPayloadFromDecoderOutput(decoderStdout);
+        const outputDiffersFromPayload = decoderStdout !== payload;
+        if (result.exitCode === 0 && payload.length > 0 && payloadRaw === null) {
+          payloadRaw = payload;
+          decoderOutputRaw = outputDiffersFromPayload ? decoderStdout : null;
+          payloadLength = payload.length;
+          tokensCount = payload.split('@').filter(Boolean).length;
+        }
         report.push({
           strategy: strategy.name,
           rotation: strategy.rotation,
@@ -205,6 +209,10 @@ export class PlayersService {
       decoderCommand: `${decoderSpec.binary} ${decoderSpec.args.join(' ')}`.trim(),
       mimetype: file.mimetype,
       size: file.size,
+      payloadRaw,
+      decoderOutputRaw,
+      payloadLength,
+      tokensCount,
       report,
     };
   }
@@ -229,7 +237,7 @@ export class PlayersService {
         try {
           const result = await this.runDecoder(decoderSpec, strategy.buffer, DECODER_TIMEOUT_MS);
           const elapsedMs = Date.now() - startedAt;
-          const payload = result.stdout.trim();
+          const payload = this.extractPayloadFromDecoderOutput(result.stdout.trim());
           if (result.exitCode !== 0) {
             throw new Error(
               `decoder exited with code ${result.exitCode}${result.stderr ? ` stderr=${result.stderr}` : ''}`,
@@ -255,7 +263,9 @@ export class PlayersService {
             if (debugEnabled) {
               this.logger.error(`[DNI_SCAN] decoder unavailable error=${error.message}`);
             }
-            throw new InternalServerErrorException(`DNI scan decoder unavailable: ${error.message}`);
+            throw new InternalServerErrorException(
+              `DNI scan decoder unavailable: ${error.message}`,
+            );
           }
 
           const elapsedMs = Date.now() - startedAt;
@@ -501,23 +511,34 @@ export class PlayersService {
     return value === '1' || value === 'true';
   }
 
-  private async writeTempDebugFile(buffer: Buffer, mimetype: string): Promise<string> {
-    const extension = mimetype.split('/')[1] || 'img';
-    const path = join('/tmp', `dni-scan-${randomUUID()}.${extension}`);
-    await writeFile(path, buffer);
-    this.logger.log(`[DNI_SCAN] debug temp file saved at ${path}`);
-    return path;
-  }
-
-  private async cleanupTempDebugFile(path: string): Promise<void> {
-    try {
-      await unlink(path);
-      this.logger.log(`[DNI_SCAN] debug temp file removed ${path}`);
-    } catch (error) {
-      this.logger.warn(
-        `[DNI_SCAN] debug temp file cleanup failed path=${path} error=${error instanceof Error ? error.message : 'unknown'}`,
-      );
+  private extractPayloadFromDecoderOutput(output: string): string {
+    const trimmed = output.trim();
+    if (!trimmed) {
+      return '';
     }
+
+    const lines = trimmed
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    for (const line of lines) {
+      const atIndex = line.indexOf('@');
+      if (atIndex >= 0) {
+        return line.slice(atIndex).trim();
+      }
+
+      const prefixedMatch = line.match(/^(Text|Content|Raw\s+text|Payload)\s*:\s*(.+)$/i);
+      if (prefixedMatch?.[2]) {
+        return prefixedMatch[2].trim();
+      }
+
+      if (!line.includes(':')) {
+        return line;
+      }
+    }
+
+    return '';
   }
 
   async findAll(query: ListPlayersDto, user?: RequestUser) {

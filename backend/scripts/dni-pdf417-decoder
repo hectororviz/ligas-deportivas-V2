@@ -95,6 +95,14 @@ if [[ "${DNI_DECODER_DEBUG:-0}" == "1" ]]; then
   } >&2
 fi
 
+if [[ "${DNI_DECODER_DEBUG:-0}" == "1" && "${DNI_DECODER_ECHO_OUTPUT:-0}" == "1" ]]; then
+  {
+    printf '[dni-pdf417-decoder] OUTPUT_RAW_BEGIN\n'
+    printf '%s\n' "$OUTPUT"
+    printf '[dni-pdf417-decoder] OUTPUT_RAW_END\n'
+  } >&2
+fi
+
 PAYLOAD="$(printf '%s\n' "$OUTPUT" | awk '
   /@/ { sub(/^[^@]*/, ""); print; exit }
   /^Text[[:space:]]*:/ { sub(/^Text[[:space:]]*:[[:space:]]*/, ""); print; exit }
