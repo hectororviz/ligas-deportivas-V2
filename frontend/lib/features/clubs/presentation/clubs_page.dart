@@ -678,7 +678,6 @@ class _ClubRosterViewState extends ConsumerState<_ClubRosterView> {
       final api = ref.read(apiClientProvider);
       final query = <String, dynamic>{
         if (_selectedTournamentId != null) 'tournamentId': _selectedTournamentId,
-        if (_selectedCategoryId != null) 'categoryId': _selectedCategoryId,
       };
 
       final response = await api.get<Map<String, dynamic>>(
@@ -700,6 +699,9 @@ class _ClubRosterViewState extends ConsumerState<_ClubRosterView> {
           .whereType<Map<String, dynamic>>()
           .map(_ClubRosterRow.fromJson)
           .toList();
+      final filteredRows = _selectedCategoryId == null
+          ? rows
+          : rows.where((row) => row.categoryId == _selectedCategoryId).toList();
 
       setState(() {
         _tournaments = tournaments;
@@ -714,7 +716,7 @@ class _ClubRosterViewState extends ConsumerState<_ClubRosterView> {
         if (_selectedCategoryId != null && !_categories.any((item) => item.id == _selectedCategoryId)) {
           _selectedCategoryId = null;
         }
-        _rows = rows;
+        _rows = filteredRows;
         _loading = false;
         _error = null;
       });
@@ -908,6 +910,7 @@ class _ClubRosterRow {
     required this.lastName,
     required this.birthDate,
     required this.dni,
+    required this.categoryId,
     required this.tournamentName,
     required this.categoryName,
   });
@@ -918,6 +921,7 @@ class _ClubRosterRow {
       lastName: json['lastName'] as String? ?? '—',
       birthDate: DateTime.tryParse(json['birthDate'] as String? ?? '') ?? DateTime(1900),
       dni: json['dni'] as String? ?? '—',
+      categoryId: json['categoryId'] as int? ?? 0,
       tournamentName: json['tournamentName'] as String? ?? '—',
       categoryName: json['categoryName'] as String? ?? '—',
     );
@@ -927,6 +931,7 @@ class _ClubRosterRow {
   final String lastName;
   final DateTime birthDate;
   final String dni;
+  final int categoryId;
   final String tournamentName;
   final String categoryName;
 }
