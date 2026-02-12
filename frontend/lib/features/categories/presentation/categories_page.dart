@@ -885,9 +885,9 @@ class _CategoryFormDialogState extends ConsumerState<_CategoryFormDialog> {
       });
       return;
     }
-    if (minPlayers == null || minPlayers < 1) {
+    if (minPlayers == null || minPlayers < 0) {
       setState(() {
-        _errorMessage = 'Ingresá un mínimo de jugadores válido (mayor o igual a 1).';
+        _errorMessage = 'Ingresá un mínimo de jugadores válido (mayor o igual a 0).';
       });
       return;
     }
@@ -1051,8 +1051,8 @@ class _CategoryFormDialogState extends ConsumerState<_CategoryFormDialog> {
                       return 'Obligatorio';
                     }
                     final parsed = int.tryParse(value.trim());
-                    if (parsed == null || parsed < 1) {
-                      return 'Ingresá un número válido mayor o igual a 1.';
+                    if (parsed == null || parsed < 0) {
+                      return 'Ingresá un número válido mayor o igual a 0.';
                     }
                     return null;
                   },
