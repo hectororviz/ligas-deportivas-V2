@@ -132,6 +132,13 @@ export class PlayersService {
 
     try {
       const payload = await this.decodePdf417Payload(file.buffer, t0);
+      const tokensCount = payload.split('@').length;
+      this.logger.log(
+        `[DNI_SCAN] decoder payload stats payloadLength=${payload.length} tokensCount=${tokensCount}`,
+      );
+      if (tokensCount < 5) {
+        throw new UnprocessableEntityException('decoded but unexpected format');
+      }
       const parsed = parseDniPdf417Payload(payload);
       return parsed;
     } finally {

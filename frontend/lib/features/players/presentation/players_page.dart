@@ -182,7 +182,14 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
       final statusCode = error.response?.statusCode;
       String message;
       if (statusCode == 422) {
-        message = 'No se pudo leer el DNI. Probá con mejor luz y enfocá el código.';
+        final backendMessage = _extractBackendErrorMessage(error.response?.data);
+        if (backendMessage == 'decoded but unexpected format') {
+          message = 'se leyó el código pero el formato no coincide';
+        } else if (backendMessage == 'No se pudo decodificar el PDF417.') {
+          message = 'no se pudo leer el código';
+        } else {
+          message = 'se leyó el código pero el formato no coincide';
+        }
       } else if (error.type == DioExceptionType.connectionTimeout ||
           error.type == DioExceptionType.receiveTimeout ||
           error.type == DioExceptionType.sendTimeout) {
@@ -199,6 +206,23 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
         const SnackBar(content: Text('Ocurrió un error al procesar el DNI.')),
       );
     }
+  }
+
+
+  String? _extractBackendErrorMessage(dynamic data) {
+    if (data is Map<String, dynamic>) {
+      final message = data['message'];
+      if (message is String) {
+        return message;
+      }
+      if (message is List && message.isNotEmpty) {
+        final first = message.first;
+        if (first is String) {
+          return first;
+        }
+      }
+    }
+    return null;
   }
 
   Future<_ScannedDniPlayer> _scanDniOnServer(CapturedDniImage image) async {
