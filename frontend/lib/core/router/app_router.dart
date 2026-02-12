@@ -112,6 +112,22 @@ GoRouter createRouter(Ref ref) {
           GoRoute(path: '/leagues', builder: (context, state) => const LeaguesPage()),
           GoRoute(path: '/clubs', builder: (context, state) => const ClubsPage()),
           GoRoute(
+            path: '/clubs/:clubId/roster',
+            builder: (context, state) {
+              final clubId = int.tryParse(state.pathParameters['clubId'] ?? '');
+              final club = state.extra is Club ? state.extra as Club : null;
+              if (clubId == null) {
+                return const Scaffold(
+                  body: Center(child: Text('Club inválido para plantel.')),
+                );
+              }
+              return ClubRosterPage(
+                clubId: clubId,
+                clubName: club?.name ?? 'Club #$clubId',
+              );
+            },
+          ),
+          GoRoute(
             path: '/club/:slug',
             builder: (context, state) {
               final slug = state.pathParameters['slug']!;
