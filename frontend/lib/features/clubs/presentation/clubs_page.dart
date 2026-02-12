@@ -714,7 +714,23 @@ class _ClubRosterViewState extends ConsumerState<_ClubRosterView> {
         if (_selectedCategoryId != null && !_categories.any((item) => item.id == _selectedCategoryId)) {
           _selectedCategoryId = null;
         }
-        _rows = rows;
+
+        final selectedCategoryName = _selectedCategoryId == null
+            ? null
+            : _categories.firstWhere(
+                (item) => item.id == _selectedCategoryId,
+                orElse: () => const _RosterFilterOption(id: 0, name: ''),
+              ).name;
+
+        _rows = _selectedCategoryId == null
+            ? rows
+            : rows
+                .where(
+                  (row) =>
+                      (row.categoryId != null && row.categoryId == _selectedCategoryId) ||
+                      (selectedCategoryName != null && row.categoryName == selectedCategoryName),
+                )
+                .toList();
         _loading = false;
         _error = null;
       });
@@ -908,6 +924,7 @@ class _ClubRosterRow {
     required this.lastName,
     required this.birthDate,
     required this.dni,
+    required this.categoryId,
     required this.tournamentName,
     required this.categoryName,
   });
@@ -918,6 +935,7 @@ class _ClubRosterRow {
       lastName: json['lastName'] as String? ?? '—',
       birthDate: DateTime.tryParse(json['birthDate'] as String? ?? '') ?? DateTime(1900),
       dni: json['dni'] as String? ?? '—',
+      categoryId: _parseCategoryId(json['categoryId']),
       tournamentName: json['tournamentName'] as String? ?? '—',
       categoryName: json['categoryName'] as String? ?? '—',
     );
@@ -927,8 +945,23 @@ class _ClubRosterRow {
   final String lastName;
   final DateTime birthDate;
   final String dni;
+  final int? categoryId;
   final String tournamentName;
   final String categoryName;
+}
+
+
+int? _parseCategoryId(dynamic value) {
+  if (value is int) {
+    return value;
+  }
+  if (value is String) {
+    return int.tryParse(value);
+  }
+  if (value is num) {
+    return value.toInt();
+  }
+  return null;
 }
 
 String _escapeCsv(String value) {
