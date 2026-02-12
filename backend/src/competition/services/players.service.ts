@@ -10,7 +10,8 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { unlink, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { access, mkdir, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Action, Gender, Module, Prisma, Scope } from '@prisma/client';
 import * as sharp from 'sharp';
@@ -96,6 +97,8 @@ export class PlayersService {
       },
     },
   } satisfies Prisma.PlayerInclude;
+
+  private writableTmpDirPromise: Promise<string> | null = null;
 
   async create(dto: CreatePlayerDto) {
     await this.ensureUniqueDni(dto.dni);
@@ -213,6 +216,7 @@ export class PlayersService {
   ): Promise<DecodePdf417Detail> {
     const decoderSpec = this.resolveDecoderCommandSpec();
     const debugEnabled = this.isScanDebugEnabled();
+    const debugKeepTmpEnabled = this.isScanDebugKeepTmpEnabled();
     const decoderCommand = `${decoderSpec.binary} ${decoderSpec.args.join(' ')}`.trim();
     let lastAttempt: DecoderAttemptDetail | null = null;
     let tempRoiPath: string | undefined;
@@ -229,16 +233,12 @@ export class PlayersService {
         `[DNI_SCAN][requestId=${requestId}][t1c] png encode info byteLength=${preprocessed.roiPngByteLength}`,
       );
       if (debugEnabled) {
-        tempRoiPath = join('/tmp', `dni-scan-${requestId}.png`);
+        const tmpDir = await this.resolveWritableTmpDir();
+        tempRoiPath = join(tmpDir, `dni-roi-${requestId}-base.png`);
         await writeFile(tempRoiPath, preprocessed.roiBuffer);
-        this.logger.log(`[DNI_SCAN][requestId=${requestId}] saved roi png path=${tempRoiPath}`);
-        const cleanupTimer = setTimeout(
-          () => {
-            void this.cleanupTempInputFile(tempRoiPath as string);
-          },
-          10 * 60 * 1000,
+        this.logger.log(
+          `[DNI_SCAN][requestId=${requestId}][tmp] savedBaseRoi=${tempRoiPath} bytes=${preprocessed.roiBuffer.byteLength}`,
         );
-        cleanupTimer.unref();
       }
 
       this.logger.log(
@@ -251,6 +251,19 @@ export class PlayersService {
         this.logger.log(
           `[DNI_SCAN][requestId=${requestId}][t2] strategy start variant=${index + 1}/${strategies.length} strategy=${strategy.name} rotation=${strategy.rotation}`,
         );
+
+        if (debugEnabled && debugKeepTmpEnabled) {
+          const tmpDir = await this.resolveWritableTmpDir();
+          const strategyPath = join(
+            tmpDir,
+            `dni-roi-${requestId}-${strategy.name}-rot${strategy.rotation}.png`,
+          );
+          await writeFile(strategyPath, strategy.buffer);
+          this.logger.log(
+            `[DNI_SCAN][requestId=${requestId}][tmp] savedVariantRoi=${strategyPath} bytes=${strategy.buffer.byteLength}`,
+          );
+        }
+
         const startedAt = Date.now();
         try {
           const result = await this.runDecoder(decoderSpec, strategy.buffer, DECODER_TIMEOUT_MS);
@@ -357,6 +370,15 @@ export class PlayersService {
         this.logger.warn('DNI scan failed to decode.');
       }
       throw new UnprocessableEntityException('No se pudo decodificar el PDF417.');
+    } finally {
+      if (tempRoiPath && debugEnabled) {
+        if (debugKeepTmpEnabled) {
+          this.logger.log(`[DNI_SCAN][requestId=${requestId}][tmp] keepingRoi=${tempRoiPath}`);
+        } else {
+          await this.cleanupTempInputFile(tempRoiPath);
+          this.logger.log(`[DNI_SCAN][requestId=${requestId}][tmp] cleanedRoi=${tempRoiPath}`);
+        }
+      }
     }
   }
 
@@ -444,7 +466,8 @@ export class PlayersService {
     input: Buffer,
     timeoutMs: number,
   ): Promise<DecoderRunResult> {
-    const tempPath = join('/tmp', `dni-scan-input-${randomUUID()}.png`);
+    const tmpDir = await this.resolveWritableTmpDir();
+    const tempPath = join(tmpDir, `dni-scan-input-${randomUUID()}.png`);
     await writeFile(tempPath, input);
 
     try {
@@ -455,6 +478,36 @@ export class PlayersService {
     } finally {
       await this.cleanupTempInputFile(tempPath);
     }
+  }
+
+  private isScanDebugKeepTmpEnabled(): boolean {
+    const rawValue = this.configService.get<string>('SCAN_DEBUG_KEEP_TMP');
+    const value = rawValue?.trim().toLowerCase();
+    return value === '1' || value === 'true';
+  }
+
+  private resolveWritableTmpDir(): Promise<string> {
+    if (!this.writableTmpDirPromise) {
+      this.writableTmpDirPromise = this.findWritableTmpDir();
+    }
+    return this.writableTmpDirPromise;
+  }
+
+  private async findWritableTmpDir(): Promise<string> {
+    const candidates = ['/tmp', '/app/tmp'];
+
+    for (const candidate of candidates) {
+      try {
+        await mkdir(candidate, { recursive: true });
+        await access(candidate, constants.W_OK);
+        this.logger.log(`[DNI_SCAN] writable tmp dir selected path=${candidate}`);
+        return candidate;
+      } catch {
+        this.logger.warn(`[DNI_SCAN] tmp dir unavailable path=${candidate}`);
+      }
+    }
+
+    throw new InternalServerErrorException('No writable tmp directory available for DNI scan.');
   }
 
   private async cleanupTempInputFile(path: string): Promise<void> {
