@@ -7,9 +7,13 @@ import {
   Patch,
   Post,
   Query,
-  UseGuards
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { Action, Module } from '@prisma/client';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { JwtOptionalAuthGuard } from '../../auth/jwt-optional.guard';
@@ -43,6 +47,20 @@ export class PlayersController {
   @Get(':id')
   findById(@Param('id', ParseIntPipe) id: number) {
     return this.playersService.findById(id);
+  }
+
+
+  @Post('dni/scan')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @Permissions({ module: Module.JUGADORES, action: Action.CREATE })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 8 * 1024 * 1024 },
+    }),
+  )
+  scanDni(@UploadedFile() file?: Express.Multer.File) {
+    return this.playersService.scanDniFromImage(file);
   }
 
   @Post()

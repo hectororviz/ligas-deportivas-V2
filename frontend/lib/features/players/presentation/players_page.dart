@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/utils/dni_capture.dart';
 import '../../../core/utils/responsive.dart';
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
@@ -128,6 +129,139 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Jugadores guardados correctamente.')),
     );
+  }
+
+
+  Future<void> _scanDniAndCreatePlayer() async {
+    try {
+      final image = await captureDniImage();
+      if (!mounted || image == null) {
+        return;
+      }
+
+      final scanned = await _scanDniOnServer(image);
+      if (!mounted) {
+        return;
+      }
+
+      final confirmed = await _confirmScannedPlayer(scanned);
+      if (!mounted || confirmed != true) {
+        return;
+      }
+
+      await _createPlayerFromScan(scanned);
+      if (!mounted) {
+        return;
+      }
+      ref.invalidate(playersProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Jugador creado.')),
+      );
+    } on UnsupportedError catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString())),
+      );
+    } on DioException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      final statusCode = error.response?.statusCode;
+      String message;
+      if (statusCode == 422) {
+        message = 'No se pudo leer el DNI. Probá con mejor luz y enfocá el código.';
+      } else if (error.type == DioExceptionType.connectionTimeout ||
+          error.type == DioExceptionType.receiveTimeout ||
+          error.type == DioExceptionType.sendTimeout) {
+        message = 'La lectura tardó demasiado. Probá nuevamente.';
+      } else {
+        message = 'No pudimos procesar el DNI. Verificá la conexión e intentá otra vez.';
+      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ocurrió un error al procesar el DNI.')),
+      );
+    }
+  }
+
+  Future<_ScannedDniPlayer> _scanDniOnServer(CapturedDniImage image) async {
+    final api = ref.read(apiClientProvider);
+    final formData = FormData.fromMap({
+      'file': MultipartFile.fromBytes(
+        image.bytes,
+        filename: image.filename,
+      ),
+    });
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        content: Row(
+          children: [
+            SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.4)),
+            SizedBox(width: 16),
+            Expanded(child: Text('Leyendo DNI...')),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final response = await api.post<Map<String, dynamic>>(
+        '/players/dni/scan',
+        data: formData,
+      );
+      return _ScannedDniPlayer.fromJson(response.data ?? const {});
+    } finally {
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).maybePop();
+      }
+    }
+  }
+
+  Future<bool?> _confirmScannedPlayer(_ScannedDniPlayer player) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Confirmar alta rápida'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _InfoRow(label: 'Apellido', value: player.lastName),
+              _InfoRow(label: 'Nombre', value: player.firstName),
+              _InfoRow(label: 'Sexo', value: player.sex),
+              _InfoRow(label: 'DNI', value: player.dni),
+              _InfoRow(label: 'Fecha nacimiento', value: DateFormat('dd/MM/yyyy').format(player.birthDate)),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancelar')),
+            FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Confirmar')),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _createPlayerFromScan(_ScannedDniPlayer player) async {
+    final api = ref.read(apiClientProvider);
+    await api.post('/players', data: {
+      'firstName': player.firstName,
+      'lastName': player.lastName,
+      'dni': player.dni,
+      'birthDate': player.birthDate.toIso8601String(),
+      'gender': player.gender,
+      'active': true,
+    });
   }
 
   Future<void> _openPlayerDetails(Player player) async {
@@ -287,6 +421,7 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
           ? _PlayersFloatingActions(
               onCreate: _openCreatePlayer,
               onMassive: _openMassivePlayers,
+              onScanDni: _scanDniAndCreatePlayer,
             )
           : null,
       builder: (context, scrollController) {
@@ -557,6 +692,7 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
                       canCreate: canCreate,
                       onCreate: _openCreatePlayer,
                       onMassive: _openMassivePlayers,
+                      onScanDni: _scanDniAndCreatePlayer,
                     );
                   }
 
@@ -987,6 +1123,82 @@ class _PlayersDataTable extends StatelessWidget {
   }
 }
 
+
+class _ScannedDniPlayer {
+  _ScannedDniPlayer({
+    required this.lastName,
+    required this.firstName,
+    required this.sex,
+    required this.dni,
+    required this.birthDate,
+  });
+
+  factory _ScannedDniPlayer.fromJson(Map<String, dynamic> json) {
+    final birthDateRaw = (json['birthDate'] as String? ?? '').trim();
+    final parsedBirthDate = DateTime.tryParse(birthDateRaw);
+    final player = _ScannedDniPlayer(
+      lastName: (json['lastName'] as String? ?? '').trim(),
+      firstName: (json['firstName'] as String? ?? '').trim(),
+      sex: (json['sex'] as String? ?? '').trim().toUpperCase(),
+      dni: (json['dni'] as String? ?? '').trim(),
+      birthDate: parsedBirthDate ?? DateTime(1900),
+    );
+
+    if (player.lastName.isEmpty ||
+        player.firstName.isEmpty ||
+        player.dni.isEmpty ||
+        !RegExp(r'^\d{6,9}$').hasMatch(player.dni) ||
+        parsedBirthDate == null) {
+      throw const FormatException('Respuesta inválida de escaneo DNI.');
+    }
+
+    return player;
+  }
+
+  final String lastName;
+  final String firstName;
+  final String sex;
+  final String dni;
+  final DateTime birthDate;
+
+  String get gender {
+    switch (sex) {
+      case 'F':
+        return 'FEMENINO';
+      case 'M':
+        return 'MASCULINO';
+      default:
+        return 'MIXTO';
+    }
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text.rich(
+        TextSpan(
+          text: '$label: ',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+          children: [
+            TextSpan(
+              text: value,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w400),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _PlayersPaginationFooter extends StatelessWidget {
   const _PlayersPaginationFooter({
     required this.page,
@@ -1079,11 +1291,13 @@ class _PlayersEmptyState extends StatelessWidget {
     required this.canCreate,
     required this.onCreate,
     required this.onMassive,
+    required this.onScanDni,
   });
 
   final bool canCreate;
   final VoidCallback onCreate;
   final VoidCallback onMassive;
+  final VoidCallback onScanDni;
 
   @override
   Widget build(BuildContext context) {
@@ -1126,6 +1340,11 @@ class _PlayersEmptyState extends StatelessWidget {
                     icon: const Icon(Icons.table_chart_outlined),
                     label: const Text('Masivo'),
                   ),
+                  OutlinedButton.icon(
+                    onPressed: onScanDni,
+                    icon: const Icon(Icons.qr_code_scanner_outlined),
+                    label: const Text('Escanear DNI'),
+                  ),
                 ],
               ),
           ],
@@ -1139,10 +1358,12 @@ class _PlayersFloatingActions extends StatelessWidget {
   const _PlayersFloatingActions({
     required this.onCreate,
     required this.onMassive,
+    required this.onScanDni,
   });
 
   final VoidCallback onCreate;
   final VoidCallback onMassive;
+  final VoidCallback onScanDni;
 
   @override
   Widget build(BuildContext context) {
@@ -1150,6 +1371,13 @@ class _PlayersFloatingActions extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
+        FloatingActionButton.extended(
+          heroTag: 'players-scan-dni',
+          onPressed: onScanDni,
+          icon: const Icon(Icons.qr_code_scanner_outlined),
+          label: const Text('Escanear DNI'),
+        ),
+        const SizedBox(height: 12),
         FloatingActionButton.extended(
           heroTag: 'players-massive',
           onPressed: onMassive,
