@@ -77,7 +77,22 @@ if [[ $ZXING_EXIT_CODE -ne 0 ]]; then
 fi
 
 if [[ "${DNI_DECODER_DEBUG:-0}" == "1" ]]; then
-  printf '%s\n' "$OUTPUT" | head -n 10 | sed 's/^/[dni-pdf417-decoder] /' >&2
+  OUTPUT_LEN=${#OUTPUT}
+  OUTPUT_HAS_AT=0
+  if [[ "$OUTPUT" == *"@"* ]]; then
+    OUTPUT_HAS_AT=1
+  fi
+  OUTPUT_HEAD_RAW="$(printf '%s\n' "$OUTPUT" | head -n 10)"
+  OUTPUT_HEAD_SANITIZED="$(printf '%s' "$OUTPUT_HEAD_RAW" | sed -E 's/[0-9]/X/g')"
+  if [[ $OUTPUT_HAS_AT -eq 1 ]]; then
+    OUTPUT_HEAD_SANITIZED="len=${OUTPUT_LEN} $(printf '%s' "$OUTPUT_HEAD_SANITIZED" | sed 's/@/[AT]/g')"
+  fi
+
+  {
+    printf '[dni-pdf417-decoder] ZXING_BIN=%s\n' "$ZXING_BIN"
+    printf '[dni-pdf417-decoder] OUTPUT_HEAD=%s\n' "$OUTPUT_HEAD_SANITIZED"
+    printf '[dni-pdf417-decoder] OUTPUT_LEN=%s\n' "$OUTPUT_LEN"
+  } >&2
 fi
 
 PAYLOAD="$(printf '%s\n' "$OUTPUT" | awk '
@@ -91,6 +106,10 @@ PAYLOAD="$(printf '%s\n' "$OUTPUT" | awk '
 
 if [[ -z "$PAYLOAD" ]]; then
   exit 1
+fi
+
+if [[ "${DNI_DECODER_DEBUG:-0}" == "1" ]]; then
+  printf '[dni-pdf417-decoder] PAYLOAD_LEN=%s\n' "${#PAYLOAD}" >&2
 fi
 
 printf '%s' "$PAYLOAD"
