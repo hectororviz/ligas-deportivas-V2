@@ -201,11 +201,9 @@ class _ClubsPageState extends ConsumerState<ClubsPage> {
     }
   }
   Future<void> _openClubRoster(Club club) async {
-    await showDialog<void>(
-      context: context,
-      builder: (context) => Dialog.fullscreen(
-        child: _ClubRosterView(club: club),
-      ),
+    GoRouter.of(context).push(
+      '/clubs/${club.id}/roster',
+      extra: club,
     );
   }
 
@@ -640,16 +638,21 @@ class _ClubsDataTable extends StatelessWidget {
 }
 
 
-class _ClubRosterView extends ConsumerStatefulWidget {
-  const _ClubRosterView({required this.club});
+class ClubRosterPage extends ConsumerStatefulWidget {
+  const ClubRosterPage({
+    super.key,
+    required this.clubId,
+    required this.clubName,
+  });
 
-  final Club club;
+  final int clubId;
+  final String clubName;
 
   @override
-  ConsumerState<_ClubRosterView> createState() => _ClubRosterViewState();
+  ConsumerState<ClubRosterPage> createState() => _ClubRosterPageState();
 }
 
-class _ClubRosterViewState extends ConsumerState<_ClubRosterView> {
+class _ClubRosterPageState extends ConsumerState<ClubRosterPage> {
   final DateFormat _birthDateFormat = DateFormat(_dateFormat);
   bool _loading = true;
   bool _exporting = false;
@@ -659,11 +662,20 @@ class _ClubRosterViewState extends ConsumerState<_ClubRosterView> {
   List<_RosterFilterOption> _tournaments = const [];
   List<_RosterFilterOption> _categories = const [];
   List<_ClubRosterRow> _rows = const [];
+  final ScrollController _tableVerticalController = ScrollController();
+  final ScrollController _tableHorizontalController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     unawaited(_loadRoster(initialLoad: true));
+  }
+
+  @override
+  void dispose() {
+    _tableVerticalController.dispose();
+    _tableHorizontalController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadRoster({required bool initialLoad}) async {
@@ -681,7 +693,7 @@ class _ClubRosterViewState extends ConsumerState<_ClubRosterView> {
       };
 
       final response = await api.get<Map<String, dynamic>>(
-        '/clubs/${widget.club.id}/roster',
+        '/clubs/${widget.clubId}/roster',
         queryParameters: query,
         options: Options(
           headers: {
@@ -706,10 +718,6 @@ class _ClubRosterViewState extends ConsumerState<_ClubRosterView> {
           .whereType<Map<String, dynamic>>()
           .map(_ClubRosterRow.fromJson)
           .toList();
-      final filteredRows = _selectedCategoryId == null
-          ? rows
-          : rows.where((row) => row.categoryId == _selectedCategoryId).toList();
-
       setState(() {
         _tournaments = tournaments;
         if (selectedTournamentId != null) {
@@ -731,7 +739,7 @@ class _ClubRosterViewState extends ConsumerState<_ClubRosterView> {
                 orElse: () => const _RosterFilterOption(id: 0, name: ''),
               ).name;
 
-        _rows = _selectedCategoryId == null
+        final selectedRows = _selectedCategoryId == null
             ? rows
             : rows
                 .where(
@@ -740,6 +748,7 @@ class _ClubRosterViewState extends ConsumerState<_ClubRosterView> {
                       (selectedCategoryName != null && row.categoryName == selectedCategoryName),
                 )
                 .toList();
+        _rows = _sortRosterRows(selectedRows);
         _loading = false;
         _error = null;
       });
@@ -749,6 +758,23 @@ class _ClubRosterViewState extends ConsumerState<_ClubRosterView> {
         _error = 'No se pudo cargar el plantel: $error';
       });
     }
+  }
+
+  List<_ClubRosterRow> _sortRosterRows(List<_ClubRosterRow> rows) {
+    final sortedRows = List<_ClubRosterRow>.from(rows);
+    sortedRows.sort((a, b) {
+      final categoryComparison =
+          a.categoryName.toLowerCase().compareTo(b.categoryName.toLowerCase());
+      if (categoryComparison != 0) {
+        return categoryComparison;
+      }
+      final lastNameComparison = a.lastName.toLowerCase().compareTo(b.lastName.toLowerCase());
+      if (lastNameComparison != 0) {
+        return lastNameComparison;
+      }
+      return a.firstName.toLowerCase().compareTo(b.firstName.toLowerCase());
+    });
+    return sortedRows;
   }
 
   Future<void> _exportCsv() async {
@@ -774,7 +800,7 @@ class _ClubRosterViewState extends ConsumerState<_ClubRosterView> {
         ].join(','));
       }
       final now = DateTime.now();
-      final fileName = 'plantel_${widget.club.id}_${DateFormat('yyyyMMdd_HHmm').format(now)}.csv';
+      final fileName = 'plantel_${widget.clubId}_${DateFormat('yyyyMMdd_HHmm').format(now)}.csv';
       await downloadCsv(content: buffer.toString(), filename: fileName);
     } catch (error) {
       if (!mounted) return;
@@ -790,127 +816,146 @@ class _ClubRosterViewState extends ConsumerState<_ClubRosterView> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Plantel · ${widget.club.name}'),
-      ),
-      body: Padding(
+    final theme = Theme.of(context);
+
+    return PageScaffold(
+      backgroundColor: Colors.transparent,
+      builder: (context, scrollController) => ListView(
+        controller: scrollController,
         padding: Responsive.pagePadding(context),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Wrap(
-                  spacing: 16,
-                  runSpacing: 12,
-                  crossAxisAlignment: WrapCrossAlignment.end,
-                  children: [
-                    SizedBox(
-                      width: 320,
-                      child: DropdownButtonFormField<int>(
-                        value: _selectedTournamentId,
-                        decoration: const InputDecoration(labelText: 'Torneo *'),
-                        items: _tournaments
-                            .map(
-                              (item) => DropdownMenuItem<int>(
-                                value: item.id,
-                                child: Text(item.name),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (value) {
-                          if (value == null) return;
-                          setState(() {
-                            _selectedTournamentId = value;
-                            _selectedCategoryId = null;
-                          });
-                          unawaited(_loadRoster(initialLoad: true));
-                        },
-                      ),
-                    ),
-                    SizedBox(
-                      width: 240,
-                      child: DropdownButtonFormField<int?>(
-                        value: _selectedCategoryId,
-                        decoration: const InputDecoration(labelText: 'Categoría'),
-                        items: [
-                          const DropdownMenuItem<int?>(
-                            value: null,
-                            child: Text('Todas'),
-                          ),
-                          ..._categories.map(
-                            (item) => DropdownMenuItem<int?>(
+        children: [
+          Text(
+            'Plantel · ${widget.clubName}',
+            style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Wrap(
+                spacing: 16,
+                runSpacing: 12,
+                crossAxisAlignment: WrapCrossAlignment.end,
+                children: [
+                  SizedBox(
+                    width: 320,
+                    child: DropdownButtonFormField<int>(
+                      value: _selectedTournamentId,
+                      decoration: const InputDecoration(labelText: 'Torneo *'),
+                      items: _tournaments
+                          .map(
+                            (item) => DropdownMenuItem<int>(
                               value: item.id,
                               child: Text(item.name),
                             ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() {
+                          _selectedTournamentId = value;
+                          _selectedCategoryId = null;
+                        });
+                        unawaited(_loadRoster(initialLoad: true));
+                      },
+                    ),
+                  ),
+                  SizedBox(
+                    width: 240,
+                    child: DropdownButtonFormField<int?>(
+                      value: _selectedCategoryId,
+                      decoration: const InputDecoration(labelText: 'Categoría'),
+                      items: [
+                        const DropdownMenuItem<int?>(
+                          value: null,
+                          child: Text('Todas'),
+                        ),
+                        ..._categories.map(
+                          (item) => DropdownMenuItem<int?>(
+                            value: item.id,
+                            child: Text(item.name),
                           ),
-                        ],
-                        onChanged: (value) {
-                          setState(() => _selectedCategoryId = value);
-                          unawaited(_loadRoster(initialLoad: true));
-                        },
-                      ),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        setState(() => _selectedCategoryId = value);
+                        unawaited(_loadRoster(initialLoad: true));
+                      },
                     ),
-                    FilledButton.icon(
-                      onPressed: _exporting ? null : _exportCsv,
-                      icon: _exporting
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.download_outlined),
-                      label: const Text('Exportar CSV'),
-                    ),
-                  ],
-                ),
+                  ),
+                  FilledButton.icon(
+                    onPressed: _exporting ? null : _exportCsv,
+                    icon: _exporting
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.download_outlined),
+                    label: const Text('Exportar CSV'),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: Card(
-                child: _loading
-                    ? const Center(child: CircularProgressIndicator())
-                    : _error != null
-                        ? Center(child: Text(_error!))
-                        : _rows.isEmpty
-                            ? const Center(
-                                child: Text('No hay jugadores para los filtros seleccionados.'),
-                              )
-                            : SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: DataTable(
-                                  columns: const [
-                                    DataColumn(label: Text('Nombre')),
-                                    DataColumn(label: Text('Apellido')),
-                                    DataColumn(label: Text('Fecha de nacimiento')),
-                                    DataColumn(label: Text('DNI')),
-                                    DataColumn(label: Text('Torneo')),
-                                    DataColumn(label: Text('Categoría')),
-                                  ],
-                                  rows: _rows
-                                      .map(
-                                        (row) => DataRow(cells: [
-                                          DataCell(Text(row.firstName)),
-                                          DataCell(Text(row.lastName)),
-                                          DataCell(Text(_birthDateFormat.format(row.birthDate))),
-                                          DataCell(Text(row.dni)),
-                                          DataCell(Text(row.tournamentName)),
-                                          DataCell(Text(row.categoryName)),
-                                        ]),
-                                      )
-                                      .toList(),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: SizedBox(
+              height: 560,
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _error != null
+                      ? Center(child: Text(_error!))
+                      : _rows.isEmpty
+                          ? const Center(
+                              child: Text('No hay jugadores para los filtros seleccionados.'),
+                            )
+                          : Scrollbar(
+                              controller: _tableVerticalController,
+                              thumbVisibility: true,
+                              child: SingleChildScrollView(
+                                controller: _tableVerticalController,
+                                child: Scrollbar(
+                                  controller: _tableHorizontalController,
+                                  thumbVisibility: true,
+                                  notificationPredicate: (notification) =>
+                                      notification.metrics.axis == Axis.horizontal,
+                                  child: SingleChildScrollView(
+                                    controller: _tableHorizontalController,
+                                    scrollDirection: Axis.horizontal,
+                                    child: DataTable(
+                                      columns: const [
+                                        DataColumn(label: Text('Apellido')),
+                                        DataColumn(label: Text('Nombre')),
+                                        DataColumn(label: Text('Fecha de nacimiento')),
+                                        DataColumn(label: Text('DNI')),
+                                        DataColumn(label: Text('Torneo')),
+                                        DataColumn(label: Text('Categoría')),
+                                      ],
+                                      rows: _rows
+                                          .map(
+                                            (row) => DataRow(cells: [
+                                              DataCell(Text(row.lastName)),
+                                              DataCell(Text(row.firstName)),
+                                              DataCell(Text(_birthDateFormat.format(row.birthDate))),
+                                              DataCell(Text(row.dni)),
+                                              DataCell(Text(row.tournamentName)),
+                                              DataCell(Text(row.categoryName)),
+                                            ]),
+                                          )
+                                          .toList(),
+                                    ),
+                                  ),
                                 ),
                               ),
-              ),
+                            ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
+
 }
 
 class _RosterFilterOption {
