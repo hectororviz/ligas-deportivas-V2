@@ -27,6 +27,8 @@ class TournamentPlayersPage extends ConsumerStatefulWidget {
 }
 
 class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
+  static const int _freeClubFilterValue = -1;
+
   final _dniController = TextEditingController();
   final _dateFormatter = DateFormat('dd/MM/yyyy');
 
@@ -45,7 +47,7 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
   bool _loadingClubs = false;
   bool _searchingPlayers = false;
 
-  bool _onlyFree = false;
+  int? _selectedAssignedClubFilter;
   Timer? _dniSearchDebounce;
 
   String? _loadError;
@@ -115,6 +117,7 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
       _selectedLeagueId = leagueId;
       _selectedTournamentId = null;
       _selectedCategoryId = null;
+      _selectedAssignedClubFilter = null;
       _tournaments = [];
       _categories = [];
       _clubs = [];
@@ -163,6 +166,7 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
     setState(() {
       _selectedTournamentId = tournamentId;
       _selectedCategoryId = null;
+      _selectedAssignedClubFilter = null;
       _categories = [];
       _clubs = [];
       _dataSource = null;
@@ -234,7 +238,7 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
       _selectedTournamentId != null ||
       _selectedCategoryId != null ||
       _dniController.text.trim().isNotEmpty ||
-      _onlyFree;
+      _selectedAssignedClubFilter != null;
 
   void _scheduleDniSearch() {
     _dniSearchDebounce?.cancel();
@@ -277,7 +281,10 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
         '/players/search',
         queryParameters: {
           if (dni.isNotEmpty) 'dni': dni,
-          if (_onlyFree) 'onlyFree': true,
+          if (_selectedAssignedClubFilter == _freeClubFilterValue) 'onlyFree': true,
+          if (_selectedAssignedClubFilter != null &&
+              _selectedAssignedClubFilter != _freeClubFilterValue)
+            'clubId': _selectedAssignedClubFilter,
           if (categoryId != null) 'categoryId': categoryId,
           if (tournamentId != null) 'tournamentId': tournamentId,
         },
@@ -534,18 +541,27 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
           ),
         ),
         TableFilterField(
-          label: ' ',
-          width: 160,
-          child: SizedBox(
-            height: 48,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Checkbox(
-                  value: _onlyFree,
-                  onChanged: (value) {
+          label: 'Club asignado',
+          width: 260,
+          child: DropdownButtonFormField<int>(
+            value: _selectedAssignedClubFilter,
+            items: [
+              const DropdownMenuItem<int>(
+                value: _freeClubFilterValue,
+                child: Text('Libres'),
+              ),
+              ..._clubs.map(
+                (club) => DropdownMenuItem<int>(
+                  value: club.id,
+                  child: Text(club.displayName),
+                ),
+              ),
+            ],
+            onChanged: _selectedTournamentId == null || _loadingClubs
+                ? null
+                : (value) {
                     setState(() {
-                      _onlyFree = value ?? false;
+                      _selectedAssignedClubFilter = value;
                       _playersError = null;
                       _dataSource = null;
                     });
@@ -553,9 +569,8 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
                       unawaited(_searchPlayers());
                     }
                   },
-                ),
-                const Text('Libres'),
-              ],
+            decoration: const InputDecoration(
+              hintText: 'Todos',
             ),
           ),
         ),

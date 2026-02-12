@@ -209,19 +209,24 @@ export class PlayersService {
 
   async searchByDniAndCategory(query: SearchPlayersDto) {
     const trimmedDni = query.dni?.trim();
-    const { tournamentId, categoryId } = query;
+    const { tournamentId, categoryId, clubId } = query;
 
     if (
       !trimmedDni &&
       tournamentId === undefined &&
       categoryId === undefined &&
-      query.onlyFree !== true
+      query.onlyFree !== true &&
+      clubId === undefined
     ) {
       throw new BadRequestException('Debe enviar al menos un filtro de búsqueda.');
     }
 
-    if (query.onlyFree === true && tournamentId === undefined) {
-      throw new BadRequestException('El filtro de jugadores libres requiere un torneo.');
+    if (query.onlyFree === true && clubId !== undefined) {
+      throw new BadRequestException('No se puede combinar club y jugadores libres.');
+    }
+
+    if ((query.onlyFree === true || clubId !== undefined) && tournamentId === undefined) {
+      throw new BadRequestException('El filtro por club requiere un torneo.');
     }
 
     let category: {
@@ -285,6 +290,13 @@ export class PlayersService {
     if (onlyFree) {
       where.playerTournamentClubs = {
         none: { tournamentId },
+      };
+    } else if (clubId !== undefined) {
+      where.playerTournamentClubs = {
+        some: {
+          tournamentId,
+          clubId,
+        },
       };
     }
 
