@@ -156,7 +156,10 @@ export class MatchPosterService {
       awayClub?: { name?: string | null; shortName?: string | null; logoKey?: string | null; logoUrl?: string | null } | null;
       categories: {
         kickoffTime: string | null;
-        tournamentCategory?: { category?: { name?: string | null } | null } | null;
+        tournamentCategory?: {
+          kickoffTime?: string | null;
+          category?: { name?: string | null } | null;
+        } | null;
       }[];
     },
     template: PosterTemplate,
@@ -166,17 +169,32 @@ export class MatchPosterService {
     const dateLabel = matchDate ? dayjs(matchDate).format('DD/MM/YYYY') : 'Fecha a confirmar';
     const dayName = matchDate ? dayjs(matchDate).format('dddd') : '';
     const dayNameNormalized = dayName ? `${dayName[0].toUpperCase()}${dayName.slice(1)}` : '';
-    const timeSlots = match.categories
+    const sortedCategories = [...match.categories].sort((left, right) => {
+      const leftKickoffTime = left.tournamentCategory?.kickoffTime || left.kickoffTime || '99:99';
+      const rightKickoffTime = right.tournamentCategory?.kickoffTime || right.kickoffTime || '99:99';
+
+      const byKickoffTime = leftKickoffTime.localeCompare(rightKickoffTime);
+      if (byKickoffTime !== 0) {
+        return byKickoffTime;
+      }
+
+      const leftCategory = left.tournamentCategory?.category?.name || '';
+      const rightCategory = right.tournamentCategory?.category?.name || '';
+      return leftCategory.localeCompare(rightCategory, 'es-AR');
+    });
+
+    const timeSlots = sortedCategories
       .map((category) => {
+        const kickoffTime = category.tournamentCategory?.kickoffTime || category.kickoffTime;
         const name = category.tournamentCategory?.category?.name ?? '';
-        if (!category.kickoffTime && !name) {
+        if (!kickoffTime && !name) {
           return '';
         }
-        if (category.kickoffTime && name) {
-          return `${category.kickoffTime} Hs - ${name}`;
+        if (kickoffTime && name) {
+          return `${kickoffTime} Hs - ${name}`;
         }
-        if (category.kickoffTime) {
-          return `${category.kickoffTime} Hs`;
+        if (kickoffTime) {
+          return `${kickoffTime} Hs`;
         }
         return name;
       })
