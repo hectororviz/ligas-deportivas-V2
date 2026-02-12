@@ -27,6 +27,8 @@ class TournamentPlayersPage extends ConsumerStatefulWidget {
 }
 
 class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
+  static const int _freeClubFilterValue = -1;
+
   final _dniController = TextEditingController();
   final _dateFormatter = DateFormat('dd/MM/yyyy');
 
@@ -45,7 +47,8 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
   bool _loadingClubs = false;
   bool _searchingPlayers = false;
 
-  bool _onlyFree = false;
+  int? _selectedAssignedClubFilter;
+  Timer? _dniSearchDebounce;
 
   String? _loadError;
   String? _categoriesError;
@@ -65,6 +68,7 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
 
   @override
   void dispose() {
+    _dniSearchDebounce?.cancel();
     _dniController.dispose();
     super.dispose();
   }
@@ -113,6 +117,7 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
       _selectedLeagueId = leagueId;
       _selectedTournamentId = null;
       _selectedCategoryId = null;
+      _selectedAssignedClubFilter = null;
       _tournaments = [];
       _categories = [];
       _clubs = [];
@@ -161,6 +166,7 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
     setState(() {
       _selectedTournamentId = tournamentId;
       _selectedCategoryId = null;
+      _selectedAssignedClubFilter = null;
       _categories = [];
       _clubs = [];
       _dataSource = null;
@@ -228,14 +234,37 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
     }
   }
 
+  bool get _hasAtLeastOnePlayerFilter =>
+      _selectedTournamentId != null ||
+      _selectedCategoryId != null ||
+      _dniController.text.trim().isNotEmpty ||
+      _selectedAssignedClubFilter != null;
+
+  void _scheduleDniSearch() {
+    _dniSearchDebounce?.cancel();
+    _dniSearchDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (!mounted) {
+        return;
+      }
+      if (!_hasAtLeastOnePlayerFilter) {
+        setState(() {
+          _playersError = null;
+          _dataSource = null;
+        });
+        return;
+      }
+      unawaited(_searchPlayers());
+    });
+  }
+
   Future<void> _searchPlayers() async {
     final tournamentId = _selectedTournamentId;
     final categoryId = _selectedCategoryId;
     final dni = _dniController.text.trim();
 
-    if (tournamentId == null || categoryId == null) {
+    if (!_hasAtLeastOnePlayerFilter) {
       setState(() {
-        _playersError = 'Selecciona liga, torneo y categoría antes de buscar.';
+        _playersError = 'Ingresa al menos un filtro para buscar jugadores.';
       });
       return;
     }
@@ -252,9 +281,12 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
         '/players/search',
         queryParameters: {
           if (dni.isNotEmpty) 'dni': dni,
-          if (_onlyFree) 'onlyFree': true,
-          'categoryId': categoryId,
-          'tournamentId': tournamentId,
+          if (_selectedAssignedClubFilter == _freeClubFilterValue) 'onlyFree': true,
+          if (_selectedAssignedClubFilter != null &&
+              _selectedAssignedClubFilter != _freeClubFilterValue)
+            'clubId': _selectedAssignedClubFilter,
+          if (categoryId != null) 'categoryId': categoryId,
+          if (tournamentId != null) 'tournamentId': tournamentId,
         },
       );
       final data = response.data ?? [];
@@ -316,6 +348,12 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
     final tournamentId = _selectedTournamentId;
     final categoryId = _selectedCategoryId;
     if (tournamentId == null || categoryId == null) {
+      setState(() {
+        _playersError =
+            'Para asignar un club, selecciona también torneo y categoría.';
+      });
+      row.selectedClubId = row.assignedClubId;
+      _dataSource?.notifyListeners();
       return;
     }
 
@@ -408,7 +446,7 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
       children: [
         TableFilterField(
           label: 'Liga',
-          width: 260,
+          width: 220,
           child: DropdownButtonFormField<int>(
             value: _selectedLeagueId,
             items: _leagues
@@ -434,7 +472,7 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
         ),
         TableFilterField(
           label: 'Torneo',
-          width: 280,
+          width: 240,
           child: DropdownButtonFormField<int>(
             value: _selectedTournamentId,
             items: _tournaments
@@ -460,17 +498,21 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
         ),
         TableFilterField(
           label: 'Categoría',
-          width: 260,
-          child: DropdownButtonFormField<int>(
+          width: 200,
+          child: DropdownButtonFormField<int?>(
             value: _selectedCategoryId,
-            items: _categories
-                .map(
-                  (category) => DropdownMenuItem<int>(
-                    value: category.id,
-                    child: Text(category.label),
-                  ),
-                )
-                .toList(),
+            items: [
+              const DropdownMenuItem<int?>(
+                value: null,
+                child: Text('Todas'),
+              ),
+              ..._categories.map(
+                (category) => DropdownMenuItem<int?>(
+                  value: category.id,
+                  child: Text(category.label),
+                ),
+              ),
+            ],
             onChanged: _loadingCategories || _selectedTournamentId == null
                 ? null
                 : (value) {
@@ -479,6 +521,9 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
                       _playersError = null;
                       _dataSource = null;
                     });
+                    if (_hasAtLeastOnePlayerFilter) {
+                      unawaited(_searchPlayers());
+                    }
                   },
             decoration: const InputDecoration(
               hintText: 'Seleccionar categoría',
@@ -487,7 +532,7 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
         ),
         TableFilterField(
           label: 'DNI',
-          width: 220,
+          width: 180,
           child: TextField(
             controller: _dniController,
             keyboardType: TextInputType.number,
@@ -495,47 +540,58 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
             decoration: const InputDecoration(
               hintText: 'Ingresar DNI (opcional)',
             ),
+            onChanged: (_) => _scheduleDniSearch(),
             onSubmitted: (_) => _searchPlayers(),
           ),
         ),
         TableFilterField(
-          label: ' ',
-          width: 160,
-          child: SizedBox(
-            height: 48,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Checkbox(
-                  value: _onlyFree,
-                  onChanged: (value) {
+          label: 'Club asignado',
+          width: 220,
+          child: DropdownButtonFormField<int>(
+            value: _selectedAssignedClubFilter,
+            items: [
+              const DropdownMenuItem<int>(
+                value: _freeClubFilterValue,
+                child: Text('Libres'),
+              ),
+              ..._clubs.map(
+                (club) => DropdownMenuItem<int>(
+                  value: club.id,
+                  child: Text(club.displayName),
+                ),
+              ),
+            ],
+            onChanged: _selectedTournamentId == null || _loadingClubs
+                ? null
+                : (value) {
                     setState(() {
-                      _onlyFree = value ?? false;
+                      _selectedAssignedClubFilter = value;
                       _playersError = null;
                       _dataSource = null;
                     });
+                    if (_hasAtLeastOnePlayerFilter) {
+                      unawaited(_searchPlayers());
+                    }
                   },
-                ),
-                const Text('Libres'),
-              ],
+            decoration: const InputDecoration(
+              hintText: 'Todos',
             ),
           ),
         ),
         TableFilterField(
           label: ' ',
-          width: 160,
+          width: 64,
           child: SizedBox(
             height: 48,
-            child: FilledButton.icon(
+            child: FilledButton(
               onPressed: _searchingPlayers ? null : _searchPlayers,
-              icon: _searchingPlayers
+              child: _searchingPlayers
                   ? const SizedBox(
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.search),
-              label: const Text('Buscar'),
             ),
           ),
         ),
@@ -611,7 +667,7 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
                           child: Text(
                             _searchingPlayers
                                 ? 'Buscando jugadores...'
-                                : 'Selecciona liga, torneo y categoría para mostrar jugadores.',
+                                : 'Ingresa uno o más filtros para mostrar jugadores.',
                             style: theme.textTheme.bodyMedium,
                           ),
                         ),
