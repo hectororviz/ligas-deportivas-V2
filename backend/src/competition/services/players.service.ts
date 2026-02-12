@@ -9,6 +9,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { spawn } from 'node:child_process';
 import { Action, Gender, Module, Prisma, Scope } from '@prisma/client';
+import sharp from 'sharp';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { RequestUser } from '../../common/interfaces/request-user.interface';
@@ -102,7 +103,9 @@ export class PlayersService {
 
     if (!decoderCommand) {
       if (debugEnabled) {
-        this.logger.warn('DNI scan decoder unavailable (DNI_SCAN_DECODER_COMMAND is not configured).');
+        this.logger.warn(
+          'DNI scan decoder unavailable (DNI_SCAN_DECODER_COMMAND is not configured).',
+        );
       }
       throw new UnprocessableEntityException('No se pudo decodificar el PDF417.');
     }
@@ -110,40 +113,110 @@ export class PlayersService {
     const [binary, ...args] = decoderCommand.split(/\s+/);
 
     try {
-      const stdout = await new Promise<string>((resolve, reject) => {
-        const child = spawn(binary, args, { stdio: ['pipe', 'pipe', 'ignore'] });
-        const chunks: Buffer[] = [];
+      const candidates = await this.buildDecodeCandidates(imageBuffer);
 
-        child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
-        child.on('error', reject);
-        child.on('close', (code) => {
-          if (code === 0) {
-            resolve(Buffer.concat(chunks).toString('utf-8'));
-            return;
+      for (let index = 0; index < candidates.length; index += 1) {
+        const candidate = candidates[index];
+        try {
+          const stdout = await this.runDecoder(binary, args, candidate);
+          const payload = stdout.trim();
+          if (!payload) {
+            throw new Error('empty decoder output');
           }
-          reject(new Error(`decoder exited with code ${code}`));
-        });
 
-        child.stdin.write(imageBuffer);
-        child.stdin.end();
-      });
+          if (debugEnabled) {
+            this.logger.log(`DNI scan decoded ok on variant ${index + 1}/${candidates.length}.`);
+          }
 
-      const payload = stdout.trim();
-      if (!payload) {
-        throw new Error('empty decoder output');
+          return payload;
+        } catch {
+          if (debugEnabled) {
+            this.logger.warn(
+              `DNI scan decoder failed on variant ${index + 1}/${candidates.length}.`,
+            );
+          }
+        }
       }
 
-      if (debugEnabled) {
-        this.logger.log('DNI scan decoded ok.');
-      }
-
-      return payload;
+      throw new Error('all decoder variants failed');
     } catch {
       if (debugEnabled) {
         this.logger.warn('DNI scan failed to decode.');
       }
       throw new UnprocessableEntityException('No se pudo decodificar el PDF417.');
     }
+  }
+
+  private runDecoder(binary: string, args: string[], input: Buffer): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
+      const child = spawn(binary, args, { stdio: ['pipe', 'pipe', 'ignore'] });
+      const chunks: Buffer[] = [];
+
+      child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
+      child.on('error', reject);
+      child.on('close', (code) => {
+        if (code === 0) {
+          resolve(Buffer.concat(chunks).toString('utf-8'));
+          return;
+        }
+        reject(new Error(`decoder exited with code ${code}`));
+      });
+
+      child.stdin.write(input);
+      child.stdin.end();
+    });
+  }
+
+  private async buildDecodeCandidates(imageBuffer: Buffer): Promise<Buffer[]> {
+    const candidates: Buffer[] = [imageBuffer];
+    const image = sharp(imageBuffer, { failOn: 'none' }).rotate();
+    const metadata = await image.metadata();
+
+    const pushUnique = (buffer: Buffer) => {
+      if (!candidates.some((candidate) => candidate.equals(buffer))) {
+        candidates.push(buffer);
+      }
+    };
+
+    pushUnique(await image.clone().normalize().sharpen().png().toBuffer());
+    pushUnique(await image.clone().greyscale().normalize().threshold(165).png().toBuffer());
+
+    if (metadata.width && metadata.height) {
+      pushUnique(
+        await image
+          .clone()
+          .resize({
+            width: metadata.width * 2,
+            height: metadata.height * 2,
+            kernel: sharp.kernel.nearest,
+          })
+          .normalize()
+          .sharpen()
+          .png()
+          .toBuffer(),
+      );
+
+      const cropTop = Math.floor(metadata.height * 0.45);
+      const cropHeight = metadata.height - cropTop;
+      if (cropHeight > 80) {
+        pushUnique(
+          await image
+            .clone()
+            .extract({ left: 0, top: cropTop, width: metadata.width, height: cropHeight })
+            .resize({
+              width: metadata.width * 2,
+              height: cropHeight * 2,
+              kernel: sharp.kernel.nearest,
+            })
+            .normalize()
+            .sharpen()
+            .png()
+            .toBuffer(),
+        );
+      }
+    }
+
+    return candidates;
   }
 
   async findAll(query: ListPlayersDto, user?: RequestUser) {
