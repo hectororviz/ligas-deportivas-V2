@@ -12,7 +12,7 @@ import { randomUUID } from 'node:crypto';
 import { unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Action, Gender, Module, Prisma, Scope } from '@prisma/client';
-import sharp from 'sharp';
+import * as sharp from 'sharp';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { RequestUser } from '../../common/interfaces/request-user.interface';
