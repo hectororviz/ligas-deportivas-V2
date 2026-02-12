@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Gender, Prisma, TournamentStatus, ZoneStatus } from '@prisma/client';
 import { Express } from 'express';
 
@@ -13,6 +18,8 @@ import { ListRosterPlayersDto } from '../dto/list-roster-players.dto';
 import { UpdateRosterPlayersDto } from '../dto/update-roster-players.dto';
 import { JoinTournamentDto } from '../dto/join-tournament.dto';
 import { StorageService } from '../../storage/storage.service';
+import { ListClubRosterDto } from '../dto/list-club-roster.dto';
+import { RequestUser } from '../../common/interfaces/request-user.interface';
 
 const CLUB_LOGO_MIN_SIZE = 200;
 const CLUB_LOGO_MAX_SIZE = 500;
@@ -509,6 +516,173 @@ export class ClubsService {
         enabled: enabledIds.has(player.id),
       })),
     };
+  }
+
+  async listClubRoster(clubId: number, query: ListClubRosterDto, user: RequestUser) {
+    await this.ensureRosterAccess(clubId, user);
+
+    const club = await this.prisma.club.findUnique({
+      where: { id: clubId },
+      select: { id: true, name: true },
+    });
+    if (!club) {
+      throw new NotFoundException('Club no encontrado');
+    }
+
+    const teams = await this.prisma.team.findMany({
+      where: {
+        clubId,
+        tournamentCategory: {
+          enabled: true,
+        },
+      },
+      select: {
+        tournamentCategory: {
+          select: {
+            category: {
+              select: { id: true, name: true },
+            },
+            tournament: {
+              select: { id: true, name: true, year: true },
+            },
+          },
+        },
+      },
+      orderBy: [
+        { tournamentCategory: { tournament: { year: 'desc' } } },
+        { tournamentCategory: { tournament: { name: 'asc' } } },
+        { tournamentCategory: { category: { name: 'asc' } } },
+      ],
+    });
+
+    const tournamentsMap = new Map<number, { id: number; name: string }>();
+    for (const team of teams) {
+      const tournament = team.tournamentCategory.tournament;
+      tournamentsMap.set(tournament.id, {
+        id: tournament.id,
+        name: `${tournament.name} ${tournament.year}`.trim(),
+      });
+    }
+
+    const selectedTournamentId =
+      query.tournamentId ?? (tournamentsMap.size > 0 ? Array.from(tournamentsMap.values())[0].id : null);
+
+    const categoriesMap = new Map<number, { id: number; name: string }>();
+    for (const team of teams) {
+      const tournament = team.tournamentCategory.tournament;
+      const category = team.tournamentCategory.category;
+      if (selectedTournamentId != null && selectedTournamentId == tournament.id) {
+        categoriesMap.set(category.id, {
+          id: category.id,
+          name: category.name,
+        });
+      }
+    }
+
+    if (query.categoryId != null && !categoriesMap.has(query.categoryId)) {
+      throw new BadRequestException('La categoría seleccionada no pertenece al torneo filtrado.');
+    }
+
+    if (selectedTournamentId == null) {
+      return {
+        club,
+        selectedTournamentId: null,
+        filters: {
+          tournaments: [],
+          categories: [],
+        },
+        rows: [],
+      };
+    }
+
+    const rosterEntries = await this.prisma.roster.findMany({
+      where: {
+        clubId,
+        tournamentCategory: {
+          tournamentId: selectedTournamentId,
+          ...(query.categoryId != null ? { categoryId: query.categoryId } : {}),
+        },
+      },
+      include: {
+        tournamentCategory: {
+          include: {
+            tournament: {
+              select: { id: true, name: true, year: true },
+            },
+            category: {
+              select: { id: true, name: true },
+            },
+          },
+        },
+        players: {
+          include: {
+            player: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                birthDate: true,
+                dni: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: [{ tournamentCategory: { category: { name: 'asc' } } }, { id: 'asc' }],
+    });
+
+    const rosterRows = rosterEntries
+      .flatMap((entry) => {
+        const tournament = entry.tournamentCategory.tournament;
+        const category = entry.tournamentCategory.category;
+        return entry.players.map(({ player }) => ({
+          playerId: player.id,
+          firstName: player.firstName,
+          lastName: player.lastName,
+          birthDate: player.birthDate.toISOString(),
+          dni: player.dni,
+          tournamentId: tournament.id,
+          tournamentName: `${tournament.name} ${tournament.year}`.trim(),
+          categoryId: category.id,
+          categoryName: category.name,
+        }));
+      })
+      .sort((a, b) => {
+        const byLastName = a.lastName.localeCompare(b.lastName);
+        if (byLastName !== 0) {
+          return byLastName;
+        }
+        const byFirstName = a.firstName.localeCompare(b.firstName);
+        if (byFirstName !== 0) {
+          return byFirstName;
+        }
+        return a.categoryName.localeCompare(b.categoryName);
+      });
+
+    return {
+      club,
+      selectedTournamentId,
+      filters: {
+        tournaments: Array.from(tournamentsMap.values()),
+        categories: Array.from(categoriesMap.values()),
+      },
+      rows: rosterRows,
+    };
+  }
+
+  private async ensureRosterAccess(clubId: number, user: RequestUser) {
+    const allowedRoles = new Set(['ADMIN', 'COLLABORATOR', 'DELEGATE']);
+    const hasAllowedRole = user.roles.some((role) => allowedRoles.has(role));
+
+    if (!hasAllowedRole) {
+      throw new ForbiddenException('No tenés permisos para consultar planteles.');
+    }
+
+    if (user.roles.includes('DELEGATE')) {
+      if (!user.club || user.club.id !== clubId) {
+        throw new ForbiddenException('Solo podés consultar el plantel de tu club asignado.');
+      }
+    }
   }
 
   async updateRosterPlayers(
