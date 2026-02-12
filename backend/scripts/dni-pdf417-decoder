@@ -47,20 +47,44 @@ if [[ -z "$ZXING_BIN" ]]; then
 fi
 
 OUTPUT=""
-if "$ZXING_BIN" --help 2>&1 | grep -q -- '--single'; then
-  OUTPUT="$($ZXING_BIN --format PDF417 --single "$TMP_IMAGE" 2>&1)" || {
-    echo "$OUTPUT" >&2
-    exit 1
-  }
-else
-  OUTPUT="$($ZXING_BIN --format PDF417 "$TMP_IMAGE" 2>&1)" || {
-    echo "$OUTPUT" >&2
-    exit 1
-  }
+ZXING_BASENAME="$(basename "$ZXING_BIN")"
+ZXING_ARGS=("$TMP_IMAGE")
+
+case "$ZXING_BASENAME" in
+  ZXingReader)
+    # Legacy CLI: only accepts `ZXingReader <imagefile>`.
+    ;;
+  ReadBarcodes)
+    ZXING_ARGS=(--format PDF417 --single "$TMP_IMAGE")
+    ;;
+  zxingcpp)
+    ZXING_ARGS=(--format PDF417 "$TMP_IMAGE")
+    ;;
+  *)
+    # Best effort for newer zxing-cpp wrappers.
+    ZXING_ARGS=(--format PDF417 "$TMP_IMAGE")
+    ;;
+esac
+
+set +e
+OUTPUT="$($ZXING_BIN "${ZXING_ARGS[@]}" 2>&1)"
+ZXING_EXIT_CODE=$?
+set -e
+
+if [[ $ZXING_EXIT_CODE -ne 0 ]]; then
+  echo "$OUTPUT" >&2
+  exit 1
+fi
+
+if [[ "${DNI_DECODER_DEBUG:-0}" == "1" ]]; then
+  printf '%s\n' "$OUTPUT" | head -n 10 | sed 's/^/[dni-pdf417-decoder] /' >&2
 fi
 
 PAYLOAD="$(printf '%s\n' "$OUTPUT" | awk '
+  /@/ { sub(/^[^@]*/, ""); print; exit }
   /^Text[[:space:]]*:/ { sub(/^Text[[:space:]]*:[[:space:]]*/, ""); print; exit }
+  /^Content[[:space:]]*:/ { sub(/^Content[[:space:]]*:[[:space:]]*/, ""); print; exit }
+  /^Raw[[:space:]]*text[[:space:]]*:/ { sub(/^Raw[[:space:]]*text[[:space:]]*:[[:space:]]*/, ""); print; exit }
   /^Payload[[:space:]]*:/ { sub(/^Payload[[:space:]]*:[[:space:]]*/, ""); print; exit }
   /^[^[:space:]:][^:]*$/ { print; exit }
 ')"
