@@ -19,7 +19,7 @@ export class CreateCategoryDto {
   gender!: Gender;
 
   @IsInt()
-  @Min(1)
+  @Min(0)
   minPlayers!: number;
 
   @IsBoolean()
