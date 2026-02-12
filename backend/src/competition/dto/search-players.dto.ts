@@ -1,20 +1,21 @@
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsInt, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class SearchPlayersDto {
   @IsOptional()
   @IsString()
-  @MinLength(6)
   @MaxLength(20)
   dni?: string;
 
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
-  categoryId!: number;
+  categoryId?: number;
 
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
-  tournamentId!: number;
+  tournamentId?: number;
 
   @IsOptional()
   @Transform(({ value }) => {

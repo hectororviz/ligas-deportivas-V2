@@ -46,6 +46,7 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
   bool _searchingPlayers = false;
 
   bool _onlyFree = false;
+  Timer? _dniSearchDebounce;
 
   String? _loadError;
   String? _categoriesError;
@@ -65,6 +66,7 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
 
   @override
   void dispose() {
+    _dniSearchDebounce?.cancel();
     _dniController.dispose();
     super.dispose();
   }
@@ -228,14 +230,37 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
     }
   }
 
+  bool get _hasAtLeastOnePlayerFilter =>
+      _selectedTournamentId != null ||
+      _selectedCategoryId != null ||
+      _dniController.text.trim().isNotEmpty ||
+      _onlyFree;
+
+  void _scheduleDniSearch() {
+    _dniSearchDebounce?.cancel();
+    _dniSearchDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (!mounted) {
+        return;
+      }
+      if (!_hasAtLeastOnePlayerFilter) {
+        setState(() {
+          _playersError = null;
+          _dataSource = null;
+        });
+        return;
+      }
+      unawaited(_searchPlayers());
+    });
+  }
+
   Future<void> _searchPlayers() async {
     final tournamentId = _selectedTournamentId;
     final categoryId = _selectedCategoryId;
     final dni = _dniController.text.trim();
 
-    if (tournamentId == null || categoryId == null) {
+    if (!_hasAtLeastOnePlayerFilter) {
       setState(() {
-        _playersError = 'Selecciona liga, torneo y categoría antes de buscar.';
+        _playersError = 'Ingresa al menos un filtro para buscar jugadores.';
       });
       return;
     }
@@ -253,8 +278,8 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
         queryParameters: {
           if (dni.isNotEmpty) 'dni': dni,
           if (_onlyFree) 'onlyFree': true,
-          'categoryId': categoryId,
-          'tournamentId': tournamentId,
+          if (categoryId != null) 'categoryId': categoryId,
+          if (tournamentId != null) 'tournamentId': tournamentId,
         },
       );
       final data = response.data ?? [];
@@ -316,6 +341,12 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
     final tournamentId = _selectedTournamentId;
     final categoryId = _selectedCategoryId;
     if (tournamentId == null || categoryId == null) {
+      setState(() {
+        _playersError =
+            'Para asignar un club, selecciona también torneo y categoría.';
+      });
+      row.selectedClubId = row.assignedClubId;
+      _dataSource?.notifyListeners();
       return;
     }
 
@@ -479,6 +510,9 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
                       _playersError = null;
                       _dataSource = null;
                     });
+                    if (_hasAtLeastOnePlayerFilter) {
+                      unawaited(_searchPlayers());
+                    }
                   },
             decoration: const InputDecoration(
               hintText: 'Seleccionar categoría',
@@ -495,6 +529,7 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
             decoration: const InputDecoration(
               hintText: 'Ingresar DNI (opcional)',
             ),
+            onChanged: (_) => _scheduleDniSearch(),
             onSubmitted: (_) => _searchPlayers(),
           ),
         ),
@@ -514,6 +549,9 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
                       _playersError = null;
                       _dataSource = null;
                     });
+                    if (_hasAtLeastOnePlayerFilter) {
+                      unawaited(_searchPlayers());
+                    }
                   },
                 ),
                 const Text('Libres'),
@@ -611,7 +649,7 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
                           child: Text(
                             _searchingPlayers
                                 ? 'Buscando jugadores...'
-                                : 'Selecciona liga, torneo y categoría para mostrar jugadores.',
+                                : 'Ingresa uno o más filtros para mostrar jugadores.',
                             style: theme.textTheme.bodyMedium,
                           ),
                         ),
