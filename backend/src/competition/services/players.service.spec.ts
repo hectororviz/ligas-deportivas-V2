@@ -1,4 +1,8 @@
-import { InternalServerErrorException, UnprocessableEntityException } from '@nestjs/common';
+import {
+  InternalServerErrorException,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import { PrismaService } from '../../prisma/prisma.service';
@@ -7,11 +11,14 @@ import { PlayersService } from './players.service';
 describe('PlayersService decoder wrapper', () => {
   const prismaMock = {} as PrismaService;
 
-  const buildService = (decoderCommand?: string) => {
+  const buildService = (decoderCommand?: string, scanDebug?: string) => {
     const configMock = {
       get: jest.fn((key: string) => {
         if (key === 'DNI_SCAN_DECODER_COMMAND') {
           return decoderCommand;
+        }
+        if (key === 'SCAN_DEBUG') {
+          return scanDebug;
         }
         return undefined;
       }),
@@ -33,38 +40,38 @@ describe('PlayersService decoder wrapper', () => {
   it('throws 500 when decoder binary is unavailable', async () => {
     const service = buildService('/definitely/missing-decoder --format PDF417');
     mockPreprocess(service);
-    jest.spyOn(service as never, 'buildDecodeStrategies' as never).mockResolvedValue([
-      { name: 'raw', rotation: 0, buffer: Buffer.from('img') },
-    ] as never);
+    jest
+      .spyOn(service as never, 'buildDecodeStrategies' as never)
+      .mockResolvedValue([{ name: 'raw', rotation: 0, buffer: Buffer.from('img') }] as never);
 
-    await expect((service as any).decodePdf417Payload(Buffer.from('input'), Date.now())).rejects.toBeInstanceOf(
-      InternalServerErrorException,
-    );
+    await expect(
+      (service as any).decodePdf417Payload(Buffer.from('input'), Date.now()),
+    ).rejects.toBeInstanceOf(InternalServerErrorException);
   });
 
   it('returns 422 when decoder runs but cannot decode payload', async () => {
     const service = buildService();
     mockPreprocess(service);
-    jest.spyOn(service as never, 'buildDecodeStrategies' as never).mockResolvedValue([
-      { name: 'raw', rotation: 0, buffer: Buffer.from('img') },
-    ] as never);
+    jest
+      .spyOn(service as never, 'buildDecodeStrategies' as never)
+      .mockResolvedValue([{ name: 'raw', rotation: 0, buffer: Buffer.from('img') }] as never);
     jest.spyOn(service as never, 'runDecoder' as never).mockResolvedValue({
       exitCode: 0,
       stdout: '',
       stderr: '',
     } as never);
 
-    await expect((service as any).decodePdf417Payload(Buffer.from('input'), Date.now())).rejects.toBeInstanceOf(
-      UnprocessableEntityException,
-    );
+    await expect(
+      (service as any).decodePdf417Payload(Buffer.from('input'), Date.now()),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
   });
 
   it('uses default decoder command when env var is missing', async () => {
     const service = buildService();
     mockPreprocess(service);
-    jest.spyOn(service as never, 'buildDecodeStrategies' as never).mockResolvedValue([
-      { name: 'raw', rotation: 0, buffer: Buffer.from('img') },
-    ] as never);
+    jest
+      .spyOn(service as never, 'buildDecodeStrategies' as never)
+      .mockResolvedValue([{ name: 'raw', rotation: 0, buffer: Buffer.from('img') }] as never);
 
     const runDecoderSpy = jest.spyOn(service as never, 'runDecoder' as never).mockResolvedValue({
       exitCode: 0,
@@ -72,7 +79,9 @@ describe('PlayersService decoder wrapper', () => {
       stderr: '',
     } as never);
 
-    await expect((service as any).decodePdf417Payload(Buffer.from('input'), Date.now())).resolves.toEqual('@payload@');
+    await expect(
+      (service as any).decodePdf417Payload(Buffer.from('input'), Date.now()),
+    ).resolves.toEqual('@payload@');
     expect(runDecoderSpy).toHaveBeenCalledWith(
       {
         binary: '/usr/local/bin/dni-pdf417-decoder',
@@ -88,9 +97,9 @@ describe('PlayersService decoder wrapper', () => {
   it('uses file input mode when command contains file placeholder token', async () => {
     const service = buildService('/usr/local/bin/dni-pdf417-decoder --format PDF417 {file}');
     mockPreprocess(service);
-    jest.spyOn(service as never, 'buildDecodeStrategies' as never).mockResolvedValue([
-      { name: 'raw', rotation: 0, buffer: Buffer.from('img') },
-    ] as never);
+    jest
+      .spyOn(service as never, 'buildDecodeStrategies' as never)
+      .mockResolvedValue([{ name: 'raw', rotation: 0, buffer: Buffer.from('img') }] as never);
 
     const runDecoderSpy = jest.spyOn(service as never, 'runDecoder' as never).mockResolvedValue({
       exitCode: 0,
@@ -98,7 +107,9 @@ describe('PlayersService decoder wrapper', () => {
       stderr: '',
     } as never);
 
-    await expect((service as any).decodePdf417Payload(Buffer.from('input'), Date.now())).resolves.toEqual('@payload@');
+    await expect(
+      (service as any).decodePdf417Payload(Buffer.from('input'), Date.now()),
+    ).resolves.toEqual('@payload@');
     expect(runDecoderSpy).toHaveBeenCalledWith(
       {
         binary: '/usr/local/bin/dni-pdf417-decoder',
@@ -109,5 +120,43 @@ describe('PlayersService decoder wrapper', () => {
       expect.any(Buffer),
       8000,
     );
+  });
+
+  it('requires SCAN_DEBUG=1 for diagnostic endpoint', async () => {
+    const service = buildService(undefined, '0');
+
+    await expect(
+      service.scanDniDiagnostic({
+        buffer: Buffer.from('img'),
+        mimetype: 'image/png',
+        size: 3,
+      } as Express.Multer.File),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('returns raw payload/output details in diagnostic mode', async () => {
+    const service = buildService(undefined, '1');
+    mockPreprocess(service);
+    jest
+      .spyOn(service as never, 'buildDecodeStrategies' as never)
+      .mockResolvedValue([{ name: 'raw', rotation: 0, buffer: Buffer.from('img') }] as never);
+    jest.spyOn(service as never, 'runDecoder' as never).mockResolvedValue({
+      exitCode: 0,
+      stdout: 'Text: @123456@DOE@JOHN@M@',
+      stderr: '',
+    } as never);
+
+    await expect(
+      service.scanDniDiagnostic({
+        buffer: Buffer.from('img'),
+        mimetype: 'image/png',
+        size: 3,
+      } as Express.Multer.File),
+    ).resolves.toMatchObject({
+      payloadRaw: '@123456@DOE@JOHN@M@',
+      decoderOutputRaw: 'Text: @123456@DOE@JOHN@M@',
+      payloadLength: 19,
+      tokensCount: 4,
+    });
   });
 });
