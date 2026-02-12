@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+FORMAT="PDF417"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --format)
+      if [[ $# -lt 2 ]]; then
+        echo "missing value for --format" >&2
+        exit 2
+      fi
+      FORMAT="$2"
+      shift 2
+      ;;
+    *)
+      echo "unsupported argument: $1" >&2
+      exit 2
+      ;;
+  esac
+done
+
+if [[ "$FORMAT" != "PDF417" ]]; then
+  echo "unsupported format: $FORMAT" >&2
+  exit 2
+fi
+
+TMP_IMAGE="/tmp/dni-pdf417-$(cat /proc/sys/kernel/random/uuid).png"
+cleanup() {
+  rm -f "$TMP_IMAGE"
+}
+trap cleanup EXIT
+
+cat > "$TMP_IMAGE"
+
+ZXING_BIN=""
+for candidate in /usr/bin/zxingcpp /usr/bin/ReadBarcodes /usr/bin/ZXingReader; do
+  if [[ -x "$candidate" ]]; then
+    ZXING_BIN="$candidate"
+    break
+  fi
+done
+
+if [[ -z "$ZXING_BIN" ]]; then
+  echo "zxing-cpp CLI not installed (expected one of: zxingcpp, ReadBarcodes, ZXingReader)" >&2
+  exit 127
+fi
+
+OUTPUT=""
+if "$ZXING_BIN" --help 2>&1 | grep -q -- '--single'; then
+  OUTPUT="$($ZXING_BIN --format PDF417 --single "$TMP_IMAGE" 2>&1)" || {
+    echo "$OUTPUT" >&2
+    exit 1
+  }
+else
+  OUTPUT="$($ZXING_BIN --format PDF417 "$TMP_IMAGE" 2>&1)" || {
+    echo "$OUTPUT" >&2
+    exit 1
+  }
+fi
+
+PAYLOAD="$(printf '%s\n' "$OUTPUT" | awk '
+  /^Text[[:space:]]*:/ { sub(/^Text[[:space:]]*:[[:space:]]*/, ""); print; exit }
+  /^Payload[[:space:]]*:/ { sub(/^Payload[[:space:]]*:[[:space:]]*/, ""); print; exit }
+  /^[^[:space:]:][^:]*$/ { print; exit }
+')"
+
+if [[ -z "$PAYLOAD" ]]; then
+  exit 1
+fi
+
+printf '%s' "$PAYLOAD"

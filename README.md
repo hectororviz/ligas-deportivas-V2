@@ -141,8 +141,10 @@ Si la API no puede conectarse al servidor SMTP, el panel te mostrará el error y
 - La imagen se procesa en memoria (multer `memoryStorage`) y se descarta inmediatamente.
 
 ### Variables de entorno relacionadas
-- `DNI_SCAN_DECODER_COMMAND`: comando externo para decodificar PDF417 (lee bytes de imagen por `stdin` y responde el payload por `stdout`).
+- `DNI_SCAN_DECODER_COMMAND`: comando externo para decodificar PDF417 (lee bytes de imagen por `stdin` y responde el payload por `stdout`). Si no se define, backend usa por defecto `/usr/local/bin/dni-pdf417-decoder --format PDF417`.
 - `DNI_SCAN_DEBUG=true`: loguea solo estado general (`ok/no`) de la decodificación, sin PII.
+
+En Docker, el backend instala `zxing-cpp-tools` y publica el wrapper `/usr/local/bin/dni-pdf417-decoder`, que usa archivos temporales únicamente en `/tmp` y los borra siempre al finalizar.
 
 ### Limitaciones prácticas
 - La lectura depende de enfoque, luz y reflejos del DNI.

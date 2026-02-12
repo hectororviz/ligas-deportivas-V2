@@ -26,8 +26,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   fontconfig \
   fonts-dejavu-core \
   fonts-liberation \
+  zxing-cpp-tools \
   && rm -rf /var/lib/apt/lists/* \
   && fc-cache -f
+
+ENV DNI_SCAN_DECODER_COMMAND="/usr/local/bin/dni-pdf417-decoder --format PDF417"
 
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules
@@ -37,10 +40,12 @@ COPY --from=builder /app/entrypoint-backend.sh ./entrypoint-backend.sh
 COPY --from=builder /app/entrypoint-migrate.sh ./entrypoint-migrate.sh
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/wait-for-migrations.sh ./wait-for-migrations.sh
+COPY ./scripts/dni-pdf417-decoder /usr/local/bin/dni-pdf417-decoder
 
 RUN npm prune --omit=dev
 
 RUN chmod +x /app/entrypoint-backend.sh /app/entrypoint-migrate.sh /app/wait-for-migrations.sh
+RUN chmod +x /usr/local/bin/dni-pdf417-decoder
 
 ENTRYPOINT ["/app/entrypoint-backend.sh"]
 CMD ["node", "dist/main.js"]

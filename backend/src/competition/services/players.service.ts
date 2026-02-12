@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  InternalServerErrorException,
   Injectable,
   Logger,
   NotFoundException,
@@ -22,6 +23,16 @@ import { SearchPlayersDto } from '../dto/search-players.dto';
 import { UpdatePlayerDto } from '../dto/update-player.dto';
 import { ScanDniResultDto } from '../dto/scan-dni-result.dto';
 import { parseDniPdf417Payload } from '../utils/dni-pdf417-parser';
+
+const DEFAULT_DNI_SCAN_DECODER_COMMAND = '/usr/local/bin/dni-pdf417-decoder --format PDF417';
+
+class DecoderUnavailableError extends Error {}
+
+type DecoderRunResult = {
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+};
 
 type PlayerWithMemberships = Prisma.PlayerGetPayload<{
   include: {
@@ -130,10 +141,7 @@ export class PlayersService {
       throw new UnsupportedMediaTypeException('Solo se admiten imágenes para escanear DNI.');
     }
 
-    const decoderCommand = this.configService.get<string>('DNI_SCAN_DECODER_COMMAND')?.trim();
-    if (!decoderCommand) {
-      throw new UnprocessableEntityException('No se pudo decodificar el PDF417.');
-    }
+    const decoderCommand = this.resolveDecoderCommand();
 
     const [binary, ...args] = decoderCommand.split(/\s+/);
     const strategies = await this.buildDecodeStrategies(file.buffer);
@@ -142,15 +150,22 @@ export class PlayersService {
     for (const strategy of strategies) {
       const startedAt = Date.now();
       try {
-        const stdout = await this.runDecoder(binary, args, strategy.buffer);
+        const result = await this.runDecoder(binary, args, strategy.buffer);
         const elapsedMs = Date.now() - startedAt;
-        const payload = stdout.trim();
+        const payload = result.stdout.trim();
         report.push({
           strategy: strategy.name,
           rotation: strategy.rotation,
-          success: payload.length > 0,
+          success: result.exitCode === 0 && payload.length > 0,
           elapsedMs,
-          error: payload.length > 0 ? null : 'empty decoder output',
+          exitCode: result.exitCode,
+          stderr: result.stderr,
+          error:
+            result.exitCode === 0
+              ? payload.length > 0
+                ? null
+                : 'empty decoder output'
+              : 'decoder exited with non-zero code',
         });
       } catch (error) {
         const elapsedMs = Date.now() - startedAt;
@@ -159,6 +174,8 @@ export class PlayersService {
           rotation: strategy.rotation,
           success: false,
           elapsedMs,
+          exitCode: null,
+          stderr: null,
           error: error instanceof Error ? error.message : 'unknown decoder error',
         });
       }
@@ -173,17 +190,8 @@ export class PlayersService {
   }
 
   private async decodePdf417Payload(imageBuffer: Buffer): Promise<string> {
-    const decoderCommand = this.configService.get<string>('DNI_SCAN_DECODER_COMMAND')?.trim();
+    const decoderCommand = this.resolveDecoderCommand();
     const debugEnabled = this.isScanDebugEnabled();
-
-    if (!decoderCommand) {
-      if (debugEnabled) {
-        this.logger.warn(
-          'DNI scan decoder unavailable (DNI_SCAN_DECODER_COMMAND is not configured).',
-        );
-      }
-      throw new UnprocessableEntityException('No se pudo decodificar el PDF417.');
-    }
 
     const [binary, ...args] = decoderCommand.split(/\s+/);
 
@@ -194,9 +202,14 @@ export class PlayersService {
         const strategy = strategies[index];
         const startedAt = Date.now();
         try {
-          const stdout = await this.runDecoder(binary, args, strategy.buffer);
+          const result = await this.runDecoder(binary, args, strategy.buffer);
           const elapsedMs = Date.now() - startedAt;
-          const payload = stdout.trim();
+          const payload = result.stdout.trim();
+          if (result.exitCode !== 0) {
+            throw new Error(
+              `decoder exited with code ${result.exitCode}${result.stderr ? ` stderr=${result.stderr}` : ''}`,
+            );
+          }
           if (!payload) {
             throw new Error('empty decoder output');
           }
@@ -209,6 +222,13 @@ export class PlayersService {
 
           return payload;
         } catch (error) {
+          if (error instanceof DecoderUnavailableError) {
+            if (debugEnabled) {
+              this.logger.error(`[DNI_SCAN] decoder unavailable error=${error.message}`);
+            }
+            throw new InternalServerErrorException(`DNI scan decoder unavailable: ${error.message}`);
+          }
+
           if (debugEnabled) {
             this.logger.warn(
               `[DNI_SCAN] decoder failed variant=${index + 1}/${strategies.length} strategy=${strategy.name} rotation=${strategy.rotation} elapsedMs=${Date.now() - startedAt} error=${error instanceof Error ? error.message : 'unknown decoder error'}`,
@@ -218,7 +238,10 @@ export class PlayersService {
       }
 
       throw new Error('all decoder variants failed');
-    } catch {
+    } catch (error) {
+      if (error instanceof InternalServerErrorException) {
+        throw error;
+      }
       if (debugEnabled) {
         this.logger.warn('DNI scan failed to decode.');
       }
@@ -226,22 +249,34 @@ export class PlayersService {
     }
   }
 
-  private runDecoder(binary: string, args: string[], input: Buffer): Promise<string> {
-    return new Promise<string>((resolve, reject) => {
+  private resolveDecoderCommand(): string {
+    return (
+      this.configService.get<string>('DNI_SCAN_DECODER_COMMAND')?.trim() ||
+      DEFAULT_DNI_SCAN_DECODER_COMMAND
+    );
+  }
+
+  private runDecoder(binary: string, args: string[], input: Buffer): Promise<DecoderRunResult> {
+    return new Promise<DecoderRunResult>((resolve, reject) => {
       const child = spawn(binary, args, { stdio: ['pipe', 'pipe', 'pipe'] });
       const chunks: Buffer[] = [];
       const errors: Buffer[] = [];
 
       child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
       child.stderr.on('data', (chunk: Buffer) => errors.push(chunk));
-      child.on('error', reject);
-      child.on('close', (code) => {
-        if (code === 0) {
-          resolve(Buffer.concat(chunks).toString('utf-8'));
+      child.on('error', (error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT' || error.code === 'EACCES') {
+          reject(new DecoderUnavailableError(`${binary} (${error.code ?? 'spawn error'})`));
           return;
         }
-        const stderr = Buffer.concat(errors).toString('utf-8').trim();
-        reject(new Error(`decoder exited with code ${code}${stderr ? ` stderr=${stderr}` : ''}`));
+        reject(error);
+      });
+      child.on('close', (code) => {
+        resolve({
+          exitCode: code,
+          stdout: Buffer.concat(chunks).toString('utf-8'),
+          stderr: Buffer.concat(errors).toString('utf-8').trim(),
+        });
       });
 
       child.stdin.write(input);
