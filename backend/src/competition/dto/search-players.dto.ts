@@ -18,6 +18,11 @@ export class SearchPlayersDto {
   tournamentId?: number;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  clubId?: number;
+
+  @IsOptional()
   @Transform(({ value }) => {
     if (value === undefined) {
       return undefined;
