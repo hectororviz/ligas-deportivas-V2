@@ -52,7 +52,6 @@ ZXING_ARGS=("$TMP_IMAGE")
 
 case "$ZXING_BASENAME" in
   ZXingReader)
-    # Legacy CLI: only accepts `ZXingReader <imagefile>`.
     ;;
   ReadBarcodes)
     ZXING_ARGS=(--format PDF417 --single "$TMP_IMAGE")
@@ -61,41 +60,23 @@ case "$ZXING_BASENAME" in
     ZXING_ARGS=(--format PDF417 "$TMP_IMAGE")
     ;;
   *)
-    # Best effort for newer zxing-cpp wrappers.
     ZXING_ARGS=(--format PDF417 "$TMP_IMAGE")
     ;;
 esac
+
+if [[ "${DNI_DECODER_DEBUG:-0}" == "1" ]]; then
+  {
+    printf '[dni-pdf417-decoder] ZXING_BIN=%s\n' "$ZXING_BIN"
+    printf '[dni-pdf417-decoder] COMMAND=%s %s\n' "$ZXING_BIN" "${ZXING_ARGS[*]}"
+  } >&2
+fi
 
 set +e
 OUTPUT="$($ZXING_BIN "${ZXING_ARGS[@]}" 2>&1)"
 ZXING_EXIT_CODE=$?
 set -e
 
-if [[ $ZXING_EXIT_CODE -ne 0 ]]; then
-  echo "$OUTPUT" >&2
-  exit 1
-fi
-
 if [[ "${DNI_DECODER_DEBUG:-0}" == "1" ]]; then
-  OUTPUT_LEN=${#OUTPUT}
-  OUTPUT_HAS_AT=0
-  if [[ "$OUTPUT" == *"@"* ]]; then
-    OUTPUT_HAS_AT=1
-  fi
-  OUTPUT_HEAD_RAW="$(printf '%s\n' "$OUTPUT" | head -n 10)"
-  OUTPUT_HEAD_SANITIZED="$(printf '%s' "$OUTPUT_HEAD_RAW" | sed -E 's/[0-9]/X/g')"
-  if [[ $OUTPUT_HAS_AT -eq 1 ]]; then
-    OUTPUT_HEAD_SANITIZED="len=${OUTPUT_LEN} $(printf '%s' "$OUTPUT_HEAD_SANITIZED" | sed 's/@/[AT]/g')"
-  fi
-
-  {
-    printf '[dni-pdf417-decoder] ZXING_BIN=%s\n' "$ZXING_BIN"
-    printf '[dni-pdf417-decoder] OUTPUT_HEAD=%s\n' "$OUTPUT_HEAD_SANITIZED"
-    printf '[dni-pdf417-decoder] OUTPUT_LEN=%s\n' "$OUTPUT_LEN"
-  } >&2
-fi
-
-if [[ "${DNI_DECODER_DEBUG:-0}" == "1" && "${DNI_DECODER_ECHO_OUTPUT:-0}" == "1" ]]; then
   {
     printf '[dni-pdf417-decoder] OUTPUT_RAW_BEGIN\n'
     printf '%s\n' "$OUTPUT"
@@ -103,13 +84,15 @@ if [[ "${DNI_DECODER_DEBUG:-0}" == "1" && "${DNI_DECODER_ECHO_OUTPUT:-0}" == "1"
   } >&2
 fi
 
+if [[ $ZXING_EXIT_CODE -ne 0 ]]; then
+  echo "$OUTPUT" >&2
+  exit 1
+fi
+
 PAYLOAD="$(printf '%s\n' "$OUTPUT" | awk '
-  /@/ { sub(/^[^@]*/, ""); print; exit }
+  /@/ { print; exit }
   /^Text[[:space:]]*:/ { sub(/^Text[[:space:]]*:[[:space:]]*/, ""); print; exit }
-  /^Content[[:space:]]*:/ { sub(/^Content[[:space:]]*:[[:space:]]*/, ""); print; exit }
-  /^Raw[[:space:]]*text[[:space:]]*:/ { sub(/^Raw[[:space:]]*text[[:space:]]*:[[:space:]]*/, ""); print; exit }
   /^Payload[[:space:]]*:/ { sub(/^Payload[[:space:]]*:[[:space:]]*/, ""); print; exit }
-  /^[^[:space:]:][^:]*$/ { print; exit }
 ')"
 
 if [[ -z "$PAYLOAD" ]]; then
@@ -117,7 +100,7 @@ if [[ -z "$PAYLOAD" ]]; then
 fi
 
 if [[ "${DNI_DECODER_DEBUG:-0}" == "1" ]]; then
-  printf '[dni-pdf417-decoder] PAYLOAD_LEN=%s\n' "${#PAYLOAD}" >&2
+  printf '[dni-pdf417-decoder] PAYLOAD_FINAL=%s\n' "$PAYLOAD" >&2
 fi
 
 printf '%s' "$PAYLOAD"

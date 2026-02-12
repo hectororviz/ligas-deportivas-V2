@@ -185,6 +185,7 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
         final backendMessage = _extractBackendErrorMessage(error.response?.data);
         if (backendMessage == 'decoded but unexpected format') {
           message = 'se leyó el código pero el formato no coincide';
+          await _showScanDebug(error.response?.data);
         } else if (backendMessage == 'No se pudo decodificar el PDF417.') {
           message = 'no se pudo leer el código';
         } else {
@@ -208,6 +209,49 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
     }
   }
 
+
+
+  Future<void> _showScanDebug(dynamic data) async {
+    if (data is! Map<String, dynamic>) {
+      return;
+    }
+    final payloadRaw = data['payloadRaw'];
+    final stdoutRaw = data['stdoutRaw'];
+    if (payloadRaw is! String && stdoutRaw is! String) {
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Debug'),
+          content: SizedBox(
+            width: 560,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (payloadRaw is String) ...[
+                    _DebugCopyField(label: 'payloadRaw', value: payloadRaw),
+                    const SizedBox(height: 12),
+                  ],
+                  if (stdoutRaw is String)
+                    _DebugCopyField(label: 'stdoutRaw', value: stdoutRaw),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cerrar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   String? _extractBackendErrorMessage(dynamic data) {
     if (data is Map<String, dynamic>) {
@@ -1227,6 +1271,44 @@ class _ScannedDniPlayer {
       default:
         return 'MIXTO';
     }
+  }
+}
+
+
+class _DebugCopyField extends StatelessWidget {
+  const _DebugCopyField({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(label, style: Theme.of(context).textTheme.titleSmall),
+            ),
+            IconButton(
+              tooltip: 'Copiar',
+              icon: const Icon(Icons.copy, size: 18),
+              onPressed: () => Clipboard.setData(ClipboardData(text: value)),
+            ),
+          ],
+        ),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.04),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: SelectableText(value),
+        ),
+      ],
+    );
   }
 }
 

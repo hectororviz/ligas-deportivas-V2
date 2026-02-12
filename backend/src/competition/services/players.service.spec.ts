@@ -34,6 +34,8 @@ describe('PlayersService decoder wrapper', () => {
       resizedHeight: 900,
       roiWidth: 1200,
       roiHeight: 315,
+      roiRawByteLength: 100,
+      roiPngByteLength: 80,
     } as never);
   };
 
@@ -45,7 +47,7 @@ describe('PlayersService decoder wrapper', () => {
       .mockResolvedValue([{ name: 'raw', rotation: 0, buffer: Buffer.from('img') }] as never);
 
     await expect(
-      (service as any).decodePdf417Payload(Buffer.from('input'), Date.now()),
+      (service as any).decodePdf417Payload(Buffer.from('input'), Date.now(), 'req-1'),
     ).rejects.toBeInstanceOf(InternalServerErrorException);
   });
 
@@ -62,7 +64,7 @@ describe('PlayersService decoder wrapper', () => {
     } as never);
 
     await expect(
-      (service as any).decodePdf417Payload(Buffer.from('input'), Date.now()),
+      (service as any).decodePdf417Payload(Buffer.from('input'), Date.now(), 'req-1'),
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
   });
 
@@ -80,8 +82,8 @@ describe('PlayersService decoder wrapper', () => {
     } as never);
 
     await expect(
-      (service as any).decodePdf417Payload(Buffer.from('input'), Date.now()),
-    ).resolves.toEqual('@payload@');
+      (service as any).decodePdf417Payload(Buffer.from('input'), Date.now(), 'req-1'),
+    ).resolves.toMatchObject({ payloadRaw: '@payload@' });
     expect(runDecoderSpy).toHaveBeenCalledWith(
       {
         binary: '/usr/local/bin/dni-pdf417-decoder',
@@ -108,8 +110,8 @@ describe('PlayersService decoder wrapper', () => {
     } as never);
 
     await expect(
-      (service as any).decodePdf417Payload(Buffer.from('input'), Date.now()),
-    ).resolves.toEqual('@payload@');
+      (service as any).decodePdf417Payload(Buffer.from('input'), Date.now(), 'req-1'),
+    ).resolves.toMatchObject({ payloadRaw: '@payload@' });
     expect(runDecoderSpy).toHaveBeenCalledWith(
       {
         binary: '/usr/local/bin/dni-pdf417-decoder',
@@ -154,9 +156,9 @@ describe('PlayersService decoder wrapper', () => {
       } as Express.Multer.File),
     ).resolves.toMatchObject({
       payloadRaw: '@123456@DOE@JOHN@M@',
-      decoderOutputRaw: 'Text: @123456@DOE@JOHN@M@',
+      stdoutRaw: 'Text: @123456@DOE@JOHN@M@',
       payloadLength: 19,
-      tokensCount: 4,
+      tokensCount: 6,
     });
   });
 });

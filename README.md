@@ -5,6 +5,7 @@ Monorepo para una plataforma web que administra ligas deportivas, torneos, fixtu
 ## Características principales
 
 ### Backend API (NestJS + Prisma)
+
 - Autenticación con registro, inicio de sesión, refresh de tokens, verificación de correo y recuperación de contraseña. ([backend/src/auth/auth.controller.ts](backend/src/auth/auth.controller.ts)) ([backend/src/mail/mail.service.ts](backend/src/mail/mail.service.ts)) ([backend/src/captcha/captcha.service.ts](backend/src/captcha/captcha.service.ts))
 - Área personal para actualizar perfil, contraseña, correo y avatar usando almacenamiento local de archivos. ([backend/src/me/me.controller.ts](backend/src/me/me.controller.ts)) ([backend/src/storage/storage.service.ts](backend/src/storage/storage.service.ts))
 - Administración de roles, permisos y usuarios con guardas basadas en RBAC y scopes personalizados. ([backend/src/rbac/roles.controller.ts](backend/src/rbac/roles.controller.ts)) ([backend/src/users/users.controller.ts](backend/src/users/users.controller.ts)) ([backend/src/prisma/base-seed.ts](backend/src/prisma/base-seed.ts))
@@ -15,11 +16,13 @@ Monorepo para una plataforma web que administra ligas deportivas, torneos, fixtu
 - Configuración centralizada, mailer SMTP y verificación de captchas integrados como módulos reutilizables. ([backend/src/app.module.ts](backend/src/app.module.ts)) ([backend/src/mail/mail.module.ts](backend/src/mail/mail.module.ts)) ([backend/src/captcha/captcha.service.ts](backend/src/captcha/captcha.service.ts))
 
 ### Frontend Flutter Web
+
 - Router con protección de rutas, shell con `NavigationRail` colapsable y menú de usuario persistente en `SharedPreferences`. ([frontend/lib/core/router/app_router.dart](frontend/lib/core/router/app_router.dart)) ([frontend/lib/features/shared/widgets/app_shell.dart](frontend/lib/features/shared/widgets/app_shell.dart))
 - Cliente HTTP basado en `dio` con interceptores para JWT y renovación automática de sesión. ([frontend/lib/services/api_client.dart](frontend/lib/services/api_client.dart)) ([frontend/lib/services/auth_controller.dart](frontend/lib/services/auth_controller.dart))
 - Pantallas de gestión para ligas, fixture y configuración de cuenta, incluyendo formularios adaptables y asistentes de guardado rápido. ([frontend/lib/features/leagues/presentation/leagues_page.dart](frontend/lib/features/leagues/presentation/leagues_page.dart)) ([frontend/lib/features/fixtures/presentation/fixtures_page.dart](frontend/lib/features/fixtures/presentation/fixtures_page.dart)) ([frontend/lib/features/settings/account_settings_page.dart](frontend/lib/features/settings/account_settings_page.dart))
 
 ### Infraestructura
+
 - Orquestación con Docker Compose que levanta PostgreSQL, MinIO, Mailhog, la API NestJS y el frontend web compilado. ([infra/docker-compose.yml](infra/docker-compose.yml))
 
 ## Estructura del repositorio
@@ -123,10 +126,10 @@ Si la API no puede conectarse al servidor SMTP, el panel te mostrará el error y
    flutter analyze
    ```
 
-
 ## Alta rápida de jugadores por escaneo DNI (PDF417)
 
 ### Uso
+
 1. En **Jugadores**, usar el botón **Escanear DNI** (ícono QR).
 2. En Android/Chrome Web se solicita cámara con preferencia por la trasera (`capture=environment`).
 3. El frontend envía la imagen como `multipart/form-data` a `POST /players/dni/scan`.
@@ -134,6 +137,7 @@ Si la API no puede conectarse al servidor SMTP, el panel te mostrará el error y
 5. Solo al confirmar se crea el jugador con `POST /players`.
 
 ### Endpoint backend
+
 - `POST /api/v1/players/dni/scan`
   - Campo: `file`
   - Respuesta: `{ lastName, firstName, sex, dni, birthDate }`
@@ -141,12 +145,16 @@ Si la API no puede conectarse al servidor SMTP, el panel te mostrará el error y
 - La imagen se procesa en memoria (multer `memoryStorage`) y se descarta inmediatamente.
 
 ### Variables de entorno relacionadas
-- `DNI_SCAN_DECODER_COMMAND`: comando externo para decodificar PDF417 (lee bytes de imagen por `stdin` y responde el payload por `stdout`). Si no se define, backend usa por defecto `/usr/local/bin/dni-pdf417-decoder --format PDF417`.
-- `DNI_SCAN_DEBUG=true`: loguea solo estado general (`ok/no`) de la decodificación, sin PII.
 
-En Docker, el backend instala `zxing-cpp-tools` y publica el wrapper `/usr/local/bin/dni-pdf417-decoder`, que usa archivos temporales únicamente en `/tmp` y los borra siempre al finalizar.
+- `DNI_SCAN_DECODER_COMMAND`: comando externo para decodificar PDF417 (lee bytes de imagen por `stdin` y responde el payload por `stdout`). Si no se define, backend usa por defecto `/usr/local/bin/dni-pdf417-decoder --format PDF417`.
+- `SCAN_DEBUG=1`: habilita trazas completas del flujo de escaneo (requestId, preprocesado, stdout/stderr crudos del decoder, payload completo y endpoint diagnóstico `POST /api/v1/players/dni/scan/diagnostic`).
+- `DNI_DECODER_DEBUG=1`: habilita trazas internas del wrapper `/usr/local/bin/dni-pdf417-decoder` (binario ZXing elegido, comando final, salida cruda y payload final).
+
+En modo normal no se imprime contenido sensible: solo métricas de longitud/estado.
+En Docker, el backend instala `zxing-cpp-tools` y publica el wrapper `/usr/local/bin/dni-pdf417-decoder`. Con `SCAN_DEBUG=1` también guarda el ROI PNG temporal en `/tmp/dni-scan-<requestId>.png` para inspección y lo limpia en diferido (best-effort).
 
 ### Limitaciones prácticas
+
 - La lectura depende de enfoque, luz y reflejos del DNI.
 - Si falla, reintentar acercando el código PDF417 y mejorando iluminación.
 
