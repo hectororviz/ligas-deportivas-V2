@@ -8,6 +8,9 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { unlink, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { Action, Gender, Module, Prisma, Scope } from '@prisma/client';
 import sharp from 'sharp';
 
@@ -91,15 +94,87 @@ export class PlayersService {
       throw new UnsupportedMediaTypeException('Solo se admiten imágenes para escanear DNI.');
     }
 
-    const payload = await this.decodePdf417Payload(file.buffer);
-    const parsed = parseDniPdf417Payload(payload);
-    return parsed;
+    const metadata = await sharp(file.buffer, { failOn: 'none' }).metadata();
+    const debugEnabled = this.isScanDebugEnabled();
+
+    this.logger.log(
+      `[DNI_SCAN] incoming file mimetype=${file.mimetype} size=${file.size} width=${metadata.width ?? 'unknown'} height=${metadata.height ?? 'unknown'}`,
+    );
+
+    let tempPath: string | null = null;
+    if (debugEnabled) {
+      tempPath = await this.writeTempDebugFile(file.buffer, file.mimetype);
+    }
+
+    try {
+      const payload = await this.decodePdf417Payload(file.buffer);
+      const parsed = parseDniPdf417Payload(payload);
+      return parsed;
+    } finally {
+      if (tempPath) {
+        await this.cleanupTempDebugFile(tempPath);
+      }
+    }
+  }
+
+  async scanDniDiagnostic(file?: Express.Multer.File) {
+    if (!this.isScanDebugEnabled()) {
+      throw new BadRequestException('El diagnóstico está disponible solo con SCAN_DEBUG=1.');
+    }
+
+    if (!file) {
+      throw new BadRequestException('Debe adjuntar una imagen.');
+    }
+
+    if (!file.mimetype.startsWith('image/')) {
+      throw new UnsupportedMediaTypeException('Solo se admiten imágenes para escanear DNI.');
+    }
+
+    const decoderCommand = this.configService.get<string>('DNI_SCAN_DECODER_COMMAND')?.trim();
+    if (!decoderCommand) {
+      throw new UnprocessableEntityException('No se pudo decodificar el PDF417.');
+    }
+
+    const [binary, ...args] = decoderCommand.split(/\s+/);
+    const strategies = await this.buildDecodeStrategies(file.buffer);
+    const report = [] as Array<Record<string, unknown>>;
+
+    for (const strategy of strategies) {
+      const startedAt = Date.now();
+      try {
+        const stdout = await this.runDecoder(binary, args, strategy.buffer);
+        const elapsedMs = Date.now() - startedAt;
+        const payload = stdout.trim();
+        report.push({
+          strategy: strategy.name,
+          rotation: strategy.rotation,
+          success: payload.length > 0,
+          elapsedMs,
+          error: payload.length > 0 ? null : 'empty decoder output',
+        });
+      } catch (error) {
+        const elapsedMs = Date.now() - startedAt;
+        report.push({
+          strategy: strategy.name,
+          rotation: strategy.rotation,
+          success: false,
+          elapsedMs,
+          error: error instanceof Error ? error.message : 'unknown decoder error',
+        });
+      }
+    }
+
+    return {
+      decoderCommand,
+      mimetype: file.mimetype,
+      size: file.size,
+      report,
+    };
   }
 
   private async decodePdf417Payload(imageBuffer: Buffer): Promise<string> {
     const decoderCommand = this.configService.get<string>('DNI_SCAN_DECODER_COMMAND')?.trim();
-    const debugEnabled =
-      this.configService.get<string>('DNI_SCAN_DEBUG')?.trim().toLowerCase() === 'true';
+    const debugEnabled = this.isScanDebugEnabled();
 
     if (!decoderCommand) {
       if (debugEnabled) {
@@ -113,26 +188,30 @@ export class PlayersService {
     const [binary, ...args] = decoderCommand.split(/\s+/);
 
     try {
-      const candidates = await this.buildDecodeCandidates(imageBuffer);
+      const strategies = await this.buildDecodeStrategies(imageBuffer);
 
-      for (let index = 0; index < candidates.length; index += 1) {
-        const candidate = candidates[index];
+      for (let index = 0; index < strategies.length; index += 1) {
+        const strategy = strategies[index];
+        const startedAt = Date.now();
         try {
-          const stdout = await this.runDecoder(binary, args, candidate);
+          const stdout = await this.runDecoder(binary, args, strategy.buffer);
+          const elapsedMs = Date.now() - startedAt;
           const payload = stdout.trim();
           if (!payload) {
             throw new Error('empty decoder output');
           }
 
           if (debugEnabled) {
-            this.logger.log(`DNI scan decoded ok on variant ${index + 1}/${candidates.length}.`);
+            this.logger.log(
+              `[DNI_SCAN] decoder success variant=${index + 1}/${strategies.length} strategy=${strategy.name} rotation=${strategy.rotation} elapsedMs=${elapsedMs}`,
+            );
           }
 
           return payload;
-        } catch {
+        } catch (error) {
           if (debugEnabled) {
             this.logger.warn(
-              `DNI scan decoder failed on variant ${index + 1}/${candidates.length}.`,
+              `[DNI_SCAN] decoder failed variant=${index + 1}/${strategies.length} strategy=${strategy.name} rotation=${strategy.rotation} elapsedMs=${Date.now() - startedAt} error=${error instanceof Error ? error.message : 'unknown decoder error'}`,
             );
           }
         }
@@ -149,17 +228,20 @@ export class PlayersService {
 
   private runDecoder(binary: string, args: string[], input: Buffer): Promise<string> {
     return new Promise<string>((resolve, reject) => {
-      const child = spawn(binary, args, { stdio: ['pipe', 'pipe', 'ignore'] });
+      const child = spawn(binary, args, { stdio: ['pipe', 'pipe', 'pipe'] });
       const chunks: Buffer[] = [];
+      const errors: Buffer[] = [];
 
       child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
+      child.stderr.on('data', (chunk: Buffer) => errors.push(chunk));
       child.on('error', reject);
       child.on('close', (code) => {
         if (code === 0) {
           resolve(Buffer.concat(chunks).toString('utf-8'));
           return;
         }
-        reject(new Error(`decoder exited with code ${code}`));
+        const stderr = Buffer.concat(errors).toString('utf-8').trim();
+        reject(new Error(`decoder exited with code ${code}${stderr ? ` stderr=${stderr}` : ''}`));
       });
 
       child.stdin.write(input);
@@ -167,45 +249,56 @@ export class PlayersService {
     });
   }
 
-  private async buildDecodeCandidates(imageBuffer: Buffer): Promise<Buffer[]> {
-    const candidates: Buffer[] = [imageBuffer];
+  private async buildDecodeStrategies(imageBuffer: Buffer) {
+    const rotations = [0, 90, 180, 270] as const;
+    const strategies: Array<{ name: string; rotation: number; buffer: Buffer }> = [];
     const image = sharp(imageBuffer, { failOn: 'none' }).rotate();
     const metadata = await image.metadata();
 
-    const pushUnique = (buffer: Buffer) => {
-      if (!candidates.some((candidate) => candidate.equals(buffer))) {
-        candidates.push(buffer);
+    const pushUnique = (name: string, rotation: number, buffer: Buffer) => {
+      if (!strategies.some((strategy) => strategy.buffer.equals(buffer))) {
+        strategies.push({ name, rotation, buffer });
       }
     };
 
-    pushUnique(await image.clone().normalize().sharpen().png().toBuffer());
-    pushUnique(await image.clone().greyscale().normalize().threshold(165).png().toBuffer());
-
-    if (metadata.width && metadata.height) {
+    for (const rotation of rotations) {
+      const base = image.clone().rotate(rotation);
+      pushUnique('raw', rotation, await base.clone().toBuffer());
       pushUnique(
-        await image
-          .clone()
-          .resize({
-            width: metadata.width * 2,
-            height: metadata.height * 2,
-            kernel: sharp.kernel.nearest,
-          })
-          .normalize()
-          .sharpen()
-          .png()
-          .toBuffer(),
+        'grayscale',
+        rotation,
+        await base.clone().greyscale().normalize().png().toBuffer(),
+      );
+      pushUnique(
+        'threshold',
+        rotation,
+        await base.clone().greyscale().normalize().threshold(165).png().toBuffer(),
       );
 
-      const cropTop = Math.floor(metadata.height * 0.45);
-      const cropHeight = metadata.height - cropTop;
-      if (cropHeight > 80) {
+      if (metadata.width && metadata.height) {
         pushUnique(
-          await image
+          'upscale_x2',
+          rotation,
+          await base
             .clone()
-            .extract({ left: 0, top: cropTop, width: metadata.width, height: cropHeight })
             .resize({
               width: metadata.width * 2,
-              height: cropHeight * 2,
+              height: metadata.height * 2,
+              kernel: sharp.kernel.nearest,
+            })
+            .normalize()
+            .sharpen()
+            .png()
+            .toBuffer(),
+        );
+        pushUnique(
+          'upscale_x3',
+          rotation,
+          await base
+            .clone()
+            .resize({
+              width: metadata.width * 3,
+              height: metadata.height * 3,
               kernel: sharp.kernel.nearest,
             })
             .normalize()
@@ -216,7 +309,34 @@ export class PlayersService {
       }
     }
 
-    return candidates;
+    return strategies;
+  }
+
+  private isScanDebugEnabled(): boolean {
+    const rawValue =
+      this.configService.get<string>('SCAN_DEBUG') ??
+      this.configService.get<string>('DNI_SCAN_DEBUG');
+    const value = rawValue?.trim().toLowerCase();
+    return value === '1' || value === 'true';
+  }
+
+  private async writeTempDebugFile(buffer: Buffer, mimetype: string): Promise<string> {
+    const extension = mimetype.split('/')[1] || 'img';
+    const path = join('/tmp', `dni-scan-${randomUUID()}.${extension}`);
+    await writeFile(path, buffer);
+    this.logger.log(`[DNI_SCAN] debug temp file saved at ${path}`);
+    return path;
+  }
+
+  private async cleanupTempDebugFile(path: string): Promise<void> {
+    try {
+      await unlink(path);
+      this.logger.log(`[DNI_SCAN] debug temp file removed ${path}`);
+    } catch (error) {
+      this.logger.warn(
+        `[DNI_SCAN] debug temp file cleanup failed path=${path} error=${error instanceof Error ? error.message : 'unknown'}`,
+      );
+    }
   }
 
   async findAll(query: ListPlayersDto, user?: RequestUser) {
