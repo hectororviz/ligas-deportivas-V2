@@ -1,4 +1,13 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  UnprocessableEntityException,
+  UnsupportedMediaTypeException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { spawn } from 'node:child_process';
 import { Action, Gender, Module, Prisma, Scope } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
@@ -7,6 +16,8 @@ import { CreatePlayerDto } from '../dto/create-player.dto';
 import { ListPlayersDto } from '../dto/list-players.dto';
 import { SearchPlayersDto } from '../dto/search-players.dto';
 import { UpdatePlayerDto } from '../dto/update-player.dto';
+import { ScanDniResultDto } from '../dto/scan-dni-result.dto';
+import { parseDniPdf417Payload } from '../utils/dni-pdf417-parser';
 
 type PlayerWithMemberships = Prisma.PlayerGetPayload<{
   include: {
@@ -21,7 +32,12 @@ type PlayerWithMemberships = Prisma.PlayerGetPayload<{
 
 @Injectable()
 export class PlayersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
+  ) {}
+
+  private readonly logger = new Logger(PlayersService.name);
 
   private readonly include = {
     playerTournamentClubs: {
@@ -62,6 +78,71 @@ export class PlayersService {
       return this.mapPlayer(player);
     } catch (error) {
       throw this.handlePrismaError(error);
+    }
+  }
+
+  async scanDniFromImage(file?: Express.Multer.File): Promise<ScanDniResultDto> {
+    if (!file) {
+      throw new BadRequestException('Debe adjuntar una imagen.');
+    }
+
+    if (!file.mimetype.startsWith('image/')) {
+      throw new UnsupportedMediaTypeException('Solo se admiten imágenes para escanear DNI.');
+    }
+
+    const payload = await this.decodePdf417Payload(file.buffer);
+    const parsed = parseDniPdf417Payload(payload);
+    return parsed;
+  }
+
+  private async decodePdf417Payload(imageBuffer: Buffer): Promise<string> {
+    const decoderCommand = this.configService.get<string>('DNI_SCAN_DECODER_COMMAND')?.trim();
+    const debugEnabled =
+      this.configService.get<string>('DNI_SCAN_DEBUG')?.trim().toLowerCase() === 'true';
+
+    if (!decoderCommand) {
+      if (debugEnabled) {
+        this.logger.warn('DNI scan decoder unavailable (DNI_SCAN_DECODER_COMMAND is not configured).');
+      }
+      throw new UnprocessableEntityException('No se pudo decodificar el PDF417.');
+    }
+
+    const [binary, ...args] = decoderCommand.split(/\s+/);
+
+    try {
+      const stdout = await new Promise<string>((resolve, reject) => {
+        const child = spawn(binary, args, { stdio: ['pipe', 'pipe', 'ignore'] });
+        const chunks: Buffer[] = [];
+
+        child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
+        child.on('error', reject);
+        child.on('close', (code) => {
+          if (code === 0) {
+            resolve(Buffer.concat(chunks).toString('utf-8'));
+            return;
+          }
+          reject(new Error(`decoder exited with code ${code}`));
+        });
+
+        child.stdin.write(imageBuffer);
+        child.stdin.end();
+      });
+
+      const payload = stdout.trim();
+      if (!payload) {
+        throw new Error('empty decoder output');
+      }
+
+      if (debugEnabled) {
+        this.logger.log('DNI scan decoded ok.');
+      }
+
+      return payload;
+    } catch {
+      if (debugEnabled) {
+        this.logger.warn('DNI scan failed to decode.');
+      }
+      throw new UnprocessableEntityException('No se pudo decodificar el PDF417.');
     }
   }
 

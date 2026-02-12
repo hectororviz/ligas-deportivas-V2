@@ -123,6 +123,31 @@ Si la API no puede conectarse al servidor SMTP, el panel te mostrará el error y
    flutter analyze
    ```
 
+
+## Alta rápida de jugadores por escaneo DNI (PDF417)
+
+### Uso
+1. En **Jugadores**, usar el botón **Escanear DNI** (ícono QR).
+2. En Android/Chrome Web se solicita cámara con preferencia por la trasera (`capture=environment`).
+3. El frontend envía la imagen como `multipart/form-data` a `POST /players/dni/scan`.
+4. Si la lectura es correcta, se muestra un modal de confirmación con: apellido, nombre, sexo, DNI y fecha de nacimiento.
+5. Solo al confirmar se crea el jugador con `POST /players`.
+
+### Endpoint backend
+- `POST /api/v1/players/dni/scan`
+  - Campo: `file`
+  - Respuesta: `{ lastName, firstName, sex, dni, birthDate }`
+  - Errores: `400` sin archivo, `415` tipo inválido, `422` si no se puede decodificar o faltan datos.
+- La imagen se procesa en memoria (multer `memoryStorage`) y se descarta inmediatamente.
+
+### Variables de entorno relacionadas
+- `DNI_SCAN_DECODER_COMMAND`: comando externo para decodificar PDF417 (lee bytes de imagen por `stdin` y responde el payload por `stdout`).
+- `DNI_SCAN_DEBUG=true`: loguea solo estado general (`ok/no`) de la decodificación, sin PII.
+
+### Limitaciones prácticas
+- La lectura depende de enfoque, luz y reflejos del DNI.
+- Si falla, reintentar acercando el código PDF417 y mejorando iluminación.
+
 ## Infraestructura con Docker Compose
 
 Puedes levantar toda la plataforma con un único comando:
