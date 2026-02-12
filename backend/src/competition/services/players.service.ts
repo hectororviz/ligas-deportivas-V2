@@ -108,32 +108,21 @@ export class PlayersService {
       where.gender = gender;
     }
 
-    if (
-      birthYear !== undefined &&
-      (birthYearMin !== undefined || birthYearMax !== undefined)
-    ) {
+    if (birthYear !== undefined && (birthYearMin !== undefined || birthYearMax !== undefined)) {
       throw new BadRequestException(
         'No se puede combinar el filtro por año de nacimiento único con un rango.',
       );
     }
 
-    if (
-      birthYearMin !== undefined &&
-      birthYearMax !== undefined &&
-      birthYearMin > birthYearMax
-    ) {
-      throw new BadRequestException(
-        'El año mínimo no puede ser mayor al año máximo.',
-      );
+    if (birthYearMin !== undefined && birthYearMax !== undefined && birthYearMin > birthYearMax) {
+      throw new BadRequestException('El año mínimo no puede ser mayor al año máximo.');
     }
 
     if (birthYear !== undefined) {
       const start = new Date(Date.UTC(birthYear, 0, 1));
       const end = new Date(Date.UTC(birthYear + 1, 0, 1));
       const existingBirthDateFilter =
-        where.birthDate &&
-        typeof where.birthDate === 'object' &&
-        !(where.birthDate instanceof Date)
+        where.birthDate && typeof where.birthDate === 'object' && !(where.birthDate instanceof Date)
           ? (where.birthDate as Prisma.DateTimeFilter)
           : undefined;
       where.birthDate = {
@@ -145,9 +134,7 @@ export class PlayersService {
 
     if (birthYearMin !== undefined || birthYearMax !== undefined) {
       const existingBirthDateFilter =
-        where.birthDate &&
-        typeof where.birthDate === 'object' &&
-        !(where.birthDate instanceof Date)
+        where.birthDate && typeof where.birthDate === 'object' && !(where.birthDate instanceof Date)
           ? (where.birthDate as Prisma.DateTimeFilter)
           : undefined;
       const filter: Prisma.DateTimeFilter = {
@@ -222,50 +209,82 @@ export class PlayersService {
 
   async searchByDniAndCategory(query: SearchPlayersDto) {
     const trimmedDni = query.dni?.trim();
-    const [category, tournamentCategory] = await Promise.all([
-      this.prisma.category.findUnique({
-        where: { id: query.categoryId },
-      }),
-      this.prisma.tournamentCategory.findFirst({
-        where: {
-          tournamentId: query.tournamentId,
-          categoryId: query.categoryId,
-          enabled: true,
+    const { tournamentId, categoryId } = query;
+
+    if (
+      !trimmedDni &&
+      tournamentId === undefined &&
+      categoryId === undefined &&
+      query.onlyFree !== true
+    ) {
+      throw new BadRequestException('Debe enviar al menos un filtro de búsqueda.');
+    }
+
+    if (query.onlyFree === true && tournamentId === undefined) {
+      throw new BadRequestException('El filtro de jugadores libres requiere un torneo.');
+    }
+
+    let category: {
+      birthYearMin: number;
+      birthYearMax: number;
+      gender: Gender;
+      active: boolean;
+    } | null = null;
+
+    if (categoryId !== undefined) {
+      category = await this.prisma.category.findUnique({
+        where: { id: categoryId },
+        select: {
+          birthYearMin: true,
+          birthYearMax: true,
+          gender: true,
+          active: true,
         },
-        select: { id: true },
-      }),
-    ]);
+      });
 
-    if (!category || !category.active) {
-      throw new BadRequestException('Categoría inválida o inactiva.');
+      if (!category || !category.active) {
+        throw new BadRequestException('Categoría inválida o inactiva.');
+      }
+
+      if (tournamentId !== undefined) {
+        const tournamentCategory = await this.prisma.tournamentCategory.findFirst({
+          where: {
+            tournamentId,
+            categoryId,
+            enabled: true,
+          },
+          select: { id: true },
+        });
+
+        if (!tournamentCategory) {
+          throw new BadRequestException('La categoría no está habilitada en el torneo.');
+        }
+      }
     }
-    if (!tournamentCategory) {
-      throw new BadRequestException('La categoría no está habilitada en el torneo.');
-    }
 
-    const startDate = new Date(Date.UTC(category.birthYearMin, 0, 1));
-    const endDate = new Date(Date.UTC(category.birthYearMax, 11, 31, 23, 59, 59, 999));
-
-    const where: Prisma.PlayerWhereInput = {
-      active: true,
-      birthDate: {
-        gte: startDate,
-        lte: endDate,
-      },
-    };
+    const where: Prisma.PlayerWhereInput = { active: true };
 
     if (trimmedDni) {
-      where.dni = trimmedDni;
+      where.dni = { contains: trimmedDni, mode: 'insensitive' };
     }
 
-    if (category.gender !== Gender.MIXTO) {
-      where.gender = category.gender;
+    if (category) {
+      const startDate = new Date(Date.UTC(category.birthYearMin, 0, 1));
+      const endDate = new Date(Date.UTC(category.birthYearMax, 11, 31, 23, 59, 59, 999));
+      where.birthDate = {
+        gte: startDate,
+        lte: endDate,
+      };
+
+      if (category.gender !== Gender.MIXTO) {
+        where.gender = category.gender;
+      }
     }
 
     const onlyFree = query.onlyFree === true;
     if (onlyFree) {
       where.playerTournamentClubs = {
-        none: { tournamentId: query.tournamentId },
+        none: { tournamentId },
       };
     }
 
@@ -273,7 +292,7 @@ export class PlayersService {
       where,
       include: {
         playerTournamentClubs: {
-          where: { tournamentId: query.tournamentId },
+          ...(tournamentId !== undefined ? { where: { tournamentId } } : { where: { id: -1 } }),
           select: {
             clubId: true,
             club: { select: { id: true, name: true } },
@@ -285,7 +304,7 @@ export class PlayersService {
     });
 
     return players.map((player) => {
-      const assignment = player.playerTournamentClubs[0];
+      const assignment = tournamentId !== undefined ? player.playerTournamentClubs[0] : null;
       return {
         id: player.id,
         firstName: player.firstName,
@@ -306,7 +325,7 @@ export class PlayersService {
     const relevantGrants = user.permissions.filter(
       (grant) =>
         grant.module === Module.JUGADORES &&
-        (grant.action === Action.VIEW || grant.action === Action.MANAGE)
+        (grant.action === Action.VIEW || grant.action === Action.MANAGE),
     );
 
     if (relevantGrants.length === 0) {
