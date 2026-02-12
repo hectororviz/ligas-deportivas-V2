@@ -662,11 +662,20 @@ class _ClubRosterPageState extends ConsumerState<ClubRosterPage> {
   List<_RosterFilterOption> _tournaments = const [];
   List<_RosterFilterOption> _categories = const [];
   List<_ClubRosterRow> _rows = const [];
+  final ScrollController _tableVerticalController = ScrollController();
+  final ScrollController _tableHorizontalController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     unawaited(_loadRoster(initialLoad: true));
+  }
+
+  @override
+  void dispose() {
+    _tableVerticalController.dispose();
+    _tableHorizontalController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadRoster({required bool initialLoad}) async {
@@ -901,29 +910,43 @@ class _ClubRosterPageState extends ConsumerState<ClubRosterPage> {
                           ? const Center(
                               child: Text('No hay jugadores para los filtros seleccionados.'),
                             )
-                          : SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: DataTable(
-                                columns: const [
-                                  DataColumn(label: Text('Apellido')),
-                                  DataColumn(label: Text('Nombre')),
-                                  DataColumn(label: Text('Fecha de nacimiento')),
-                                  DataColumn(label: Text('DNI')),
-                                  DataColumn(label: Text('Torneo')),
-                                  DataColumn(label: Text('Categoría')),
-                                ],
-                                rows: _rows
-                                    .map(
-                                      (row) => DataRow(cells: [
-                                        DataCell(Text(row.lastName)),
-                                        DataCell(Text(row.firstName)),
-                                        DataCell(Text(_birthDateFormat.format(row.birthDate))),
-                                        DataCell(Text(row.dni)),
-                                        DataCell(Text(row.tournamentName)),
-                                        DataCell(Text(row.categoryName)),
-                                      ]),
-                                    )
-                                    .toList(),
+                          : Scrollbar(
+                              controller: _tableVerticalController,
+                              thumbVisibility: true,
+                              child: SingleChildScrollView(
+                                controller: _tableVerticalController,
+                                child: Scrollbar(
+                                  controller: _tableHorizontalController,
+                                  thumbVisibility: true,
+                                  notificationPredicate: (notification) =>
+                                      notification.metrics.axis == Axis.horizontal,
+                                  child: SingleChildScrollView(
+                                    controller: _tableHorizontalController,
+                                    scrollDirection: Axis.horizontal,
+                                    child: DataTable(
+                                      columns: const [
+                                        DataColumn(label: Text('Apellido')),
+                                        DataColumn(label: Text('Nombre')),
+                                        DataColumn(label: Text('Fecha de nacimiento')),
+                                        DataColumn(label: Text('DNI')),
+                                        DataColumn(label: Text('Torneo')),
+                                        DataColumn(label: Text('Categoría')),
+                                      ],
+                                      rows: _rows
+                                          .map(
+                                            (row) => DataRow(cells: [
+                                              DataCell(Text(row.lastName)),
+                                              DataCell(Text(row.firstName)),
+                                              DataCell(Text(_birthDateFormat.format(row.birthDate))),
+                                              DataCell(Text(row.dni)),
+                                              DataCell(Text(row.tournamentName)),
+                                              DataCell(Text(row.categoryName)),
+                                            ]),
+                                          )
+                                          .toList(),
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
             ),
