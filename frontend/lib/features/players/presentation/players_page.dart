@@ -235,6 +235,10 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
       final response = await api.post<Map<String, dynamic>>(
         '/players/dni/scan',
         data: formData,
+        options: Options(
+          sendTimeout: const Duration(seconds: 20),
+          receiveTimeout: const Duration(seconds: 20),
+        ),
       );
       return _ScannedDniPlayer.fromJson(response.data ?? const {});
     } finally {

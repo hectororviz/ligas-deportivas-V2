@@ -25,8 +25,20 @@ import { ScanDniResultDto } from '../dto/scan-dni-result.dto';
 import { parseDniPdf417Payload } from '../utils/dni-pdf417-parser';
 
 const DEFAULT_DNI_SCAN_DECODER_COMMAND = '/usr/local/bin/dni-pdf417-decoder --format PDF417';
+const DECODER_TIMEOUT_MS = 8_000;
+const DECODER_FILE_PLACEHOLDER_TOKENS = new Set(['{file}', '__INPUT_FILE__']);
 
 class DecoderUnavailableError extends Error {}
+class DecoderTimeoutError extends Error {}
+
+type DecoderInputMode = 'stdin' | 'file';
+
+type DecoderCommandSpec = {
+  binary: string;
+  args: string[];
+  inputMode: DecoderInputMode;
+  inputFileToken?: string;
+};
 
 type DecoderRunResult = {
   exitCode: number | null;
@@ -108,8 +120,9 @@ export class PlayersService {
     const metadata = await sharp(file.buffer, { failOn: 'none' }).metadata();
     const debugEnabled = this.isScanDebugEnabled();
 
+    const t0 = Date.now();
     this.logger.log(
-      `[DNI_SCAN] incoming file mimetype=${file.mimetype} size=${file.size} width=${metadata.width ?? 'unknown'} height=${metadata.height ?? 'unknown'}`,
+      `[DNI_SCAN][t0] incoming file mimetype=${file.mimetype} size=${file.size} width=${metadata.width ?? 'unknown'} height=${metadata.height ?? 'unknown'}`,
     );
 
     let tempPath: string | null = null;
@@ -118,10 +131,11 @@ export class PlayersService {
     }
 
     try {
-      const payload = await this.decodePdf417Payload(file.buffer);
+      const payload = await this.decodePdf417Payload(file.buffer, t0);
       const parsed = parseDniPdf417Payload(payload);
       return parsed;
     } finally {
+      this.logger.log(`[DNI_SCAN][tEnd] totalElapsedMs=${Date.now() - t0}`);
       if (tempPath) {
         await this.cleanupTempDebugFile(tempPath);
       }
@@ -141,16 +155,15 @@ export class PlayersService {
       throw new UnsupportedMediaTypeException('Solo se admiten imágenes para escanear DNI.');
     }
 
-    const decoderCommand = this.resolveDecoderCommand();
-
-    const [binary, ...args] = decoderCommand.split(/\s+/);
-    const strategies = await this.buildDecodeStrategies(file.buffer);
+    const decoderSpec = this.resolveDecoderCommandSpec();
+    const preprocessed = await this.preprocessDecodeImage(file.buffer);
+    const strategies = await this.buildDecodeStrategies(preprocessed.roiBuffer);
     const report = [] as Array<Record<string, unknown>>;
 
     for (const strategy of strategies) {
       const startedAt = Date.now();
       try {
-        const result = await this.runDecoder(binary, args, strategy.buffer);
+        const result = await this.runDecoder(decoderSpec, strategy.buffer, DECODER_TIMEOUT_MS);
         const elapsedMs = Date.now() - startedAt;
         const payload = result.stdout.trim();
         report.push({
@@ -182,27 +195,32 @@ export class PlayersService {
     }
 
     return {
-      decoderCommand,
+      decoderCommand: `${decoderSpec.binary} ${decoderSpec.args.join(' ')}`.trim(),
       mimetype: file.mimetype,
       size: file.size,
       report,
     };
   }
 
-  private async decodePdf417Payload(imageBuffer: Buffer): Promise<string> {
-    const decoderCommand = this.resolveDecoderCommand();
+  private async decodePdf417Payload(imageBuffer: Buffer, t0: number): Promise<string> {
+    const decoderSpec = this.resolveDecoderCommandSpec();
     const debugEnabled = this.isScanDebugEnabled();
 
-    const [binary, ...args] = decoderCommand.split(/\s+/);
-
     try {
-      const strategies = await this.buildDecodeStrategies(imageBuffer);
+      const preprocessed = await this.preprocessDecodeImage(imageBuffer);
+      this.logger.log(
+        `[DNI_SCAN][t1] base preprocess done elapsedMs=${Date.now() - t0} resized=${preprocessed.resizedWidth}x${preprocessed.resizedHeight} roi=${preprocessed.roiWidth}x${preprocessed.roiHeight}`,
+      );
+      const strategies = await this.buildDecodeStrategies(preprocessed.roiBuffer);
 
       for (let index = 0; index < strategies.length; index += 1) {
         const strategy = strategies[index];
+        this.logger.log(
+          `[DNI_SCAN][t2] strategy start variant=${index + 1}/${strategies.length} strategy=${strategy.name} rotation=${strategy.rotation}`,
+        );
         const startedAt = Date.now();
         try {
-          const result = await this.runDecoder(binary, args, strategy.buffer);
+          const result = await this.runDecoder(decoderSpec, strategy.buffer, DECODER_TIMEOUT_MS);
           const elapsedMs = Date.now() - startedAt;
           const payload = result.stdout.trim();
           if (result.exitCode !== 0) {
@@ -213,6 +231,10 @@ export class PlayersService {
           if (!payload) {
             throw new Error('empty decoder output');
           }
+
+          this.logger.log(
+            `[DNI_SCAN][t3] strategy end variant=${index + 1}/${strategies.length} strategy=${strategy.name} rotation=${strategy.rotation} result=ok elapsedMs=${elapsedMs}`,
+          );
 
           if (debugEnabled) {
             this.logger.log(
@@ -229,9 +251,20 @@ export class PlayersService {
             throw new InternalServerErrorException(`DNI scan decoder unavailable: ${error.message}`);
           }
 
+          const elapsedMs = Date.now() - startedAt;
+          const errorMessage =
+            error instanceof DecoderTimeoutError
+              ? 'timeout'
+              : error instanceof Error
+                ? error.message
+                : 'unknown decoder error';
+          this.logger.warn(
+            `[DNI_SCAN][t3] strategy end variant=${index + 1}/${strategies.length} strategy=${strategy.name} rotation=${strategy.rotation} result=fail elapsedMs=${elapsedMs} error=${errorMessage}`,
+          );
+
           if (debugEnabled) {
             this.logger.warn(
-              `[DNI_SCAN] decoder failed variant=${index + 1}/${strategies.length} strategy=${strategy.name} rotation=${strategy.rotation} elapsedMs=${Date.now() - startedAt} error=${error instanceof Error ? error.message : 'unknown decoder error'}`,
+              `[DNI_SCAN] decoder failed variant=${index + 1}/${strategies.length} strategy=${strategy.name} rotation=${strategy.rotation} elapsedMs=${elapsedMs} error=${errorMessage}`,
             );
           }
         }
@@ -249,22 +282,60 @@ export class PlayersService {
     }
   }
 
-  private resolveDecoderCommand(): string {
-    return (
+  private resolveDecoderCommandSpec(): DecoderCommandSpec {
+    const command =
       this.configService.get<string>('DNI_SCAN_DECODER_COMMAND')?.trim() ||
-      DEFAULT_DNI_SCAN_DECODER_COMMAND
-    );
+      DEFAULT_DNI_SCAN_DECODER_COMMAND;
+    const [binary, ...args] = command.split(/\s+/).filter(Boolean);
+    const inputFileToken = args.find((arg) => DECODER_FILE_PLACEHOLDER_TOKENS.has(arg));
+    return {
+      binary,
+      args,
+      inputMode: inputFileToken ? 'file' : 'stdin',
+      inputFileToken,
+    };
   }
 
-  private runDecoder(binary: string, args: string[], input: Buffer): Promise<DecoderRunResult> {
+  private runDecoder(
+    decoderSpec: DecoderCommandSpec,
+    input: Buffer,
+    timeoutMs: number,
+  ): Promise<DecoderRunResult> {
+    if (decoderSpec.inputMode === 'file') {
+      return this.runDecoderUsingInputFile(decoderSpec, input, timeoutMs);
+    }
+    return this.runDecoderUsingStdin(decoderSpec.binary, decoderSpec.args, input, timeoutMs);
+  }
+
+  private runDecoderUsingStdin(
+    binary: string,
+    args: string[],
+    input: Buffer,
+    timeoutMs: number,
+  ): Promise<DecoderRunResult> {
     return new Promise<DecoderRunResult>((resolve, reject) => {
       const child = spawn(binary, args, { stdio: ['pipe', 'pipe', 'pipe'] });
       const chunks: Buffer[] = [];
       const errors: Buffer[] = [];
+      let settled = false;
+
+      const timeoutHandle = setTimeout(() => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        child.kill('SIGKILL');
+        reject(new DecoderTimeoutError(`timeout after ${timeoutMs}ms`));
+      }, timeoutMs);
 
       child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
       child.stderr.on('data', (chunk: Buffer) => errors.push(chunk));
       child.on('error', (error: NodeJS.ErrnoException) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timeoutHandle);
         if (error.code === 'ENOENT' || error.code === 'EACCES') {
           reject(new DecoderUnavailableError(`${binary} (${error.code ?? 'spawn error'})`));
           return;
@@ -272,6 +343,11 @@ export class PlayersService {
         reject(error);
       });
       child.on('close', (code) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timeoutHandle);
         resolve({
           exitCode: code,
           stdout: Buffer.concat(chunks).toString('utf-8'),
@@ -282,6 +358,69 @@ export class PlayersService {
       child.stdin.write(input);
       child.stdin.end();
     });
+  }
+
+  private async runDecoderUsingInputFile(
+    decoderSpec: DecoderCommandSpec,
+    input: Buffer,
+    timeoutMs: number,
+  ): Promise<DecoderRunResult> {
+    const tempPath = join('/tmp', `dni-scan-input-${randomUUID()}.png`);
+    await writeFile(tempPath, input);
+
+    try {
+      const args = decoderSpec.args.map((arg) =>
+        arg === decoderSpec.inputFileToken ? tempPath : arg,
+      );
+      return await this.runDecoderUsingStdin(decoderSpec.binary, args, Buffer.alloc(0), timeoutMs);
+    } finally {
+      await this.cleanupTempInputFile(tempPath);
+    }
+  }
+
+  private async cleanupTempInputFile(path: string): Promise<void> {
+    try {
+      await unlink(path);
+    } catch (error) {
+      this.logger.warn(
+        `[DNI_SCAN] input temp file cleanup failed path=${path} error=${error instanceof Error ? error.message : 'unknown'}`,
+      );
+    }
+  }
+
+  private async preprocessDecodeImage(imageBuffer: Buffer) {
+    const normalized = sharp(imageBuffer, { failOn: 'none' }).rotate();
+    const metadata = await normalized.metadata();
+    const resizedBuffer = await normalized
+      .clone()
+      .resize({ width: 1800, withoutEnlargement: true })
+      .png()
+      .toBuffer();
+    const resizedMetadata = await sharp(resizedBuffer, { failOn: 'none' }).metadata();
+
+    const resizedWidth = resizedMetadata.width ?? metadata.width ?? 0;
+    const resizedHeight = resizedMetadata.height ?? metadata.height ?? 0;
+    const roiHeight = Math.max(1, Math.floor(resizedHeight * 0.35));
+    const roiTop = Math.max(0, resizedHeight - roiHeight);
+    const roiWidth = Math.max(1, resizedWidth);
+
+    const roiBuffer = await sharp(resizedBuffer, { failOn: 'none' })
+      .extract({
+        left: 0,
+        top: roiTop,
+        width: roiWidth,
+        height: roiHeight,
+      })
+      .png()
+      .toBuffer();
+
+    return {
+      roiBuffer,
+      resizedWidth,
+      resizedHeight,
+      roiWidth,
+      roiHeight,
+    };
   }
 
   private async buildDecodeStrategies(imageBuffer: Buffer) {
