@@ -549,12 +549,6 @@ export class TournamentsService {
         );
       }
 
-      if (dto.categories.length !== existingAssignmentsByCategoryId.size) {
-        throw new BadRequestException(
-          'Con zonas cerradas solo se pueden modificar los horarios de categorías ya asociadas.',
-        );
-      }
-
       for (const assignment of dto.categories) {
         const existingAssignment = existingAssignmentsByCategoryId.get(assignment.categoryId);
         if (!existingAssignment) {
