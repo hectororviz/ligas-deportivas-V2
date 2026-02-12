@@ -347,10 +347,9 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
   Future<void> _saveAssignment(PlayerAssignmentRow row, int? clubId) async {
     final tournamentId = _selectedTournamentId;
     final categoryId = _selectedCategoryId;
-    if (tournamentId == null || categoryId == null) {
+    if (tournamentId == null) {
       setState(() {
-        _playersError =
-            'Para asignar un club, selecciona también torneo y categoría.';
+        _playersError = 'Para asignar un club, selecciona también torneo.';
       });
       row.selectedClubId = row.assignedClubId;
       _dataSource?.notifyListeners();
@@ -370,7 +369,7 @@ class _TournamentPlayersPageState extends ConsumerState<TournamentPlayersPage> {
         data: {
           'playerId': row.playerId,
           'clubId': clubId,
-          'categoryId': categoryId,
+          if (categoryId != null) 'categoryId': categoryId,
         },
       );
       row.assignedClubId = clubId;
