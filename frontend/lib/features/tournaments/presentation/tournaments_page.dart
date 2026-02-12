@@ -167,6 +167,7 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
       tournament: tournament,
       leagues: allowedLeagues.isEmpty ? leagues : allowedLeagues,
       readOnly: false,
+      scheduleOnly: tournament.status == TournamentStatus.inProgress,
       allowedLeagueIds: allowedLeagueIds,
     );
 
@@ -217,6 +218,7 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
     TournamentSummary? tournament,
     required List<League> leagues,
     required bool readOnly,
+    bool scheduleOnly = false,
     Set<int>? allowedLeagueIds,
   }) {
     final size = MediaQuery.sizeOf(context);
@@ -231,6 +233,7 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
       leagues: leagues,
       tournament: tournament,
       readOnly: readOnly,
+      scheduleOnly: scheduleOnly,
       allowedLeagueIds: allowedLeagueIds,
       maxContentWidth: estimatedContentWidth,
     );
@@ -654,8 +657,7 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
                                         action: _actionUpdate,
                                         leagueId: tournament.leagueId,
                                       ) ??
-                                      false) &&
-                                  !tournament.hasLockedZones,
+                                      false),
                               canDeactivate: (tournament) =>
                                   (user?.hasPermission(
                                         module: _moduleTorneos,
@@ -1303,6 +1305,7 @@ class _TournamentFormDialog extends ConsumerStatefulWidget {
     required this.leagues,
     this.tournament,
     required this.readOnly,
+    required this.scheduleOnly,
     this.allowedLeagueIds,
     required this.maxContentWidth,
   });
@@ -1310,6 +1313,7 @@ class _TournamentFormDialog extends ConsumerStatefulWidget {
   final List<League> leagues;
   final TournamentSummary? tournament;
   final bool readOnly;
+  final bool scheduleOnly;
   final Set<int>? allowedLeagueIds;
   final double maxContentWidth;
 
@@ -1329,6 +1333,8 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
   bool _showCategoryErrors = false;
   List<_CategorySelection> _selections = [];
   bool _categoriesInitialized = false;
+
+  bool get _lockGeneralFields => widget.readOnly || widget.scheduleOnly;
 
   @override
   void initState() {
@@ -1397,7 +1403,7 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
       'pointsLoss': 0,
       'gender': _selectedGender,
     };
-    final selections = _selections;
+    final selections = widget.scheduleOnly ? _editableSelections : _selections;
     final categoriesPayload = selections
         .map((selection) => {
               'categoryId': selection.category.id,
@@ -1468,7 +1474,7 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
   }
 
   bool _validateCategories() {
-    final included = _selections
+    final included = _editableSelections
         .where(
           (selection) =>
               _matchesSelectedGender(selection.category) && selection.include,
@@ -1529,6 +1535,9 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
   }
 
   void _applyGenderFilter() {
+    if (widget.scheduleOnly) {
+      return;
+    }
     for (final selection in _selections) {
       if (!_matchesSelectedGender(selection.category)) {
         selection
@@ -1545,6 +1554,13 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
       return true;
     }
     return category.gender == _selectedGender;
+  }
+
+  List<_CategorySelection> get _editableSelections {
+    if (!widget.scheduleOnly) {
+      return _selections;
+    }
+    return _selections.where((selection) => selection.include).toList();
   }
 
   TimeOfDay? _parseKickoffTime(String? value) {
@@ -1586,6 +1602,8 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
             Text(
               widget.readOnly
                   ? 'Visualiza la configuración del torneo seleccionado.'
+                  : widget.scheduleOnly
+                      ? 'El torneo está en juego. Solo puedes modificar los horarios de las categorías asociadas.'
                   : isCreate
                       ? 'Completa los datos esenciales para dar de alta un nuevo torneo.'
                       : 'Actualiza los datos esenciales del torneo.',
@@ -1621,7 +1639,7 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
                         ),
                       )
                       .toList(),
-                  onChanged: widget.readOnly
+                  onChanged: _lockGeneralFields
                       ? null
                       : (value) => setState(() => _selectedLeagueId = value),
                   validator: (value) {
@@ -1636,7 +1654,7 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
             const SizedBox(height: 16),
             TextFormField(
               controller: _nameController,
-              readOnly: widget.readOnly,
+              readOnly: _lockGeneralFields,
               decoration: const InputDecoration(
                 labelText: 'Nombre del torneo',
                 hintText: 'Ej. Torneo 2024 Domingo',
@@ -1653,7 +1671,7 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
             const SizedBox(height: 16),
             TextFormField(
               controller: _yearController,
-              readOnly: widget.readOnly,
+              readOnly: _lockGeneralFields,
               decoration: InputDecoration(
                 labelText: 'Año del torneo (YYYY)',
                 hintText: 'Ej. $currentYear',
@@ -1694,7 +1712,7 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
                   child: Text('Femenino'),
                 ),
               ],
-              onChanged: widget.readOnly
+              onChanged: _lockGeneralFields
                   ? null
                   : (value) {
                       if (value == null) {
@@ -1726,7 +1744,7 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
                 if (!_categoriesInitialized) {
                   _initializeSelections(categories);
                 }
-                final visibleSelections = _selections
+                final visibleSelections = _editableSelections
                     .where((selection) =>
                         _matchesSelectedGender(selection.category))
                     .toList();
@@ -1742,6 +1760,7 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
                 return _CategorySelectionTable(
                   selections: visibleSelections,
                   readOnly: widget.readOnly,
+                  scheduleOnly: widget.scheduleOnly,
                   onChanged: (selection) {
                     setState(() {});
                   },
@@ -1807,12 +1826,14 @@ class _CategorySelectionTable extends StatefulWidget {
   const _CategorySelectionTable({
     required this.selections,
     required this.readOnly,
+    required this.scheduleOnly,
     required this.onChanged,
     required this.minWidth,
   });
 
   final List<_CategorySelection> selections;
   final bool readOnly;
+  final bool scheduleOnly;
   final ValueChanged<_CategorySelection> onChanged;
   final double minWidth;
 
@@ -1875,7 +1896,7 @@ class _CategorySelectionTableState extends State<_CategorySelectionTable> {
               DataCell(
                 Checkbox(
                   value: selection.include,
-                  onChanged: widget.readOnly
+                  onChanged: widget.readOnly || widget.scheduleOnly
                       ? null
                       : (value) {
                           setState(() {
@@ -1910,7 +1931,7 @@ class _CategorySelectionTableState extends State<_CategorySelectionTable> {
               DataCell(
                 Switch(
                   value: selection.countsForGeneral,
-                  onChanged: widget.readOnly || !selection.include
+                  onChanged: widget.readOnly || widget.scheduleOnly || !selection.include
                       ? null
                       : (value) {
                           setState(() {

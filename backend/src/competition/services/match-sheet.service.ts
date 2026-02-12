@@ -87,7 +87,6 @@ export class MatchSheetService {
               },
             },
           },
-          orderBy: [{ kickoffTime: 'asc' }, { id: 'asc' }],
         },
       },
     });
@@ -97,7 +96,21 @@ export class MatchSheetService {
     }
 
     const pages: SheetPageData[] = [];
-    for (const matchCategory of match.categories) {
+    const sortedCategories = [...match.categories].sort((left, right) => {
+      const leftKickoffTime = left.tournamentCategory?.kickoffTime || left.kickoffTime || '99:99';
+      const rightKickoffTime = right.tournamentCategory?.kickoffTime || right.kickoffTime || '99:99';
+
+      const byKickoffTime = leftKickoffTime.localeCompare(rightKickoffTime);
+      if (byKickoffTime !== 0) {
+        return byKickoffTime;
+      }
+
+      const leftCategory = left.tournamentCategory?.category?.name || '';
+      const rightCategory = right.tournamentCategory?.category?.name || '';
+      return leftCategory.localeCompare(rightCategory, 'es-AR');
+    });
+
+    for (const matchCategory of sortedCategories) {
       const category = matchCategory.tournamentCategory?.category;
       const [homePlayers, awayPlayers] = await Promise.all([
         this.findPlayersForSheet(match.homeClub, match.tournament.id, category),
