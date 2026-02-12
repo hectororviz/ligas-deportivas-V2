@@ -540,7 +540,7 @@ export class ClubsService {
         tournamentCategory: {
           select: {
             category: {
-              select: { id: true, name: true },
+              select: { id: true, name: true, birthYearMin: true, birthYearMax: true, gender: true },
             },
             tournament: {
               select: { id: true, name: true, year: true },
@@ -610,7 +610,7 @@ export class ClubsService {
               select: { id: true, name: true, year: true },
             },
             category: {
-              select: { id: true, name: true },
+              select: { id: true, name: true, birthYearMin: true, birthYearMax: true, gender: true },
             },
           },
         },
@@ -659,6 +659,92 @@ export class ClubsService {
         return a.categoryName.localeCompare(b.categoryName);
       });
 
+    if (rosterRows.length > 0) {
+      return {
+        club,
+        selectedTournamentId,
+        filters: {
+          tournaments: Array.from(tournamentsMap.values()),
+          categories: Array.from(categoriesMap.values()),
+        },
+        rows: rosterRows,
+      };
+    }
+
+    const eligibleCategories = teams
+      .map((team) => team.tournamentCategory)
+      .filter((item) => item.tournament.id === selectedTournamentId)
+      .filter((item) => (query.categoryId != null ? item.category.id === query.categoryId : true));
+
+    if (eligibleCategories.length === 0) {
+      return {
+        club,
+        selectedTournamentId,
+        filters: {
+          tournaments: Array.from(tournamentsMap.values()),
+          categories: Array.from(categoriesMap.values()),
+        },
+        rows: [],
+      };
+    }
+
+    const tournamentName = tournamentsMap.get(selectedTournamentId)?.name ?? '—';
+    const tournamentPlayers = await this.prisma.player.findMany({
+      where: {
+        active: true,
+        playerTournamentClubs: {
+          some: {
+            clubId,
+            tournamentId: selectedTournamentId,
+          },
+        },
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        birthDate: true,
+        dni: true,
+        gender: true,
+      },
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+    });
+
+    const fallbackRows = tournamentPlayers
+      .flatMap((player) => {
+        const birthYear = player.birthDate.getUTCFullYear();
+        return eligibleCategories
+          .filter((entry) => {
+            const category = entry.category;
+            if (birthYear < category.birthYearMin || birthYear > category.birthYearMax) {
+              return false;
+            }
+            return category.gender === Gender.MIXTO || category.gender === player.gender;
+          })
+          .map((entry) => ({
+            playerId: player.id,
+            firstName: player.firstName,
+            lastName: player.lastName,
+            birthDate: player.birthDate.toISOString(),
+            dni: player.dni,
+            tournamentId: selectedTournamentId,
+            tournamentName,
+            categoryId: entry.category.id,
+            categoryName: entry.category.name,
+          }));
+      })
+      .sort((a, b) => {
+        const byLastName = a.lastName.localeCompare(b.lastName);
+        if (byLastName !== 0) {
+          return byLastName;
+        }
+        const byFirstName = a.firstName.localeCompare(b.firstName);
+        if (byFirstName !== 0) {
+          return byFirstName;
+        }
+        return a.categoryName.localeCompare(b.categoryName);
+      });
+
     return {
       club,
       selectedTournamentId,
@@ -666,7 +752,7 @@ export class ClubsService {
         tournaments: Array.from(tournamentsMap.values()),
         categories: Array.from(categoriesMap.values()),
       },
-      rows: rosterRows,
+      rows: fallbackRows,
     };
   }
 
