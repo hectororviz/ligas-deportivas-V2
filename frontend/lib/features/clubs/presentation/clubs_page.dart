@@ -678,7 +678,6 @@ class _ClubRosterViewState extends ConsumerState<_ClubRosterView> {
       final api = ref.read(apiClientProvider);
       final query = <String, dynamic>{
         if (_selectedTournamentId != null) 'tournamentId': _selectedTournamentId,
-        if (_selectedCategoryId != null) 'categoryId': _selectedCategoryId,
       };
 
       final response = await api.get<Map<String, dynamic>>(
@@ -700,6 +699,9 @@ class _ClubRosterViewState extends ConsumerState<_ClubRosterView> {
           .whereType<Map<String, dynamic>>()
           .map(_ClubRosterRow.fromJson)
           .toList();
+      final filteredRows = _selectedCategoryId == null
+          ? rows
+          : rows.where((row) => row.categoryId == _selectedCategoryId).toList();
 
       setState(() {
         _tournaments = tournaments;
