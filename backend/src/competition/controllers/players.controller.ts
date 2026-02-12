@@ -49,7 +49,6 @@ export class PlayersController {
     return this.playersService.findById(id);
   }
 
-
   @Post('dni/scan')
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @Permissions({ module: Module.JUGADORES, action: Action.CREATE })
@@ -61,6 +60,19 @@ export class PlayersController {
   )
   scanDni(@UploadedFile() file?: Express.Multer.File) {
     return this.playersService.scanDniFromImage(file);
+  }
+
+  @Post('dni/scan/diagnostic')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @Permissions({ module: Module.JUGADORES, action: Action.CREATE })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 8 * 1024 * 1024 },
+    }),
+  )
+  scanDniDiagnostic(@UploadedFile() file?: Express.Multer.File) {
+    return this.playersService.scanDniDiagnostic(file);
   }
 
   @Post()

@@ -1,10 +1,14 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
+import 'package:http_parser/http_parser.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/utils/dni_capture.dart';
@@ -139,6 +143,13 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
         return;
       }
 
+      final dimensions = await _decodeImageDimensions(image.bytes);
+      if (kDebugMode) {
+        debugPrint(
+          '[DNI_SCAN][frontend] selected file name=${image.filename} mime=${image.mimeType} bytes=${image.bytes.length} dimensions=${dimensions?.$1 ?? 'unknown'}x${dimensions?.$2 ?? 'unknown'} base64Length=not_used(raw_upload)',
+        );
+      }
+
       final scanned = await _scanDniOnServer(image);
       if (!mounted) {
         return;
@@ -196,8 +207,15 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
       'file': MultipartFile.fromBytes(
         image.bytes,
         filename: image.filename,
+        contentType: MediaType.parse(image.mimeType),
       ),
     });
+
+    if (kDebugMode) {
+      debugPrint(
+        '[DNI_SCAN][frontend] uploading raw file filename=${image.filename} mime=${image.mimeType} bytes=${image.bytes.length}',
+      );
+    }
 
     showDialog<void>(
       context: context,
@@ -223,6 +241,17 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
       if (mounted) {
         Navigator.of(context, rootNavigator: true).maybePop();
       }
+    }
+  }
+
+  Future<(int, int)?> _decodeImageDimensions(List<int> bytes) async {
+    try {
+      final codec = await ui.instantiateImageCodec(Uint8List.fromList(bytes));
+      final frame = await codec.getNextFrame();
+      codec.dispose();
+      return (frame.image.width, frame.image.height);
+    } catch (_) {
+      return null;
     }
   }
 
