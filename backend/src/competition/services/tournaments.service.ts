@@ -17,10 +17,7 @@ export class TournamentsService {
       include: {
         league: true,
       },
-      orderBy: [
-        { year: 'desc' },
-        { name: 'asc' },
-      ],
+      orderBy: [{ year: 'desc' }, { name: 'asc' }],
     });
   }
 
@@ -44,9 +41,7 @@ export class TournamentsService {
 
   findAllByLeague(leagueId: number, includeInactive = false) {
     return this.prisma.tournament.findMany({
-      where: includeInactive
-        ? { leagueId }
-        : { leagueId, status: TournamentStatus.ACTIVE },
+      where: includeInactive ? { leagueId } : { leagueId, status: TournamentStatus.ACTIVE },
       include: {
         zones: true,
         categories: {
@@ -513,16 +508,69 @@ export class TournamentsService {
         zones: {
           select: { status: true },
         },
+        categories: {
+          select: {
+            categoryId: true,
+            enabled: true,
+            countsForGeneral: true,
+          },
+        },
       },
     });
 
     if (!tournament) {
       throw new BadRequestException('Torneo inexistente');
     }
-    if (tournament.zones.some((zone) => zone.status !== ZoneStatus.OPEN)) {
-      throw new BadRequestException(
-        'No se puede editar el torneo mientras alguna de sus zonas no esté abierta.',
-      );
+    const hasLockedZones = tournament.zones.some((zone) => zone.status !== ZoneStatus.OPEN);
+    const existingAssignmentsByCategoryId = new Map(
+      tournament.categories.map((assignment) => [assignment.categoryId, assignment]),
+    );
+
+    if (hasLockedZones) {
+      const immutableTournamentDataChanged =
+        tournament.leagueId !== dto.leagueId ||
+        tournament.name !== dto.name ||
+        tournament.year !== dto.year ||
+        tournament.gender !== dto.gender ||
+        tournament.championMode !== dto.championMode ||
+        tournament.pointsWin !== dto.pointsWin ||
+        tournament.pointsDraw !== dto.pointsDraw ||
+        tournament.pointsLoss !== dto.pointsLoss ||
+        (dto.status != null && tournament.status !== dto.status) ||
+        (dto.startDate != null &&
+          (tournament.startDate?.toISOString() ?? null) !==
+            new Date(dto.startDate).toISOString()) ||
+        (dto.endDate != null &&
+          (tournament.endDate?.toISOString() ?? null) !== new Date(dto.endDate).toISOString());
+
+      if (immutableTournamentDataChanged) {
+        throw new BadRequestException(
+          'No se puede editar el torneo mientras alguna de sus zonas no esté abierta.',
+        );
+      }
+
+      if (dto.categories.length !== existingAssignmentsByCategoryId.size) {
+        throw new BadRequestException(
+          'Con zonas cerradas solo se pueden modificar los horarios de categorías ya asociadas.',
+        );
+      }
+
+      for (const assignment of dto.categories) {
+        const existingAssignment = existingAssignmentsByCategoryId.get(assignment.categoryId);
+        if (!existingAssignment) {
+          throw new BadRequestException(
+            'Con zonas cerradas solo se pueden modificar los horarios de categorías ya asociadas.',
+          );
+        }
+        if (
+          assignment.enabled !== existingAssignment.enabled ||
+          assignment.countsForGeneral !== existingAssignment.countsForGeneral
+        ) {
+          throw new BadRequestException(
+            'Con zonas cerradas solo se pueden modificar los horarios de categorías ya asociadas.',
+          );
+        }
+      }
     }
 
     const categoryIds = dto.categories.map((category) => category.categoryId);
@@ -549,22 +597,24 @@ export class TournamentsService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.tournament.update({
-        where: { id },
-        data: {
-          leagueId: dto.leagueId,
-          name: dto.name,
-          year: dto.year,
-          status: dto.status,
-          gender: dto.gender,
-          pointsWin: dto.pointsWin,
-          pointsDraw: dto.pointsDraw,
-          pointsLoss: dto.pointsLoss,
-          championMode: dto.championMode,
-          startDate: dto.startDate ? new Date(dto.startDate) : undefined,
-          endDate: dto.endDate ? new Date(dto.endDate) : undefined,
-        },
-      });
+      const updated = hasLockedZones
+        ? await tx.tournament.findUniqueOrThrow({ where: { id } })
+        : await tx.tournament.update({
+            where: { id },
+            data: {
+              leagueId: dto.leagueId,
+              name: dto.name,
+              year: dto.year,
+              status: dto.status,
+              gender: dto.gender,
+              pointsWin: dto.pointsWin,
+              pointsDraw: dto.pointsDraw,
+              pointsLoss: dto.pointsLoss,
+              championMode: dto.championMode,
+              startDate: dto.startDate ? new Date(dto.startDate) : undefined,
+              endDate: dto.endDate ? new Date(dto.endDate) : undefined,
+            },
+          });
 
       const existing = await tx.tournamentCategory.findMany({
         where: { tournamentId: id },
@@ -587,7 +637,7 @@ export class TournamentsService {
         if (existingById.has(assignment.categoryId)) {
           await tx.tournamentCategory.update({ where, data });
           existingById.delete(assignment.categoryId);
-        } else if (assignment.enabled) {
+        } else if (!hasLockedZones && assignment.enabled) {
           await tx.tournamentCategory.create({
             data: {
               tournamentId: id,
@@ -600,15 +650,17 @@ export class TournamentsService {
         }
       }
 
-      for (const remaining of existingById.values()) {
-        await tx.tournamentCategory.delete({
-          where: {
-            tournamentId_categoryId: {
-              tournamentId: id,
-              categoryId: remaining.categoryId,
+      if (!hasLockedZones) {
+        for (const remaining of existingById.values()) {
+          await tx.tournamentCategory.delete({
+            where: {
+              tournamentId_categoryId: {
+                tournamentId: id,
+                categoryId: remaining.categoryId,
+              },
             },
-          },
-        });
+          });
+        }
       }
 
       return updated;

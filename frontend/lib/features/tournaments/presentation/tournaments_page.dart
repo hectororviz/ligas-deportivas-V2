@@ -1403,7 +1403,7 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
       'pointsLoss': 0,
       'gender': _selectedGender,
     };
-    final selections = _selections;
+    final selections = widget.scheduleOnly ? _editableSelections : _selections;
     final categoriesPayload = selections
         .map((selection) => {
               'categoryId': selection.category.id,
