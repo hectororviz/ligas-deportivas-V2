@@ -28,6 +28,9 @@ import { UpdateRosterPlayersDto } from '../dto/update-roster-players.dto';
 import { JoinTournamentDto } from '../dto/join-tournament.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Express } from 'express';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RequestUser } from '../../common/interfaces/request-user.interface';
+import { ListClubRosterDto } from '../dto/list-club-roster.dto';
 
 @Controller()
 export class ClubsController {
@@ -80,6 +83,17 @@ export class ClubsController {
   @Get('clubs/:clubId/available-tournaments')
   listAvailableTournaments(@Param('clubId', ParseIntPipe) clubId: number) {
     return this.clubsService.listAvailableTournaments(clubId);
+  }
+
+  @Get('clubs/:clubId/roster')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @Permissions({ module: Module.CLUBES, action: Action.VIEW })
+  listClubRoster(
+    @Param('clubId', ParseIntPipe) clubId: number,
+    @Query() query: ListClubRosterDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.clubsService.listClubRoster(clubId, query, user);
   }
 
   @Post('clubs/:clubId/available-tournaments')

@@ -8,10 +8,12 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../../core/utils/csv_download.dart';
 import '../../../core/utils/responsive.dart';
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
@@ -23,6 +25,8 @@ import 'widgets/authenticated_image.dart';
 const _moduleClubes = 'CLUBES';
 const _actionCreate = 'CREATE';
 const _actionUpdate = 'UPDATE';
+const _actionView = 'VIEW';
+const _dateFormat = 'dd/MM/yyyy';
 const double _clubLogoSize = 200;
 const int _clubLogoMinSize = 200;
 const int _clubLogoMaxSize = 500;
@@ -196,6 +200,15 @@ class _ClubsPageState extends ConsumerState<ClubsPage> {
       );
     }
   }
+  Future<void> _openClubRoster(Club club) async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => Dialog.fullscreen(
+        child: _ClubRosterView(club: club),
+      ),
+    );
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -205,6 +218,10 @@ class _ClubsPageState extends ConsumerState<ClubsPage> {
         user?.hasPermission(module: _moduleClubes, action: _actionCreate) ?? false;
     final canEdit =
         user?.hasPermission(module: _moduleClubes, action: _actionUpdate) ?? false;
+    final canViewRoster =
+        user != null &&
+        user.hasAnyRole(const ['ADMIN', 'COLLABORATOR', 'DELEGATE']) &&
+        user.hasPermission(module: _moduleClubes, action: _actionView);
     final clubsAsync = ref.watch(clubsProvider);
     final filters = ref.watch(clubsFiltersProvider);
 
@@ -358,6 +375,9 @@ class _ClubsPageState extends ConsumerState<ClubsPage> {
                             canEdit: canEdit,
                             onEdit: _openEditClub,
                             onView: _openClubDetails,
+                            onViewRoster: _openClubRoster,
+                            canViewRoster: canViewRoster,
+                            delegateClubId: user?.clubId,
                           ),
                         ),
                         const Divider(height: 1),
@@ -469,12 +489,18 @@ class _ClubsDataTable extends StatelessWidget {
     required this.canEdit,
     required this.onEdit,
     required this.onView,
+    required this.onViewRoster,
+    required this.canViewRoster,
+    required this.delegateClubId,
   });
 
   final PaginatedClubs data;
   final bool canEdit;
   final ValueChanged<Club> onEdit;
   final ValueChanged<Club> onView;
+  final ValueChanged<Club> onViewRoster;
+  final bool canViewRoster;
+  final int? delegateClubId;
 
   @override
   Widget build(BuildContext context) {
@@ -486,6 +512,7 @@ class _ClubsDataTable extends StatelessWidget {
     final headerStyle =
         theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: colors.headerText);
     final isMobile = Responsive.isMobile(context);
+    final delegateClubIdIsRequired = delegateClubId != null;
 
     final table = DataTable(
       columns: [
@@ -564,6 +591,15 @@ class _ClubsDataTable extends StatelessWidget {
                         icon: const Icon(Icons.visibility_outlined),
                         label: const Text('Detalles'),
                       ),
+                      if (canViewRoster &&
+                          (!delegateClubIdIsRequired || delegateClubId == clubs[index].id)) ...[
+                        const SizedBox(width: 8),
+                        FilledButton.icon(
+                          onPressed: () => onViewRoster(clubs[index]),
+                          icon: const Icon(Icons.groups_outlined),
+                          label: const Text('Plantel'),
+                        ),
+                      ],
                       const SizedBox(width: 8),
                       FilledButton.tonalIcon(
                         onPressed: canEdit ? () => onEdit(clubs[index]) : null,
@@ -601,6 +637,303 @@ class _ClubsDataTable extends StatelessWidget {
       },
     );
   }
+}
+
+
+class _ClubRosterView extends ConsumerStatefulWidget {
+  const _ClubRosterView({required this.club});
+
+  final Club club;
+
+  @override
+  ConsumerState<_ClubRosterView> createState() => _ClubRosterViewState();
+}
+
+class _ClubRosterViewState extends ConsumerState<_ClubRosterView> {
+  final DateFormat _birthDateFormat = DateFormat(_dateFormat);
+  bool _loading = true;
+  bool _exporting = false;
+  String? _error;
+  int? _selectedTournamentId;
+  int? _selectedCategoryId;
+  List<_RosterFilterOption> _tournaments = const [];
+  List<_RosterFilterOption> _categories = const [];
+  List<_ClubRosterRow> _rows = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadRoster(initialLoad: true));
+  }
+
+  Future<void> _loadRoster({required bool initialLoad}) async {
+    if (initialLoad) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
+
+    try {
+      final api = ref.read(apiClientProvider);
+      final query = <String, dynamic>{
+        if (_selectedTournamentId != null) 'tournamentId': _selectedTournamentId,
+        if (_selectedCategoryId != null) 'categoryId': _selectedCategoryId,
+      };
+
+      final response = await api.get<Map<String, dynamic>>(
+        '/clubs/${widget.club.id}/roster',
+        queryParameters: query,
+      );
+      final data = response.data ?? {};
+      final selectedTournamentId = data['selectedTournamentId'] as int?;
+      final filters = data['filters'] as Map<String, dynamic>? ?? {};
+      final tournaments = (filters['tournaments'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(_RosterFilterOption.fromJson)
+          .toList();
+      final categories = (filters['categories'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(_RosterFilterOption.fromJson)
+          .toList();
+      final rows = (data['rows'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(_ClubRosterRow.fromJson)
+          .toList();
+
+      setState(() {
+        _tournaments = tournaments;
+        if (selectedTournamentId != null) {
+          _selectedTournamentId = selectedTournamentId;
+        }
+        _categories = categories;
+        if (_selectedTournamentId != null &&
+            !_tournaments.any((item) => item.id == _selectedTournamentId)) {
+          _selectedTournamentId = _tournaments.isNotEmpty ? _tournaments.first.id : null;
+        }
+        if (_selectedCategoryId != null && !_categories.any((item) => item.id == _selectedCategoryId)) {
+          _selectedCategoryId = null;
+        }
+        _rows = rows;
+        _loading = false;
+        _error = null;
+      });
+    } catch (error) {
+      setState(() {
+        _loading = false;
+        _error = 'No se pudo cargar el plantel: $error';
+      });
+    }
+  }
+
+  Future<void> _exportCsv() async {
+    if (_rows.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay datos para exportar.')),
+      );
+      return;
+    }
+
+    setState(() => _exporting = true);
+    try {
+      final buffer = StringBuffer();
+      buffer.writeln('Nombre,Apellido,Fecha de nacimiento,DNI,Torneo,Categoría');
+      for (final row in _rows) {
+        buffer.writeln([
+          _escapeCsv(row.firstName),
+          _escapeCsv(row.lastName),
+          _escapeCsv(_birthDateFormat.format(row.birthDate)),
+          _escapeCsv(row.dni),
+          _escapeCsv(row.tournamentName),
+          _escapeCsv(row.categoryName),
+        ].join(','));
+      }
+      final now = DateTime.now();
+      final fileName = 'plantel_${widget.club.id}_${DateFormat('yyyyMMdd_HHmm').format(now)}.csv';
+      await downloadCsv(content: buffer.toString(), filename: fileName);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo exportar el CSV: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _exporting = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Plantel · ${widget.club.name}'),
+      ),
+      body: Padding(
+        padding: Responsive.pagePadding(context),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Wrap(
+                  spacing: 16,
+                  runSpacing: 12,
+                  crossAxisAlignment: WrapCrossAlignment.end,
+                  children: [
+                    SizedBox(
+                      width: 320,
+                      child: DropdownButtonFormField<int>(
+                        value: _selectedTournamentId,
+                        decoration: const InputDecoration(labelText: 'Torneo *'),
+                        items: _tournaments
+                            .map(
+                              (item) => DropdownMenuItem<int>(
+                                value: item.id,
+                                child: Text(item.name),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setState(() {
+                            _selectedTournamentId = value;
+                            _selectedCategoryId = null;
+                          });
+                          unawaited(_loadRoster(initialLoad: true));
+                        },
+                      ),
+                    ),
+                    SizedBox(
+                      width: 240,
+                      child: DropdownButtonFormField<int?>(
+                        value: _selectedCategoryId,
+                        decoration: const InputDecoration(labelText: 'Categoría'),
+                        items: [
+                          const DropdownMenuItem<int?>(
+                            value: null,
+                            child: Text('Todas'),
+                          ),
+                          ..._categories.map(
+                            (item) => DropdownMenuItem<int?>(
+                              value: item.id,
+                              child: Text(item.name),
+                            ),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          setState(() => _selectedCategoryId = value);
+                          unawaited(_loadRoster(initialLoad: true));
+                        },
+                      ),
+                    ),
+                    FilledButton.icon(
+                      onPressed: _exporting ? null : _exportCsv,
+                      icon: _exporting
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.download_outlined),
+                      label: const Text('Exportar CSV'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: Card(
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _error != null
+                        ? Center(child: Text(_error!))
+                        : _rows.isEmpty
+                            ? const Center(
+                                child: Text('No hay jugadores para los filtros seleccionados.'),
+                              )
+                            : SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: DataTable(
+                                  columns: const [
+                                    DataColumn(label: Text('Nombre')),
+                                    DataColumn(label: Text('Apellido')),
+                                    DataColumn(label: Text('Fecha de nacimiento')),
+                                    DataColumn(label: Text('DNI')),
+                                    DataColumn(label: Text('Torneo')),
+                                    DataColumn(label: Text('Categoría')),
+                                  ],
+                                  rows: _rows
+                                      .map(
+                                        (row) => DataRow(cells: [
+                                          DataCell(Text(row.firstName)),
+                                          DataCell(Text(row.lastName)),
+                                          DataCell(Text(_birthDateFormat.format(row.birthDate))),
+                                          DataCell(Text(row.dni)),
+                                          DataCell(Text(row.tournamentName)),
+                                          DataCell(Text(row.categoryName)),
+                                        ]),
+                                      )
+                                      .toList(),
+                                ),
+                              ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RosterFilterOption {
+  const _RosterFilterOption({required this.id, required this.name});
+
+  factory _RosterFilterOption.fromJson(Map<String, dynamic> json) {
+    return _RosterFilterOption(
+      id: json['id'] as int,
+      name: json['name'] as String? ?? '—',
+    );
+  }
+
+  final int id;
+  final String name;
+}
+
+class _ClubRosterRow {
+  const _ClubRosterRow({
+    required this.firstName,
+    required this.lastName,
+    required this.birthDate,
+    required this.dni,
+    required this.tournamentName,
+    required this.categoryName,
+  });
+
+  factory _ClubRosterRow.fromJson(Map<String, dynamic> json) {
+    return _ClubRosterRow(
+      firstName: json['firstName'] as String? ?? '—',
+      lastName: json['lastName'] as String? ?? '—',
+      birthDate: DateTime.tryParse(json['birthDate'] as String? ?? '') ?? DateTime(1900),
+      dni: json['dni'] as String? ?? '—',
+      tournamentName: json['tournamentName'] as String? ?? '—',
+      categoryName: json['categoryName'] as String? ?? '—',
+    );
+  }
+
+  final String firstName;
+  final String lastName;
+  final DateTime birthDate;
+  final String dni;
+  final String tournamentName;
+  final String categoryName;
+}
+
+String _escapeCsv(String value) {
+  final escaped = value.replaceAll('"', '""');
+  return '"$escaped"';
 }
 
 class _ClubsPaginationFooter extends StatelessWidget {
