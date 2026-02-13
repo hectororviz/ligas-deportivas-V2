@@ -1328,15 +1328,49 @@ class _ScannedPlayerConfirmationDialogState
     try {
       final api = ref.read(apiClientProvider);
       final response = await api.get<List<dynamic>>('/tournaments');
-      final items = (response.data ?? const [])
+      final activeTournaments = (response.data ?? const [])
           .whereType<Map<String, dynamic>>()
           .map((json) => _SimpleOption.fromJson(json))
           .toList();
+      final playerBirthYear = widget.player.birthDate.year;
+      final playerGender = widget.player.gender;
+
+      final eligibility = await Future.wait(
+        activeTournaments.map((tournament) async {
+          final categoriesResponse = await api.get<List<dynamic>>(
+            '/tournaments/${tournament.id}/categories',
+          );
+          final categories = (categoriesResponse.data ?? const [])
+              .whereType<Map<String, dynamic>>();
+          final hasEligibleCategory = categories.any((category) {
+            final birthYearMin = category['birthYearMin'] as int?;
+            final birthYearMax = category['birthYearMax'] as int?;
+            final categoryGender = (category['gender'] as String? ?? '').trim();
+            if (birthYearMin == null || birthYearMax == null || categoryGender.isEmpty) {
+              return false;
+            }
+            final isBirthYearEligible =
+                playerBirthYear >= birthYearMin && playerBirthYear <= birthYearMax;
+            final isGenderEligible =
+                categoryGender == 'MIXTO' || categoryGender == playerGender;
+            return isBirthYearEligible && isGenderEligible;
+          });
+          return (tournamentId: tournament.id, eligible: hasEligibleCategory);
+        }),
+      );
+      final eligibleTournamentIds = eligibility
+          .where((item) => item.eligible)
+          .map((item) => item.tournamentId)
+          .toSet();
+      final eligibleTournaments = activeTournaments
+          .where((tournament) => eligibleTournamentIds.contains(tournament.id))
+          .toList();
+
       if (!mounted) {
         return;
       }
       setState(() {
-        _tournaments = items;
+        _tournaments = eligibleTournaments;
       });
     } catch (_) {
       if (!mounted) {
@@ -1436,6 +1470,10 @@ class _ScannedPlayerConfirmationDialogState
                 ],
                 onChanged: _loadingTournaments ? null : _selectTournament,
               ),
+              if (!_loadingTournaments && _tournaments.isEmpty && _loadingError == null) ...[
+                const SizedBox(height: 8),
+                const Text('No hay categorias acorde a los datos'),
+              ],
               if (_loadingTournaments) ...[
                 const SizedBox(height: 8),
                 const LinearProgressIndicator(minHeight: 2),
