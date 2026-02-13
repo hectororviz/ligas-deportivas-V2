@@ -107,9 +107,10 @@ export class MatchesController {
     @Param('matchId', ParseIntPipe) matchId: number,
     @Res() res: Response,
   ) {
+    const filenameBase = await this.matchesService.buildMatchDownloadFilename(matchId);
     const poster = await this.matchPosterService.generate(matchId);
     res.setHeader('Content-Type', poster.contentType);
-    res.setHeader('Content-Disposition', `attachment; filename=\"poster-${matchId}.${poster.fileExtension}\"`);
+    res.setHeader('Content-Disposition', `attachment; filename=\"${filenameBase}.${poster.fileExtension}\"`);
     return res.send(poster.buffer);
   }
 
