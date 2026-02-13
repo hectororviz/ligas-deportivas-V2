@@ -37,12 +37,14 @@ describe('PlayersService decoder wrapper', () => {
   const mockPreprocess = (service: PlayersService) => {
     jest.spyOn(service as never, 'preprocessDecodeImage' as never).mockResolvedValue({
       roiBuffer: Buffer.from('roi'),
+      resizedBuffer: Buffer.from('full'),
       resizedWidth: 1200,
       resizedHeight: 900,
       roiWidth: 1200,
       roiHeight: 315,
       roiRawByteLength: 100,
       roiPngByteLength: 80,
+      extractParams: { left: 60, top: 495, width: 1080, height: 360 },
     } as never);
   };
 
@@ -100,6 +102,7 @@ describe('PlayersService decoder wrapper', () => {
       },
       expect.any(Buffer),
       8000,
+      'req-1',
     );
   });
 
@@ -128,6 +131,7 @@ describe('PlayersService decoder wrapper', () => {
       },
       expect.any(Buffer),
       8000,
+      'req-1',
     );
   });
 

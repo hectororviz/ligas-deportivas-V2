@@ -47,22 +47,7 @@ if [[ -z "$ZXING_BIN" ]]; then
 fi
 
 OUTPUT=""
-ZXING_BASENAME="$(basename "$ZXING_BIN")"
-ZXING_ARGS=("$TMP_IMAGE")
-
-case "$ZXING_BASENAME" in
-  ZXingReader)
-    ;;
-  ReadBarcodes)
-    ZXING_ARGS=(--format PDF417 --single "$TMP_IMAGE")
-    ;;
-  zxingcpp)
-    ZXING_ARGS=(--format PDF417 "$TMP_IMAGE")
-    ;;
-  *)
-    ZXING_ARGS=(--format PDF417 "$TMP_IMAGE")
-    ;;
-esac
+ZXING_ARGS=(--format PDF417 "$TMP_IMAGE")
 
 if [[ "${DNI_DECODER_DEBUG:-0}" == "1" ]]; then
   {
@@ -72,8 +57,20 @@ if [[ "${DNI_DECODER_DEBUG:-0}" == "1" ]]; then
 fi
 
 set +e
+DECODER_START_MS="$(date +%s%3N)"
+if [[ "${DNI_DECODER_DEBUG:-0}" == "1" ]]; then
+  printf '[dni-pdf417-decoder] START_MS=%s\n' "$DECODER_START_MS" >&2
+fi
 OUTPUT="$($ZXING_BIN "${ZXING_ARGS[@]}" 2>&1)"
 ZXING_EXIT_CODE=$?
+DECODER_END_MS="$(date +%s%3N)"
+DECODER_ELAPSED_MS=$((DECODER_END_MS - DECODER_START_MS))
+if [[ "${DNI_DECODER_DEBUG:-0}" == "1" ]]; then
+  {
+    printf '[dni-pdf417-decoder] END_MS=%s\n' "$DECODER_END_MS"
+    printf '[dni-pdf417-decoder] ELAPSED_MS=%s\n' "$DECODER_ELAPSED_MS"
+  } >&2
+fi
 set -e
 
 if [[ "${DNI_DECODER_DEBUG:-0}" == "1" ]]; then
