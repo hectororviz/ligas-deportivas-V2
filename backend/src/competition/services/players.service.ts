@@ -383,9 +383,11 @@ export class PlayersService {
   }
 
   private resolveDecoderCommandSpec(): DecoderCommandSpec {
+    const rawCommand = this.configService.get('DNI_SCAN_DECODER_COMMAND');
     const command =
-      this.configService.get<string>('DNI_SCAN_DECODER_COMMAND')?.trim() ||
-      DEFAULT_DNI_SCAN_DECODER_COMMAND;
+      typeof rawCommand === 'string' && rawCommand.trim().length > 0
+        ? rawCommand.trim()
+        : DEFAULT_DNI_SCAN_DECODER_COMMAND;
     const [binary, ...args] = command.split(/\s+/).filter(Boolean);
     const inputFileToken = args.find((arg) => DECODER_FILE_PLACEHOLDER_TOKENS.has(arg));
     return {
@@ -481,9 +483,9 @@ export class PlayersService {
   }
 
   private isScanDebugKeepTmpEnabled(): boolean {
-    const rawValue = this.configService.get<string>('SCAN_DEBUG_KEEP_TMP');
-    const value = rawValue?.trim().toLowerCase();
-    return value === '1' || value === 'true';
+    const rawValue =
+      this.configService.get('SCAN_DEBUG_KEEP_TMP') ?? process.env.SCAN_DEBUG_KEEP_TMP;
+    return this.parseEnvBool(rawValue, false);
   }
 
   private resolveWritableTmpDir(): Promise<string> {
@@ -629,10 +631,22 @@ export class PlayersService {
 
   private isScanDebugEnabled(): boolean {
     const rawValue =
-      this.configService.get<string>('SCAN_DEBUG') ??
-      this.configService.get<string>('DNI_SCAN_DEBUG');
-    const value = rawValue?.trim().toLowerCase();
-    return value === '1' || value === 'true';
+      this.configService.get('SCAN_DEBUG') ??
+      this.configService.get('DNI_SCAN_DEBUG') ??
+      process.env.SCAN_DEBUG;
+    return this.parseEnvBool(rawValue, false);
+  }
+
+  private parseEnvBool(v: unknown, defaultValue = false): boolean {
+    if (v === undefined || v === null) return defaultValue;
+    if (typeof v === 'boolean') return v;
+    if (typeof v === 'number') return v === 1;
+    if (typeof v !== 'string') return defaultValue;
+
+    const s = v.trim().toLowerCase();
+    if (['1', 'true', 'yes', 'y', 'on'].includes(s)) return true;
+    if (['0', 'false', 'no', 'n', 'off', ''].includes(s)) return false;
+    return defaultValue;
   }
 
   private extractPayloadFromDecoderOutput(output: string): string {

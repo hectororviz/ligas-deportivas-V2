@@ -11,7 +11,11 @@ import { PlayersService } from './players.service';
 describe('PlayersService decoder wrapper', () => {
   const prismaMock = {} as PrismaService;
 
-  const buildService = (decoderCommand?: string, scanDebug?: string) => {
+  const buildService = (
+    decoderCommand?: unknown,
+    scanDebug?: unknown,
+    scanDebugKeepTmp?: unknown,
+  ) => {
     const configMock = {
       get: jest.fn((key: string) => {
         if (key === 'DNI_SCAN_DECODER_COMMAND') {
@@ -19,6 +23,9 @@ describe('PlayersService decoder wrapper', () => {
         }
         if (key === 'SCAN_DEBUG') {
           return scanDebug;
+        }
+        if (key === 'SCAN_DEBUG_KEEP_TMP') {
+          return scanDebugKeepTmp;
         }
         return undefined;
       }),
@@ -122,6 +129,27 @@ describe('PlayersService decoder wrapper', () => {
       expect.any(Buffer),
       8000,
     );
+  });
+
+
+  it('accepts boolean/number/string values in SCAN_DEBUG without crashing', () => {
+    const serviceWithBool = buildService(undefined, true);
+    const serviceWithNumber = buildService(undefined, 1);
+    const serviceWithString = buildService(undefined, 'yes');
+
+    expect((serviceWithBool as any).isScanDebugEnabled()).toBe(true);
+    expect((serviceWithNumber as any).isScanDebugEnabled()).toBe(true);
+    expect((serviceWithString as any).isScanDebugEnabled()).toBe(true);
+  });
+
+  it('accepts boolean/number/string values in SCAN_DEBUG_KEEP_TMP without crashing', () => {
+    const serviceWithBool = buildService(undefined, undefined, false);
+    const serviceWithNumber = buildService(undefined, undefined, 1);
+    const serviceWithString = buildService(undefined, undefined, 'off');
+
+    expect((serviceWithBool as any).isScanDebugKeepTmpEnabled()).toBe(false);
+    expect((serviceWithNumber as any).isScanDebugKeepTmpEnabled()).toBe(true);
+    expect((serviceWithString as any).isScanDebugKeepTmpEnabled()).toBe(false);
   });
 
   it('requires SCAN_DEBUG=1 for diagnostic endpoint', async () => {
