@@ -173,6 +173,15 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
         return;
       }
 
+      final alreadyExists = await _isDniAlreadyRegistered(scanned.dni);
+      if (!mounted) {
+        return;
+      }
+      if (alreadyExists) {
+        await _showExistingPlayerDialog();
+        return;
+      }
+
       final confirmation = await _confirmScannedPlayer(scanned);
       if (!mounted || confirmation == null) {
         return;
@@ -401,6 +410,39 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
       context: context,
       builder: (context) {
         return _ScannedPlayerConfirmationDialog(player: player);
+      },
+    );
+  }
+
+  Future<bool> _isDniAlreadyRegistered(String dni) async {
+    final api = ref.read(apiClientProvider);
+    final response = await api.get<Map<String, dynamic>>(
+      '/players',
+      queryParameters: {
+        'dni': dni,
+        'page': 1,
+        'pageSize': 1,
+      },
+    );
+
+    final data = response.data ?? const <String, dynamic>{};
+    final paginated = PaginatedPlayers.fromJson(data);
+    return paginated.players.any((player) => player.dni.trim() == dni.trim());
+  }
+
+  Future<void> _showExistingPlayerDialog() {
+    return showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          content: const Text('Jugador/a ya existente!!'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cerrar'),
+            ),
+          ],
+        );
       },
     );
   }
