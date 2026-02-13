@@ -1012,6 +1012,7 @@ export class PlayersService {
   async searchByDniAndCategory(query: SearchPlayersDto) {
     const trimmedDni = query.dni?.trim();
     const { tournamentId, categoryId, clubId } = query;
+    let tournamentGender: Gender | null = null;
 
     if (
       !trimmedDni &&
@@ -1029,6 +1030,19 @@ export class PlayersService {
 
     if ((query.onlyFree === true || clubId !== undefined) && tournamentId === undefined) {
       throw new BadRequestException('El filtro por club requiere un torneo.');
+    }
+
+    if (tournamentId !== undefined) {
+      const tournament = await this.prisma.tournament.findUnique({
+        where: { id: tournamentId },
+        select: { gender: true },
+      });
+
+      if (!tournament) {
+        throw new BadRequestException('Torneo inválido.');
+      }
+
+      tournamentGender = tournament.gender;
     }
 
     let category: {
@@ -1083,9 +1097,21 @@ export class PlayersService {
         lte: endDate,
       };
 
-      if (category.gender !== Gender.MIXTO) {
-        where.gender = category.gender;
-      }
+    }
+
+    const categoryGender =
+      category !== null && category.gender !== Gender.MIXTO ? category.gender : null;
+    const tournamentGenderFilter =
+      tournamentGender !== null && tournamentGender !== Gender.MIXTO ? tournamentGender : null;
+    if (
+      categoryGender !== null &&
+      tournamentGenderFilter !== null &&
+      categoryGender !== tournamentGenderFilter
+    ) {
+      return [];
+    }
+    if (categoryGender !== null || tournamentGenderFilter !== null) {
+      where.gender = categoryGender ?? tournamentGenderFilter;
     }
 
     const onlyFree = query.onlyFree === true;

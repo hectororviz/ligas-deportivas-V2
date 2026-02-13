@@ -1,9 +1,11 @@
 import {
+  BadRequestException,
   InternalServerErrorException,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Gender } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { PlayersService } from './players.service';
@@ -215,5 +217,72 @@ describe('PlayersService decoder wrapper', () => {
       payloadLength: 19,
       tokensCount: 6,
     });
+  });
+});
+
+describe('PlayersService.searchByDniAndCategory', () => {
+  const configMock = {
+    get: jest.fn(),
+  } as unknown as ConfigService;
+
+  it('filters players by tournament gender when tournament is feminine', async () => {
+    const prismaMock = {
+      tournament: {
+        findUnique: jest.fn().mockResolvedValue({ gender: Gender.FEMENINO }),
+      },
+      player: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+    } as unknown as PrismaService;
+    const service = new PlayersService(prismaMock, configMock);
+
+    await service.searchByDniAndCategory({ tournamentId: 10 });
+
+    expect(prismaMock.player.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ gender: Gender.FEMENINO }),
+      }),
+    );
+  });
+
+  it('returns empty list when category and tournament genders conflict', async () => {
+    const prismaMock = {
+      tournament: {
+        findUnique: jest.fn().mockResolvedValue({ gender: Gender.MASCULINO }),
+      },
+      tournamentCategory: {
+        findFirst: jest.fn().mockResolvedValue({ id: 1 }),
+      },
+      category: {
+        findUnique: jest.fn().mockResolvedValue({
+          birthYearMin: 2000,
+          birthYearMax: 2010,
+          gender: Gender.FEMENINO,
+          active: true,
+        }),
+      },
+      player: {
+        findMany: jest.fn(),
+      },
+    } as unknown as PrismaService;
+    const service = new PlayersService(prismaMock, configMock);
+
+    const result = await service.searchByDniAndCategory({ tournamentId: 1, categoryId: 2 });
+
+    expect(result).toEqual([]);
+    expect(prismaMock.player.findMany).not.toHaveBeenCalled();
+  });
+
+  it('throws when tournament does not exist', async () => {
+    const prismaMock = {
+      tournament: {
+        findUnique: jest.fn().mockResolvedValue(null),
+      },
+    } as unknown as PrismaService;
+    const service = new PlayersService(prismaMock, configMock);
+
+    await expect(service.searchByDniAndCategory({ tournamentId: 999 })).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
   });
 });
