@@ -30,7 +30,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/* \
   && fc-cache -f
 
-ENV DNI_SCAN_DECODER_COMMAND="/usr/local/bin/dni-pdf417-decoder --format PDF417"
+ENV DNI_SCAN_DECODER_COMMAND="/usr/local/bin/dni-pdf417-decoder"
 
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules

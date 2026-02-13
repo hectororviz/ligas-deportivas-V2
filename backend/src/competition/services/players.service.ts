@@ -25,7 +25,7 @@ import { UpdatePlayerDto } from '../dto/update-player.dto';
 import { ScanDniResultDto } from '../dto/scan-dni-result.dto';
 import { parseDniPdf417Payload } from '../utils/dni-pdf417-parser';
 
-const DEFAULT_DNI_SCAN_DECODER_COMMAND = '/usr/local/bin/dni-pdf417-decoder --format PDF417';
+const DEFAULT_DNI_SCAN_DECODER_COMMAND = '/usr/local/bin/dni-pdf417-decoder';
 const DECODER_TIMEOUT_MS = 8_000;
 const DECODER_FILE_PLACEHOLDER_TOKENS = new Set(['{file}', '__INPUT_FILE__']);
 
@@ -220,6 +220,7 @@ export class PlayersService {
     const debugEnabled = this.isScanDebugEnabled();
     const debugKeepTmpEnabled = this.isScanDebugKeepTmpEnabled();
     const decoderCommand = `${decoderSpec.binary} ${decoderSpec.args.join(' ')}`.trim();
+    const resolvedBinary = await this.resolveBinaryPath(decoderSpec.binary);
     let lastAttempt: DecoderAttemptDetail | null = null;
     let tempRoiPath: string | undefined;
 
@@ -256,7 +257,7 @@ export class PlayersService {
       }
 
       this.logger.log(
-        `[DNI_SCAN][requestId=${requestId}] decoder command=${decoderCommand} binary=${decoderSpec.binary}`,
+        `[DNI_SCAN][requestId=${requestId}] commandFinal=${decoderCommand} resolvedBinary=${resolvedBinary}`,
       );
       this.logger.log(`[DNI_SCAN][requestId=${requestId}][t1d] enter decode loop`);
       const decodeTargets = [
@@ -344,7 +345,7 @@ export class PlayersService {
               exitCode: result.exitCode,
               elapsedMs,
               decoderCommand,
-              decoderBinary: decoderSpec.binary,
+              decoderBinary: resolvedBinary,
               requestId,
               tempRoiPath,
             };
@@ -386,7 +387,7 @@ export class PlayersService {
           exitCode: lastAttempt?.exitCode ?? null,
           elapsedMs: lastAttempt?.elapsedMs ?? 0,
           decoderCommand,
-          decoderBinary: decoderSpec.binary,
+          decoderBinary: resolvedBinary,
           requestId,
           tempRoiPath,
         };
@@ -507,6 +508,35 @@ export class PlayersService {
     });
   }
 
+  private async resolveBinaryPath(binary: string): Promise<string> {
+    if (!binary) {
+      return '';
+    }
+
+    const executableExists = async (path: string): Promise<boolean> => {
+      try {
+        await access(path, constants.X_OK);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    if (binary.includes('/')) {
+      return (await executableExists(binary)) ? binary : `UNRESOLVED:${binary}`;
+    }
+
+    const pathEnv = process.env.PATH ?? '';
+    for (const dir of pathEnv.split(':').filter(Boolean)) {
+      const candidate = join(dir, binary);
+      if (await executableExists(candidate)) {
+        return candidate;
+      }
+    }
+
+    return `UNRESOLVED:${binary}`;
+  }
+
   private async runDecoderUsingInputFile(
     decoderSpec: DecoderCommandSpec,
     input: Buffer,
@@ -586,7 +616,7 @@ export class PlayersService {
     const metadata = await normalized.metadata();
     const resizedBuffer = await normalized
       .clone()
-      .resize({ width: 1200, withoutEnlargement: true })
+      .resize({ width: 1800, height: 1350, fit: 'fill' })
       .png({ compressionLevel: 3 })
       .toBuffer();
     const resizedMetadata = await sharp(resizedBuffer, { failOn: 'none' }).metadata();
