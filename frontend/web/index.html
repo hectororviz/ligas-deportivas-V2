@@ -144,6 +144,28 @@
       if (retryButton) {
         retryButton.addEventListener('click', () => window.location.reload());
       }
+
+      // Workaround for intermittent black screen on Android after returning
+      // from camera/file-capture intents (e.g. DNI scan/photo capture).
+      // Forcing a repaint + resize event helps Flutter web redraw the frame.
+      const forceFlutterRepaint = () => {
+        if (document.visibilityState !== 'visible') {
+          return;
+        }
+
+        const root = document.documentElement;
+        root.style.transform = 'translateZ(0)';
+        window.requestAnimationFrame(() => {
+          root.style.transform = '';
+          window.dispatchEvent(new Event('resize'));
+        });
+      };
+
+      document.addEventListener('visibilitychange', forceFlutterRepaint);
+      window.addEventListener('pageshow', forceFlutterRepaint);
+      window.addEventListener('focus', () => {
+        window.setTimeout(forceFlutterRepaint, 50);
+      });
     })();
   </script>
   <script src="flutter_bootstrap.js" async></script>
