@@ -57,8 +57,14 @@ class ApiClient {
     String path, {
     dynamic data,
     Options? options,
+    CancelToken? cancelToken,
   }) {
-    return _dio.post<T>(path, data: data, options: options);
+    return _dio.post<T>(
+      path,
+      data: data,
+      options: options,
+      cancelToken: cancelToken,
+    );
   }
 
   Future<Response<T>> patch<T>(String path, {dynamic data}) {
