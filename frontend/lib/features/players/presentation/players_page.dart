@@ -72,22 +72,40 @@ class PlayersPage extends ConsumerStatefulWidget {
   ConsumerState<PlayersPage> createState() => _PlayersPageState();
 }
 
-class _PlayersPageState extends ConsumerState<PlayersPage> {
+class _PlayersPageState extends ConsumerState<PlayersPage> with WidgetsBindingObserver {
   late final TextEditingController _searchController;
   Timer? _debounce;
   CancelToken? _dniScanCancelToken;
   bool _isDniScanning = false;
   int _dniScanRequestId = 0;
+  int? _dniScanLoadingDialogRequestId;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _searchController = TextEditingController();
     _searchController.addListener(_onSearchChanged);
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted && _isDniScanning) {
+      if (kDebugMode) {
+        debugPrint('[DNI_SCAN][ui] visibility_resumed_repaint requestId=$_dniScanRequestId');
+      }
+      setState(() {});
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {});
+        }
+      });
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _cancelDniScan(closeDialog: false);
     _debounce?.cancel();
     _searchController.removeListener(_onSearchChanged);
@@ -96,15 +114,23 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
   }
 
   void _cancelDniScan({bool closeDialog = true}) {
+    final activeRequestId = _dniScanRequestId;
     _dniScanRequestId++;
     _dniScanCancelToken?.cancel('scan_cancelled_by_user');
     _dniScanCancelToken = null;
+    if (kDebugMode) {
+      debugPrint('[DNI_SCAN][http] cancel requestId=$activeRequestId');
+    }
     if (_isDniScanning && mounted) {
       setState(() {
         _isDniScanning = false;
       });
     }
-    if (closeDialog && mounted) {
+    if (closeDialog && mounted && _dniScanLoadingDialogRequestId == activeRequestId) {
+      if (kDebugMode) {
+        debugPrint('[DNI_SCAN][ui] close_loading requestId=$activeRequestId');
+      }
+      _dniScanLoadingDialogRequestId = null;
       Navigator.of(context, rootNavigator: true).maybePop();
     }
   }
@@ -156,9 +182,26 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
 
   Future<void> _scanDniAndCreatePlayer() async {
     try {
+      if (_isDniScanning || _dniScanCancelToken != null) {
+        _cancelDniScan();
+      }
+
       final image = await captureDniImage();
+      if (kDebugMode) {
+        debugPrint('[DNI_SCAN][capture] image_selected=${image == null ? 'null' : image.filename}');
+      }
       if (!mounted || image == null) {
         return;
+      }
+
+      await Future.delayed(const Duration(milliseconds: 50));
+      if (mounted) {
+        setState(() {});
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {});
+          }
+        });
       }
 
       final dimensions = await _decodeImageDimensions(image.bytes);
@@ -336,6 +379,10 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
         context: context,
         barrierDismissible: false,
         builder: (_) {
+          _dniScanLoadingDialogRequestId = requestId;
+          if (kDebugMode) {
+            debugPrint('[DNI_SCAN][ui] open_loading requestId=$requestId');
+          }
           if (!loadingDialogOpened.isCompleted) {
             loadingDialogOpened.complete();
           }
@@ -359,6 +406,9 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
     );
 
     try {
+      if (kDebugMode) {
+        debugPrint('[DNI_SCAN][http] start requestId=$requestId');
+      }
       final response = await api.post<Map<String, dynamic>>(
         '/players/dni/scan',
         data: formData,
@@ -375,18 +425,39 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
         throw _DniScanCancelledException();
       }
 
+      if (kDebugMode) {
+        debugPrint('[DNI_SCAN][http] ok requestId=$requestId');
+      }
+
       return _ScannedDniPlayer.fromJson(response.data ?? const {});
+    } on DioException catch (error) {
+      if (kDebugMode) {
+        if (error.type == DioExceptionType.cancel) {
+          debugPrint('[DNI_SCAN][http] cancel requestId=$requestId');
+        } else {
+          debugPrint('[DNI_SCAN][http] error requestId=$requestId type=${error.type}');
+        }
+      }
+      rethrow;
     } finally {
+      // requestId evita que requests viejos (cancelados/superpuestos) cierren dialogs
+      // o pisen estado de UI de un escaneo más nuevo.
       if (requestId == _dniScanRequestId) {
         _dniScanCancelToken = null;
       }
       if (!loadingDialogOpened.isCompleted) {
         await Future<void>.delayed(Duration.zero);
       }
-      if (mounted) {
+      if (mounted && requestId == _dniScanRequestId) {
         setState(() {
           _isDniScanning = false;
         });
+      }
+      if (mounted && requestId == _dniScanRequestId && _dniScanLoadingDialogRequestId == requestId) {
+        if (kDebugMode) {
+          debugPrint('[DNI_SCAN][ui] close_loading requestId=$requestId');
+        }
+        _dniScanLoadingDialogRequestId = null;
         Navigator.of(context, rootNavigator: true).maybePop();
       }
     }

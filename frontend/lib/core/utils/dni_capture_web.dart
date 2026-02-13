@@ -86,6 +86,7 @@ Future<CapturedDniImage?> captureDniImageImpl() async {
   });
 
   html.document.body?.append(input);
+  input.value = '';
   input.click();
 
   return completer.future.timeout(
