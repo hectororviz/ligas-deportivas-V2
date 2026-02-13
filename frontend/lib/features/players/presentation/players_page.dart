@@ -75,6 +75,9 @@ class PlayersPage extends ConsumerStatefulWidget {
 class _PlayersPageState extends ConsumerState<PlayersPage> {
   late final TextEditingController _searchController;
   Timer? _debounce;
+  CancelToken? _dniScanCancelToken;
+  bool _isDniScanning = false;
+  int _dniScanRequestId = 0;
 
   @override
   void initState() {
@@ -85,10 +88,25 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
 
   @override
   void dispose() {
+    _cancelDniScan(closeDialog: false);
     _debounce?.cancel();
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _cancelDniScan({bool closeDialog = true}) {
+    _dniScanRequestId++;
+    _dniScanCancelToken?.cancel('scan_cancelled_by_user');
+    _dniScanCancelToken = null;
+    if (_isDniScanning && mounted) {
+      setState(() {
+        _isDniScanning = false;
+      });
+    }
+    if (closeDialog && mounted) {
+      Navigator.of(context, rootNavigator: true).maybePop();
+    }
   }
 
   void _onSearchChanged() {
@@ -175,7 +193,12 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(error.toString())),
       );
+    } on _DniScanCancelledException {
+      return;
     } on DioException catch (error) {
+      if (error.type == DioExceptionType.cancel) {
+        return;
+      }
       if (!mounted) {
         return;
       }
@@ -271,6 +294,15 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
 
   Future<_ScannedDniPlayer> _scanDniOnServer(CapturedDniImage image) async {
     final api = ref.read(apiClientProvider);
+    final requestId = ++_dniScanRequestId;
+    final cancelToken = CancelToken();
+    _dniScanCancelToken = cancelToken;
+    if (mounted) {
+      setState(() {
+        _isDniScanning = true;
+      });
+    }
+
     final formData = FormData.fromMap({
       'file': MultipartFile.fromBytes(
         image.bytes,
@@ -288,14 +320,20 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
     showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const AlertDialog(
-        content: Row(
+      builder: (_) => AlertDialog(
+        content: const Row(
           children: [
             SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.4)),
             SizedBox(width: 16),
             Expanded(child: Text('Leyendo DNI...')),
           ],
         ),
+        actions: [
+          TextButton(
+            onPressed: _isDniScanning ? _cancelDniScan : null,
+            child: const Text('Cancelar'),
+          ),
+        ],
       ),
     );
 
@@ -303,14 +341,28 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
       final response = await api.post<Map<String, dynamic>>(
         '/players/dni/scan',
         data: formData,
+        cancelToken: cancelToken,
         options: Options(
           sendTimeout: const Duration(seconds: 20),
           receiveTimeout: const Duration(seconds: 20),
         ),
       );
+
+      if (!mounted ||
+          requestId != _dniScanRequestId ||
+          cancelToken.isCancelled) {
+        throw _DniScanCancelledException();
+      }
+
       return _ScannedDniPlayer.fromJson(response.data ?? const {});
     } finally {
+      if (requestId == _dniScanRequestId) {
+        _dniScanCancelToken = null;
+      }
       if (mounted) {
+        setState(() {
+          _isDniScanning = false;
+        });
         Navigator.of(context, rootNavigator: true).maybePop();
       }
     }
@@ -1224,6 +1276,8 @@ class _PlayersDataTable extends StatelessWidget {
   }
 }
 
+
+class _DniScanCancelledException implements Exception {}
 
 class _ScannedDniPlayer {
   _ScannedDniPlayer({
