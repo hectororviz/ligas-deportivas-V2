@@ -26,11 +26,13 @@ import { ScanDniResultDto } from '../dto/scan-dni-result.dto';
 import { parseDniPdf417Payload } from '../utils/dni-pdf417-parser';
 
 const DEFAULT_DNI_SCAN_DECODER_COMMAND = '/usr/local/bin/dni-pdf417-decoder';
-const DECODER_TIMEOUT_MS = 8_000;
+const DEFAULT_DECODER_TIMEOUT_MS = 1_200;
+const DEFAULT_SCAN_DEADLINE_MS = 8_000;
 const DECODER_FILE_PLACEHOLDER_TOKENS = new Set(['{file}', '__INPUT_FILE__']);
 
 class DecoderUnavailableError extends Error {}
 class DecoderTimeoutError extends Error {}
+class ScanDeadlineExceededError extends Error {}
 
 type DecoderInputMode = 'stdin' | 'file';
 
@@ -142,14 +144,18 @@ export class PlayersService {
     const metadata = await sharp(file.buffer, { failOn: 'none' }).metadata();
     const debugEnabled = this.isScanDebugEnabled();
     const requestId = randomUUID();
+    const scanDeadlineMs = this.getScanDeadlineMs();
 
     const t0 = Date.now();
     this.logger.log(
       `[DNI_SCAN][requestId=${requestId}][t0] incoming file mimetype=${file.mimetype} size=${file.size} width=${metadata.width ?? 'unknown'} height=${metadata.height ?? 'unknown'}`,
     );
+    this.logger.log(
+      `[DNI_SCAN][requestId=${requestId}][phase=scan][start] deadlineMs=${scanDeadlineMs}`,
+    );
 
     try {
-      const decodeDetail = await this.decodePdf417Payload(file.buffer, t0, requestId);
+      const decodeDetail = await this.decodePdf417Payload(file.buffer, t0, requestId, false, scanDeadlineMs);
       const payload = decodeDetail.payloadRaw;
       const tokensCount = payload.split('@').length;
       if (debugEnabled) {
@@ -172,6 +178,9 @@ export class PlayersService {
       const parsed = parseDniPdf417Payload(payload);
       return parsed;
     } finally {
+      this.logger.log(
+        `[DNI_SCAN][requestId=${requestId}][phase=scan][end] elapsedMs=${Date.now() - t0}`,
+      );
       this.logger.log(`[DNI_SCAN][requestId=${requestId}][tEnd] totalElapsedMs=${Date.now() - t0}`);
     }
   }
@@ -190,7 +199,13 @@ export class PlayersService {
     }
 
     const requestId = randomUUID();
-    const decodeDetail = await this.decodePdf417Payload(file.buffer, Date.now(), requestId, true);
+    const decodeDetail = await this.decodePdf417Payload(
+      file.buffer,
+      Date.now(),
+      requestId,
+      true,
+      this.getScanDeadlineMs(),
+    );
     const payloadLength = decodeDetail.payloadRaw.length;
     const tokensCount = decodeDetail.payloadRaw ? decodeDetail.payloadRaw.split('@').length : 0;
     return {
@@ -215,6 +230,7 @@ export class PlayersService {
     t0: number,
     requestId: string,
     diagnosticsMode = false,
+    scanDeadlineMs = DEFAULT_SCAN_DEADLINE_MS,
   ): Promise<DecodePdf417Detail> {
     const decoderSpec = this.resolveDecoderCommandSpec();
     const debugEnabled = this.isScanDebugEnabled();
@@ -260,124 +276,162 @@ export class PlayersService {
         `[DNI_SCAN][requestId=${requestId}] commandFinal=${decoderCommand} resolvedBinary=${resolvedBinary}`,
       );
       this.logger.log(`[DNI_SCAN][requestId=${requestId}][t1d] enter decode loop`);
-      const decodeTargets = [
-        { name: 'roi', buffer: preprocessed.roiBuffer },
-        { name: 'full', buffer: preprocessed.resizedBuffer },
-      ] as const;
+      const decoderTimeoutMs = this.getDecoderTimeoutMs();
+      const decodeTargets = {
+        roi: preprocessed.roiBuffer,
+        full: preprocessed.resizedBuffer,
+      } as const;
+      let attemptIndex = 0;
+      const runAttempt = async (
+        targetName: 'roi' | 'full',
+        strategy: { name: string; rotation: number; buffer: Buffer },
+      ) => {
+        attemptIndex += 1;
+        this.throwIfDeadlineExceeded(t0, scanDeadlineMs, requestId, `before variant ${attemptIndex}`);
+        this.logger.log(
+          `[DNI_SCAN][requestId=${requestId}][phase=variant][start] variant=${attemptIndex} target=${targetName} strategy=${strategy.name} rotation=${strategy.rotation} totalElapsedMs=${Date.now() - t0}`,
+        );
 
-      for (const target of decodeTargets) {
-        const strategies = await this.buildDecodeStrategies(target.buffer);
-
-        for (let index = 0; index < strategies.length; index += 1) {
-          const strategy = strategies[index];
-          this.logger.log(
-            `[DNI_SCAN][requestId=${requestId}][t2] target=${target.name} strategy start variant=${index + 1}/${strategies.length} strategy=${strategy.name} rotation=${strategy.rotation}`,
+        if (debugEnabled && debugKeepTmpEnabled) {
+          const tmpDir = await this.resolveWritableTmpDir();
+          const strategyPath = join(
+            tmpDir,
+            `dni-${targetName}-${requestId}-${strategy.name}-rot${strategy.rotation}.png`,
           );
+          await writeFile(strategyPath, strategy.buffer);
+          this.logger.log(
+            `[DNI_SCAN][requestId=${requestId}][tmp] savedVariant=${strategyPath} bytes=${strategy.buffer.byteLength}`,
+          );
+        }
 
-          if (debugEnabled && debugKeepTmpEnabled) {
-            const tmpDir = await this.resolveWritableTmpDir();
-            const strategyPath = join(
-              tmpDir,
-              `dni-${target.name}-${requestId}-${strategy.name}-rot${strategy.rotation}.png`,
-            );
-            await writeFile(strategyPath, strategy.buffer);
+        const startedAt = Date.now();
+        try {
+          const result = await this.runDecoder(
+            decoderSpec,
+            strategy.buffer,
+            decoderTimeoutMs,
+            requestId,
+          );
+          const elapsedMs = Date.now() - startedAt;
+          const stdoutRaw = result.stdout.trim();
+          const stderrRaw = result.stderr.trim();
+          const payload = this.extractPayloadFromDecoderOutput(stdoutRaw);
+          lastAttempt = { ...result, elapsedMs, payloadRaw: payload };
+          if (debugEnabled) {
+            this.logger.log(`[DNI_SCAN][requestId=${requestId}] stdoutRaw=${stdoutRaw}`);
+            this.logger.log(`[DNI_SCAN][requestId=${requestId}] stderrRaw=${stderrRaw}`);
+          } else {
             this.logger.log(
-              `[DNI_SCAN][requestId=${requestId}][tmp] savedVariant=${strategyPath} bytes=${strategy.buffer.byteLength}`,
+              `[DNI_SCAN][requestId=${requestId}] decoder io stdoutLength=${stdoutRaw.length} stderrLength=${stderrRaw.length}`,
             );
           }
-
-          const startedAt = Date.now();
           this.logger.log(
-            `[DNI_SCAN][requestId=${requestId}][t1e] before spawn decoder target=${target.name} strategy=${strategy.name} rotation=${strategy.rotation}`,
+            `[DNI_SCAN][requestId=${requestId}] decoder run exitCode=${result.exitCode} elapsedMs=${elapsedMs} spawnElapsedMs=${result.spawnElapsedMs ?? -1} wrapperElapsedMs=${result.wrapperElapsedMs ?? -1}`,
           );
-          try {
-            const result = await this.runDecoder(
-              decoderSpec,
-              strategy.buffer,
-              DECODER_TIMEOUT_MS,
-              requestId,
+          if (result.exitCode !== 0) {
+            throw new Error(
+              `decoder exited with code ${result.exitCode}${stderrRaw ? ` stderr=${stderrRaw}` : ''}`,
             );
-            const elapsedMs = Date.now() - startedAt;
-            const stdoutRaw = result.stdout.trim();
-            const stderrRaw = result.stderr.trim();
-            const payload = this.extractPayloadFromDecoderOutput(stdoutRaw);
-            lastAttempt = { ...result, elapsedMs, payloadRaw: payload };
+          }
+          if (!payload) {
+            throw new Error('empty decoder output');
+          }
+          if (debugEnabled) {
+            this.logger.log(`[DNI_SCAN][requestId=${requestId}] payloadRaw=${payload}`);
+          }
+          this.logger.log(
+            `[DNI_SCAN][requestId=${requestId}] payloadLength=${payload.length} tokensCount=${payload.split('@').length}`,
+          );
+          this.logger.log(
+            `[DNI_SCAN][requestId=${requestId}][phase=variant][end] variant=${attemptIndex} target=${targetName} strategy=${strategy.name} rotation=${strategy.rotation} result=ok elapsedMs=${elapsedMs} totalElapsedMs=${Date.now() - t0}`,
+          );
+
+          return {
+            payloadRaw: payload,
+            stdoutRaw,
+            stderrRaw,
+            exitCode: result.exitCode,
+            elapsedMs,
+            decoderCommand,
+            decoderBinary: resolvedBinary,
+            requestId,
+            tempRoiPath,
+          };
+        } catch (error) {
+          if (error instanceof DecoderUnavailableError) {
             if (debugEnabled) {
-              this.logger.log(`[DNI_SCAN][requestId=${requestId}] stdoutRaw=${stdoutRaw}`);
-              this.logger.log(`[DNI_SCAN][requestId=${requestId}] stderrRaw=${stderrRaw}`);
-            } else {
-              this.logger.log(
-                `[DNI_SCAN][requestId=${requestId}] decoder io stdoutLength=${stdoutRaw.length} stderrLength=${stderrRaw.length}`,
-              );
+              this.logger.error(`[DNI_SCAN] decoder unavailable error=${error.message}`);
             }
+            throw new InternalServerErrorException(`DNI scan decoder unavailable: ${error.message}`);
+          }
+
+          const elapsedMs = Date.now() - startedAt;
+          const errorMessage =
+            error instanceof DecoderTimeoutError
+              ? 'timeout'
+              : error instanceof Error
+                ? error.message
+                : 'unknown decoder error';
+          this.logger.warn(
+            `[DNI_SCAN][requestId=${requestId}][phase=variant][end] variant=${attemptIndex} target=${targetName} strategy=${strategy.name} rotation=${strategy.rotation} result=fail elapsedMs=${elapsedMs} totalElapsedMs=${Date.now() - t0} error=${errorMessage}`,
+          );
+          return null;
+        }
+      };
+
+      const roiRawResult = await runAttempt('roi', {
+        name: 'raw',
+        rotation: 0,
+        buffer: decodeTargets.roi,
+      });
+      if (roiRawResult) {
+        return roiRawResult;
+      }
+
+      const fullRawResult = await runAttempt('full', {
+        name: 'raw',
+        rotation: 0,
+        buffer: decodeTargets.full,
+      });
+      if (fullRawResult) {
+        return fullRawResult;
+      }
+
+      this.throwIfDeadlineExceeded(t0, scanDeadlineMs, requestId, 'before fallback strategies');
+      this.logger.log(
+        `[DNI_SCAN][requestId=${requestId}][phase=fallback][start] totalElapsedMs=${Date.now() - t0}`,
+      );
+
+      const fallbackAttempts = [
+        {
+          targetName: 'full' as const,
+          strategies: (await this.buildDecodeStrategies(decodeTargets.full)).filter(
+            (strategy) => !(strategy.name === 'raw' && strategy.rotation === 0),
+          ),
+        },
+        {
+          targetName: 'roi' as const,
+          strategies: (await this.buildDecodeStrategies(decodeTargets.roi)).filter(
+            (strategy) => !(strategy.name === 'raw' && strategy.rotation === 0),
+          ),
+        },
+      ];
+
+      for (const attemptGroup of fallbackAttempts) {
+        for (const strategy of attemptGroup.strategies) {
+          const fallbackResult = await runAttempt(attemptGroup.targetName, strategy);
+          if (fallbackResult) {
             this.logger.log(
-              `[DNI_SCAN][requestId=${requestId}] decoder run exitCode=${result.exitCode} elapsedMs=${elapsedMs} spawnElapsedMs=${result.spawnElapsedMs ?? -1} wrapperElapsedMs=${result.wrapperElapsedMs ?? -1}`,
+              `[DNI_SCAN][requestId=${requestId}][phase=fallback][end] result=ok totalElapsedMs=${Date.now() - t0}`,
             );
-            if (result.exitCode !== 0) {
-              throw new Error(
-                `decoder exited with code ${result.exitCode}${stderrRaw ? ` stderr=${stderrRaw}` : ''}`,
-              );
-            }
-            if (!payload) {
-              throw new Error('empty decoder output');
-            }
-            if (debugEnabled) {
-              this.logger.log(`[DNI_SCAN][requestId=${requestId}] payloadRaw=${payload}`);
-            }
-            this.logger.log(
-              `[DNI_SCAN][requestId=${requestId}] payloadLength=${payload.length} tokensCount=${payload.split('@').length}`,
-            );
-
-            this.logger.log(
-              `[DNI_SCAN][requestId=${requestId}][t3] target=${target.name} strategy end variant=${index + 1}/${strategies.length} strategy=${strategy.name} rotation=${strategy.rotation} result=ok elapsedMs=${elapsedMs}`,
-            );
-
-            if (debugEnabled) {
-              this.logger.log(
-                `[DNI_SCAN] decoder success variant=${index + 1}/${strategies.length} strategy=${strategy.name} rotation=${strategy.rotation} elapsedMs=${elapsedMs}`,
-              );
-            }
-
-            return {
-              payloadRaw: payload,
-              stdoutRaw,
-              stderrRaw,
-              exitCode: result.exitCode,
-              elapsedMs,
-              decoderCommand,
-              decoderBinary: resolvedBinary,
-              requestId,
-              tempRoiPath,
-            };
-          } catch (error) {
-            if (error instanceof DecoderUnavailableError) {
-              if (debugEnabled) {
-                this.logger.error(`[DNI_SCAN] decoder unavailable error=${error.message}`);
-              }
-              throw new InternalServerErrorException(
-                `DNI scan decoder unavailable: ${error.message}`,
-              );
-            }
-
-            const elapsedMs = Date.now() - startedAt;
-            const errorMessage =
-              error instanceof DecoderTimeoutError
-                ? 'timeout'
-                : error instanceof Error
-                  ? error.message
-                  : 'unknown decoder error';
-            this.logger.warn(
-              `[DNI_SCAN][requestId=${requestId}][t3] target=${target.name} strategy end variant=${index + 1}/${strategies.length} strategy=${strategy.name} rotation=${strategy.rotation} result=fail elapsedMs=${elapsedMs} error=${errorMessage}`,
-            );
-
-            if (debugEnabled) {
-              this.logger.warn(
-                `[DNI_SCAN] decoder failed variant=${index + 1}/${strategies.length} strategy=${strategy.name} rotation=${strategy.rotation} elapsedMs=${elapsedMs} error=${errorMessage}`,
-              );
-            }
+            return fallbackResult;
           }
         }
       }
+
+      this.logger.log(
+        `[DNI_SCAN][requestId=${requestId}][phase=fallback][end] result=fail totalElapsedMs=${Date.now() - t0}`,
+      );
 
       if (diagnosticsMode) {
         return {
@@ -397,6 +451,9 @@ export class PlayersService {
       if (error instanceof InternalServerErrorException) {
         throw error;
       }
+      if (error instanceof ScanDeadlineExceededError) {
+        throw new UnprocessableEntityException('timeout scan');
+      }
       if (debugEnabled) {
         this.logger.warn('DNI scan failed to decode.');
       }
@@ -406,6 +463,36 @@ export class PlayersService {
         this.logger.log(`[DNI_SCAN][requestId=${requestId}][tmp] keepingRoi=${tempRoiPath}`);
       }
     }
+  }
+
+  private throwIfDeadlineExceeded(
+    startedAt: number,
+    deadlineMs: number,
+    requestId: string,
+    phase: string,
+  ): void {
+    const elapsedMs = Date.now() - startedAt;
+    if (elapsedMs <= deadlineMs) {
+      return;
+    }
+
+    this.logger.warn(
+      `[DNI_SCAN][requestId=${requestId}][phase=deadline] exceeded=true elapsedMs=${elapsedMs} deadlineMs=${deadlineMs} at=${phase}`,
+    );
+    throw new ScanDeadlineExceededError(`deadline exceeded after ${elapsedMs}ms`);
+  }
+
+  private getScanDeadlineMs(): number {
+    const raw = this.configService.get('SCAN_DEADLINE_MS') ?? process.env.SCAN_DEADLINE_MS;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : DEFAULT_SCAN_DEADLINE_MS;
+  }
+
+  private getDecoderTimeoutMs(): number {
+    const raw =
+      this.configService.get('SCAN_DECODER_TIMEOUT_MS') ?? process.env.SCAN_DECODER_TIMEOUT_MS;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : DEFAULT_DECODER_TIMEOUT_MS;
   }
 
   private resolveDecoderCommandSpec(): DecoderCommandSpec {

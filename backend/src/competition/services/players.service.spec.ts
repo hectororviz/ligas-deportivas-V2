@@ -15,6 +15,8 @@ describe('PlayersService decoder wrapper', () => {
     decoderCommand?: unknown,
     scanDebug?: unknown,
     scanDebugKeepTmp?: unknown,
+    scanDeadlineMs?: unknown,
+    scanDecoderTimeoutMs?: unknown,
   ) => {
     const configMock = {
       get: jest.fn((key: string) => {
@@ -26,6 +28,12 @@ describe('PlayersService decoder wrapper', () => {
         }
         if (key === 'SCAN_DEBUG_KEEP_TMP') {
           return scanDebugKeepTmp;
+        }
+        if (key === 'SCAN_DEADLINE_MS') {
+          return scanDeadlineMs;
+        }
+        if (key === 'SCAN_DECODER_TIMEOUT_MS') {
+          return scanDecoderTimeoutMs;
         }
         return undefined;
       }),
@@ -101,7 +109,7 @@ describe('PlayersService decoder wrapper', () => {
         inputFileToken: undefined,
       },
       expect.any(Buffer),
-      8000,
+      1200,
       'req-1',
     );
   });
@@ -130,9 +138,24 @@ describe('PlayersService decoder wrapper', () => {
         inputFileToken: '{file}',
       },
       expect.any(Buffer),
-      8000,
+      1200,
       'req-1',
     );
+  });
+
+  it('returns timeout scan when deadline is exceeded', async () => {
+    const service = buildService(undefined, undefined, undefined, 1);
+    mockPreprocess(service);
+
+    await expect(
+      (service as any).decodePdf417Payload(
+        Buffer.from('input'),
+        Date.now() - 50,
+        'req-timeout',
+        false,
+        1,
+      ),
+    ).rejects.toThrow('timeout scan');
   });
 
 
