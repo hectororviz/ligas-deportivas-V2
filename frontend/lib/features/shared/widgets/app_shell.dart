@@ -173,7 +173,6 @@ class _AppShellState extends ConsumerState<AppShell> {
     final siteIdentity = ref.watch(siteIdentityProvider).valueOrNull;
     final isMobile = Responsive.isMobile(context);
     final isDesktop = Responsive.isDesktop(context);
-    final showUserMenu = !isMobile;
     final autoCollapsed = MediaQuery.sizeOf(context).width < 1024;
     final showCollapsed = autoCollapsed ? true : isCollapsed;
 
@@ -189,7 +188,7 @@ class _AppShellState extends ConsumerState<AppShell> {
             ),
           ),
           actions: [
-            if (showUserMenu)
+            if (isMobile)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
                 child: UserMenuButton(),
