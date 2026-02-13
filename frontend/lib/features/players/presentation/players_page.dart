@@ -1930,11 +1930,6 @@ class _MassivePlayersPageState extends ConsumerState<_MassivePlayersPage> {
                     decoration: const InputDecoration(
                       hintText: 'Calle',
                     ),
-                    validator: (value) => _requiredValidator(
-                      value,
-                      _rows[index],
-                      'Obligatorio',
-                    ),
                   ),
                 ),
               ),
@@ -1946,11 +1941,6 @@ class _MassivePlayersPageState extends ConsumerState<_MassivePlayersPage> {
                     decoration: const InputDecoration(
                       hintText: 'N°',
                     ),
-                    validator: (value) => _requiredValidator(
-                      value,
-                      _rows[index],
-                      'Obligatorio',
-                    ),
                   ),
                 ),
               ),
@@ -1961,11 +1951,6 @@ class _MassivePlayersPageState extends ConsumerState<_MassivePlayersPage> {
                     controller: _rows[index].cityController,
                     decoration: const InputDecoration(
                       hintText: 'Localidad',
-                    ),
-                    validator: (value) => _requiredValidator(
-                      value,
-                      _rows[index],
-                      'Obligatorio',
                     ),
                   ),
                 ),
@@ -2744,12 +2729,6 @@ class _PlayerFormDialogState extends ConsumerState<_PlayerFormDialog> {
                     decoration: const InputDecoration(
                       labelText: 'Calle',
                     ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'La calle es obligatoria.';
-                      }
-                      return null;
-                    },
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -2760,12 +2739,6 @@ class _PlayerFormDialogState extends ConsumerState<_PlayerFormDialog> {
                     decoration: const InputDecoration(
                       labelText: 'Número',
                     ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Obligatorio';
-                      }
-                      return null;
-                    },
                   ),
                 ),
               ],
@@ -2777,12 +2750,6 @@ class _PlayerFormDialogState extends ConsumerState<_PlayerFormDialog> {
               decoration: const InputDecoration(
                 labelText: 'Localidad',
               ),
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'La localidad es obligatoria.';
-                }
-                return null;
-              },
             ),
             const SizedBox(height: 16),
             SwitchListTile.adaptive(
