@@ -45,6 +45,8 @@ type DecoderRunResult = {
   exitCode: number | null;
   stdout: string;
   stderr: string;
+  spawnElapsedMs?: number;
+  wrapperElapsedMs?: number;
 };
 
 type DecoderAttemptDetail = DecoderRunResult & {
@@ -256,9 +258,10 @@ export class PlayersService {
       this.logger.log(
         `[DNI_SCAN][requestId=${requestId}] decoder command=${decoderCommand} binary=${decoderSpec.binary}`,
       );
+      this.logger.log(`[DNI_SCAN][requestId=${requestId}][t1d] enter decode loop`);
       const decodeTargets = [
-        { name: 'full', buffer: preprocessed.resizedBuffer },
         { name: 'roi', buffer: preprocessed.roiBuffer },
+        { name: 'full', buffer: preprocessed.resizedBuffer },
       ] as const;
 
       for (const target of decodeTargets) {
@@ -283,8 +286,16 @@ export class PlayersService {
           }
 
           const startedAt = Date.now();
+          this.logger.log(
+            `[DNI_SCAN][requestId=${requestId}][t1e] before spawn decoder target=${target.name} strategy=${strategy.name} rotation=${strategy.rotation}`,
+          );
           try {
-            const result = await this.runDecoder(decoderSpec, strategy.buffer, DECODER_TIMEOUT_MS);
+            const result = await this.runDecoder(
+              decoderSpec,
+              strategy.buffer,
+              DECODER_TIMEOUT_MS,
+              requestId,
+            );
             const elapsedMs = Date.now() - startedAt;
             const stdoutRaw = result.stdout.trim();
             const stderrRaw = result.stderr.trim();
@@ -299,7 +310,7 @@ export class PlayersService {
               );
             }
             this.logger.log(
-              `[DNI_SCAN][requestId=${requestId}] decoder run exitCode=${result.exitCode} elapsedMs=${elapsedMs}`,
+              `[DNI_SCAN][requestId=${requestId}] decoder run exitCode=${result.exitCode} elapsedMs=${elapsedMs} spawnElapsedMs=${result.spawnElapsedMs ?? -1} wrapperElapsedMs=${result.wrapperElapsedMs ?? -1}`,
             );
             if (result.exitCode !== 0) {
               throw new Error(
@@ -416,11 +427,18 @@ export class PlayersService {
     decoderSpec: DecoderCommandSpec,
     input: Buffer,
     timeoutMs: number,
+    requestId?: string,
   ): Promise<DecoderRunResult> {
     if (decoderSpec.inputMode === 'file') {
-      return this.runDecoderUsingInputFile(decoderSpec, input, timeoutMs);
+      return this.runDecoderUsingInputFile(decoderSpec, input, timeoutMs, requestId);
     }
-    return this.runDecoderUsingStdin(decoderSpec.binary, decoderSpec.args, input, timeoutMs);
+    return this.runDecoderUsingStdin(
+      decoderSpec.binary,
+      decoderSpec.args,
+      input,
+      timeoutMs,
+      requestId,
+    );
   }
 
   private runDecoderUsingStdin(
@@ -428,9 +446,18 @@ export class PlayersService {
     args: string[],
     input: Buffer,
     timeoutMs: number,
+    requestId?: string,
   ): Promise<DecoderRunResult> {
     return new Promise<DecoderRunResult>((resolve, reject) => {
+      const wrapperStartedAt = Date.now();
+      const spawnStartedAt = Date.now();
       const child = spawn(binary, args, { stdio: ['pipe', 'pipe', 'pipe'] });
+      const spawnElapsedMs = Date.now() - spawnStartedAt;
+      if (requestId) {
+        this.logger.log(
+          `[DNI_SCAN][requestId=${requestId}][t1f] after spawn started spawnElapsedMs=${spawnElapsedMs} binary=${binary}`,
+        );
+      }
       const chunks: Buffer[] = [];
       const errors: Buffer[] = [];
       let settled = false;
@@ -465,10 +492,13 @@ export class PlayersService {
         }
         settled = true;
         clearTimeout(timeoutHandle);
+        const wrapperElapsedMs = Date.now() - wrapperStartedAt;
         resolve({
           exitCode: code,
           stdout: Buffer.concat(chunks).toString('utf-8'),
           stderr: Buffer.concat(errors).toString('utf-8').trim(),
+          spawnElapsedMs,
+          wrapperElapsedMs,
         });
       });
 
@@ -481,6 +511,7 @@ export class PlayersService {
     decoderSpec: DecoderCommandSpec,
     input: Buffer,
     timeoutMs: number,
+    requestId?: string,
   ): Promise<DecoderRunResult> {
     const tmpDir = await this.resolveWritableTmpDir();
     const tempPath = join(tmpDir, `dni-scan-input-${randomUUID()}.png`);
@@ -490,7 +521,13 @@ export class PlayersService {
       const args = decoderSpec.args.map((arg) =>
         arg === decoderSpec.inputFileToken ? tempPath : arg,
       );
-      return await this.runDecoderUsingStdin(decoderSpec.binary, args, Buffer.alloc(0), timeoutMs);
+      return await this.runDecoderUsingStdin(
+        decoderSpec.binary,
+        args,
+        Buffer.alloc(0),
+        timeoutMs,
+        requestId,
+      );
     } finally {
       await this.cleanupTempInputFile(tempPath);
     }
@@ -549,8 +586,8 @@ export class PlayersService {
     const metadata = await normalized.metadata();
     const resizedBuffer = await normalized
       .clone()
-      .resize({ width: 1800, withoutEnlargement: true })
-      .png()
+      .resize({ width: 1200, withoutEnlargement: true })
+      .png({ compressionLevel: 3 })
       .toBuffer();
     const resizedMetadata = await sharp(resizedBuffer, { failOn: 'none' }).metadata();
 
@@ -574,7 +611,7 @@ export class PlayersService {
       height: extractHeight,
     });
     const roiRawBuffer = await extracted.clone().raw().toBuffer();
-    const roiBuffer = await extracted.clone().png().toBuffer();
+    const roiBuffer = await extracted.clone().png({ compressionLevel: 3 }).toBuffer();
 
     return {
       roiBuffer,
@@ -608,16 +645,22 @@ export class PlayersService {
 
     for (const rotation of rotations) {
       const base = image.clone().rotate(rotation);
-      pushUnique('raw', rotation, await base.clone().toBuffer());
+      pushUnique('raw', rotation, await base.clone().png({ compressionLevel: 3 }).toBuffer());
       pushUnique(
         'grayscale',
         rotation,
-        await base.clone().greyscale().normalize().png().toBuffer(),
+        await base.clone().greyscale().normalize().png({ compressionLevel: 3 }).toBuffer(),
       );
       pushUnique(
         'threshold',
         rotation,
-        await base.clone().greyscale().normalize().threshold(165).png().toBuffer(),
+        await base
+          .clone()
+          .greyscale()
+          .normalize()
+          .threshold(165)
+          .png({ compressionLevel: 3 })
+          .toBuffer(),
       );
 
       if (metadata.width && metadata.height) {
@@ -633,7 +676,7 @@ export class PlayersService {
             })
             .normalize()
             .sharpen()
-            .png()
+            .png({ compressionLevel: 3 })
             .toBuffer(),
         );
         pushUnique(
@@ -648,7 +691,7 @@ export class PlayersService {
             })
             .normalize()
             .sharpen()
-            .png()
+            .png({ compressionLevel: 3 })
             .toBuffer(),
         );
       }
