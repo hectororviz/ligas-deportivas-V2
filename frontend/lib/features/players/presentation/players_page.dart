@@ -173,18 +173,22 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
         return;
       }
 
-      final confirmed = await _confirmScannedPlayer(scanned);
-      if (!mounted || confirmed != true) {
+      final confirmation = await _confirmScannedPlayer(scanned);
+      if (!mounted || confirmation == null) {
         return;
       }
 
-      await _createPlayerFromScan(scanned);
+      final assignment = await _createPlayerFromScan(
+        scanned,
+        tournamentId: confirmation.tournamentId,
+        clubId: confirmation.clubId,
+      );
       if (!mounted) {
         return;
       }
       ref.invalidate(playersProvider);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Jugador creado.')),
+        SnackBar(content: Text(assignment ? 'Jugador creado y asignado.' : 'Jugador creado.')),
       );
     } on UnsupportedError catch (error) {
       if (!mounted) {
@@ -379,35 +383,24 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
     }
   }
 
-  Future<bool?> _confirmScannedPlayer(_ScannedDniPlayer player) {
-    return showDialog<bool>(
+  Future<_ScannedPlayerAssignmentSelection?> _confirmScannedPlayer(
+    _ScannedDniPlayer player,
+  ) {
+    return showDialog<_ScannedPlayerAssignmentSelection>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text('Confirmar alta rápida'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _InfoRow(label: 'Apellido', value: player.lastName),
-              _InfoRow(label: 'Nombre', value: player.firstName),
-              _InfoRow(label: 'Sexo', value: player.sex),
-              _InfoRow(label: 'DNI', value: player.dni),
-              _InfoRow(label: 'Fecha nacimiento', value: DateFormat('dd/MM/yyyy').format(player.birthDate)),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancelar')),
-            FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Confirmar')),
-          ],
-        );
+        return _ScannedPlayerConfirmationDialog(player: player);
       },
     );
   }
 
-  Future<void> _createPlayerFromScan(_ScannedDniPlayer player) async {
+  Future<bool> _createPlayerFromScan(
+    _ScannedDniPlayer player, {
+    int? tournamentId,
+    int? clubId,
+  }) async {
     final api = ref.read(apiClientProvider);
-    await api.post('/players', data: {
+    final response = await api.post<Map<String, dynamic>>('/players', data: {
       'firstName': player.firstName,
       'lastName': player.lastName,
       'dni': player.dni,
@@ -415,6 +408,18 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
       'gender': player.gender,
       'active': true,
     });
+
+    final createdPlayer = response.data;
+    final playerId = createdPlayer?['id'] as int?;
+    if (playerId == null || tournamentId == null || clubId == null) {
+      return false;
+    }
+
+    await api.put('/tournaments/$tournamentId/player-club', data: {
+      'playerId': playerId,
+      'clubId': clubId,
+    });
+    return true;
   }
 
   Future<void> _openPlayerDetails(Player player) async {
@@ -1279,6 +1284,219 @@ class _PlayersDataTable extends StatelessWidget {
 
 class _DniScanCancelledException implements Exception {}
 
+class _ScannedPlayerAssignmentSelection {
+  const _ScannedPlayerAssignmentSelection({
+    this.tournamentId,
+    this.clubId,
+  });
+
+  final int? tournamentId;
+  final int? clubId;
+}
+
+class _ScannedPlayerConfirmationDialog extends ConsumerStatefulWidget {
+  const _ScannedPlayerConfirmationDialog({required this.player});
+
+  final _ScannedDniPlayer player;
+
+  @override
+  ConsumerState<_ScannedPlayerConfirmationDialog> createState() =>
+      _ScannedPlayerConfirmationDialogState();
+}
+
+class _ScannedPlayerConfirmationDialogState
+    extends ConsumerState<_ScannedPlayerConfirmationDialog> {
+  List<_SimpleOption> _tournaments = const [];
+  List<_SimpleOption> _clubs = const [];
+  int? _selectedTournamentId;
+  int? _selectedClubId;
+  bool _loadingTournaments = true;
+  bool _loadingClubs = false;
+  String? _loadingError;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadTournaments());
+  }
+
+  Future<void> _loadTournaments() async {
+    setState(() {
+      _loadingTournaments = true;
+      _loadingError = null;
+    });
+    try {
+      final api = ref.read(apiClientProvider);
+      final response = await api.get<List<dynamic>>('/tournaments');
+      final items = (response.data ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map((json) => _SimpleOption.fromJson(json))
+          .toList();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _tournaments = items;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _loadingError = 'No se pudieron cargar los torneos.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingTournaments = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _selectTournament(int? tournamentId) async {
+    setState(() {
+      _selectedTournamentId = tournamentId;
+      _selectedClubId = null;
+      _clubs = const [];
+    });
+    if (tournamentId == null) {
+      return;
+    }
+    setState(() {
+      _loadingClubs = true;
+      _loadingError = null;
+    });
+    try {
+      final api = ref.read(apiClientProvider);
+      final response = await api.get<List<dynamic>>(
+        '/tournaments/$tournamentId/participating-clubs',
+      );
+      final clubs = (response.data ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map((json) => _SimpleOption.fromJson(json))
+          .toList();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _clubs = clubs;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _loadingError = 'No se pudieron cargar los clubes del torneo.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingClubs = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Confirmar alta rápida'),
+      content: SizedBox(
+        width: 460,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _InfoRow(label: 'Apellido', value: widget.player.lastName),
+              _InfoRow(label: 'Nombre', value: widget.player.firstName),
+              _InfoRow(label: 'Sexo', value: widget.player.sex),
+              _InfoRow(label: 'DNI', value: widget.player.dni),
+              _InfoRow(
+                label: 'Fecha nacimiento',
+                value: DateFormat('dd/MM/yyyy').format(widget.player.birthDate),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<int?>(
+                value: _selectedTournamentId,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Torneo vigente (opcional)',
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  const DropdownMenuItem<int?>(value: null, child: Text('Sin asignar')),
+                  ..._tournaments.map(
+                    (tournament) => DropdownMenuItem<int?>(
+                      value: tournament.id,
+                      child: Text(tournament.name),
+                    ),
+                  ),
+                ],
+                onChanged: _loadingTournaments ? null : _selectTournament,
+              ),
+              if (_loadingTournaments) ...[
+                const SizedBox(height: 8),
+                const LinearProgressIndicator(minHeight: 2),
+              ],
+              const SizedBox(height: 12),
+              DropdownButtonFormField<int?>(
+                value: _selectedClubId,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Club participante (opcional)',
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  const DropdownMenuItem<int?>(value: null, child: Text('Sin asignar')),
+                  ..._clubs.map(
+                    (club) => DropdownMenuItem<int?>(
+                      value: club.id,
+                      child: Text(club.name),
+                    ),
+                  ),
+                ],
+                onChanged: _selectedTournamentId == null || _loadingClubs
+                    ? null
+                    : (value) => setState(() => _selectedClubId = value),
+              ),
+              if (_loadingClubs) ...[
+                const SizedBox(height: 8),
+                const LinearProgressIndicator(minHeight: 2),
+              ],
+              if (_loadingError != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _loadingError!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: () {
+            Navigator.of(context).pop(
+              _ScannedPlayerAssignmentSelection(
+                tournamentId: _selectedTournamentId,
+                clubId: _selectedClubId,
+              ),
+            );
+          },
+          child: const Text('Confirmar'),
+        ),
+      ],
+    );
+  }
+}
+
 class _ScannedDniPlayer {
   _ScannedDniPlayer({
     required this.lastName,
@@ -1326,6 +1544,23 @@ class _ScannedDniPlayer {
         return 'MIXTO';
     }
   }
+}
+
+class _SimpleOption {
+  const _SimpleOption({
+    required this.id,
+    required this.name,
+  });
+
+  factory _SimpleOption.fromJson(Map<String, dynamic> json) {
+    return _SimpleOption(
+      id: json['id'] as int,
+      name: (json['name'] as String? ?? '').trim(),
+    );
+  }
+
+  final int id;
+  final String name;
 }
 
 
