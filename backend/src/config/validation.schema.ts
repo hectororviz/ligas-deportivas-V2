@@ -31,4 +31,6 @@ export const validationSchema = Joi.object({
   SCAN_DEBUG: Joi.boolean().optional(),
   SCAN_DEBUG_KEEP_TMP: Joi.boolean().optional(),
   DNI_SCAN_DECODER_COMMAND: Joi.string().allow(''),
+  SCAN_DEADLINE_MS: Joi.number().integer().min(1).optional(),
+  SCAN_DECODER_TIMEOUT_MS: Joi.number().integer().min(1).optional(),
 });
