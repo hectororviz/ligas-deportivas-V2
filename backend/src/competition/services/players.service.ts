@@ -233,9 +233,21 @@ export class PlayersService {
         `[DNI_SCAN][requestId=${requestId}][t1c] png encode info byteLength=${preprocessed.roiPngByteLength}`,
       );
       if (debugEnabled) {
-        const tmpDir = await this.resolveWritableTmpDir();
-        tempRoiPath = join(tmpDir, `dni-roi-${requestId}-base.png`);
+        this.logger.log(
+          `[DNI_SCAN][requestId=${requestId}][debug] resizedW,H=${preprocessed.resizedWidth},${preprocessed.resizedHeight}`,
+        );
+        this.logger.log(
+          `[DNI_SCAN][requestId=${requestId}][debug] extract params ${JSON.stringify(preprocessed.extractParams)}`,
+        );
+
+        const tmpDir = '/tmp';
+        const tempFullPath = join(tmpDir, `dni-full-${requestId}.png`);
+        tempRoiPath = join(tmpDir, `dni-roi-${requestId}.png`);
+        await writeFile(tempFullPath, preprocessed.resizedBuffer);
         await writeFile(tempRoiPath, preprocessed.roiBuffer);
+        this.logger.log(
+          `[DNI_SCAN][requestId=${requestId}][tmp] savedFull=${tempFullPath} bytes=${preprocessed.resizedBuffer.byteLength}`,
+        );
         this.logger.log(
           `[DNI_SCAN][requestId=${requestId}][tmp] savedBaseRoi=${tempRoiPath} bytes=${preprocessed.roiBuffer.byteLength}`,
         );
@@ -244,106 +256,113 @@ export class PlayersService {
       this.logger.log(
         `[DNI_SCAN][requestId=${requestId}] decoder command=${decoderCommand} binary=${decoderSpec.binary}`,
       );
-      const strategies = await this.buildDecodeStrategies(preprocessed.roiBuffer);
+      const decodeTargets = [
+        { name: 'full', buffer: preprocessed.resizedBuffer },
+        { name: 'roi', buffer: preprocessed.roiBuffer },
+      ] as const;
 
-      for (let index = 0; index < strategies.length; index += 1) {
-        const strategy = strategies[index];
-        this.logger.log(
-          `[DNI_SCAN][requestId=${requestId}][t2] strategy start variant=${index + 1}/${strategies.length} strategy=${strategy.name} rotation=${strategy.rotation}`,
-        );
+      for (const target of decodeTargets) {
+        const strategies = await this.buildDecodeStrategies(target.buffer);
 
-        if (debugEnabled && debugKeepTmpEnabled) {
-          const tmpDir = await this.resolveWritableTmpDir();
-          const strategyPath = join(
-            tmpDir,
-            `dni-roi-${requestId}-${strategy.name}-rot${strategy.rotation}.png`,
-          );
-          await writeFile(strategyPath, strategy.buffer);
+        for (let index = 0; index < strategies.length; index += 1) {
+          const strategy = strategies[index];
           this.logger.log(
-            `[DNI_SCAN][requestId=${requestId}][tmp] savedVariantRoi=${strategyPath} bytes=${strategy.buffer.byteLength}`,
+            `[DNI_SCAN][requestId=${requestId}][t2] target=${target.name} strategy start variant=${index + 1}/${strategies.length} strategy=${strategy.name} rotation=${strategy.rotation}`,
           );
-        }
 
-        const startedAt = Date.now();
-        try {
-          const result = await this.runDecoder(decoderSpec, strategy.buffer, DECODER_TIMEOUT_MS);
-          const elapsedMs = Date.now() - startedAt;
-          const stdoutRaw = result.stdout.trim();
-          const stderrRaw = result.stderr.trim();
-          const payload = this.extractPayloadFromDecoderOutput(stdoutRaw);
-          lastAttempt = { ...result, elapsedMs, payloadRaw: payload };
-          if (debugEnabled) {
-            this.logger.log(`[DNI_SCAN][requestId=${requestId}] stdoutRaw=${stdoutRaw}`);
-            this.logger.log(`[DNI_SCAN][requestId=${requestId}] stderrRaw=${stderrRaw}`);
-          } else {
+          if (debugEnabled && debugKeepTmpEnabled) {
+            const tmpDir = await this.resolveWritableTmpDir();
+            const strategyPath = join(
+              tmpDir,
+              `dni-${target.name}-${requestId}-${strategy.name}-rot${strategy.rotation}.png`,
+            );
+            await writeFile(strategyPath, strategy.buffer);
             this.logger.log(
-              `[DNI_SCAN][requestId=${requestId}] decoder io stdoutLength=${stdoutRaw.length} stderrLength=${stderrRaw.length}`,
-            );
-          }
-          this.logger.log(
-            `[DNI_SCAN][requestId=${requestId}] decoder run exitCode=${result.exitCode} elapsedMs=${elapsedMs}`,
-          );
-          if (result.exitCode !== 0) {
-            throw new Error(
-              `decoder exited with code ${result.exitCode}${stderrRaw ? ` stderr=${stderrRaw}` : ''}`,
-            );
-          }
-          if (!payload) {
-            throw new Error('empty decoder output');
-          }
-          if (debugEnabled) {
-            this.logger.log(`[DNI_SCAN][requestId=${requestId}] payloadRaw=${payload}`);
-          }
-          this.logger.log(
-            `[DNI_SCAN][requestId=${requestId}] payloadLength=${payload.length} tokensCount=${payload.split('@').length}`,
-          );
-
-          this.logger.log(
-            `[DNI_SCAN][requestId=${requestId}][t3] strategy end variant=${index + 1}/${strategies.length} strategy=${strategy.name} rotation=${strategy.rotation} result=ok elapsedMs=${elapsedMs}`,
-          );
-
-          if (debugEnabled) {
-            this.logger.log(
-              `[DNI_SCAN] decoder success variant=${index + 1}/${strategies.length} strategy=${strategy.name} rotation=${strategy.rotation} elapsedMs=${elapsedMs}`,
+              `[DNI_SCAN][requestId=${requestId}][tmp] savedVariant=${strategyPath} bytes=${strategy.buffer.byteLength}`,
             );
           }
 
-          return {
-            payloadRaw: payload,
-            stdoutRaw,
-            stderrRaw,
-            exitCode: result.exitCode,
-            elapsedMs,
-            decoderCommand,
-            decoderBinary: decoderSpec.binary,
-            requestId,
-            tempRoiPath,
-          };
-        } catch (error) {
-          if (error instanceof DecoderUnavailableError) {
+          const startedAt = Date.now();
+          try {
+            const result = await this.runDecoder(decoderSpec, strategy.buffer, DECODER_TIMEOUT_MS);
+            const elapsedMs = Date.now() - startedAt;
+            const stdoutRaw = result.stdout.trim();
+            const stderrRaw = result.stderr.trim();
+            const payload = this.extractPayloadFromDecoderOutput(stdoutRaw);
+            lastAttempt = { ...result, elapsedMs, payloadRaw: payload };
             if (debugEnabled) {
-              this.logger.error(`[DNI_SCAN] decoder unavailable error=${error.message}`);
+              this.logger.log(`[DNI_SCAN][requestId=${requestId}] stdoutRaw=${stdoutRaw}`);
+              this.logger.log(`[DNI_SCAN][requestId=${requestId}] stderrRaw=${stderrRaw}`);
+            } else {
+              this.logger.log(
+                `[DNI_SCAN][requestId=${requestId}] decoder io stdoutLength=${stdoutRaw.length} stderrLength=${stderrRaw.length}`,
+              );
             }
-            throw new InternalServerErrorException(
-              `DNI scan decoder unavailable: ${error.message}`,
+            this.logger.log(
+              `[DNI_SCAN][requestId=${requestId}] decoder run exitCode=${result.exitCode} elapsedMs=${elapsedMs}`,
             );
-          }
+            if (result.exitCode !== 0) {
+              throw new Error(
+                `decoder exited with code ${result.exitCode}${stderrRaw ? ` stderr=${stderrRaw}` : ''}`,
+              );
+            }
+            if (!payload) {
+              throw new Error('empty decoder output');
+            }
+            if (debugEnabled) {
+              this.logger.log(`[DNI_SCAN][requestId=${requestId}] payloadRaw=${payload}`);
+            }
+            this.logger.log(
+              `[DNI_SCAN][requestId=${requestId}] payloadLength=${payload.length} tokensCount=${payload.split('@').length}`,
+            );
 
-          const elapsedMs = Date.now() - startedAt;
-          const errorMessage =
-            error instanceof DecoderTimeoutError
-              ? 'timeout'
-              : error instanceof Error
-                ? error.message
-                : 'unknown decoder error';
-          this.logger.warn(
-            `[DNI_SCAN][requestId=${requestId}][t3] strategy end variant=${index + 1}/${strategies.length} strategy=${strategy.name} rotation=${strategy.rotation} result=fail elapsedMs=${elapsedMs} error=${errorMessage}`,
-          );
+            this.logger.log(
+              `[DNI_SCAN][requestId=${requestId}][t3] target=${target.name} strategy end variant=${index + 1}/${strategies.length} strategy=${strategy.name} rotation=${strategy.rotation} result=ok elapsedMs=${elapsedMs}`,
+            );
 
-          if (debugEnabled) {
+            if (debugEnabled) {
+              this.logger.log(
+                `[DNI_SCAN] decoder success variant=${index + 1}/${strategies.length} strategy=${strategy.name} rotation=${strategy.rotation} elapsedMs=${elapsedMs}`,
+              );
+            }
+
+            return {
+              payloadRaw: payload,
+              stdoutRaw,
+              stderrRaw,
+              exitCode: result.exitCode,
+              elapsedMs,
+              decoderCommand,
+              decoderBinary: decoderSpec.binary,
+              requestId,
+              tempRoiPath,
+            };
+          } catch (error) {
+            if (error instanceof DecoderUnavailableError) {
+              if (debugEnabled) {
+                this.logger.error(`[DNI_SCAN] decoder unavailable error=${error.message}`);
+              }
+              throw new InternalServerErrorException(
+                `DNI scan decoder unavailable: ${error.message}`,
+              );
+            }
+
+            const elapsedMs = Date.now() - startedAt;
+            const errorMessage =
+              error instanceof DecoderTimeoutError
+                ? 'timeout'
+                : error instanceof Error
+                  ? error.message
+                  : 'unknown decoder error';
             this.logger.warn(
-              `[DNI_SCAN] decoder failed variant=${index + 1}/${strategies.length} strategy=${strategy.name} rotation=${strategy.rotation} elapsedMs=${elapsedMs} error=${errorMessage}`,
+              `[DNI_SCAN][requestId=${requestId}][t3] target=${target.name} strategy end variant=${index + 1}/${strategies.length} strategy=${strategy.name} rotation=${strategy.rotation} result=fail elapsedMs=${elapsedMs} error=${errorMessage}`,
             );
+
+            if (debugEnabled) {
+              this.logger.warn(
+                `[DNI_SCAN] decoder failed variant=${index + 1}/${strategies.length} strategy=${strategy.name} rotation=${strategy.rotation} elapsedMs=${elapsedMs} error=${errorMessage}`,
+              );
+            }
           }
         }
       }
@@ -372,12 +391,7 @@ export class PlayersService {
       throw new UnprocessableEntityException('No se pudo decodificar el PDF417.');
     } finally {
       if (tempRoiPath && debugEnabled) {
-        if (debugKeepTmpEnabled) {
-          this.logger.log(`[DNI_SCAN][requestId=${requestId}][tmp] keepingRoi=${tempRoiPath}`);
-        } else {
-          await this.cleanupTempInputFile(tempRoiPath);
-          this.logger.log(`[DNI_SCAN][requestId=${requestId}][tmp] cleanedRoi=${tempRoiPath}`);
-        }
+        this.logger.log(`[DNI_SCAN][requestId=${requestId}][tmp] keepingRoi=${tempRoiPath}`);
       }
     }
   }
@@ -542,15 +556,22 @@ export class PlayersService {
 
     const resizedWidth = resizedMetadata.width ?? metadata.width ?? 0;
     const resizedHeight = resizedMetadata.height ?? metadata.height ?? 0;
-    const roiHeight = Math.max(1, Math.floor(resizedHeight * 0.35));
-    const roiTop = Math.max(0, resizedHeight - roiHeight);
-    const roiWidth = Math.max(1, resizedWidth);
+    const extractLeft = Math.max(0, Math.floor(resizedWidth * 0.05));
+    const extractTop = Math.max(0, Math.floor(resizedHeight * 0.55));
+    const extractWidth = Math.max(
+      1,
+      Math.min(resizedWidth - extractLeft, Math.floor(resizedWidth * 0.9)),
+    );
+    const extractHeight = Math.max(
+      1,
+      Math.min(resizedHeight - extractTop, Math.floor(resizedHeight * 0.4)),
+    );
 
     const extracted = sharp(resizedBuffer, { failOn: 'none' }).extract({
-      left: 0,
-      top: roiTop,
-      width: roiWidth,
-      height: roiHeight,
+      left: extractLeft,
+      top: extractTop,
+      width: extractWidth,
+      height: extractHeight,
     });
     const roiRawBuffer = await extracted.clone().raw().toBuffer();
     const roiBuffer = await extracted.clone().png().toBuffer();
@@ -559,10 +580,17 @@ export class PlayersService {
       roiBuffer,
       roiRawByteLength: roiRawBuffer.length,
       roiPngByteLength: roiBuffer.length,
+      resizedBuffer,
       resizedWidth,
       resizedHeight,
-      roiWidth,
-      roiHeight,
+      roiWidth: extractWidth,
+      roiHeight: extractHeight,
+      extractParams: {
+        left: extractLeft,
+        top: extractTop,
+        width: extractWidth,
+        height: extractHeight,
+      },
     };
   }
 
