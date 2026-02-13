@@ -270,6 +270,39 @@ export class MatchesService {
     };
   }
 
+  async buildMatchDownloadFilename(matchId: number) {
+    const match = await this.prisma.match.findUnique({
+      where: { id: matchId },
+      select: {
+        round: true,
+        matchday: true,
+        homeClub: { select: { shortName: true, name: true } },
+        awayClub: { select: { shortName: true, name: true } },
+      },
+    });
+
+    if (!match) {
+      throw new NotFoundException('Partido no encontrado.');
+    }
+
+    const round = match.round === 'SECOND' ? '2' : '1';
+    const matchday = String(match.matchday || 1);
+    const home = this.normalizeFilenamePart(match.homeClub?.shortName || match.homeClub?.name || 'Local');
+    const away = this.normalizeFilenamePart(match.awayClub?.shortName || match.awayClub?.name || 'Visitante');
+
+    return `R${round}-F${matchday}-${home}-${away}`;
+  }
+
+  private normalizeFilenamePart(value: string) {
+    const normalized = value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9]+/g, '')
+      .trim();
+
+    return normalized || 'Equipo';
+  }
+
   async getResult(matchId: number, tournamentCategoryId: number) {
     const matchCategory = await this.prisma.matchCategory.findFirst({
       where: { matchId, tournamentCategoryId },

@@ -95,9 +95,10 @@ export class MatchesController {
     @Param('matchId', ParseIntPipe) matchId: number,
     @Res() res: Response,
   ) {
+    const filenameBase = await this.matchesService.buildMatchDownloadFilename(matchId);
     const flyer = await this.matchFlyerService.generate(matchId);
     res.setHeader('Content-Type', flyer.contentType);
-    res.setHeader('Content-Disposition', `attachment; filename="flyer-${matchId}.${flyer.fileExtension}"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${filenameBase}.${flyer.fileExtension}"`);
     return res.send(flyer.buffer);
   }
 
@@ -106,9 +107,10 @@ export class MatchesController {
     @Param('matchId', ParseIntPipe) matchId: number,
     @Res() res: Response,
   ) {
+    const filenameBase = await this.matchesService.buildMatchDownloadFilename(matchId);
     const poster = await this.matchPosterService.generate(matchId);
     res.setHeader('Content-Type', poster.contentType);
-    res.setHeader('Content-Disposition', `attachment; filename=\"poster-${matchId}.${poster.fileExtension}\"`);
+    res.setHeader('Content-Disposition', `attachment; filename=\"${filenameBase}.${poster.fileExtension}\"`);
     return res.send(poster.buffer);
   }
 
@@ -117,9 +119,10 @@ export class MatchesController {
     @Param('matchId', ParseIntPipe) matchId: number,
     @Res() res: Response,
   ) {
+    const filenameBase = await this.matchesService.buildMatchDownloadFilename(matchId);
     const sheet = await this.matchSheetService.generate(matchId);
     res.setHeader('Content-Type', sheet.contentType);
-    res.setHeader('Content-Disposition', `attachment; filename="planilla-${matchId}.${sheet.fileExtension}"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${filenameBase}.${sheet.fileExtension}"`);
     return res.send(sheet.buffer);
   }
 
