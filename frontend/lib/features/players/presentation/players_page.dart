@@ -321,23 +321,31 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
       );
     }
 
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        content: const Row(
-          children: [
-            SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.4)),
-            SizedBox(width: 16),
-            Expanded(child: Text('Leyendo DNI...')),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: _isDniScanning ? _cancelDniScan : null,
-            child: const Text('Cancelar'),
-          ),
-        ],
+    final loadingDialogOpened = Completer<void>();
+    unawaited(
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) {
+          if (!loadingDialogOpened.isCompleted) {
+            loadingDialogOpened.complete();
+          }
+          return AlertDialog(
+            content: const Row(
+              children: [
+                SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.4)),
+                SizedBox(width: 16),
+                Expanded(child: Text('Leyendo DNI...')),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: _isDniScanning ? _cancelDniScan : null,
+                child: const Text('Cancelar'),
+              ),
+            ],
+          );
+        },
       ),
     );
 
@@ -362,6 +370,9 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
     } finally {
       if (requestId == _dniScanRequestId) {
         _dniScanCancelToken = null;
+      }
+      if (!loadingDialogOpened.isCompleted) {
+        await Future<void>.delayed(Duration.zero);
       }
       if (mounted) {
         setState(() {
