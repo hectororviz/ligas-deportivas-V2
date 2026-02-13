@@ -96,7 +96,7 @@ describe('PlayersService decoder wrapper', () => {
     expect(runDecoderSpy).toHaveBeenCalledWith(
       {
         binary: '/usr/local/bin/dni-pdf417-decoder',
-        args: ['--format', 'PDF417'],
+        args: [],
         inputMode: 'stdin',
         inputFileToken: undefined,
       },
@@ -107,7 +107,7 @@ describe('PlayersService decoder wrapper', () => {
   });
 
   it('uses file input mode when command contains file placeholder token', async () => {
-    const service = buildService('/usr/local/bin/dni-pdf417-decoder --format PDF417 {file}');
+    const service = buildService('/usr/local/bin/dni-pdf417-decoder {file}');
     mockPreprocess(service);
     jest
       .spyOn(service as never, 'buildDecodeStrategies' as never)
@@ -125,7 +125,7 @@ describe('PlayersService decoder wrapper', () => {
     expect(runDecoderSpy).toHaveBeenCalledWith(
       {
         binary: '/usr/local/bin/dni-pdf417-decoder',
-        args: ['--format', 'PDF417', '{file}'],
+        args: ['{file}'],
         inputMode: 'file',
         inputFileToken: '{file}',
       },

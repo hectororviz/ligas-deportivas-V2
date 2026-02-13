@@ -146,7 +146,7 @@ Si la API no puede conectarse al servidor SMTP, el panel te mostrará el error y
 
 ### Variables de entorno relacionadas
 
-- `DNI_SCAN_DECODER_COMMAND`: comando externo para decodificar PDF417 (lee bytes de imagen por `stdin` y responde el payload por `stdout`). Si no se define, backend usa por defecto `/usr/local/bin/dni-pdf417-decoder --format PDF417`.
+- `DNI_SCAN_DECODER_COMMAND`: comando externo para decodificar PDF417 (lee bytes de imagen por `stdin` y responde el payload por `stdout`). Si no se define, backend usa por defecto `/usr/local/bin/dni-pdf417-decoder`.
 - `SCAN_DEBUG=1`: habilita trazas completas del flujo de escaneo (requestId, preprocesado, stdout/stderr crudos del decoder, payload completo y endpoint diagnóstico `POST /api/v1/players/dni/scan/diagnostic`).
 - `DNI_DECODER_DEBUG=1`: habilita trazas internas del wrapper `/usr/local/bin/dni-pdf417-decoder` (binario ZXing elegido, comando final, salida cruda y payload final).
 

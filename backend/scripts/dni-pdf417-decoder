@@ -1,30 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-FORMAT="PDF417"
-
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --format)
-      if [[ $# -lt 2 ]]; then
-        echo "missing value for --format" >&2
-        exit 2
-      fi
-      FORMAT="$2"
-      shift 2
-      ;;
-    *)
-      echo "unsupported argument: $1" >&2
-      exit 2
-      ;;
-  esac
-done
-
-if [[ "$FORMAT" != "PDF417" ]]; then
-  echo "unsupported format: $FORMAT" >&2
-  exit 2
-fi
-
 TMP_IMAGE="/tmp/dni-pdf417-$(cat /proc/sys/kernel/random/uuid).png"
 cleanup() {
   rm -f "$TMP_IMAGE"
@@ -34,7 +10,7 @@ trap cleanup EXIT
 cat > "$TMP_IMAGE"
 
 ZXING_BIN=""
-for candidate in /usr/bin/zxingcpp /usr/bin/ReadBarcodes /usr/bin/ZXingReader; do
+for candidate in /usr/bin/ZXingReader /usr/bin/zxingcpp /usr/bin/ReadBarcodes; do
   if [[ -x "$candidate" ]]; then
     ZXING_BIN="$candidate"
     break
@@ -47,12 +23,11 @@ if [[ -z "$ZXING_BIN" ]]; then
 fi
 
 OUTPUT=""
-ZXING_ARGS=(--format PDF417 "$TMP_IMAGE")
 
 if [[ "${DNI_DECODER_DEBUG:-0}" == "1" ]]; then
   {
     printf '[dni-pdf417-decoder] ZXING_BIN=%s\n' "$ZXING_BIN"
-    printf '[dni-pdf417-decoder] COMMAND=%s %s\n' "$ZXING_BIN" "${ZXING_ARGS[*]}"
+    printf '[dni-pdf417-decoder] COMMAND=%s %s\n' "$ZXING_BIN" "$TMP_IMAGE"
   } >&2
 fi
 
@@ -61,7 +36,7 @@ DECODER_START_MS="$(date +%s%3N)"
 if [[ "${DNI_DECODER_DEBUG:-0}" == "1" ]]; then
   printf '[dni-pdf417-decoder] START_MS=%s\n' "$DECODER_START_MS" >&2
 fi
-OUTPUT="$($ZXING_BIN "${ZXING_ARGS[@]}" 2>&1)"
+OUTPUT="$($ZXING_BIN "$TMP_IMAGE" 2>&1)"
 ZXING_EXIT_CODE=$?
 DECODER_END_MS="$(date +%s%3N)"
 DECODER_ELAPSED_MS=$((DECODER_END_MS - DECODER_START_MS))
