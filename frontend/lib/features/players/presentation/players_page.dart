@@ -167,15 +167,15 @@ class _PlayersPageState extends ConsumerState<PlayersPage> with WidgetsBindingOb
   }
 
   Future<void> _openMassivePlayers() async {
-    final created = await Navigator.of(context).push<bool>(
+    final result = await Navigator.of(context).push<_MassivePlayersSaveResult>(
       MaterialPageRoute(builder: (_) => const _MassivePlayersPage()),
     );
-    if (!mounted || created != true) {
+    if (!mounted || result == null || !result.hasChanges) {
       return;
     }
     ref.invalidate(playersProvider);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Jugadores guardados correctamente.')),
+      SnackBar(content: Text(result.message)),
     );
   }
 
@@ -2047,6 +2047,8 @@ class _MassivePlayersPageState extends ConsumerState<_MassivePlayersPage> {
   final _formKey = GlobalKey<FormState>();
   final List<_MassivePlayerRow> _rows = [];
   final ScrollController _horizontalScrollController = ScrollController();
+  final RegExp _dniRegex = RegExp(r'^\d{6,9}$');
+  Map<int, String> _dniErrors = {};
   bool _isSaving = false;
 
   @override
@@ -2105,6 +2107,67 @@ class _MassivePlayersPageState extends ConsumerState<_MassivePlayersPage> {
     return null;
   }
 
+  String? _dniValidator(String? value, _MassivePlayerRow row, int rowIndex) {
+    if (_rowIsBlank(row)) {
+      return null;
+    }
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) {
+      return 'Obligatorio';
+    }
+    if (!_dniRegex.hasMatch(text)) {
+      return 'DNI inválido (6 a 9 dígitos)';
+    }
+    return _dniErrors[rowIndex];
+  }
+
+  Map<int, String> _collectDniErrors(List<_IndexedMassiveRow> rows) {
+    final errors = <int, String>{};
+    final seen = <String, int>{};
+
+    for (final entry in rows) {
+      final dni = entry.row.dniController.text.trim();
+      if (!_dniRegex.hasMatch(dni)) {
+        errors[entry.index] = 'DNI inválido (6 a 9 dígitos)';
+        continue;
+      }
+
+      final duplicatedAt = seen[dni];
+      if (duplicatedAt != null) {
+        errors[duplicatedAt] = 'DNI duplicado en la planilla';
+        errors[entry.index] = 'DNI duplicado en la planilla';
+        continue;
+      }
+
+      seen[dni] = entry.index;
+    }
+
+    return errors;
+  }
+
+  Future<Set<String>> _findExistingDnis(Set<String> dnis) async {
+    final api = ref.read(apiClientProvider);
+    final existingDnis = <String>{};
+
+    for (final dni in dnis) {
+      final response = await api.get<Map<String, dynamic>>(
+        '/players',
+        queryParameters: {
+          'dni': dni,
+          'page': 1,
+          'pageSize': 1,
+        },
+      );
+      final data = response.data ?? const <String, dynamic>{};
+      final paginated = PaginatedPlayers.fromJson(data);
+      if (paginated.players.any((player) => player.dni.trim() == dni)) {
+        existingDnis.add(dni);
+      }
+    }
+
+    return existingDnis;
+  }
+
   Future<void> _saveRows() async {
     if (_isSaving) {
       return;
@@ -2117,13 +2180,32 @@ class _MassivePlayersPageState extends ConsumerState<_MassivePlayersPage> {
       return;
     }
 
-    final playersToSave = _rows.where((row) => !row.isBlank).toList();
-    if (playersToSave.isEmpty) {
+    final rowsToSave = [
+      for (var index = 0; index < _rows.length; index++)
+        if (!_rows[index].isBlank) _IndexedMassiveRow(index: index, row: _rows[index]),
+    ];
+    if (rowsToSave.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Cargá al menos un jugador.')),
       );
       return;
     }
+
+    final dniErrors = _collectDniErrors(rowsToSave);
+    if (dniErrors.isNotEmpty) {
+      setState(() {
+        _dniErrors = dniErrors;
+      });
+      _formKey.currentState?.validate();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Revisá los DNI marcados en rojo.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _dniErrors = {};
+    });
 
     setState(() {
       _isSaving = true;
@@ -2132,7 +2214,23 @@ class _MassivePlayersPageState extends ConsumerState<_MassivePlayersPage> {
     final api = ref.read(apiClientProvider);
 
     try {
-      for (final row in playersToSave) {
+      final uniqueDnis = rowsToSave
+          .map((entry) => entry.row.dniController.text.trim())
+          .toSet();
+      final existingDnis = await _findExistingDnis(uniqueDnis);
+
+      var createdCount = 0;
+      var skippedExistingCount = 0;
+
+      for (final entry in rowsToSave) {
+        final row = entry.row;
+        final dni = row.dniController.text.trim();
+
+        if (existingDnis.contains(dni)) {
+          skippedExistingCount++;
+          continue;
+        }
+
         final birthDate = _parseBirthDate(row.birthDateController.text.trim());
         final payload = {
           'firstName': row.firstNameController.text.trim(),
@@ -2156,12 +2254,18 @@ class _MassivePlayersPageState extends ConsumerState<_MassivePlayersPage> {
         };
 
         await api.post('/players', data: payload);
+        createdCount++;
       }
 
       if (!mounted) {
         return;
       }
-      Navigator.of(context).pop(true);
+      Navigator.of(context).pop(
+        _MassivePlayersSaveResult(
+          createdCount: createdCount,
+          skippedExistingCount: skippedExistingCount,
+        ),
+      );
     } on DioException catch (error) {
       if (!mounted) {
         return;
@@ -2307,14 +2411,21 @@ class _MassivePlayersPageState extends ConsumerState<_MassivePlayersPage> {
                   width: 130,
                   child: TextFormField(
                     controller: _rows[index].dniController,
+                    onChanged: (_) {
+                      if (_dniErrors.containsKey(index)) {
+                        setState(() {
+                          _dniErrors = {..._dniErrors}..remove(index);
+                        });
+                      }
+                    },
                     decoration: const InputDecoration(
                       hintText: 'DNI',
                     ),
                     keyboardType: TextInputType.number,
-                    validator: (value) => _requiredValidator(
+                    validator: (value) => _dniValidator(
                       value,
                       _rows[index],
-                      'Obligatorio',
+                      index,
                     ),
                   ),
                 ),
@@ -2542,6 +2653,35 @@ class _MassivePlayerRow {
     emergencyNameController.dispose();
     emergencyRelationshipController.dispose();
     emergencyPhoneController.dispose();
+  }
+}
+
+class _IndexedMassiveRow {
+  _IndexedMassiveRow({required this.index, required this.row});
+
+  final int index;
+  final _MassivePlayerRow row;
+}
+
+class _MassivePlayersSaveResult {
+  _MassivePlayersSaveResult({
+    required this.createdCount,
+    required this.skippedExistingCount,
+  });
+
+  final int createdCount;
+  final int skippedExistingCount;
+
+  bool get hasChanges => createdCount > 0 || skippedExistingCount > 0;
+
+  String get message {
+    if (createdCount > 0 && skippedExistingCount > 0) {
+      return 'Se cargaron $createdCount jugadores. Se omitieron $skippedExistingCount por DNI ya existente.';
+    }
+    if (createdCount > 0) {
+      return 'Se cargaron $createdCount jugadores correctamente.';
+    }
+    return 'No se cargaron jugadores nuevos. Se omitieron $skippedExistingCount por DNI ya existente.';
   }
 }
 
