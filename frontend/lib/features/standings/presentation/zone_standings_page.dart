@@ -270,7 +270,7 @@ class _ZoneStandingsViewState extends ConsumerState<_ZoneStandingsView> {
 }
 
 class _StandingsImageExporter {
-  static const double _imageWidth = 2200;
+  static const double _imageWidth = 2400;
   static const double _horizontalPadding = 96;
   static const double _verticalPadding = 72;
   static const double _sectionGap = 44;
@@ -301,7 +301,7 @@ class _StandingsImageExporter {
     'Pts',
   ];
 
-  static const List<double> _columnFlex = [1.2, 5.6, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8];
+  static const List<double> _columnFlex = [1.2, 6.7, 0.72, 0.72, 0.72, 0.72, 0.72, 0.72, 0.72, 0.72];
 
   static Future<Uint8List> create(
     ZoneStandingsData data, {
@@ -656,7 +656,8 @@ class _StandingsImageExporter {
     try {
       final uri = Uri.tryParse(siteLogoUrl);
       if (uri != null) {
-        final data = await NetworkAssetBundle(uri).load(uri.toString());
+        final resolvedUri = uri.hasScheme ? uri : Uri.base.resolveUri(uri);
+        final data = await NetworkAssetBundle(resolvedUri).load(resolvedUri.toString());
         final codec = await ui.instantiateImageCodec(data.buffer.asUint8List(), targetWidth: _logoSize.toInt());
         final frame = await codec.getNextFrame();
         return frame.image;
