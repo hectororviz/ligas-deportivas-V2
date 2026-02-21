@@ -119,7 +119,7 @@ class _ZoneStandingsViewState extends ConsumerState<_ZoneStandingsView> {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final data = widget.data;
     final theme = Theme.of(context);
     final leagueColors = ref.watch(leagueColorsProvider);
