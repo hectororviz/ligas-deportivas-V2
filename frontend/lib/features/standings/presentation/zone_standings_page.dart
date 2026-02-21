@@ -83,8 +83,12 @@ class _ZoneStandingsView extends ConsumerWidget {
     final tileChildrenPadding =
         isMobile ? const EdgeInsets.fromLTRB(12, 0, 12, 12) : const EdgeInsets.fromLTRB(20, 0, 20, 16);
 
+    final listPadding = isMobile
+        ? const EdgeInsets.fromLTRB(8, 16, 8, 16)
+        : const EdgeInsets.all(24);
+
     return ListView(
-      padding: const EdgeInsets.all(24),
+      padding: listPadding,
       children: [
         Text(
           data.zone.name,

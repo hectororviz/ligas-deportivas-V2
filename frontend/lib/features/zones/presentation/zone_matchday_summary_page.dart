@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/responsive.dart';
 import '../../../services/api_client.dart';
 import '../../standings/presentation/standings_table.dart';
 import '../../standings/domain/standings_models.dart';
@@ -91,8 +92,19 @@ class _MatchdaySummaryView extends ConsumerWidget {
       categories: data.categoryStandings,
     );
 
+    final isMobile = Responsive.isMobile(context);
+    final listPadding = isMobile
+        ? const EdgeInsets.fromLTRB(8, 16, 8, 16)
+        : const EdgeInsets.all(24);
+    final sectionPadding = isMobile ? const EdgeInsets.all(12) : const EdgeInsets.all(20);
+    final tilePadding = isMobile
+        ? const EdgeInsets.symmetric(horizontal: 12, vertical: 10)
+        : const EdgeInsets.symmetric(horizontal: 20, vertical: 12);
+    final tileChildrenPadding =
+        isMobile ? const EdgeInsets.fromLTRB(12, 0, 12, 12) : const EdgeInsets.fromLTRB(20, 0, 20, 16);
+
     return ListView(
-      padding: const EdgeInsets.all(24),
+      padding: listPadding,
       children: [
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -120,7 +132,7 @@ class _MatchdaySummaryView extends ConsumerWidget {
         const SizedBox(height: 24),
         Card(
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: sectionPadding,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -142,7 +154,7 @@ class _MatchdaySummaryView extends ConsumerWidget {
         const SizedBox(height: 20),
         Card(
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: sectionPadding,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -186,7 +198,7 @@ class _MatchdaySummaryView extends ConsumerWidget {
         if (generalStandings.categories.isEmpty)
           Card(
             child: Padding(
-              padding: const EdgeInsets.all(20),
+              padding: sectionPadding,
               child: Text(
                 'No hay categorías con estadísticas disponibles en esta zona.',
                 style: theme.textTheme.bodyMedium,
@@ -199,8 +211,8 @@ class _MatchdaySummaryView extends ConsumerWidget {
               margin: const EdgeInsets.only(bottom: 12),
               child: ExpansionTile(
                 key: PageStorageKey('zone-${data.zone.id}-matchday-${data.matchday.matchday}-category-${category.tournamentCategoryId}'),
-                tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                tilePadding: tilePadding,
+                childrenPadding: tileChildrenPadding,
                 title: Text(
                   category.categoryName,
                   style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
