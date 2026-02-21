@@ -65,7 +65,7 @@ class StandingsTable extends StatelessWidget {
               color: buildStripedRowColor(index: index, colors: colors),
               cells: [
                 DataCell(Text('${index + 1}')),
-                DataCell(Text(rows[index].clubName)),
+                DataCell(SizedBox(width: isMobile ? 170 : 260, child: Text(rows[index].displayClubName))),
                 DataCell(Text(rows[index].played.toString())),
                 DataCell(Text(rows[index].wins.toString())),
                 DataCell(Text(rows[index].draws.toString())),

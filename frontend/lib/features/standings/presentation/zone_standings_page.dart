@@ -199,7 +199,7 @@ class _ZoneStandingsViewState extends ConsumerState<_ZoneStandingsView> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Tabla general',
+                  'Tabla de posiciones',
                   style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 12),
@@ -286,7 +286,7 @@ class _StandingsImageExporter {
   static const double _headerFontSize = 28;
   static const double _cellFontSize = 28;
   static const double _cellHorizontalPadding = 16;
-  static const double _logoSize = 122;
+  static const double _logoSize = 183;
 
   static const List<String> _columns = [
     'Posición',
@@ -301,7 +301,7 @@ class _StandingsImageExporter {
     'Pts',
   ];
 
-  static const List<double> _columnFlex = [1.3, 4.6, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9];
+  static const List<double> _columnFlex = [1.2, 5.6, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8];
 
   static Future<Uint8List> create(
     ZoneStandingsData data, {
@@ -326,7 +326,7 @@ class _StandingsImageExporter {
     _drawLogo(canvas, y, logoImage: logoImage);
     y = _drawCenteredText(
       canvas,
-      'TABLAS DE RESULTADOS',
+      'TABLA DE POSICIONES',
       y,
       size: _titleSize,
       weight: FontWeight.w700,
@@ -344,7 +344,7 @@ class _StandingsImageExporter {
 
     y = _drawCenteredText(
       canvas,
-      'Tabla general',
+      'Tabla de posiciones',
       y + 24,
       size: _sectionTitleSize,
       weight: FontWeight.w700,
@@ -570,7 +570,7 @@ class _StandingsImageExporter {
           ? const ['-', 'Sin datos', '-', '-', '-', '-', '-', '-', '-', '-']
           : [
               '${index + 1}',
-              row.clubName,
+              row.displayClubName,
               '${row.played}',
               '${row.wins}',
               '${row.draws}',
@@ -655,10 +655,18 @@ class _StandingsImageExporter {
     }
     try {
       final uri = Uri.tryParse(siteLogoUrl);
-      if (uri == null) {
-        return null;
+      if (uri != null) {
+        final data = await NetworkAssetBundle(uri).load(uri.toString());
+        final codec = await ui.instantiateImageCodec(data.buffer.asUint8List(), targetWidth: _logoSize.toInt());
+        final frame = await codec.getNextFrame();
+        return frame.image;
       }
-      final data = await NetworkAssetBundle(uri).load(uri.toString());
+    } catch (_) {
+      // Intentamos fallback local.
+    }
+
+    try {
+      final data = await rootBundle.load('web/favicon.png');
       final codec = await ui.instantiateImageCodec(data.buffer.asUint8List(), targetWidth: _logoSize.toInt());
       final frame = await codec.getNextFrame();
       return frame.image;
@@ -680,12 +688,12 @@ class _StandingsImageExporter {
       return;
     }
 
-    canvas.drawRRect(rrect, Paint()..color = const Color(0xFF111827));
+    canvas.drawRRect(rrect, Paint()..color = const Color(0xFFE5E7EB));
     _drawCenteredText(
       canvas,
-      'LD',
-      y + 30,
-      size: 44,
+      'LP',
+      y + (_logoSize * 0.25),
+      size: _logoSize * 0.36,
       weight: FontWeight.w700,
       maxWidth: _logoSize,
       originX: x,

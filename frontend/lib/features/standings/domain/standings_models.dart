@@ -89,6 +89,7 @@ class StandingsRow {
   StandingsRow({
     required this.clubId,
     required this.clubName,
+    required this.clubShortName,
     required this.played,
     required this.wins,
     required this.draws,
@@ -106,6 +107,7 @@ class StandingsRow {
     return StandingsRow(
       clubId: _parseInt(json['clubId'], fallback: _parseInt(club['id'])),
       clubName: _parseString(json['clubName'], fallback: _parseString(club['name'], fallback: 'Club')),
+      clubShortName: _parseString(json['clubShortName'], fallback: _parseString(club['shortName'])),
       played: _parseInt(json['played']),
       wins: _parseInt(json['wins']),
       draws: _parseInt(json['draws']),
@@ -119,6 +121,7 @@ class StandingsRow {
 
   final int clubId;
   final String clubName;
+  final String? clubShortName;
   final int played;
   final int wins;
   final int draws;
@@ -127,6 +130,14 @@ class StandingsRow {
   final int goalsAgainst;
   final int goalDifference;
   final int points;
+
+  String get displayClubName {
+    final shortName = clubShortName?.trim();
+    if (shortName != null && shortName.isNotEmpty) {
+      return shortName;
+    }
+    return clubName;
+  }
 }
 
 ZoneCategoryStandings? _tryParseCategoryStandings(Map<String, dynamic> json) {
@@ -212,6 +223,7 @@ StandingsRow? _tryParseStandingsRow(Map<String, dynamic> json) {
       return StandingsRow(
         clubId: _parseInt(json['clubId']),
         clubName: _parseString(json['clubName'], fallback: 'Club'),
+        clubShortName: _parseString(json['clubShortName']),
         played: _parseInt(json['played']),
         wins: _parseInt(json['wins']),
         draws: _parseInt(json['draws']),
