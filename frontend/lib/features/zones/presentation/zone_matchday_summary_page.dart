@@ -86,6 +86,7 @@ class _MatchdaySummaryView extends ConsumerWidget {
         : 'Sin fecha definida';
     final scoreboardGrouping = _buildScoreboardGrouping(data.scoreboard, data.matches);
     final matchdayPoints = _buildMatchdayPoints(data.matches);
+    final clubShortNames = _buildClubShortNames(data.matches);
     final generalStandings = ZoneStandingsData(
       zone: data.zone,
       general: data.generalStandings,
@@ -177,6 +178,8 @@ class _MatchdaySummaryView extends ConsumerWidget {
                   clubNameGroupIndexes: scoreboardGrouping.clubNameGroupIndexes,
                   pointsByClubId: matchdayPoints.byClubId,
                   pointsByClubName: matchdayPoints.byClubName,
+                  shortNameByClubId: clubShortNames.byClubId,
+                  shortNameByClubName: clubShortNames.byClubName,
                 ),
                 if (scoreboardGrouping.byeClubs.isNotEmpty) ...[
                   const SizedBox(height: 8),
@@ -249,6 +252,8 @@ class _MatchdayScoreboardTable extends StatelessWidget {
     required this.clubNameGroupIndexes,
     required this.pointsByClubId,
     required this.pointsByClubName,
+    required this.shortNameByClubId,
+    required this.shortNameByClubName,
   });
 
   final MatchdayScoreboard scoreboard;
@@ -258,6 +263,8 @@ class _MatchdayScoreboardTable extends StatelessWidget {
   final Map<String, int> clubNameGroupIndexes;
   final Map<int, int> pointsByClubId;
   final Map<String, int> pointsByClubName;
+  final Map<int, String> shortNameByClubId;
+  final Map<String, String> shortNameByClubName;
 
   @override
   Widget build(BuildContext context) {
@@ -317,6 +324,14 @@ class _MatchdayScoreboardTable extends StatelessWidget {
       return pointsByClubName[_normalizeName(row.clubName)] ?? 0;
     }
 
+    String resolveClubName(MatchdayScoreboardRow row) {
+      final byId = row.clubId != 0 ? shortNameByClubId[row.clubId] : null;
+      if (byId != null && byId.isNotEmpty) {
+        return byId;
+      }
+      return shortNameByClubName[_normalizeName(row.clubName)] ?? row.clubName;
+    }
+
     final pointsStyle = theme.textTheme.titleSmall?.copyWith(
       fontWeight: FontWeight.w700,
       color: theme.colorScheme.primary,
@@ -337,7 +352,7 @@ class _MatchdayScoreboardTable extends StatelessWidget {
                 colors: colors,
               ),
               cells: [
-                DataCell(Text(rows[index].clubName)),
+                DataCell(Text(resolveClubName(rows[index]))),
                 ...generalCategories.map(
                   (category) => DataCell(Text(formatGoals(rows[index], category))),
                 ),
@@ -508,6 +523,31 @@ _MatchdayPoints _buildMatchdayPoints(List<MatchdaySummaryMatch> matches) {
   );
 }
 
+_MatchdayClubShortNames _buildClubShortNames(List<MatchdaySummaryMatch> matches) {
+  final byClubId = <int, String>{};
+  final byClubName = <String, String>{};
+
+  void registerClub(SummaryClub? club) {
+    if (!_hasRealClub(club)) {
+      return;
+    }
+    final shortName = club!.shortName?.trim();
+    if (shortName == null || shortName.isEmpty) {
+      return;
+    }
+    byClubId[club.id] = shortName;
+    byClubName[_normalizeName(club.name)] = shortName;
+    byClubName[_normalizeName(club.displayName)] = shortName;
+  }
+
+  for (final match in matches) {
+    registerClub(match.homeClub);
+    registerClub(match.awayClub);
+  }
+
+  return _MatchdayClubShortNames(byClubId: byClubId, byClubName: byClubName);
+}
+
 _ScoreboardGrouping _buildScoreboardGrouping(
   MatchdayScoreboard scoreboard,
   List<MatchdaySummaryMatch> matches,
@@ -605,6 +645,16 @@ class _MatchdayPoints {
 
   final Map<int, int> byClubId;
   final Map<String, int> byClubName;
+}
+
+class _MatchdayClubShortNames {
+  const _MatchdayClubShortNames({
+    required this.byClubId,
+    required this.byClubName,
+  });
+
+  final Map<int, String> byClubId;
+  final Map<String, String> byClubName;
 }
 
 class _MatchdaySummaryRequest {
