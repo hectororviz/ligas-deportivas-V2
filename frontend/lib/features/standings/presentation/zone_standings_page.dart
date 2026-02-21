@@ -5,11 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/binary_download.dart';
 import '../../../core/utils/responsive.dart';
 import '../../../services/api_client.dart';
+import '../../settings/site_identity_provider.dart';
 import '../domain/standings_models.dart';
 import 'standings_table.dart';
 
@@ -84,7 +86,24 @@ class _ZoneStandingsViewState extends ConsumerState<_ZoneStandingsView> {
   Future<void> _downloadStandingsImage() async {
     setState(() => _isExporting = true);
     try {
-      final bytes = await _StandingsImageExporter.create(widget.data);
+      final leagueColor =
+          ref.read(leagueColorsProvider)[widget.data.zone.leagueId] ?? Theme.of(context).colorScheme.primary;
+      String? siteLogoUrl;
+      try {
+        final identity = await ref.read(siteIdentityProvider.future);
+        final basePath = identity.faviconBasePath;
+        if (basePath != null && basePath.isNotEmpty) {
+          siteLogoUrl = '$basePath/favicon-192x192.png';
+        }
+      } catch (_) {
+        siteLogoUrl = null;
+      }
+
+      final bytes = await _StandingsImageExporter.create(
+        widget.data,
+        leagueColor: leagueColor,
+        siteLogoUrl: siteLogoUrl,
+      );
       final fileName = _StandingsImageExporter.fileName(widget.data);
       if (kIsWeb) {
         await downloadBinary(
@@ -256,16 +275,18 @@ class _StandingsImageExporter {
   static const double _verticalPadding = 72;
   static const double _sectionGap = 44;
   static const double _gridGap = 30;
-  static const double _titleSize = 56;
-  static const double _subtitleSize = 30;
-  static const double _sectionTitleSize = 32;
-  static const double _categoryTitleSize = 28;
-  static const double _promoSize = 22;
+  static const double _titleSize = 68;
+  static const double _subtitleSize = 34;
+  static const double _sectionTitleSize = 38;
+  static const double _categoryTitleSize = 32;
+  static const double _promoSize = 25;
+  static const double _footerSize = 28;
   static const double _headerRowHeight = 82;
   static const double _dataRowHeight = 74;
-  static const double _headerFontSize = 22;
-  static const double _cellFontSize = 22;
+  static const double _headerFontSize = 28;
+  static const double _cellFontSize = 28;
   static const double _cellHorizontalPadding = 16;
+  static const double _logoSize = 122;
 
   static const List<String> _columns = [
     'Posición',
@@ -282,7 +303,11 @@ class _StandingsImageExporter {
 
   static const List<double> _columnFlex = [1.3, 4.6, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9];
 
-  static Future<Uint8List> create(ZoneStandingsData data) async {
+  static Future<Uint8List> create(
+    ZoneStandingsData data, {
+    required Color leagueColor,
+    String? siteLogoUrl,
+  }) async {
     final contentWidth = _imageWidth - (_horizontalPadding * 2);
     final generalTableWidth = contentWidth * 0.9;
     final categoriesTableWidth = (contentWidth - _gridGap) / 2;
@@ -295,7 +320,10 @@ class _StandingsImageExporter {
       Paint()..color = const Color(0xFFFFFFFF),
     );
 
+    final logoImage = await _loadLogo(siteLogoUrl);
+
     var y = _verticalPadding;
+    _drawLogo(canvas, y, logoImage: logoImage);
     y = _drawCenteredText(
       canvas,
       'TABLAS DE RESULTADOS',
@@ -330,6 +358,7 @@ class _StandingsImageExporter {
       y: y,
       width: generalTableWidth,
       rows: data.general,
+      leagueColor: leagueColor,
     );
     y += _tableHeight(data.general.length) + _sectionGap;
 
@@ -369,6 +398,7 @@ class _StandingsImageExporter {
           y: y,
           width: categoriesTableWidth,
           category: left,
+          leagueColor: leagueColor,
         );
 
         if (right != null) {
@@ -378,12 +408,22 @@ class _StandingsImageExporter {
             y: y,
             width: categoriesTableWidth,
             category: right,
+            leagueColor: leagueColor,
           );
         }
 
         y += rowHeight + _sectionGap;
       }
     }
+
+    _drawCenteredText(
+      canvas,
+      'ligas.csdsoler.com.ar',
+      imageHeight - _verticalPadding + 6,
+      size: _footerSize,
+      weight: FontWeight.w600,
+      maxWidth: _imageWidth,
+    );
 
     final image = await recorder.endRecording().toImage(_imageWidth.toInt(), imageHeight.toInt());
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
@@ -422,7 +462,7 @@ class _StandingsImageExporter {
       }
     }
 
-    return height + _verticalPadding;
+    return height + _verticalPadding + _footerSize + 20;
   }
 
   static double _categoryBlockHeight(int rows, bool countsForGeneral) {
@@ -441,6 +481,7 @@ class _StandingsImageExporter {
     required double y,
     required double width,
     required ZoneCategoryStandings category,
+    required Color leagueColor,
   }) {
     var currentY = y;
     currentY = _drawCenteredText(
@@ -471,6 +512,7 @@ class _StandingsImageExporter {
       y: currentY + 10,
       width: width,
       rows: category.standings,
+      leagueColor: leagueColor,
     );
   }
 
@@ -480,10 +522,11 @@ class _StandingsImageExporter {
     required double y,
     required double width,
     required List<StandingsRow> rows,
+    required Color leagueColor,
   }) {
-    final headerPaint = Paint()..color = const Color(0xFFB7BAC3);
-    final oddRowPaint = Paint()..color = const Color(0xFFC7CAD1);
-    final evenRowPaint = Paint()..color = const Color(0xFFD3D5DC);
+    final headerPaint = Paint()..color = leagueColor;
+    final oddRowPaint = Paint()..color = _lighten(leagueColor, 0.72);
+    final evenRowPaint = Paint()..color = _lighten(leagueColor, 0.82);
     final borderPaint = Paint()
       ..color = const Color(0xFFA9ADB6)
       ..style = PaintingStyle.stroke
@@ -510,6 +553,7 @@ class _StandingsImageExporter {
         align: i == 1 ? TextAlign.left : TextAlign.center,
         size: _headerFontSize,
         weight: FontWeight.w700,
+        color: Colors.white,
       );
       cursorX += columnWidth;
     }
@@ -550,6 +594,7 @@ class _StandingsImageExporter {
           align: i == 1 ? TextAlign.left : TextAlign.center,
           size: _cellFontSize,
           weight: FontWeight.w500,
+          color: const Color(0xFF20232B),
         );
         cellX += columnWidth;
       }
@@ -602,6 +647,55 @@ class _StandingsImageExporter {
     return y + painter.height;
   }
 
+
+
+  static Future<ui.Image?> _loadLogo(String? siteLogoUrl) async {
+    if (siteLogoUrl == null || siteLogoUrl.isEmpty) {
+      return null;
+    }
+    try {
+      final uri = Uri.tryParse(siteLogoUrl);
+      if (uri == null) {
+        return null;
+      }
+      final data = await NetworkAssetBundle(uri).load(uri.toString());
+      final codec = await ui.instantiateImageCodec(data.buffer.asUint8List(), targetWidth: _logoSize.toInt());
+      final frame = await codec.getNextFrame();
+      return frame.image;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static void _drawLogo(Canvas canvas, double y, {ui.Image? logoImage}) {
+    final x = _horizontalPadding;
+    final rect = Rect.fromLTWH(x, y, _logoSize, _logoSize);
+    final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(20));
+
+    if (logoImage != null) {
+      canvas.save();
+      canvas.clipRRect(rrect);
+      paintImage(canvas: canvas, rect: rect, image: logoImage, fit: BoxFit.cover);
+      canvas.restore();
+      return;
+    }
+
+    canvas.drawRRect(rrect, Paint()..color = const Color(0xFF111827));
+    _drawCenteredText(
+      canvas,
+      'LD',
+      y + 30,
+      size: 44,
+      weight: FontWeight.w700,
+      maxWidth: _logoSize,
+      originX: x,
+    );
+  }
+
+  static Color _lighten(Color color, double amount) {
+    return Color.lerp(color, Colors.white, amount) ?? color;
+  }
+
   static void _drawCellText(
     Canvas canvas, {
     required String text,
@@ -612,13 +706,14 @@ class _StandingsImageExporter {
     required TextAlign align,
     required double size,
     required FontWeight weight,
+    Color color = const Color(0xFF20232B),
   }) {
     final inset = align == TextAlign.left ? _cellHorizontalPadding : 8.0;
     final painter = TextPainter(
       text: TextSpan(
         text: text,
         style: TextStyle(
-          color: const Color(0xFF20232B),
+          color: color,
           fontSize: size,
           fontWeight: weight,
         ),
