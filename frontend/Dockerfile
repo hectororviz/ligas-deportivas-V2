@@ -1,9 +1,12 @@
 FROM ghcr.io/cirruslabs/flutter:latest AS builder
 WORKDIR /app
-ENV HOME=/home/flutter
+ENV HOME=/home/flutter \
+    PUB_CACHE=/home/flutter/.pub-cache \
+    FLUTTER_ROOT=/sdks/flutter
 
 RUN useradd --create-home --shell /bin/bash flutter \
-  && chown -R flutter:flutter /app
+  && mkdir -p "$HOME" "$PUB_CACHE" \
+  && chown -R flutter:flutter /app "$HOME" /sdks/flutter
 
 USER flutter
 
