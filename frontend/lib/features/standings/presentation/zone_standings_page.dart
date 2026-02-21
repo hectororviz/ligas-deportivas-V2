@@ -251,83 +251,141 @@ class _ZoneStandingsViewState extends ConsumerState<_ZoneStandingsView> {
 }
 
 class _StandingsImageExporter {
-  static const double _horizontalPadding = 48;
-  static const double _verticalPadding = 40;
-  static const double _titleSize = 34;
-  static const double _subtitleSize = 24;
-  static const double _headerSize = 21;
-  static const double _lineSize = 18;
-  static const double _lineHeight = 1.35;
+  static const double _imageWidth = 2200;
+  static const double _horizontalPadding = 96;
+  static const double _verticalPadding = 72;
+  static const double _sectionGap = 44;
+  static const double _gridGap = 30;
+  static const double _titleSize = 56;
+  static const double _subtitleSize = 30;
+  static const double _sectionTitleSize = 32;
+  static const double _categoryTitleSize = 28;
+  static const double _promoSize = 22;
+  static const double _headerRowHeight = 82;
+  static const double _dataRowHeight = 74;
+  static const double _headerFontSize = 22;
+  static const double _cellFontSize = 22;
+  static const double _cellHorizontalPadding = 16;
+
+  static const List<String> _columns = [
+    'Posición',
+    'Club',
+    'PJ',
+    'PG',
+    'PE',
+    'PP',
+    'GF',
+    'GC',
+    'DG',
+    'Pts',
+  ];
+
+  static const List<double> _columnFlex = [1.3, 4.6, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9];
 
   static Future<Uint8List> create(ZoneStandingsData data) async {
-    const width = 1600.0;
-    final lines = _buildLines(data);
-    final imageHeight = _calculateHeight(lines.length);
+    final contentWidth = _imageWidth - (_horizontalPadding * 2);
+    final generalTableWidth = contentWidth * 0.9;
+    final categoriesTableWidth = (contentWidth - _gridGap) / 2;
+    final imageHeight = _calculateHeight(data);
 
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
-    final backgroundPaint = Paint()..color = const Color(0xFFFFFFFF);
-    canvas.drawRect(Rect.fromLTWH(0, 0, width, imageHeight), backgroundPaint);
-
-    final linePainter = Paint()
-      ..color = const Color(0xFFE5E7EB)
-      ..strokeWidth = 2;
-    canvas.drawLine(
-      Offset(_horizontalPadding, 170),
-      Offset(width - _horizontalPadding, 170),
-      linePainter,
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, _imageWidth, imageHeight),
+      Paint()..color = const Color(0xFFFFFFFF),
     );
 
     var y = _verticalPadding;
-    y = _drawText(canvas, 'Liga: ${data.zone.leagueName}', _horizontalPadding, y,
-        size: _titleSize, weight: FontWeight.w700);
-    y = _drawText(
+    y = _drawCenteredText(
       canvas,
-      'Torneo: ${data.zone.tournamentName} ${data.zone.tournamentYear}',
-      _horizontalPadding,
+      'TABLAS DE RESULTADOS',
       y,
-      size: _subtitleSize,
-      weight: FontWeight.w600,
+      size: _titleSize,
+      weight: FontWeight.w700,
+      maxWidth: _imageWidth,
     );
-    y = _drawText(
-      canvas,
-      'Zona: ${data.zone.name}',
-      _horizontalPadding,
-      y,
-      size: _subtitleSize,
-      weight: FontWeight.w600,
-    );
-    y += 30;
 
-    for (var i = 0; i < lines.length; i++) {
-      final line = lines[i];
-      final isHeader = line.startsWith('TABLA') || line.startsWith('Categoría:');
-      final isTableHeader = line.startsWith('#  Club');
-      final isSeparator = line == _separator;
-      if (isSeparator) {
-        canvas.drawLine(
-          Offset(_horizontalPadding, y + 8),
-          Offset(width - _horizontalPadding, y + 8),
-          linePainter,
-        );
-        y += 18;
-        continue;
-      }
-      y = _drawText(
+    y = _drawCenteredText(
+      canvas,
+      '${data.zone.leagueName} · ${data.zone.tournamentName} ${data.zone.tournamentYear} · ${data.zone.name}',
+      y + 8,
+      size: _subtitleSize,
+      weight: FontWeight.w500,
+      maxWidth: _imageWidth,
+    );
+
+    y = _drawCenteredText(
+      canvas,
+      'Tabla general',
+      y + 24,
+      size: _sectionTitleSize,
+      weight: FontWeight.w700,
+      maxWidth: _imageWidth,
+    );
+
+    y += 16;
+    _drawTable(
+      canvas,
+      x: (_imageWidth - generalTableWidth) / 2,
+      y: y,
+      width: generalTableWidth,
+      rows: data.general,
+    );
+    y += _tableHeight(data.general.length) + _sectionGap;
+
+    if (data.categories.isEmpty) {
+      _drawCenteredText(
         canvas,
-        line,
-        _horizontalPadding,
+        'Sin categorías con datos disponibles.',
         y,
-        size: isHeader ? _headerSize : _lineSize,
-        weight: isHeader || isTableHeader ? FontWeight.w700 : FontWeight.w400,
-        mono: !isHeader,
+        size: _subtitleSize,
+        weight: FontWeight.w500,
+        maxWidth: _imageWidth,
       );
-      if (isHeader && i > 0) {
-        y += 4;
+    } else {
+      y = _drawCenteredText(
+        canvas,
+        'Tablas por categoría',
+        y,
+        size: _sectionTitleSize,
+        weight: FontWeight.w700,
+        maxWidth: _imageWidth,
+      );
+      y += 12;
+
+      for (var i = 0; i < data.categories.length; i += 2) {
+        final left = data.categories[i];
+        final right = i + 1 < data.categories.length ? data.categories[i + 1] : null;
+
+        final leftHeight = _categoryBlockHeight(left.standings.length, left.countsForGeneral);
+        final rightHeight = right == null
+            ? 0.0
+            : _categoryBlockHeight(right.standings.length, right.countsForGeneral);
+        final rowHeight = leftHeight > rightHeight ? leftHeight : rightHeight;
+
+        _drawCategoryBlock(
+          canvas,
+          x: _horizontalPadding,
+          y: y,
+          width: categoriesTableWidth,
+          category: left,
+        );
+
+        if (right != null) {
+          _drawCategoryBlock(
+            canvas,
+            x: _horizontalPadding + categoriesTableWidth + _gridGap,
+            y: y,
+            width: categoriesTableWidth,
+            category: right,
+          );
+        }
+
+        y += rowHeight + _sectionGap;
       }
     }
 
-    final image = await recorder.endRecording().toImage(width.toInt(), imageHeight.toInt());
+    final image = await recorder.endRecording().toImage(_imageWidth.toInt(), imageHeight.toInt());
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
     if (bytes == null) {
       throw StateError('No se pudo generar la imagen de tablas.');
@@ -343,65 +401,185 @@ class _StandingsImageExporter {
     return 'tablas-$base.png';
   }
 
-  static List<String> _buildLines(ZoneStandingsData data) {
-    final lines = <String>[
-      'TABLA GENERAL',
-      _tableHeader,
-      ..._rows(data.general),
-      _separator,
-      'TABLAS DE TODAS LAS CATEGORÍAS',
-    ];
+  static double _calculateHeight(ZoneStandingsData data) {
+    var height = _verticalPadding;
+    height += (_titleSize * 1.3) + (_subtitleSize * 1.5) + 24;
+    height += (_sectionTitleSize * 1.4) + 16;
+    height += _tableHeight(data.general.length) + _sectionGap;
 
     if (data.categories.isEmpty) {
-      lines.add('Sin categorías con datos disponibles.');
-      return lines;
-    }
-
-    for (final category in data.categories) {
-      lines.add('Categoría: ${category.categoryName}');
-      if (!category.countsForGeneral) {
-        lines.add('  * Promocional (no suma a la tabla general).');
+      height += _subtitleSize * 1.6;
+    } else {
+      height += (_sectionTitleSize * 1.4) + 12;
+      for (var i = 0; i < data.categories.length; i += 2) {
+        final left = data.categories[i];
+        final right = i + 1 < data.categories.length ? data.categories[i + 1] : null;
+        final leftHeight = _categoryBlockHeight(left.standings.length, left.countsForGeneral);
+        final rightHeight = right == null
+            ? 0.0
+            : _categoryBlockHeight(right.standings.length, right.countsForGeneral);
+        height += (leftHeight > rightHeight ? leftHeight : rightHeight) + _sectionGap;
       }
-      lines.add(_tableHeader);
-      lines.addAll(_rows(category.standings));
-      lines.add(_separator);
     }
-    return lines;
+
+    return height + _verticalPadding;
   }
 
-  static List<String> _rows(List<StandingsRow> rows) {
-    if (rows.isEmpty) {
-      return const ['(Sin datos)'];
+  static double _categoryBlockHeight(int rows, bool countsForGeneral) {
+    final promoHeight = countsForGeneral ? 0.0 : (_promoSize * 1.4) + 6;
+    return (_categoryTitleSize * 1.4) + promoHeight + 10 + _tableHeight(rows);
+  }
+
+  static double _tableHeight(int rows) {
+    final count = rows == 0 ? 1 : rows;
+    return _headerRowHeight + (_dataRowHeight * count);
+  }
+
+  static void _drawCategoryBlock(
+    Canvas canvas, {
+    required double x,
+    required double y,
+    required double width,
+    required CategoryStandings category,
+  }) {
+    var currentY = y;
+    currentY = _drawCenteredText(
+      canvas,
+      category.categoryName,
+      currentY,
+      size: _categoryTitleSize,
+      weight: FontWeight.w700,
+      maxWidth: width,
+      originX: x,
+    );
+
+    if (!category.countsForGeneral) {
+      currentY = _drawCenteredText(
+        canvas,
+        'Promocional (no suma a la tabla general)',
+        currentY + 4,
+        size: _promoSize,
+        weight: FontWeight.w500,
+        maxWidth: width,
+        originX: x,
+      );
     }
-    return rows.asMap().entries.map((entry) {
-      final index = entry.key + 1;
-      final row = entry.value;
-      return '${index.toString().padLeft(2)}  '
-          '${_trim(row.clubName, 28).padRight(28)}  '
-          '${row.played.toString().padLeft(2)}  '
-          '${row.wins.toString().padLeft(2)}  '
-          '${row.draws.toString().padLeft(2)}  '
-          '${row.losses.toString().padLeft(2)}  '
-          '${row.goalsFor.toString().padLeft(2)}  '
-          '${row.goalsAgainst.toString().padLeft(2)}  '
-          '${row.goalDifference >= 0 ? '+' : ''}${row.goalDifference.toString().padLeft(2)}  '
-          '${row.points.toString().padLeft(3)}';
-    }).toList();
+
+    _drawTable(
+      canvas,
+      x: x,
+      y: currentY + 10,
+      width: width,
+      rows: category.standings,
+    );
   }
 
-  static double _calculateHeight(int linesCount) {
-    final estimated = (_verticalPadding * 2) + 220 + (linesCount * _lineSize * _lineHeight);
-    return estimated < 900 ? 900 : estimated;
+  static void _drawTable(
+    Canvas canvas, {
+    required double x,
+    required double y,
+    required double width,
+    required List<StandingsRow> rows,
+  }) {
+    final headerPaint = Paint()..color = const Color(0xFFB7BAC3);
+    final oddRowPaint = Paint()..color = const Color(0xFFC7CAD1);
+    final evenRowPaint = Paint()..color = const Color(0xFFD3D5DC);
+    final borderPaint = Paint()
+      ..color = const Color(0xFFA9ADB6)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.4;
+
+    final rowCount = rows.isEmpty ? 1 : rows.length;
+    final tableHeight = _headerRowHeight + (_dataRowHeight * rowCount);
+
+    final tableRect = Rect.fromLTWH(x, y, width, tableHeight);
+    canvas.drawRect(tableRect, borderPaint);
+    canvas.drawRect(Rect.fromLTWH(x, y, width, _headerRowHeight), headerPaint);
+
+    final columns = _normalizedColumnWidths(width);
+    var cursorX = x;
+    for (var i = 0; i < _columns.length; i++) {
+      final columnWidth = columns[i];
+      _drawCellText(
+        canvas,
+        text: _columns[i],
+        x: cursorX,
+        y: y,
+        width: columnWidth,
+        height: _headerRowHeight,
+        align: i == 1 ? TextAlign.left : TextAlign.center,
+        size: _headerFontSize,
+        weight: FontWeight.w700,
+      );
+      cursorX += columnWidth;
+    }
+
+    for (var index = 0; index < rowCount; index++) {
+      final rowY = y + _headerRowHeight + (index * _dataRowHeight);
+      canvas.drawRect(
+        Rect.fromLTWH(x, rowY, width, _dataRowHeight),
+        index.isEven ? evenRowPaint : oddRowPaint,
+      );
+
+      final row = index < rows.length ? rows[index] : null;
+      final values = row == null
+          ? const ['-', 'Sin datos', '-', '-', '-', '-', '-', '-', '-', '-']
+          : [
+              '${index + 1}',
+              row.clubName,
+              '${row.played}',
+              '${row.wins}',
+              '${row.draws}',
+              '${row.losses}',
+              '${row.goalsFor}',
+              '${row.goalsAgainst}',
+              '${row.goalDifference}',
+              '${row.points}',
+            ];
+
+      var cellX = x;
+      for (var i = 0; i < values.length; i++) {
+        final columnWidth = columns[i];
+        _drawCellText(
+          canvas,
+          text: values[i],
+          x: cellX,
+          y: rowY,
+          width: columnWidth,
+          height: _dataRowHeight,
+          align: i == 1 ? TextAlign.left : TextAlign.center,
+          size: _cellFontSize,
+          weight: FontWeight.w500,
+        );
+        cellX += columnWidth;
+      }
+    }
+
+    var lineX = x;
+    for (var i = 0; i < columns.length - 1; i++) {
+      lineX += columns[i];
+      canvas.drawLine(Offset(lineX, y), Offset(lineX, y + tableHeight), borderPaint);
+    }
+
+    for (var i = 0; i <= rowCount; i++) {
+      final lineY = y + _headerRowHeight + (i * _dataRowHeight);
+      canvas.drawLine(Offset(x, lineY), Offset(x + width, lineY), borderPaint);
+    }
   }
 
-  static double _drawText(
+  static List<double> _normalizedColumnWidths(double tableWidth) {
+    final totalFlex = _columnFlex.fold<double>(0, (acc, value) => acc + value);
+    return _columnFlex.map((value) => tableWidth * (value / totalFlex)).toList(growable: false);
+  }
+
+  static double _drawCenteredText(
     Canvas canvas,
     String text,
-    double x,
     double y, {
     required double size,
     required FontWeight weight,
-    bool mono = false,
+    required double maxWidth,
+    double originX = 0,
   }) {
     final painter = TextPainter(
       text: TextSpan(
@@ -409,28 +587,54 @@ class _StandingsImageExporter {
         style: TextStyle(
           color: const Color(0xFF111827),
           fontSize: size,
-          height: _lineHeight,
+          height: 1.25,
           fontWeight: weight,
-          fontFamily: mono ? 'monospace' : null,
         ),
       ),
+      textAlign: TextAlign.center,
+      maxLines: 2,
+      ellipsis: '…',
       textDirection: TextDirection.ltr,
-    )..layout(maxWidth: 1500);
+    )..layout(maxWidth: maxWidth);
 
-    painter.paint(canvas, Offset(x, y));
+    final textX = originX + ((maxWidth - painter.width) / 2);
+    painter.paint(canvas, Offset(textX, y));
     return y + painter.height;
   }
 
-  static String _trim(String value, int maxLength) {
-    if (value.length <= maxLength) {
-      return value;
-    }
-    if (maxLength <= 1) {
-      return value.substring(0, maxLength);
-    }
-    return '${value.substring(0, maxLength - 1)}…';
-  }
+  static void _drawCellText(
+    Canvas canvas, {
+    required String text,
+    required double x,
+    required double y,
+    required double width,
+    required double height,
+    required TextAlign align,
+    required double size,
+    required FontWeight weight,
+  }) {
+    final inset = align == TextAlign.left ? _cellHorizontalPadding : 8.0;
+    final painter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          color: const Color(0xFF20232B),
+          fontSize: size,
+          fontWeight: weight,
+        ),
+      ),
+      maxLines: 1,
+      ellipsis: '…',
+      textAlign: align,
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: width - (inset * 2));
 
-  static const _tableHeader = '#  Club                          PJ  G  E  P  GF  GC  DG  PTS';
-  static const _separator = '----';
+    final textX = switch (align) {
+      TextAlign.left => x + inset,
+      TextAlign.right => x + width - painter.width - inset,
+      _ => x + ((width - painter.width) / 2),
+    };
+    final textY = y + ((height - painter.height) / 2);
+    painter.paint(canvas, Offset(textX, textY));
+  }
 }
