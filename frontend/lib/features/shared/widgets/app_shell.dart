@@ -218,19 +218,9 @@ class _AppShellState extends ConsumerState<AppShell> {
                 padding: const EdgeInsets.only(top: 16.0),
                 child: Column(
                   children: [
-                    Container(
-                      width: 100,
-                      height: 100,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        color: Colors.white,
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      alignment: Alignment.center,
-                      child: siteIdentity?.iconUrl != null
-                          ? Image.network(siteIdentity!.iconUrl!, fit: BoxFit.contain)
-                          : const FlutterLogo(size: 80),
+                    _SiteLogo(
+                      iconUrl: siteIdentity?.iconUrl,
+                      size: 200,
                     ),
                     const SizedBox(height: 16),
                     IconButton(
@@ -329,6 +319,41 @@ class _AppShellState extends ConsumerState<AppShell> {
   }
 }
 
+
+class _SiteLogo extends StatelessWidget {
+  const _SiteLogo({required this.iconUrl, required this.size});
+
+  final String? iconUrl;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final fallbackSize = size * 0.7;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: Colors.white,
+      ),
+      clipBehavior: Clip.antiAlias,
+      padding: const EdgeInsets.all(8),
+      alignment: Alignment.center,
+      child: iconUrl != null && iconUrl!.isNotEmpty
+          ? Image.network(
+              iconUrl!,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) => Icon(
+                Icons.shield_outlined,
+                size: fallbackSize,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            )
+          : FlutterLogo(size: fallbackSize),
+    );
+  }
+}
+
 class _NavigationDrawer extends StatelessWidget {
   const _NavigationDrawer({
     required this.navigationItems,
@@ -344,25 +369,14 @@ class _NavigationDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Drawer(
       child: SafeArea(
         child: Column(
           children: [
             ListTile(
-              leading: Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  color: Colors.white,
-                ),
-                clipBehavior: Clip.antiAlias,
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                alignment: Alignment.center,
-                child: siteIdentity?.iconUrl != null
-                    ? Image.network(siteIdentity!.iconUrl!, fit: BoxFit.contain)
-                    : const FlutterLogo(size: 80),
+              leading: _SiteLogo(
+                iconUrl: siteIdentity?.iconUrl,
+                size: 200,
               ),
               title: Text(siteIdentity?.title ?? 'Ligas deportivas'),
               subtitle: const Text('Menú principal'),
