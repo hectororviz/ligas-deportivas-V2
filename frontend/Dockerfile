@@ -1,10 +1,19 @@
 FROM ghcr.io/cirruslabs/flutter:latest AS builder
 WORKDIR /app
+ENV HOME=/home/flutter
 
 RUN useradd --create-home --shell /bin/bash flutter \
   && chown -R flutter:flutter /app
 
 USER flutter
+
+RUN set -eux; \
+    git config --global --add safe.directory /sdks/flutter; \
+    for repo in /sdks/flutter/bin/cache/pkg/sky_engine /sdks/flutter/bin/cache/flutter_web_sdk; do \
+      if [ -d "$repo/.git" ] || git -C "$repo" rev-parse --is-inside-work-tree >/dev/null 2>&1; then \
+        git config --global --add safe.directory "$repo"; \
+      fi; \
+    done
 
 ARG API_BASE_URL=/api/v1
 
