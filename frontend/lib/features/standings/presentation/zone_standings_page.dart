@@ -4,8 +4,10 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/binary_download.dart';
 import '../../../core/utils/responsive.dart';
 import '../../../services/api_client.dart';
 import '../domain/standings_models.dart';
@@ -84,20 +86,32 @@ class _ZoneStandingsViewState extends ConsumerState<_ZoneStandingsView> {
     try {
       final bytes = await _StandingsImageExporter.create(widget.data);
       final fileName = _StandingsImageExporter.fileName(widget.data);
-      final savedPath = await FilePicker.platform.saveFile(
-        dialogTitle: 'Guardar tabla de resultados',
-        fileName: fileName,
-        bytes: bytes,
-      );
+      if (kIsWeb) {
+        await downloadBinary(
+          bytes: bytes,
+          filename: fileName,
+          mimeType: 'image/png',
+        );
+      } else {
+        final savedPath = await FilePicker.platform.saveFile(
+          dialogTitle: 'Guardar tabla de resultados',
+          fileName: fileName,
+          bytes: bytes,
+        );
 
-      if (!mounted) {
-        return;
+        if (!mounted) {
+          return;
+        }
+
+        if (savedPath == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Descarga cancelada.')),
+          );
+          return;
+        }
       }
 
-      if (savedPath == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Descarga cancelada.')),
-        );
+      if (!mounted) {
         return;
       }
 
