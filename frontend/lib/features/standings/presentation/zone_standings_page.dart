@@ -440,7 +440,7 @@ class _StandingsImageExporter {
     required double x,
     required double y,
     required double width,
-    required CategoryStandings category,
+    required ZoneCategoryStandings category,
   }) {
     var currentY = y;
     currentY = _drawCenteredText(
