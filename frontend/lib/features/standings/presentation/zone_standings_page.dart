@@ -91,9 +91,13 @@ class _ZoneStandingsViewState extends ConsumerState<_ZoneStandingsView> {
       String? siteLogoUrl;
       try {
         final identity = await ref.read(siteIdentityProvider.future);
-        final basePath = identity.faviconBasePath;
-        if (basePath != null && basePath.isNotEmpty) {
-          siteLogoUrl = '$basePath/favicon-192x192.png';
+        if (identity.iconUrl != null && identity.iconUrl!.isNotEmpty) {
+          siteLogoUrl = identity.iconUrl;
+        } else {
+          final basePath = identity.faviconBasePath;
+          if (basePath != null && basePath.isNotEmpty) {
+            siteLogoUrl = '$basePath/android-chrome-192x192.png';
+          }
         }
       } catch (_) {
         siteLogoUrl = null;
@@ -667,7 +671,8 @@ class _StandingsImageExporter {
     }
 
     try {
-      final data = await rootBundle.load('web/favicon.png');
+      final fallbackUri = Uri.base.resolve('favicon.png');
+      final data = await NetworkAssetBundle(fallbackUri).load(fallbackUri.toString());
       final codec = await ui.instantiateImageCodec(data.buffer.asUint8List(), targetWidth: _logoSize.toInt());
       final frame = await codec.getNextFrame();
       return frame.image;
