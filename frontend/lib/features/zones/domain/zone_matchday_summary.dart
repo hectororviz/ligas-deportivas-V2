@@ -287,11 +287,13 @@ StandingsRow? _tryParseStandingsRow(Map<String, dynamic> json) {
     return StandingsRow.fromJson(json);
   } catch (_) {
     try {
+      final club = _asMap(json['club']);
       final goalsFor = _parseInt(json['goalsFor']);
       final goalsAgainst = _parseInt(json['goalsAgainst']);
       return StandingsRow(
-        clubId: _parseInt(json['clubId']),
-        clubName: _parseString(json['clubName'], fallback: 'Club'),
+        clubId: _parseInt(json['clubId'], fallback: _parseInt(club['id'])),
+        clubName: _parseString(json['clubName'], fallback: _parseString(club['name'], fallback: 'Club')),
+        clubShortName: _parseString(json['clubShortName'], fallback: _parseString(club['shortName'])),
         played: _parseInt(json['played']),
         wins: _parseInt(json['wins']),
         draws: _parseInt(json['draws']),
