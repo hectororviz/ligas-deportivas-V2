@@ -33,6 +33,11 @@ export class TournamentsController {
     return this.tournamentsService.findAll(parseIncludeInactive(includeInactive));
   }
 
+  @Get('tournaments/active')
+  listActive() {
+    return this.tournamentsService.findAll(false);
+  }
+
   @Get('leagues/:leagueId/tournaments')
   listByLeague(
     @Param('leagueId', ParseIntPipe) leagueId: number,
