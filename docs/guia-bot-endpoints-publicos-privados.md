@@ -26,6 +26,7 @@ Ejemplos frecuentes:
 
 - `GET /leagues`
 - `GET /tournaments`
+- `GET /tournaments/:tournamentId/zones`
 - `GET /zones/:id`
 - `GET /zones/:zoneId/matches`
 - `GET /zones/:zoneId/standings`
@@ -61,6 +62,42 @@ curl -sS -X POST "https://<dominio>/api/v1/zones/12/fixture" \
   -H "Content-Type: application/json" \
   -d '{"mode":"single_round_robin"}'
 ```
+
+---
+
+
+### Ejemplo para bot: zonas con equipos por torneo
+
+Endpoint público:
+
+- `GET /tournaments/:tournamentId/zones`
+
+Respuesta ejemplo:
+
+```json
+[
+  {
+    "id": 11,
+    "name": "Zona A",
+    "teams": [
+      {
+        "id": 5,
+        "name": "Club Soler",
+        "shortName": "Soler",
+        "slug": "club-soler"
+      },
+      {
+        "id": 9,
+        "name": "San Martín",
+        "shortName": "San Martin",
+        "slug": "san-martin"
+      }
+    ]
+  }
+]
+```
+
+Con este payload el bot puede renderizar mensajes del estilo: `Zona A: Soler, San Martín`.
 
 ---
 

@@ -110,6 +110,51 @@ export class TournamentsService {
     });
   }
 
+  async listZonesWithTeams(tournamentId: number) {
+    const tournament = await this.prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      select: { id: true },
+    });
+
+    if (!tournament) {
+      throw new NotFoundException('Torneo inexistente');
+    }
+
+    const zones = await this.prisma.zone.findMany({
+      where: { tournamentId },
+      select: {
+        id: true,
+        name: true,
+        clubZones: {
+          select: {
+            club: {
+              select: {
+                id: true,
+                name: true,
+                shortName: true,
+                slug: true,
+              },
+            },
+          },
+          orderBy: {
+            club: {
+              name: 'asc',
+            },
+          },
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    return zones.map((zone) => ({
+      id: zone.id,
+      name: zone.name,
+      teams: zone.clubZones
+        .map((assignment) => assignment.club)
+        .filter((club): club is NonNullable<typeof club> => Boolean(club)),
+    }));
+  }
+
   getTournament(id: number) {
     return this.prisma.tournament.findUnique({
       where: { id },
