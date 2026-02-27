@@ -43,6 +43,16 @@ export class MatchesController {
     return this.matchesService.listByZone(zoneId);
   }
 
+  @Get('public/zones/:zoneId/matchdays/results')
+  getPublicZoneMatchdays(@Param('zoneId', ParseIntPipe) zoneId: number) {
+    return this.matchesService.listPublicMatchdaysByZone(zoneId);
+  }
+
+  @Get('public/matches/:matchId/results')
+  getPublicMatchResults(@Param('matchId', ParseIntPipe) matchId: number) {
+    return this.matchesService.getPublicMatchResults(matchId);
+  }
+
   @Post('zones/:zoneId/matchdays/:matchday/finalize')
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @Permissions({ module: Module.FIXTURE, action: Action.UPDATE })
