@@ -7,7 +7,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateMatchDto } from '../dto/update-match.dto';
 import { RecordMatchResultDto } from '../dto/record-match-result.dto';
-import { MatchStatus, MatchdayStatus } from '@prisma/client';
+import { MatchStatus, MatchdayStatus, Round } from '@prisma/client';
 import { StorageService } from '../../storage/storage.service';
 import { StandingsService } from '../../standings/standings.service';
 import { UpdateMatchdayDto } from '../dto/update-matchday.dto';
@@ -270,6 +270,169 @@ export class MatchesService {
     };
   }
 
+  async listPublicMatchdaysByZone(zoneId: number) {
+    const zone = await this.prisma.zone.findUnique({
+      where: { id: zoneId },
+      select: {
+        id: true,
+        name: true,
+        matchdays: {
+          where: { status: { in: [MatchdayStatus.PLAYED, MatchdayStatus.INCOMPLETE] } },
+          orderBy: { matchday: 'asc' },
+          select: {
+            matchday: true,
+            status: true,
+            date: true
+          }
+        }
+      }
+    });
+
+    if (!zone) {
+      throw new NotFoundException('Zona no encontrada');
+    }
+
+    const matches = await this.prisma.match.findMany({
+      where: { zoneId },
+      orderBy: [{ matchday: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        matchday: true,
+        round: true,
+        date: true,
+        status: true,
+        homeClub: { select: { name: true, shortName: true } },
+        awayClub: { select: { name: true, shortName: true } }
+      }
+    });
+
+    const matchesByMatchday = new Map<number, typeof matches>();
+    for (const match of matches) {
+      const grouped = matchesByMatchday.get(match.matchday) ?? [];
+      grouped.push(match);
+      matchesByMatchday.set(match.matchday, grouped);
+    }
+
+    const matchdayEntries =
+      zone.matchdays.length > 0
+        ? zone.matchdays
+        : Array.from(matchesByMatchday.entries())
+            .map(([matchday, matchdayMatches]) => {
+              const allFinished = matchdayMatches.every((match) => match.status === MatchStatus.FINISHED);
+              return {
+                matchday,
+                status: allFinished ? MatchdayStatus.PLAYED : MatchdayStatus.INCOMPLETE,
+                date: null
+              };
+            })
+            .sort((a, b) => a.matchday - b.matchday);
+
+    return {
+      zoneId: zone.id,
+      zoneName: zone.name,
+      matchdays: matchdayEntries.map((entry) => {
+        const matchdayMatches = matchesByMatchday.get(entry.matchday) ?? [];
+        const gameDate = entry.date ?? matchdayMatches.find((match) => match.date)?.date ?? null;
+        return {
+          matchday: entry.matchday,
+          status: entry.status,
+          roundNumber: this.toRoundNumber(matchdayMatches[0]?.round),
+          gameDate: this.formatGameDate(gameDate),
+          matches: matchdayMatches.map((match) => ({
+            matchId: match.id,
+            home: match.homeClub?.shortName || match.homeClub?.name || 'Local',
+            away: match.awayClub?.shortName || match.awayClub?.name || 'Visitante'
+          }))
+        };
+      })
+    };
+  }
+
+  async getPublicMatchResults(matchId: number) {
+    const match = await this.prisma.match.findUnique({
+      where: { id: matchId },
+      include: {
+        tournament: {
+          select: {
+            pointsWin: true,
+            pointsDraw: true,
+            pointsLoss: true
+          }
+        },
+        homeClub: { select: { id: true, name: true, shortName: true } },
+        awayClub: { select: { id: true, name: true, shortName: true } },
+        categories: {
+          include: {
+            tournamentCategory: {
+              include: {
+                category: {
+                  select: { id: true, name: true }
+                }
+              }
+            }
+          },
+          orderBy: {
+            tournamentCategory: {
+              category: { birthYearMin: 'asc' }
+            }
+          }
+        }
+      }
+    });
+
+    if (!match) {
+      throw new NotFoundException('Partido no encontrado');
+    }
+
+    const homeClubId = match.homeClub?.id;
+    const awayClubId = match.awayClub?.id;
+
+    const totals = {
+      home: 0,
+      away: 0
+    };
+
+    const categories = match.categories.map((category) => {
+      const points = this.calculatePointsByScore(
+        category.homeScore,
+        category.awayScore,
+        match.tournament.pointsWin,
+        match.tournament.pointsDraw,
+        match.tournament.pointsLoss
+      );
+
+      totals.home += points.home;
+      totals.away += points.away;
+
+      return {
+        tournamentCategoryId: category.tournamentCategoryId,
+        categoryId: category.tournamentCategory.category.id,
+        categoryName: category.tournamentCategory.category.name,
+        homeScore: category.homeScore,
+        awayScore: category.awayScore,
+        homePoints: points.home,
+        awayPoints: points.away
+      };
+    });
+
+    return {
+      matchId: match.id,
+      clubs: {
+        home: {
+          id: homeClubId,
+          name: match.homeClub?.shortName || match.homeClub?.name || 'Local',
+          totalPoints: totals.home
+        },
+        away: {
+          id: awayClubId,
+          name: match.awayClub?.shortName || match.awayClub?.name || 'Visitante',
+          totalPoints: totals.away
+        }
+      },
+      categories
+    };
+  }
+
   async buildMatchDownloadFilename(matchId: number) {
     const match = await this.prisma.match.findUnique({
       where: { id: matchId },
@@ -472,6 +635,39 @@ export class MatchesService {
           return goals;
         })()
       }))
+    };
+  }
+
+  private calculatePointsByScore(homeScore: number, awayScore: number, pointsWin: number, pointsDraw: number, pointsLoss: number) {
+    if (homeScore > awayScore) {
+      return { home: pointsWin, away: pointsLoss };
+    }
+    if (homeScore < awayScore) {
+      return { home: pointsLoss, away: pointsWin };
+    }
+    return { home: pointsDraw, away: pointsDraw };
+  }
+
+  private toRoundNumber(round: Round | undefined) {
+    if (round === Round.SECOND) {
+      return 2;
+    }
+    if (round === Round.FIRST) {
+      return 1;
+    }
+    return null;
+  }
+
+  private formatGameDate(date: Date | null) {
+    if (!date) {
+      return null;
+    }
+
+    return {
+      iso: date.toISOString(),
+      day: date.getUTCDate(),
+      month: date.getUTCMonth() + 1,
+      year: date.getUTCFullYear()
     };
   }
 
