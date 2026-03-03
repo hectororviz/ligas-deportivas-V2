@@ -21,7 +21,10 @@ type MatchWithFlyerRelations = Match & {
   awayClub?: { name?: string | null; shortName?: string | null; logoKey?: string | null } | null;
   categories: {
     kickoffTime: string | null;
-    tournamentCategory?: { category?: { name?: string | null } | null } | null;
+    tournamentCategory?: {
+      kickoffTime?: string | null;
+      category?: { name?: string | null } | null;
+    } | null;
   }[];
 };
 
@@ -528,12 +531,24 @@ export class MatchFlyerService {
   }
 
   private buildCategories(match: MatchWithFlyerRelations) {
-    return match.categories
+    return [...match.categories]
+      .sort((left, right) => {
+        const leftKickoffTime = left.tournamentCategory?.kickoffTime || left.kickoffTime || '99:99';
+        const rightKickoffTime = right.tournamentCategory?.kickoffTime || right.kickoffTime || '99:99';
+
+        const byKickoffTime = leftKickoffTime.localeCompare(rightKickoffTime);
+        if (byKickoffTime !== 0) {
+          return byKickoffTime;
+        }
+
+        const leftCategory = left.tournamentCategory?.category?.name || '';
+        const rightCategory = right.tournamentCategory?.category?.name || '';
+        return leftCategory.localeCompare(rightCategory, 'es-AR');
+      })
       .map((category) => ({
-        time: category.kickoffTime || 'Horario a confirmar',
+        time: category.tournamentCategory?.kickoffTime || category.kickoffTime || 'Horario a confirmar',
         name: category.tournamentCategory?.category?.name || 'Categoría',
-      }))
-      .sort((a, b) => a.time.localeCompare(b.time));
+      }));
   }
 
   private async loadExistingFile(key: string, label: string) {

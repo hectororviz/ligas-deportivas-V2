@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+TMP_IMAGE="/tmp/dni-pdf417-$(cat /proc/sys/kernel/random/uuid).png"
+cleanup() {
+  rm -f "$TMP_IMAGE"
+}
+trap cleanup EXIT
+
+cat > "$TMP_IMAGE"
+
+ZXING_BIN=""
+for candidate in /usr/bin/ZXingReader /usr/bin/zxingcpp /usr/bin/ReadBarcodes; do
+  if [[ -x "$candidate" ]]; then
+    ZXING_BIN="$candidate"
+    break
+  fi
+done
+
+if [[ -z "$ZXING_BIN" ]]; then
+  echo "zxing-cpp CLI not installed (expected one of: zxingcpp, ReadBarcodes, ZXingReader)" >&2
+  exit 127
+fi
+
+OUTPUT=""
+
+if [[ "${DNI_DECODER_DEBUG:-0}" == "1" ]]; then
+  {
+    printf '[dni-pdf417-decoder] ZXING_BIN=%s\n' "$ZXING_BIN"
+    printf '[dni-pdf417-decoder] COMMAND=%s %s\n' "$ZXING_BIN" "$TMP_IMAGE"
+  } >&2
+fi
+
+set +e
+DECODER_START_MS="$(date +%s%3N)"
+if [[ "${DNI_DECODER_DEBUG:-0}" == "1" ]]; then
+  printf '[dni-pdf417-decoder] START_MS=%s\n' "$DECODER_START_MS" >&2
+fi
+OUTPUT="$($ZXING_BIN "$TMP_IMAGE" 2>&1)"
+ZXING_EXIT_CODE=$?
+DECODER_END_MS="$(date +%s%3N)"
+DECODER_ELAPSED_MS=$((DECODER_END_MS - DECODER_START_MS))
+if [[ "${DNI_DECODER_DEBUG:-0}" == "1" ]]; then
+  {
+    printf '[dni-pdf417-decoder] END_MS=%s\n' "$DECODER_END_MS"
+    printf '[dni-pdf417-decoder] ELAPSED_MS=%s\n' "$DECODER_ELAPSED_MS"
+  } >&2
+fi
+set -e
+
+if [[ "${DNI_DECODER_DEBUG:-0}" == "1" ]]; then
+  {
+    printf '[dni-pdf417-decoder] OUTPUT_RAW_BEGIN\n'
+    printf '%s\n' "$OUTPUT"
+    printf '[dni-pdf417-decoder] OUTPUT_RAW_END\n'
+  } >&2
+fi
+
+if [[ $ZXING_EXIT_CODE -ne 0 ]]; then
+  echo "$OUTPUT" >&2
+  exit 1
+fi
+
+PAYLOAD="$(printf '%s\n' "$OUTPUT" | awk '
+  /@/ { print; exit }
+  /^Text[[:space:]]*:/ { sub(/^Text[[:space:]]*:[[:space:]]*/, ""); print; exit }
+  /^Payload[[:space:]]*:/ { sub(/^Payload[[:space:]]*:[[:space:]]*/, ""); print; exit }
+')"
+
+if [[ -z "$PAYLOAD" ]]; then
+  exit 1
+fi
+
+if [[ "${DNI_DECODER_DEBUG:-0}" == "1" ]]; then
+  printf '[dni-pdf417-decoder] PAYLOAD_FINAL=%s\n' "$PAYLOAD" >&2
+fi
+
+printf '%s' "$PAYLOAD"

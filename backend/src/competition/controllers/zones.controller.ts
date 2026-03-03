@@ -6,6 +6,7 @@ import {
   Param,
   ParseIntPipe,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 
@@ -16,6 +17,7 @@ import { PermissionsGuard } from '../../rbac/permissions.guard';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { Action, Module } from '@prisma/client';
 import { FixtureService } from '../services/fixture.service';
+import { ManualZoneFixtureDto } from '../dto/manual-zone-fixture.dto';
 import { ZoneFixtureOptionsDto } from '../dto/zone-fixture-options.dto';
 
 @Controller('zones')
@@ -26,8 +28,9 @@ export class ZonesController {
   ) {}
 
   @Get()
-  list() {
-    return this.zonesService.list();
+  list(@Query('includeInactive') includeInactive?: string) {
+    const includeInactiveFlag = includeInactive === 'true' || includeInactive === '1';
+    return this.zonesService.list(includeInactiveFlag);
   }
 
   @Get(':id')
@@ -80,5 +83,15 @@ export class ZonesController {
     @Body() options: ZoneFixtureOptionsDto
   ) {
     return this.fixtureService.generateForZone(zoneId, options);
+  }
+
+  @Post(':zoneId/fixture/manual')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @Permissions({ module: Module.FIXTURE, action: Action.CREATE })
+  generateManualFixture(
+    @Param('zoneId', ParseIntPipe) zoneId: number,
+    @Body() payload: ManualZoneFixtureDto
+  ) {
+    return this.fixtureService.generateManualForZone(zoneId, payload);
   }
 }

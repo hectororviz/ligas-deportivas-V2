@@ -952,7 +952,7 @@ class _TournamentCategoriesList extends StatelessWidget {
               ),
             ),
           if (!showHeader) const SizedBox(height: 16),
-          if (!hasCategories)
+          if (!hasCategories && tournament.isActive)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: Text(
@@ -1128,6 +1128,7 @@ class ClubAdminTournament {
     required this.id,
     required this.name,
     required this.year,
+    required this.status,
     required this.leagueId,
     required this.leagueName,
     required this.categories,
@@ -1140,6 +1141,7 @@ class ClubAdminTournament {
       id: json['id'] as int,
       name: json['name'] as String,
       year: json['year'] as int,
+      status: json['status'] as String? ?? 'ACTIVE',
       leagueId: json['leagueId'] as int,
       leagueName: json['leagueName'] as String? ?? '—',
       categories: (json['categories'] as List<dynamic>? ?? [])
@@ -1155,12 +1157,14 @@ class ClubAdminTournament {
   final int id;
   final String name;
   final int year;
+  final String status;
   final int leagueId;
   final String leagueName;
   final List<ClubAdminCategory> categories;
   final ClubAdminZone? zone;
   final bool canLeave;
 
+  bool get isActive => status == 'ACTIVE';
   bool get isCompliant => categories.every((category) => category.isCompliant);
 
   int get mandatoryCount => categories.where((category) => category.mandatory).length;

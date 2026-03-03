@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/utils/responsive.dart';
 import '../../shared/widgets/app_data_table_style.dart';
 import '../domain/standings_models.dart';
 
@@ -30,6 +31,7 @@ class StandingsTable extends StatelessWidget {
     }
 
     final theme = Theme.of(context);
+    final isMobile = Responsive.isMobile(context);
     final colors = AppDataTableColors.score(theme, leagueColor);
     final headerStyle =
         theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: colors.headerText);
@@ -38,6 +40,11 @@ class StandingsTable extends StatelessWidget {
       key: PageStorageKey<String>(storageKey),
       scrollDirection: Axis.horizontal,
       child: DataTable(
+        columnSpacing: isMobile ? 14 : 28,
+        horizontalMargin: isMobile ? 10 : 24,
+        headingRowHeight: isMobile ? 46 : 56,
+        dataRowMinHeight: isMobile ? 44 : 48,
+        dataRowMaxHeight: isMobile ? 50 : 56,
         headingRowColor: buildHeaderColor(colors.headerBackground),
         headingTextStyle: headerStyle,
         columns: const [
@@ -58,7 +65,7 @@ class StandingsTable extends StatelessWidget {
               color: buildStripedRowColor(index: index, colors: colors),
               cells: [
                 DataCell(Text('${index + 1}')),
-                DataCell(Text(rows[index].clubName)),
+                DataCell(SizedBox(width: isMobile ? 170 : 260, child: Text(rows[index].displayClubName))),
                 DataCell(Text(rows[index].played.toString())),
                 DataCell(Text(rows[index].wins.toString())),
                 DataCell(Text(rows[index].draws.toString())),

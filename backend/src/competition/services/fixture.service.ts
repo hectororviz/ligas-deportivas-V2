@@ -7,6 +7,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { FixtureAlreadyExistsException } from '../../common/exceptions/fixture-already-exists.exception';
 import { FixtureGenerationException } from '../../common/exceptions/fixture-generation.exception';
 import { GenerateFixtureDto } from '../dto/generate-fixture.dto';
+import { ManualZoneFixtureDto } from '../dto/manual-zone-fixture.dto';
 import { ZoneFixtureOptionsDto } from '../dto/zone-fixture-options.dto';
 
 interface RoundMatch {
@@ -329,6 +330,94 @@ export class FixtureService {
           success: true,
           totalMatchdays: doubleRound ? totalMatchdays * 2 : totalMatchdays,
           seed: seed ?? null,
+        };
+      });
+    } catch (error) {
+      if (
+        error instanceof FixtureAlreadyExistsException ||
+        error instanceof BadRequestException ||
+        error instanceof NotFoundException
+      ) {
+        throw error;
+      }
+      throw new FixtureGenerationException();
+    }
+  }
+
+  async generateManualForZone(zoneId: number, payload: ManualZoneFixtureDto) {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const existingMatches = await tx.match.count({ where: { zoneId } });
+        if (existingMatches > 0) {
+          throw new FixtureAlreadyExistsException();
+        }
+
+        const context = await this.getZoneFixtureContext(tx, zoneId);
+        const allowedClubIds = new Set(context.clubIds);
+
+        for (const matchday of payload.matchdays) {
+          if (matchday.byeClubId && !allowedClubIds.has(matchday.byeClubId)) {
+            throw new BadRequestException('El club de libre no pertenece a la zona');
+          }
+          for (const match of matchday.matches) {
+            if (!allowedClubIds.has(match.homeClubId) || !allowedClubIds.has(match.awayClubId)) {
+              throw new BadRequestException('Hay clubes que no pertenecen a la zona');
+            }
+            if (match.homeClubId === match.awayClubId) {
+              throw new BadRequestException('No se permiten partidos con el mismo club en ambos lados');
+            }
+          }
+        }
+
+        for (const matchday of payload.matchdays) {
+          const round = matchday.round === 'SECOND' ? Round.SECOND : Round.FIRST;
+          for (const match of matchday.matches) {
+            await tx.match.create({
+              data: {
+                tournamentId: context.tournamentId,
+                zoneId: context.zoneId,
+                matchday: matchday.matchday,
+                round,
+                homeClubId: match.homeClubId,
+                awayClubId: match.awayClubId,
+                categories: {
+                  create: context.categories.map((category) => ({
+                    tournamentCategoryId: category.id,
+                    kickoffTime: category.kickoffTime,
+                    isPromocional: !category.countsForGeneral,
+                  })),
+                },
+              },
+            });
+          }
+        }
+
+        const totalGenerated = payload.matchdays.reduce(
+          (max, matchday) => Math.max(max, matchday.matchday),
+          0
+        );
+
+        await tx.zoneMatchday.deleteMany({ where: { zoneId } });
+        if (totalGenerated > 0) {
+          const matchdayEntries = Array.from({ length: totalGenerated }, (_, index) => ({
+            zoneId,
+            matchday: index + 1,
+            status: index === 0 ? MatchdayStatus.IN_PROGRESS : MatchdayStatus.PENDING,
+          }));
+          await tx.zoneMatchday.createMany({ data: matchdayEntries });
+        }
+
+        await tx.zone.update({
+          where: { id: zoneId },
+          data: {
+            status: ZoneStatus.PLAYING,
+            fixtureSeed: null,
+          },
+        });
+
+        return {
+          success: true,
+          totalMatchdays: totalGenerated,
         };
       });
     } catch (error) {

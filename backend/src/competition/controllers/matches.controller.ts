@@ -24,6 +24,7 @@ import { RequestUser } from '../../common/interfaces/request-user.interface';
 import { UpdateMatchdayDto } from '../dto/update-matchday.dto';
 import { MatchFlyerService } from '../services/match-flyer.service';
 import { MatchPosterService } from '../services/match-poster.service';
+import { MatchSheetService } from '../services/match-sheet.service';
 import { Response } from 'express';
 import { MATCH_FLYER_TOKEN_DEFINITIONS } from '../dto/match-flyer-token.dto';
 import { MATCH_POSTER_TOKEN_DEFINITIONS } from '../dto/match-poster-token.dto';
@@ -34,11 +35,22 @@ export class MatchesController {
     private readonly matchesService: MatchesService,
     private readonly matchFlyerService: MatchFlyerService,
     private readonly matchPosterService: MatchPosterService,
+    private readonly matchSheetService: MatchSheetService,
   ) {}
 
   @Get('zones/:zoneId/matches')
   getByZone(@Param('zoneId', ParseIntPipe) zoneId: number) {
     return this.matchesService.listByZone(zoneId);
+  }
+
+  @Get('public/zones/:zoneId/matchdays/results')
+  getPublicZoneMatchdays(@Param('zoneId', ParseIntPipe) zoneId: number) {
+    return this.matchesService.listPublicMatchdaysByZone(zoneId);
+  }
+
+  @Get('public/matches/:matchId/results')
+  getPublicMatchResults(@Param('matchId', ParseIntPipe) matchId: number) {
+    return this.matchesService.getPublicMatchResults(matchId);
   }
 
   @Post('zones/:zoneId/matchdays/:matchday/finalize')
@@ -93,9 +105,10 @@ export class MatchesController {
     @Param('matchId', ParseIntPipe) matchId: number,
     @Res() res: Response,
   ) {
+    const filenameBase = await this.matchesService.buildMatchDownloadFilename(matchId);
     const flyer = await this.matchFlyerService.generate(matchId);
     res.setHeader('Content-Type', flyer.contentType);
-    res.setHeader('Content-Disposition', `attachment; filename="flyer-${matchId}.${flyer.fileExtension}"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${filenameBase}.${flyer.fileExtension}"`);
     return res.send(flyer.buffer);
   }
 
@@ -104,10 +117,23 @@ export class MatchesController {
     @Param('matchId', ParseIntPipe) matchId: number,
     @Res() res: Response,
   ) {
+    const filenameBase = await this.matchesService.buildMatchDownloadFilename(matchId);
     const poster = await this.matchPosterService.generate(matchId);
     res.setHeader('Content-Type', poster.contentType);
-    res.setHeader('Content-Disposition', `attachment; filename=\"poster-${matchId}.${poster.fileExtension}\"`);
+    res.setHeader('Content-Disposition', `attachment; filename=\"${filenameBase}.${poster.fileExtension}\"`);
     return res.send(poster.buffer);
+  }
+
+  @Get('matches/:matchId/planilla')
+  async downloadSheet(
+    @Param('matchId', ParseIntPipe) matchId: number,
+    @Res() res: Response,
+  ) {
+    const filenameBase = await this.matchesService.buildMatchDownloadFilename(matchId);
+    const sheet = await this.matchSheetService.generate(matchId);
+    res.setHeader('Content-Type', sheet.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${filenameBase}.${sheet.fileExtension}"`);
+    return res.send(sheet.buffer);
   }
 
   @Patch('matches/:matchId')

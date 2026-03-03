@@ -15,6 +15,7 @@ import '../../shared/widgets/app_data_table_style.dart';
 import '../../shared/widgets/table_filters_bar.dart';
 
 const _moduleTorneos = 'TORNEOS';
+const _actionCreate = 'CREATE';
 const _actionUpdate = 'UPDATE';
 
 final tournamentFiltersProvider =
@@ -28,9 +29,16 @@ final _leagueFilterProvider = Provider<int?>((ref) {
   );
 });
 
+final _includeInactiveProvider = Provider<bool>((ref) {
+  return ref.watch(
+    tournamentFiltersProvider.select((value) => value.includeInactive),
+  );
+});
+
 final _tournamentsSourceProvider =
     FutureProvider<List<TournamentSummary>>((ref) async {
   final leagueFilter = ref.watch(_leagueFilterProvider);
+  final includeInactive = ref.watch(_includeInactiveProvider);
   final leagues = await ref.watch(leaguesProvider.future);
   if (leagues.isEmpty) {
     return [];
@@ -43,8 +51,10 @@ final _tournamentsSourceProvider =
     return [];
   }
   final futures = leaguesToFetch.map((league) async {
-    final response =
-        await api.get<List<dynamic>>('/leagues/${league.id}/tournaments');
+    final response = await api.get<List<dynamic>>(
+      '/leagues/${league.id}/tournaments',
+      queryParameters: includeInactive ? {'includeInactive': 'true'} : null,
+    );
     final data = response.data ?? [];
     return data
         .map(
@@ -147,7 +157,6 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
     final allowedLeagues = _filterLeaguesForPermission(leagues, user, _actionUpdate);
     final allowedLeagueIds =
         user?.allowedLeaguesFor(module: _moduleTorneos, action: _actionUpdate);
-    final canConfigurePoster = user?.roles.contains('ADMIN') ?? false;
 
     if (!mounted) {
       return;
@@ -158,8 +167,8 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
       tournament: tournament,
       leagues: allowedLeagues.isEmpty ? leagues : allowedLeagues,
       readOnly: false,
+      scheduleOnly: tournament.status == TournamentStatus.inProgress,
       allowedLeagueIds: allowedLeagueIds,
-      canConfigurePoster: canConfigurePoster,
     );
 
     if (!mounted || result == null) {
@@ -174,13 +183,43 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
     }
   }
 
+  Future<void> _openCreateTournament() async {
+    final leagues = await ref.read(leaguesProvider.future);
+    final user = ref.read(authControllerProvider).user;
+    final allowedLeagues = _filterLeaguesForPermission(leagues, user, _actionCreate);
+    final allowedLeagueIds =
+        user?.allowedLeaguesFor(module: _moduleTorneos, action: _actionCreate);
+
+    if (!mounted) {
+      return;
+    }
+
+    final result = await _showTournamentForm(
+      context,
+      leagues: allowedLeagues.isEmpty ? leagues : allowedLeagues,
+      readOnly: false,
+      allowedLeagueIds: allowedLeagueIds,
+    );
+
+    if (!mounted || result == null) {
+      return;
+    }
+
+    if (result == _TournamentFormResult.saved) {
+      ref.invalidate(_tournamentsSourceProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Torneo creado.')),
+      );
+    }
+  }
+
   Future<_TournamentFormResult?> _showTournamentForm(
     BuildContext context, {
     TournamentSummary? tournament,
     required List<League> leagues,
     required bool readOnly,
+    bool scheduleOnly = false,
     Set<int>? allowedLeagueIds,
-    required bool canConfigurePoster,
   }) {
     final size = MediaQuery.sizeOf(context);
     final isCompact = size.width < 640;
@@ -194,9 +233,9 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
       leagues: leagues,
       tournament: tournament,
       readOnly: readOnly,
+      scheduleOnly: scheduleOnly,
       allowedLeagueIds: allowedLeagueIds,
       maxContentWidth: estimatedContentWidth,
-      canConfigurePoster: canConfigurePoster,
     );
     if (isCompact) {
       return showModalBottomSheet<_TournamentFormResult>(
@@ -245,7 +284,10 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
               children: [
                 _DetailRow(label: 'Liga', value: tournament.leagueName),
                 _DetailRow(label: 'Año', value: tournament.year.toString()),
-                _DetailRow(label: 'Estado', value: tournament.status.label),
+                _DetailRow(
+                  label: 'Estado',
+                  value: tournament.isInactive ? 'Inactivo' : tournament.status.label,
+                ),
                 const SizedBox(height: 16),
                 Text(
                   'Categorías participantes',
@@ -322,17 +364,96 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
     );
   }
 
+  Future<void> _confirmDeactivateTournament(TournamentSummary tournament) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Desactivar torneo'),
+          content: Text(
+            'Vas a desactivar el torneo "${tournament.name}". '
+            'Esta acción lo dejará inactivo y dejará de mostrarse en zonas, '
+            'fixture, tabla y home.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error,
+                foregroundColor: Theme.of(context).colorScheme.onError,
+              ),
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Desactivar'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    await _deactivateTournament(tournament);
+  }
+
+  Future<void> _deactivateTournament(TournamentSummary tournament) async {
+    try {
+      final api = ref.read(apiClientProvider);
+      await api.put(
+        '/tournaments/${tournament.id}/status',
+        data: const {'status': 'INACTIVE'},
+      );
+      ref.invalidate(_tournamentsSourceProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Torneo "${tournament.name}" desactivado.')),
+        );
+      }
+    } on DioException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo desactivar el torneo: $error')),
+        );
+      }
+    }
+  }
+
+  void _openPosterTemplate(TournamentSummary tournament) {
+    context.go(
+      '/tournaments/${tournament.id}/poster-template',
+      extra: tournament,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tournamentsAsync = ref.watch(tournamentsProvider);
     final authState = ref.watch(authControllerProvider);
     final user = authState.user;
+    final canConfigurePoster = user?.roles.contains('ADMIN') ?? false;
+    final canOpenPlayers = user != null &&
+        user.roles.isNotEmpty &&
+        !user.hasAnyRole(const ['DELEGATE', 'COACH', 'USER']);
+    final canCreate =
+        user?.hasPermission(module: _moduleTorneos, action: _actionCreate) ?? false;
     final years = ref.watch(availableTournamentYearsProvider);
     final leaguesAsync = ref.watch(leaguesProvider);
     final filters = ref.watch(tournamentFiltersProvider);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
+      floatingActionButton: canCreate
+          ? FloatingActionButton.extended(
+              onPressed: _openCreateTournament,
+              icon: const Icon(Icons.add),
+              label: const Text('Agregar torneo'),
+            )
+          : null,
       body: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(
@@ -353,165 +474,197 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
             const SizedBox(height: 24),
             Expanded(
               child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      TableFiltersBar(
-                        children: [
-                          TableFilterField(
-                            label: 'Buscar',
-                            width: 320,
-                            child: TableFilterSearchField(
-                              controller: _searchController,
-                              placeholder: 'Buscar por nombre o liga',
-                              showClearButton: filters.query.isNotEmpty,
-                              onChanged: (value) => ref
-                                  .read(tournamentFiltersProvider.notifier)
-                                  .updateQuery(value),
-                              onClear: () {
-                                _searchController.clear();
-                                ref
-                                    .read(tournamentFiltersProvider.notifier)
-                                    .updateQuery('');
-                              },
-                            ),
-                          ),
-                          TableFilterField(
-                            label: 'Liga',
-                            width: 220,
-                            child: leaguesAsync.when(
-                              data: (leagues) {
-                                return DropdownButtonHideUnderline(
-                                  child: DropdownButton<int?>(
-                                    value: filters.leagueId,
-                                    isExpanded: true,
-                                    items: [
-                                      const DropdownMenuItem<int?>(
-                                        value: null,
-                                        child: Text('Todas las ligas'),
-                                      ),
-                                      ...leagues.map(
-                                        (league) => DropdownMenuItem<int?>(
-                                          value: league.id,
-                                          child: Text(league.name),
-                                        ),
-                                      ),
-                                    ],
-                                    onChanged: (value) => ref
-                                        .read(tournamentFiltersProvider.notifier)
-                                        .updateLeague(value),
-                                  ),
-                                );
-                              },
-                              loading: () => const SizedBox(
-                                height: 24,
-                                child: LinearProgressIndicator(),
-                              ),
-                              error: (error, _) => Text(
-                                'Error: $error',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(color: Theme.of(context).colorScheme.error),
-                              ),
-                            ),
-                          ),
-                          TableFilterField(
-                            label: 'Año',
-                            width: 160,
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<int?>(
-                                value: filters.year,
-                                isExpanded: true,
-                                items: [
-                                  const DropdownMenuItem<int?>(
-                                    value: null,
-                                    child: Text('Todos'),
-                                  ),
-                                  ...years.map(
-                                    (year) => DropdownMenuItem<int?>(
-                                      value: year,
-                                      child: Text(year.toString()),
-                                    ),
-                                  ),
-                                ],
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ExpansionTile(
+                      title: const Text('Búsqueda'),
+                      initiallyExpanded: false,
+                      childrenPadding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                      children: [
+                        TableFiltersBar(
+                          children: [
+                            TableFilterField(
+                              label: 'Buscar',
+                              width: 320,
+                              child: TableFilterSearchField(
+                                controller: _searchController,
+                                placeholder: 'Buscar por nombre o liga',
+                                showClearButton: filters.query.isNotEmpty,
                                 onChanged: (value) => ref
                                     .read(tournamentFiltersProvider.notifier)
-                                    .updateYear(value),
-                              ),
-                            ),
-                          ),
-                          TableFilterField(
-                            label: 'Estado',
-                            width: 220,
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<TournamentStatus?>(
-                                value: filters.status,
-                                isExpanded: true,
-                                items: const [
-                                  DropdownMenuItem<TournamentStatus?>(
-                                    value: null,
-                                    child: Text('Todos los estados'),
-                                  ),
-                                  DropdownMenuItem<TournamentStatus?>(
-                                    value: TournamentStatus.draft,
-                                    child: Text('Borrador'),
-                                  ),
-                                  DropdownMenuItem<TournamentStatus?>(
-                                    value: TournamentStatus.scheduled,
-                                    child: Text('Programado'),
-                                  ),
-                                  DropdownMenuItem<TournamentStatus?>(
-                                    value: TournamentStatus.inProgress,
-                                    child: Text('En juego'),
-                                  ),
-                                  DropdownMenuItem<TournamentStatus?>(
-                                    value: TournamentStatus.finished,
-                                    child: Text('Finalizado'),
-                                  ),
-                                ],
-                                onChanged: (value) => ref
-                                    .read(tournamentFiltersProvider.notifier)
-                                    .updateStatus(value),
-                              ),
-                            ),
-                          ),
-                        ],
-                        trailing: TextButton.icon(
-                          onPressed: filters.isEmpty
-                              ? null
-                              : () {
+                                    .updateQuery(value),
+                                onClear: () {
                                   _searchController.clear();
                                   ref
                                       .read(tournamentFiltersProvider.notifier)
-                                      .clear();
+                                      .updateQuery('');
                                 },
-                          icon: const Icon(Icons.filter_alt_off_outlined),
-                          label: const Text('Limpiar filtros'),
+                              ),
+                            ),
+                            TableFilterField(
+                              label: 'Liga',
+                              width: 220,
+                              child: leaguesAsync.when(
+                                data: (leagues) {
+                                  return DropdownButtonHideUnderline(
+                                    child: DropdownButton<int?>(
+                                      value: filters.leagueId,
+                                      isExpanded: true,
+                                      items: [
+                                        const DropdownMenuItem<int?>(
+                                          value: null,
+                                          child: Text('Todas las ligas'),
+                                        ),
+                                        ...leagues.map(
+                                          (league) => DropdownMenuItem<int?>(
+                                            value: league.id,
+                                            child: Text(league.name),
+                                          ),
+                                        ),
+                                      ],
+                                      onChanged: (value) => ref
+                                          .read(tournamentFiltersProvider.notifier)
+                                          .updateLeague(value),
+                                    ),
+                                  );
+                                },
+                                loading: () => const SizedBox(
+                                  height: 24,
+                                  child: LinearProgressIndicator(),
+                                ),
+                                error: (error, _) => Text(
+                                  'Error: $error',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(color: Theme.of(context).colorScheme.error),
+                                ),
+                              ),
+                            ),
+                            TableFilterField(
+                              label: 'Año',
+                              width: 160,
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<int?>(
+                                  value: filters.year,
+                                  isExpanded: true,
+                                  items: [
+                                    const DropdownMenuItem<int?>(
+                                      value: null,
+                                      child: Text('Todos'),
+                                    ),
+                                    ...years.map(
+                                      (year) => DropdownMenuItem<int?>(
+                                        value: year,
+                                        child: Text(year.toString()),
+                                      ),
+                                    ),
+                                  ],
+                                  onChanged: (value) => ref
+                                      .read(tournamentFiltersProvider.notifier)
+                                      .updateYear(value),
+                                ),
+                              ),
+                            ),
+                            TableFilterField(
+                              label: 'Estado',
+                              width: 220,
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<TournamentStatus?>(
+                                  value: filters.status,
+                                  isExpanded: true,
+                                  items: const [
+                                    DropdownMenuItem<TournamentStatus?>(
+                                      value: null,
+                                      child: Text('Todos los estados'),
+                                    ),
+                                    DropdownMenuItem<TournamentStatus?>(
+                                      value: TournamentStatus.draft,
+                                      child: Text('Borrador'),
+                                    ),
+                                    DropdownMenuItem<TournamentStatus?>(
+                                      value: TournamentStatus.scheduled,
+                                      child: Text('Programado'),
+                                    ),
+                                    DropdownMenuItem<TournamentStatus?>(
+                                      value: TournamentStatus.inProgress,
+                                      child: Text('En juego'),
+                                    ),
+                                    DropdownMenuItem<TournamentStatus?>(
+                                      value: TournamentStatus.finished,
+                                      child: Text('Finalizado'),
+                                    ),
+                                  ],
+                                  onChanged: (value) => ref
+                                      .read(tournamentFiltersProvider.notifier)
+                                      .updateStatus(value),
+                                ),
+                              ),
+                            ),
+                            TableFilterField(
+                              label: 'Visibilidad',
+                              width: 220,
+                              child: CheckboxListTile(
+                                contentPadding: EdgeInsets.zero,
+                                dense: true,
+                                title: const Text('Mostrar inactivos'),
+                                value: filters.includeInactive,
+                                onChanged: (value) => ref
+                                    .read(tournamentFiltersProvider.notifier)
+                                    .updateIncludeInactive(value ?? false),
+                              ),
+                            ),
+                          ],
+                          trailing: TextButton.icon(
+                            onPressed: filters.isEmpty
+                                ? null
+                                : () {
+                                    _searchController.clear();
+                                    ref
+                                        .read(tournamentFiltersProvider.notifier)
+                                        .clear();
+                                  },
+                            icon: const Icon(Icons.filter_alt_off_outlined),
+                            label: const Text('Limpiar filtros'),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      const Divider(height: 1),
-                      const SizedBox(height: 16),
-                      Expanded(
+                      ],
+                    ),
+                    const Divider(height: 1),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                         child: tournamentsAsync.when(
                           data: (tournaments) {
                             if (tournaments.isEmpty) {
-                              return const _EmptyTournamentsState();
+                              return _EmptyTournamentsState(
+                                onCreate: canCreate ? _openCreateTournament : null,
+                              );
                             }
                             return _TournamentsDataTable(
                               tournaments: tournaments,
                               onDetails: _showTournamentDetails,
                               onEdit: _openEditTournament,
                               onClubs: _openTournamentClubs,
-                              canEdit: (tournament) => user?.hasPermission(
-                                    module: _moduleTorneos,
-                                    action: _actionUpdate,
-                                    leagueId: tournament.leagueId,
-                                  ) ??
-                                  false,
+                              onPosterTemplate: _openPosterTemplate,
+                              onDeactivate: _confirmDeactivateTournament,
+                              canConfigurePoster: canConfigurePoster,
+                              canOpenPlayers: canOpenPlayers,
+                              canEdit: (tournament) =>
+                                  (user?.hasPermission(
+                                        module: _moduleTorneos,
+                                        action: _actionUpdate,
+                                        leagueId: tournament.leagueId,
+                                      ) ??
+                                      false),
+                              canDeactivate: (tournament) =>
+                                  (user?.hasPermission(
+                                        module: _moduleTorneos,
+                                        action: _actionUpdate,
+                                        leagueId: tournament.leagueId,
+                                      ) ??
+                                      false),
                             );
                           },
                           loading: () => const Center(child: CircularProgressIndicator()),
@@ -521,8 +674,8 @@ class _TournamentsPageState extends ConsumerState<TournamentsPage> {
                           ),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -868,7 +1021,9 @@ class _ClubAssignment {
 }
 
 class _EmptyTournamentsState extends StatelessWidget {
-  const _EmptyTournamentsState();
+  const _EmptyTournamentsState({this.onCreate});
+
+  final VoidCallback? onCreate;
 
   @override
   Widget build(BuildContext context) {
@@ -895,6 +1050,14 @@ class _EmptyTournamentsState extends StatelessWidget {
               style: Theme.of(context).textTheme.bodyMedium,
               textAlign: TextAlign.center,
             ),
+            if (onCreate != null) ...[
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                onPressed: onCreate,
+                icon: const Icon(Icons.add),
+                label: const Text('Agregar torneo'),
+              ),
+            ],
           ],
         ),
       ),
@@ -932,14 +1095,24 @@ class _TournamentsDataTable extends StatelessWidget {
     required this.onDetails,
     required this.onEdit,
     required this.onClubs,
+    required this.onPosterTemplate,
+    required this.onDeactivate,
+    required this.canConfigurePoster,
+    required this.canOpenPlayers,
     required this.canEdit,
+    required this.canDeactivate,
   });
 
   final List<TournamentSummary> tournaments;
   final ValueChanged<TournamentSummary> onDetails;
   final ValueChanged<TournamentSummary> onEdit;
   final ValueChanged<TournamentSummary> onClubs;
+  final ValueChanged<TournamentSummary> onPosterTemplate;
+  final ValueChanged<TournamentSummary> onDeactivate;
+  final bool canConfigurePoster;
+  final bool canOpenPlayers;
   final bool Function(TournamentSummary tournament) canEdit;
+  final bool Function(TournamentSummary tournament) canDeactivate;
 
   @override
   Widget build(BuildContext context) {
@@ -964,93 +1137,12 @@ class _TournamentsDataTable extends StatelessWidget {
       ],
       rows: [
         for (var index = 0; index < tournaments.length; index++)
-          DataRow(
-            color: buildStripedRowColor(index: index, colors: colors),
-            cells: [
-              DataCell(
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      tournaments[index].leagueName,
-                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-                    ),
-                    Text('ID ${tournaments[index].leagueId}',
-                        style: theme.textTheme.bodySmall),
-                  ],
-                ),
-              ),
-              DataCell(
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      tournaments[index].name,
-                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: switch (tournaments[index].status) {
-                          TournamentStatus.draft => theme.colorScheme.surfaceVariant,
-                          TournamentStatus.scheduled => theme.colorScheme.tertiaryContainer,
-                          TournamentStatus.inProgress => theme.colorScheme.primaryContainer,
-                          TournamentStatus.finished => theme.colorScheme.secondaryContainer,
-                        },
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        child: Text(
-                          tournaments[index].status.label,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              DataCell(Text(tournaments[index].year.toString())),
-              DataCell(Text('${tournaments[index].zonesCount}')),
-              DataCell(Text('${tournaments[index].enabledCategoriesCount}')),
-              DataCell(
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: () => onDetails(tournaments[index]),
-                      icon: const Icon(Icons.visibility_outlined),
-                      label: const Text('Detalles'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: () => context.go(
-                        '/tournaments/${tournaments[index].id}/players',
-                        extra: tournaments[index],
-                      ),
-                      icon: const Icon(Icons.people_alt_outlined),
-                      label: const Text('Jugadores'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: () => onClubs(tournaments[index]),
-                      icon: const Icon(Icons.groups_outlined),
-                      label: const Text('Clubes'),
-                    ),
-                    FilledButton.tonalIcon(
-                      onPressed:
-                          canEdit(tournaments[index]) ? () => onEdit(tournaments[index]) : null,
-                      icon: const Icon(Icons.edit_outlined),
-                      label: const Text('Editar'),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          _buildTournamentRow(
+            context: context,
+            colors: colors,
+            theme: theme,
+            index: index,
+            tournament: tournaments[index],
           ),
       ],
     );
@@ -1077,6 +1169,133 @@ class _TournamentsDataTable extends StatelessWidget {
       },
     );
   }
+
+  DataRow _buildTournamentRow({
+    required BuildContext context,
+    required AppDataTableColors colors,
+    required ThemeData theme,
+    required int index,
+    required TournamentSummary tournament,
+  }) {
+    final isInactive = tournament.isInactive;
+    final statusLabel = isInactive ? 'Inactivo' : tournament.status.label;
+    final statusColor = isInactive
+        ? theme.colorScheme.errorContainer
+        : switch (tournament.status) {
+            TournamentStatus.draft => theme.colorScheme.surfaceVariant,
+            TournamentStatus.scheduled => theme.colorScheme.tertiaryContainer,
+            TournamentStatus.inProgress => theme.colorScheme.primaryContainer,
+            TournamentStatus.finished => theme.colorScheme.secondaryContainer,
+          };
+    final canDeactivateTournament = canDeactivate(tournament);
+    final canEditTournament = canEdit(tournament);
+
+    return DataRow(
+      color: buildStripedRowColor(index: index, colors: colors),
+      cells: [
+        DataCell(
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                tournament.leagueName,
+                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              Text('ID ${tournament.leagueId}', style: theme.textTheme.bodySmall),
+            ],
+          ),
+        ),
+        DataCell(
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                tournament.name,
+                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: statusColor,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: Text(
+                    statusLabel,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        DataCell(Text(tournament.year.toString())),
+        DataCell(Text('${tournament.zonesCount}')),
+        DataCell(Text('${tournament.enabledCategoriesCount}')),
+        DataCell(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () => onDetails(tournament),
+                icon: const Icon(Icons.visibility_outlined),
+                label: const Text('Detalles'),
+              ),
+              OutlinedButton.icon(
+                onPressed: canOpenPlayers
+                    ? () => context.go(
+                          '/tournaments/${tournament.id}/players',
+                          extra: tournament,
+                        )
+                    : null,
+                icon: const Icon(Icons.people_alt_outlined),
+                label: const Text('Jugadores'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => onClubs(tournament),
+                icon: const Icon(Icons.groups_outlined),
+                label: const Text('Clubes'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: canEditTournament ? () => onEdit(tournament) : null,
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('Editar'),
+              ),
+              FilledButton.icon(
+                onPressed:
+                    (!isInactive && canDeactivateTournament) ? () => onDeactivate(tournament) : null,
+                style: FilledButton.styleFrom(
+                  backgroundColor: theme.colorScheme.error,
+                  foregroundColor: theme.colorScheme.onError,
+                  disabledBackgroundColor: theme.colorScheme.error.withOpacity(0.2),
+                  disabledForegroundColor: theme.colorScheme.onError.withOpacity(0.6),
+                ),
+                icon: const Icon(Icons.delete_outline),
+                label: const Text('Desactivar'),
+              ),
+              if (canConfigurePoster)
+                Tooltip(
+                  message:
+                      'Abre el editor de plantilla para el poster promocional del torneo.',
+                  child: OutlinedButton.icon(
+                    onPressed: () => onPosterTemplate(tournament),
+                    icon: const Icon(Icons.wallpaper_outlined),
+                    label: const Text('Poster'),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 enum _TournamentFormResult { saved }
@@ -1086,17 +1305,17 @@ class _TournamentFormDialog extends ConsumerStatefulWidget {
     required this.leagues,
     this.tournament,
     required this.readOnly,
+    required this.scheduleOnly,
     this.allowedLeagueIds,
     required this.maxContentWidth,
-    required this.canConfigurePoster,
   });
 
   final List<League> leagues;
   final TournamentSummary? tournament;
   final bool readOnly;
+  final bool scheduleOnly;
   final Set<int>? allowedLeagueIds;
   final double maxContentWidth;
-  final bool canConfigurePoster;
 
   @override
   ConsumerState<_TournamentFormDialog> createState() => _TournamentFormDialogState();
@@ -1115,18 +1334,7 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
   List<_CategorySelection> _selections = [];
   bool _categoriesInitialized = false;
 
-  void _openPosterTemplate() {
-    final tournament = widget.tournament;
-    if (tournament == null) {
-      return;
-    }
-    final router = GoRouter.of(context);
-    Navigator.of(context).pop();
-    router.push(
-      '/tournaments/${tournament.id}/poster-template',
-      extra: tournament,
-    );
-  }
+  bool get _lockGeneralFields => widget.readOnly || widget.scheduleOnly;
 
   @override
   void initState() {
@@ -1166,12 +1374,6 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
     if (_isSaving || widget.readOnly) {
       return;
     }
-    if (widget.tournament == null) {
-      setState(() {
-        _errorMessage = 'No se puede crear un torneo desde esta pantalla.';
-      });
-      return;
-    }
     final isValid = _formKey.currentState?.validate() ?? false;
     final categoriesValid = _validateCategories();
     if (!isValid || !categoriesValid) {
@@ -1201,7 +1403,7 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
       'pointsLoss': 0,
       'gender': _selectedGender,
     };
-    final selections = _selections;
+    final selections = widget.scheduleOnly ? _editableSelections : _selections;
     final categoriesPayload = selections
         .map((selection) => {
               'categoryId': selection.category.id,
@@ -1213,13 +1415,33 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
         .toList();
 
     try {
-      await api.put(
-        '/tournaments/${widget.tournament!.id}',
-        data: {
-          ...payload,
-          'categories': categoriesPayload,
-        },
-      );
+      final tournamentId = widget.tournament?.id;
+      if (tournamentId == null) {
+        final response = await api.post<Map<String, dynamic>>(
+          '/tournaments',
+          data: payload,
+        );
+        final data = response.data ?? <String, dynamic>{};
+        final createdId = data['id'] as int? ?? 0;
+        if (createdId <= 0) {
+          throw StateError('No pudimos determinar el torneo creado. Intenta nuevamente.');
+        }
+        await api.put(
+          '/tournaments/$createdId',
+          data: {
+            ...payload,
+            'categories': categoriesPayload,
+          },
+        );
+      } else {
+        await api.put(
+          '/tournaments/$tournamentId',
+          data: {
+            ...payload,
+            'categories': categoriesPayload,
+          },
+        );
+      }
       if (!mounted) {
         return;
       }
@@ -1252,7 +1474,7 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
   }
 
   bool _validateCategories() {
-    final included = _selections
+    final included = _editableSelections
         .where(
           (selection) =>
               _matchesSelectedGender(selection.category) && selection.include,
@@ -1313,6 +1535,9 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
   }
 
   void _applyGenderFilter() {
+    if (widget.scheduleOnly) {
+      return;
+    }
     for (final selection in _selections) {
       if (!_matchesSelectedGender(selection.category)) {
         selection
@@ -1329,6 +1554,13 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
       return true;
     }
     return category.gender == _selectedGender;
+  }
+
+  List<_CategorySelection> get _editableSelections {
+    if (!widget.scheduleOnly) {
+      return _selections;
+    }
+    return _selections.where((selection) => selection.include).toList();
   }
 
   TimeOfDay? _parseKickoffTime(String? value) {
@@ -1351,6 +1583,7 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
   Widget build(BuildContext context) {
     final categoriesAsync = ref.watch(categoriesCatalogProvider);
     final currentYear = DateTime.now().year;
+    final isCreate = widget.tournament == null;
     return Form(
       key: _formKey,
       child: SingleChildScrollView(
@@ -1359,7 +1592,7 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'Editar torneo',
+              isCreate ? 'Crear torneo' : 'Editar torneo',
               style: Theme.of(context)
                   .textTheme
                   .titleLarge
@@ -1369,31 +1602,13 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
             Text(
               widget.readOnly
                   ? 'Visualiza la configuración del torneo seleccionado.'
-                  : 'Actualiza los datos esenciales del torneo.',
+                  : widget.scheduleOnly
+                      ? 'El torneo está en juego. Solo puedes modificar los horarios de las categorías asociadas.'
+                  : isCreate
+                      ? 'Completa los datos esenciales para dar de alta un nuevo torneo.'
+                      : 'Actualiza los datos esenciales del torneo.',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
-            if (widget.canConfigurePoster) ...[
-              const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Wrap(
-                  spacing: 12,
-                  runSpacing: 8,
-                  children: [
-                    Tooltip(
-                      message: widget.tournament == null
-                          ? 'Guarda el torneo para habilitar la configuración del poster.'
-                          : 'Abre el editor de plantilla para el poster promocional del torneo.',
-                      child: FilledButton.tonalIcon(
-                        onPressed: widget.tournament == null ? null : _openPosterTemplate,
-                        icon: const Icon(Icons.wallpaper_outlined),
-                        label: const Text('Configurar poster'),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
             const SizedBox(height: 20),
             Builder(
               builder: (context) {
@@ -1424,7 +1639,7 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
                         ),
                       )
                       .toList(),
-                  onChanged: widget.readOnly
+                  onChanged: _lockGeneralFields
                       ? null
                       : (value) => setState(() => _selectedLeagueId = value),
                   validator: (value) {
@@ -1439,7 +1654,7 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
             const SizedBox(height: 16),
             TextFormField(
               controller: _nameController,
-              readOnly: widget.readOnly,
+              readOnly: _lockGeneralFields,
               decoration: const InputDecoration(
                 labelText: 'Nombre del torneo',
                 hintText: 'Ej. Torneo 2024 Domingo',
@@ -1456,7 +1671,7 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
             const SizedBox(height: 16),
             TextFormField(
               controller: _yearController,
-              readOnly: widget.readOnly,
+              readOnly: _lockGeneralFields,
               decoration: InputDecoration(
                 labelText: 'Año del torneo (YYYY)',
                 hintText: 'Ej. $currentYear',
@@ -1497,7 +1712,7 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
                   child: Text('Femenino'),
                 ),
               ],
-              onChanged: widget.readOnly
+              onChanged: _lockGeneralFields
                   ? null
                   : (value) {
                       if (value == null) {
@@ -1529,7 +1744,7 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
                 if (!_categoriesInitialized) {
                   _initializeSelections(categories);
                 }
-                final visibleSelections = _selections
+                final visibleSelections = _editableSelections
                     .where((selection) =>
                         _matchesSelectedGender(selection.category))
                     .toList();
@@ -1545,6 +1760,7 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
                 return _CategorySelectionTable(
                   selections: visibleSelections,
                   readOnly: widget.readOnly,
+                  scheduleOnly: widget.scheduleOnly,
                   onChanged: (selection) {
                     setState(() {});
                   },
@@ -1589,7 +1805,7 @@ class _TournamentFormDialogState extends ConsumerState<_TournamentFormDialog> {
                           height: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('Guardar cambios'),
+                      : Text(isCreate ? 'Crear torneo' : 'Guardar cambios'),
                 ),
               ],
             )
@@ -1610,12 +1826,14 @@ class _CategorySelectionTable extends StatefulWidget {
   const _CategorySelectionTable({
     required this.selections,
     required this.readOnly,
+    required this.scheduleOnly,
     required this.onChanged,
     required this.minWidth,
   });
 
   final List<_CategorySelection> selections;
   final bool readOnly;
+  final bool scheduleOnly;
   final ValueChanged<_CategorySelection> onChanged;
   final double minWidth;
 
@@ -1678,7 +1896,7 @@ class _CategorySelectionTableState extends State<_CategorySelectionTable> {
               DataCell(
                 Checkbox(
                   value: selection.include,
-                  onChanged: widget.readOnly
+                  onChanged: widget.readOnly || widget.scheduleOnly
                       ? null
                       : (value) {
                           setState(() {
@@ -1713,7 +1931,7 @@ class _CategorySelectionTableState extends State<_CategorySelectionTable> {
               DataCell(
                 Switch(
                   value: selection.countsForGeneral,
-                  onChanged: widget.readOnly || !selection.include
+                  onChanged: widget.readOnly || widget.scheduleOnly || !selection.include
                       ? null
                       : (value) {
                           setState(() {
@@ -1800,16 +2018,20 @@ class TournamentSummary {
     required this.startDate,
     required this.endDate,
     required this.championMode,
+    required this.hasLockedZones,
+    required this.isInactive,
   });
 
   factory TournamentSummary.fromJson(
     Map<String, dynamic> json,
     League league,
   ) {
+    final zones = (json['zones'] as List<dynamic>? ?? []);
     final categories = (json['categories'] as List<dynamic>? ?? [])
         .map((entry) => TournamentCategoryAssignment.fromJson(
             entry as Map<String, dynamic>))
         .toList();
+    final status = json['status'] as String?;
     return TournamentSummary(
       id: json['id'] as int,
       name: json['name'] as String,
@@ -1817,7 +2039,7 @@ class TournamentSummary {
       leagueId: league.id,
       leagueName: league.name,
       gender: json['gender'] as String? ?? 'MIXTO',
-      zonesCount: (json['zones'] as List<dynamic>? ?? []).length,
+      zonesCount: zones.length,
       categories: categories,
       startDate: json['startDate'] != null
           ? DateTime.tryParse(json['startDate'] as String)
@@ -1826,6 +2048,13 @@ class TournamentSummary {
           ? DateTime.tryParse(json['endDate'] as String)
           : null,
       championMode: json['championMode'] as String? ?? 'GLOBAL',
+      hasLockedZones: zones.any((zone) {
+        if (zone is Map<String, dynamic>) {
+          return zone['status'] != 'OPEN';
+        }
+        return false;
+      }),
+      isInactive: status == 'INACTIVE',
     );
   }
 
@@ -1840,6 +2069,8 @@ class TournamentSummary {
   final DateTime? startDate;
   final DateTime? endDate;
   final String championMode;
+  final bool hasLockedZones;
+  final bool isInactive;
 
   int get enabledCategoriesCount =>
       categories.where((category) => category.enabled).length;
@@ -1956,15 +2187,21 @@ class TournamentFilters {
     this.leagueId,
     this.year,
     this.status,
+    this.includeInactive = false,
   });
 
   final String query;
   final int? leagueId;
   final int? year;
   final TournamentStatus? status;
+  final bool includeInactive;
 
   bool get isEmpty =>
-      query.isEmpty && leagueId == null && year == null && status == null;
+      query.isEmpty &&
+      leagueId == null &&
+      year == null &&
+      status == null &&
+      !includeInactive;
 }
 
 class TournamentFiltersController extends StateNotifier<TournamentFilters> {
@@ -1976,6 +2213,7 @@ class TournamentFiltersController extends StateNotifier<TournamentFilters> {
       leagueId: state.leagueId,
       year: state.year,
       status: state.status,
+      includeInactive: state.includeInactive,
     );
   }
 
@@ -1985,6 +2223,7 @@ class TournamentFiltersController extends StateNotifier<TournamentFilters> {
       leagueId: leagueId,
       year: state.year,
       status: state.status,
+      includeInactive: state.includeInactive,
     );
   }
 
@@ -1994,6 +2233,7 @@ class TournamentFiltersController extends StateNotifier<TournamentFilters> {
       leagueId: state.leagueId,
       year: year,
       status: state.status,
+      includeInactive: state.includeInactive,
     );
   }
 
@@ -2003,6 +2243,17 @@ class TournamentFiltersController extends StateNotifier<TournamentFilters> {
       leagueId: state.leagueId,
       year: state.year,
       status: status,
+      includeInactive: state.includeInactive,
+    );
+  }
+
+  void updateIncludeInactive(bool includeInactive) {
+    state = TournamentFilters(
+      query: state.query,
+      leagueId: state.leagueId,
+      year: state.year,
+      status: state.status,
+      includeInactive: includeInactive,
     );
   }
 

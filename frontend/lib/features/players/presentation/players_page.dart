@@ -1,12 +1,18 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
+import 'package:http_parser/http_parser.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/utils/dni_capture.dart';
+import '../../../core/utils/responsive.dart';
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
 import '../../categories/providers/categories_catalog_provider.dart';
@@ -66,23 +72,67 @@ class PlayersPage extends ConsumerStatefulWidget {
   ConsumerState<PlayersPage> createState() => _PlayersPageState();
 }
 
-class _PlayersPageState extends ConsumerState<PlayersPage> {
+class _PlayersPageState extends ConsumerState<PlayersPage> with WidgetsBindingObserver {
   late final TextEditingController _searchController;
   Timer? _debounce;
+  CancelToken? _dniScanCancelToken;
+  bool _isDniScanning = false;
+  int _dniScanRequestId = 0;
+  int? _dniScanLoadingDialogRequestId;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _searchController = TextEditingController();
     _searchController.addListener(_onSearchChanged);
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted && _isDniScanning) {
+      if (kDebugMode) {
+        debugPrint('[DNI_SCAN][ui] visibility_resumed_repaint requestId=$_dniScanRequestId');
+      }
+      setState(() {});
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {});
+        }
+      });
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _cancelDniScan(closeDialog: false);
     _debounce?.cancel();
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _cancelDniScan({bool closeDialog = true}) {
+    final activeRequestId = _dniScanRequestId;
+    _dniScanRequestId++;
+    _dniScanCancelToken?.cancel('scan_cancelled_by_user');
+    _dniScanCancelToken = null;
+    if (kDebugMode) {
+      debugPrint('[DNI_SCAN][http] cancel requestId=$activeRequestId');
+    }
+    if (_isDniScanning && mounted) {
+      setState(() {
+        _isDniScanning = false;
+      });
+    }
+    if (closeDialog && mounted && _dniScanLoadingDialogRequestId == activeRequestId) {
+      if (kDebugMode) {
+        debugPrint('[DNI_SCAN][ui] close_loading requestId=$activeRequestId');
+      }
+      _dniScanLoadingDialogRequestId = null;
+      Navigator.of(context, rootNavigator: true).maybePop();
+    }
   }
 
   void _onSearchChanged() {
@@ -117,16 +167,383 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
   }
 
   Future<void> _openMassivePlayers() async {
-    final created = await Navigator.of(context).push<bool>(
+    final result = await Navigator.of(context).push<_MassivePlayersSaveResult>(
       MaterialPageRoute(builder: (_) => const _MassivePlayersPage()),
     );
-    if (!mounted || created != true) {
+    if (!mounted || result == null || !result.hasChanges) {
       return;
     }
     ref.invalidate(playersProvider);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Jugadores guardados correctamente.')),
+      SnackBar(content: Text(result.message)),
     );
+  }
+
+
+  Future<void> _scanDniAndCreatePlayer() async {
+    try {
+      if (_isDniScanning || _dniScanCancelToken != null) {
+        _cancelDniScan();
+      }
+
+      final image = await captureDniImage();
+      if (kDebugMode) {
+        debugPrint('[DNI_SCAN][capture] image_selected=${image == null ? 'null' : image.filename}');
+      }
+      if (!mounted || image == null) {
+        return;
+      }
+
+      await Future.delayed(const Duration(milliseconds: 50));
+      if (mounted) {
+        setState(() {});
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {});
+          }
+        });
+      }
+
+      final dimensions = await _decodeImageDimensions(image.bytes);
+      if (kDebugMode) {
+        debugPrint(
+          '[DNI_SCAN][frontend] selected file name=${image.filename} mime=${image.mimeType} bytes=${image.bytes.length} dimensions=${dimensions?.$1 ?? 'unknown'}x${dimensions?.$2 ?? 'unknown'} base64Length=not_used(raw_upload)',
+        );
+      }
+
+      final scanned = await _scanDniOnServer(image);
+      if (!mounted) {
+        return;
+      }
+
+      final alreadyExists = await _isDniAlreadyRegistered(scanned.dni);
+      if (!mounted) {
+        return;
+      }
+      if (alreadyExists) {
+        await _showExistingPlayerDialog();
+        return;
+      }
+
+      final confirmation = await _confirmScannedPlayer(scanned);
+      if (!mounted || confirmation == null) {
+        return;
+      }
+
+      final assignment = await _createPlayerFromScan(
+        scanned,
+        tournamentId: confirmation.tournamentId,
+        clubId: confirmation.clubId,
+      );
+      if (!mounted) {
+        return;
+      }
+      ref.invalidate(playersProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(assignment ? 'Jugador creado y asignado.' : 'Jugador creado.')),
+      );
+    } on UnsupportedError catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString())),
+      );
+    } on _DniScanCancelledException {
+      return;
+    } on DioException catch (error) {
+      if (error.type == DioExceptionType.cancel) {
+        return;
+      }
+      if (!mounted) {
+        return;
+      }
+      final statusCode = error.response?.statusCode;
+      String message;
+      if (statusCode == 422) {
+        final backendMessage = _extractBackendErrorMessage(error.response?.data);
+        if (backendMessage == 'decoded but unexpected format') {
+          message = 'se leyó el código pero el formato no coincide';
+          await _showScanDebug(error.response?.data);
+        } else if (backendMessage == 'No se pudo decodificar el PDF417.') {
+          message = 'no se pudo leer el código';
+        } else {
+          message = 'se leyó el código pero el formato no coincide';
+        }
+      } else if (error.type == DioExceptionType.connectionTimeout ||
+          error.type == DioExceptionType.receiveTimeout ||
+          error.type == DioExceptionType.sendTimeout) {
+        message = 'La lectura tardó demasiado. Probá nuevamente.';
+      } else {
+        message = 'No pudimos procesar el DNI. Verificá la conexión e intentá otra vez.';
+      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ocurrió un error al procesar el DNI.')),
+      );
+    }
+  }
+
+
+
+  Future<void> _showScanDebug(dynamic data) async {
+    if (data is! Map<String, dynamic>) {
+      return;
+    }
+    final payloadRaw = data['payloadRaw'];
+    final stdoutRaw = data['stdoutRaw'];
+    if (payloadRaw is! String && stdoutRaw is! String) {
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Debug'),
+          content: SizedBox(
+            width: 560,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (payloadRaw is String) ...[
+                    _DebugCopyField(label: 'payloadRaw', value: payloadRaw),
+                    const SizedBox(height: 12),
+                  ],
+                  if (stdoutRaw is String)
+                    _DebugCopyField(label: 'stdoutRaw', value: stdoutRaw),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cerrar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  String? _extractBackendErrorMessage(dynamic data) {
+    if (data is Map<String, dynamic>) {
+      final message = data['message'];
+      if (message is String) {
+        return message;
+      }
+      if (message is List && message.isNotEmpty) {
+        final first = message.first;
+        if (first is String) {
+          return first;
+        }
+      }
+    }
+    return null;
+  }
+
+  Future<_ScannedDniPlayer> _scanDniOnServer(CapturedDniImage image) async {
+    final api = ref.read(apiClientProvider);
+    final requestId = ++_dniScanRequestId;
+    final cancelToken = CancelToken();
+    _dniScanCancelToken = cancelToken;
+    if (mounted) {
+      setState(() {
+        _isDniScanning = true;
+      });
+    }
+
+    final formData = FormData.fromMap({
+      'file': MultipartFile.fromBytes(
+        image.bytes,
+        filename: image.filename,
+        contentType: MediaType.parse(image.mimeType),
+      ),
+    });
+
+    if (kDebugMode) {
+      debugPrint(
+        '[DNI_SCAN][frontend] uploading raw file filename=${image.filename} mime=${image.mimeType} bytes=${image.bytes.length}',
+      );
+    }
+
+    final loadingDialogOpened = Completer<void>();
+    unawaited(
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) {
+          _dniScanLoadingDialogRequestId = requestId;
+          if (kDebugMode) {
+            debugPrint('[DNI_SCAN][ui] open_loading requestId=$requestId');
+          }
+          if (!loadingDialogOpened.isCompleted) {
+            loadingDialogOpened.complete();
+          }
+          return AlertDialog(
+            content: const Row(
+              children: [
+                SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.4)),
+                SizedBox(width: 16),
+                Expanded(child: Text('Leyendo DNI...')),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: _isDniScanning ? _cancelDniScan : null,
+                child: const Text('Cancelar'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    try {
+      if (kDebugMode) {
+        debugPrint('[DNI_SCAN][http] start requestId=$requestId');
+      }
+      final response = await api.post<Map<String, dynamic>>(
+        '/players/dni/scan',
+        data: formData,
+        cancelToken: cancelToken,
+        options: Options(
+          sendTimeout: const Duration(seconds: 20),
+          receiveTimeout: const Duration(seconds: 20),
+        ),
+      );
+
+      if (!mounted ||
+          requestId != _dniScanRequestId ||
+          cancelToken.isCancelled) {
+        throw _DniScanCancelledException();
+      }
+
+      if (kDebugMode) {
+        debugPrint('[DNI_SCAN][http] ok requestId=$requestId');
+      }
+
+      return _ScannedDniPlayer.fromJson(response.data ?? const {});
+    } on DioException catch (error) {
+      if (kDebugMode) {
+        if (error.type == DioExceptionType.cancel) {
+          debugPrint('[DNI_SCAN][http] cancel requestId=$requestId');
+        } else {
+          debugPrint('[DNI_SCAN][http] error requestId=$requestId type=${error.type}');
+        }
+      }
+      rethrow;
+    } finally {
+      // requestId evita que requests viejos (cancelados/superpuestos) cierren dialogs
+      // o pisen estado de UI de un escaneo más nuevo.
+      if (requestId == _dniScanRequestId) {
+        _dniScanCancelToken = null;
+      }
+      if (!loadingDialogOpened.isCompleted) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      if (mounted && requestId == _dniScanRequestId) {
+        setState(() {
+          _isDniScanning = false;
+        });
+      }
+      if (mounted && requestId == _dniScanRequestId && _dniScanLoadingDialogRequestId == requestId) {
+        if (kDebugMode) {
+          debugPrint('[DNI_SCAN][ui] close_loading requestId=$requestId');
+        }
+        _dniScanLoadingDialogRequestId = null;
+        Navigator.of(context, rootNavigator: true).maybePop();
+      }
+    }
+  }
+
+  Future<(int, int)?> _decodeImageDimensions(List<int> bytes) async {
+    try {
+      final codec = await ui.instantiateImageCodec(Uint8List.fromList(bytes));
+      final frame = await codec.getNextFrame();
+      codec.dispose();
+      return (frame.image.width, frame.image.height);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<_ScannedPlayerAssignmentSelection?> _confirmScannedPlayer(
+    _ScannedDniPlayer player,
+  ) {
+    return showDialog<_ScannedPlayerAssignmentSelection>(
+      context: context,
+      builder: (context) {
+        return _ScannedPlayerConfirmationDialog(player: player);
+      },
+    );
+  }
+
+  Future<bool> _isDniAlreadyRegistered(String dni) async {
+    final api = ref.read(apiClientProvider);
+    final response = await api.get<Map<String, dynamic>>(
+      '/players',
+      queryParameters: {
+        'dni': dni,
+        'page': 1,
+        'pageSize': 1,
+      },
+    );
+
+    final data = response.data ?? const <String, dynamic>{};
+    final paginated = PaginatedPlayers.fromJson(data);
+    return paginated.players.any((player) => player.dni.trim() == dni.trim());
+  }
+
+  Future<void> _showExistingPlayerDialog() {
+    return showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          content: const Text('Jugador/a ya existente!!'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cerrar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<bool> _createPlayerFromScan(
+    _ScannedDniPlayer player, {
+    int? tournamentId,
+    int? clubId,
+  }) async {
+    final api = ref.read(apiClientProvider);
+    final response = await api.post<Map<String, dynamic>>('/players', data: {
+      'firstName': player.firstName,
+      'lastName': player.lastName,
+      'dni': player.dni,
+      'birthDate': player.birthDate.toIso8601String(),
+      'gender': player.gender,
+      'active': true,
+    });
+
+    final createdPlayer = response.data;
+    final playerId = createdPlayer?['id'] as int?;
+    if (playerId == null || tournamentId == null || clubId == null) {
+      return false;
+    }
+
+    await api.put('/tournaments/$tournamentId/player-club', data: {
+      'playerId': playerId,
+      'clubId': clubId,
+    });
+    return true;
   }
 
   Future<void> _openPlayerDetails(Player player) async {
@@ -286,6 +703,7 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
           ? _PlayersFloatingActions(
               onCreate: _openCreatePlayer,
               onMassive: _openMassivePlayers,
+              onScanDni: _scanDniAndCreatePlayer,
             )
           : null,
       builder: (context, scrollController) {
@@ -307,85 +725,116 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
             ),
             const SizedBox(height: 24),
             Card(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
-                child: TableFiltersBar(
-                  children: [
-                    TableFilterField(
-                      label: 'Buscar',
-                      width: 320,
-                      child: TableFilterSearchField(
-                        controller: _searchController,
-                        placeholder: 'Buscar por apellido, nombre o DNI',
-                        showClearButton: filters.query.isNotEmpty,
-                        onClear: () {
-                          _searchController.clear();
-                          ref
-                              .read(playersFiltersProvider.notifier)
-                              .setQuery('');
-                        },
+              child: ExpansionTile(
+                title: const Text('Búsqueda'),
+                initiallyExpanded: false,
+                childrenPadding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                children: [
+                  TableFiltersBar(
+                    children: [
+                      TableFilterField(
+                        label: 'Buscar',
+                        width: 320,
+                        child: TableFilterSearchField(
+                          controller: _searchController,
+                          placeholder: 'Buscar por apellido, nombre o DNI',
+                          showClearButton: filters.query.isNotEmpty,
+                          onClear: () {
+                            _searchController.clear();
+                            ref
+                                .read(playersFiltersProvider.notifier)
+                                .setQuery('');
+                          },
+                        ),
                       ),
-                    ),
-                    TableFilterField(
-                      label: 'Club',
-                      width: 240,
-                      child: clubsAsync.when(
-                        data: (clubs) {
-                          final notifier =
-                              ref.read(playersFiltersProvider.notifier);
-                          if (restrictToAssignedClubs) {
-                            final allowedIds =
-                                restrictedClubIds!.toList(growable: false);
-                            final allowedClubs = clubs
-                                .where(
-                                  (club) => allowedIds.contains(club.id),
-                                )
-                                .toList();
+                      TableFilterField(
+                        label: 'Club',
+                        width: 240,
+                        child: clubsAsync.when(
+                          data: (clubs) {
+                            final notifier =
+                                ref.read(playersFiltersProvider.notifier);
+                            if (restrictToAssignedClubs) {
+                              final allowedIds =
+                                  restrictedClubIds!.toList(growable: false);
+                              final allowedClubs = clubs
+                                  .where(
+                                    (club) => allowedIds.contains(club.id),
+                                  )
+                                  .toList();
 
-                            if (allowedClubs.isEmpty) {
-                              if (filters.clubId != null) {
+                              if (allowedClubs.isEmpty) {
+                                if (filters.clubId != null) {
+                                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                                    notifier.setClubId(null);
+                                  });
+                                }
+                                return const Text('Sin clubes asignados');
+                              }
+
+                              final hasMultipleAllowed = allowedClubs.length > 1;
+                              final validValues = <int?>{
+                                if (hasMultipleAllowed) null,
+                                ...allowedClubs.map((club) => club.id),
+                              };
+
+                              final desiredValue = validValues.contains(filters.clubId)
+                                  ? filters.clubId
+                                  : (hasMultipleAllowed
+                                      ? null
+                                      : allowedClubs.first.id);
+
+                              if (filters.clubId != desiredValue) {
                                 WidgetsBinding.instance.addPostFrameCallback((_) {
-                                  notifier.setClubId(null);
+                                  notifier.setClubId(desiredValue);
                                 });
                               }
-                              return const Text('Sin clubes asignados');
-                            }
 
-                            final hasMultipleAllowed = allowedClubs.length > 1;
-                            final validValues = <int?>{
-                              if (hasMultipleAllowed) null,
-                              ...allowedClubs.map((club) => club.id),
-                            };
+                              final items = [
+                                if (hasMultipleAllowed)
+                                  const DropdownMenuItem<int?>(
+                                    value: null,
+                                    child: Text('Todos mis clubes'),
+                                  ),
+                                ...allowedClubs.map(
+                                  (club) => DropdownMenuItem<int?>(
+                                    value: club.id,
+                                    child: Text(club.name),
+                                  ),
+                                ),
+                              ];
 
-                            final desiredValue = validValues.contains(filters.clubId)
-                                ? filters.clubId
-                                : (hasMultipleAllowed
-                                    ? null
-                                    : allowedClubs.first.id);
-
-                            if (filters.clubId != desiredValue) {
-                              WidgetsBinding.instance.addPostFrameCallback((_) {
-                                notifier.setClubId(desiredValue);
-                              });
+                              return DropdownButtonHideUnderline(
+                                child: DropdownButton<int?>(
+                                  value: desiredValue,
+                                  isExpanded: true,
+                                  items: items,
+                                  onChanged: (value) {
+                                    notifier.setClubId(value);
+                                  },
+                                ),
+                              );
                             }
 
                             final items = [
-                              if (hasMultipleAllowed)
-                                const DropdownMenuItem<int?>(
-                                  value: null,
-                                  child: Text('Todos mis clubes'),
-                                ),
-                              ...allowedClubs.map(
+                              const DropdownMenuItem<int?>(
+                                value: _noClubFilterValue,
+                                child: Text('Sin club asignado'),
+                              ),
+                              const DropdownMenuItem<int?>(
+                                value: null,
+                                child: Text('Todos'),
+                              ),
+                              ...clubs.map(
                                 (club) => DropdownMenuItem<int?>(
                                   value: club.id,
                                   child: Text(club.name),
                                 ),
                               ),
                             ];
-
                             return DropdownButtonHideUnderline(
                               child: DropdownButton<int?>(
-                                value: desiredValue,
+                                value: filters.clubId,
                                 isExpanded: true,
                                 items: items,
                                 onChanged: (value) {
@@ -393,149 +842,122 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
                                 },
                               ),
                             );
-                          }
-
-                          final items = [
-                            const DropdownMenuItem<int?>(
-                              value: _noClubFilterValue,
-                              child: Text('Sin club asignado'),
-                            ),
-                            const DropdownMenuItem<int?>(
-                              value: null,
-                              child: Text('Todos'),
-                            ),
-                            ...clubs.map(
-                              (club) => DropdownMenuItem<int?>(
-                                value: club.id,
-                                child: Text(club.name),
-                              ),
-                            ),
-                          ];
-                          return DropdownButtonHideUnderline(
-                            child: DropdownButton<int?>(
-                              value: filters.clubId,
-                              isExpanded: true,
-                              items: items,
-                              onChanged: (value) {
-                                notifier.setClubId(value);
-                              },
-                            ),
-                          );
-                        },
-                        loading: () => const Center(
-                          child: SizedBox(
-                            height: 24,
-                            width: 24,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        ),
-                        error: (error, _) => Center(
-                          child: Tooltip(
-                            message: 'No se pudieron cargar los clubes: $error',
-                            child: const Icon(Icons.error_outline, color: Colors.redAccent),
-                          ),
-                        ),
-                      ),
-                    ),
-                    TableFilterField(
-                      label: 'Género',
-                      width: 200,
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<PlayerGenderFilter>(
-                          value: filters.gender,
-                          isExpanded: true,
-                          items: PlayerGenderFilter.values
-                              .map(
-                                (value) => DropdownMenuItem(
-                                  value: value,
-                                  child: Text(value.label),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) {
-                            if (value != null) {
-                              ref
-                                  .read(playersFiltersProvider.notifier)
-                                  .setGender(value);
-                            }
                           },
+                          loading: () => const Center(
+                            child: SizedBox(
+                              height: 24,
+                              width: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
+                          error: (error, _) => Center(
+                            child: Tooltip(
+                              message: 'No se pudieron cargar los clubes: $error',
+                              child: const Icon(Icons.error_outline, color: Colors.redAccent),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                    TableFilterField(
-                      label: 'Categoría (año)',
-                      width: 200,
-                      child: categoriesAsync.when(
-                        data: (categories) {
-                          final options = [
-                            const _BirthYearFilterOption.all(),
-                            ...categories
-                                .where((category) =>
-                                    category.birthYearMin != category.birthYearMax)
+                      TableFilterField(
+                        label: 'Género',
+                        width: 200,
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<PlayerGenderFilter>(
+                            value: filters.gender,
+                            isExpanded: true,
+                            items: PlayerGenderFilter.values
                                 .map(
-                                  (category) => _BirthYearFilterOption.range(
-                                    label: category.name,
-                                    min: category.birthYearMin,
-                                    max: category.birthYearMax,
+                                  (value) => DropdownMenuItem(
+                                    value: value,
+                                    child: Text(value.label),
                                   ),
-                                ),
+                                )
+                                .toList(),
+                            onChanged: (value) {
+                              if (value != null) {
+                                ref
+                                    .read(playersFiltersProvider.notifier)
+                                    .setGender(value);
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                      TableFilterField(
+                        label: 'Categoría (año)',
+                        width: 200,
+                        child: categoriesAsync.when(
+                          data: (categories) {
+                            final options = [
+                              const _BirthYearFilterOption.all(),
+                              ...categories
+                                  .where((category) =>
+                                      category.birthYearMin != category.birthYearMax)
+                                  .map(
+                                    (category) => _BirthYearFilterOption.range(
+                                      label: category.name,
+                                      min: category.birthYearMin,
+                                      max: category.birthYearMax,
+                                    ),
+                                  ),
+                              ...birthYearOptions.map(
+                                (year) => _BirthYearFilterOption.year(year),
+                              ),
+                            ];
+                            return buildBirthYearDropdown(options);
+                          },
+                          loading: () => buildBirthYearDropdown([
+                            const _BirthYearFilterOption.all(),
                             ...birthYearOptions.map(
                               (year) => _BirthYearFilterOption.year(year),
                             ),
-                          ];
-                          return buildBirthYearDropdown(options);
-                        },
-                        loading: () => buildBirthYearDropdown([
-                          const _BirthYearFilterOption.all(),
-                          ...birthYearOptions.map(
-                            (year) => _BirthYearFilterOption.year(year),
-                          ),
-                        ]),
-                        error: (_, __) => buildBirthYearDropdown([
-                          const _BirthYearFilterOption.all(),
-                          ...birthYearOptions.map(
-                            (year) => _BirthYearFilterOption.year(year),
-                          ),
-                        ]),
-                      ),
-                    ),
-                    TableFilterField(
-                      label: 'Estado',
-                      width: 200,
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<PlayerStatusFilter>(
-                          value: filters.status,
-                          isExpanded: true,
-                          items: PlayerStatusFilter.values
-                              .map(
-                                (value) => DropdownMenuItem(
-                                  value: value,
-                                  child: Text(value.label),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) {
-                            if (value != null) {
-                              ref
-                                  .read(playersFiltersProvider.notifier)
-                                  .setStatus(value);
-                            }
-                          },
+                          ]),
+                          error: (_, __) => buildBirthYearDropdown([
+                            const _BirthYearFilterOption.all(),
+                            ...birthYearOptions.map(
+                              (year) => _BirthYearFilterOption.year(year),
+                            ),
+                          ]),
                         ),
                       ),
+                      TableFilterField(
+                        label: 'Estado',
+                        width: 200,
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<PlayerStatusFilter>(
+                            value: filters.status,
+                            isExpanded: true,
+                            items: PlayerStatusFilter.values
+                                .map(
+                                  (value) => DropdownMenuItem(
+                                    value: value,
+                                    child: Text(value.label),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (value) {
+                              if (value != null) {
+                                ref
+                                    .read(playersFiltersProvider.notifier)
+                                    .setStatus(value);
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                    trailing: TextButton.icon(
+                      onPressed: filters.hasActiveFilters
+                          ? () {
+                              _searchController.clear();
+                              ref.read(playersFiltersProvider.notifier).reset();
+                            }
+                          : null,
+                      icon: const Icon(Icons.filter_alt_off_outlined),
+                      label: const Text('Limpiar filtros'),
                     ),
-                  ],
-                  trailing: TextButton.icon(
-                    onPressed: filters.hasActiveFilters
-                        ? () {
-                            _searchController.clear();
-                            ref.read(playersFiltersProvider.notifier).reset();
-                          }
-                        : null,
-                    icon: const Icon(Icons.filter_alt_off_outlined),
-                    label: const Text('Limpiar filtros'),
                   ),
-                ),
+                ],
               ),
             ),
             const SizedBox(height: 16),
@@ -552,6 +974,7 @@ class _PlayersPageState extends ConsumerState<PlayersPage> {
                       canCreate: canCreate,
                       onCreate: _openCreatePlayer,
                       onMassive: _openMassivePlayers,
+                      onScanDni: _scanDniAndCreatePlayer,
                     );
                   }
 
@@ -890,15 +1313,16 @@ class _PlayersDataTable extends StatelessWidget {
     final colors = AppDataTableColors.standard(theme);
     final headerStyle =
         theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: colors.headerText);
+    final isMobile = Responsive.isMobile(context);
 
     final table = DataTable(
-      columns: const [
-        DataColumn(label: Text('Apellido')),
-        DataColumn(label: Text('Nombre')),
-        DataColumn(label: Text('Género')),
-        DataColumn(label: Text('Nacimiento')),
-        DataColumn(label: Text('Estado')),
-        DataColumn(label: Text('Acciones')),
+      columns: [
+        const DataColumn(label: Text('Apellido')),
+        const DataColumn(label: Text('Nombre')),
+        const DataColumn(label: Text('Género')),
+        const DataColumn(label: Text('Nacimiento')),
+        if (!isMobile) const DataColumn(label: Text('Estado')),
+        const DataColumn(label: Text('Acciones')),
       ],
       dataRowMinHeight: 44,
       dataRowMaxHeight: 60,
@@ -914,40 +1338,41 @@ class _PlayersDataTable extends StatelessWidget {
               DataCell(Text(players[index].firstName)),
               DataCell(Text(players[index].genderLabel)),
               DataCell(Text(players[index].formattedBirthDateWithAge)),
-              DataCell(
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Chip(
-                    avatar: Icon(
-                      players[index].active ? Icons.check_circle : Icons.pause_circle,
-                      size: 18,
-                      color: players[index].active
-                          ? theme.colorScheme.onPrimary
-                          : theme.colorScheme.onSurfaceVariant,
-                    ),
-                    backgroundColor: players[index].active
-                        ? theme.colorScheme.primary
-                        : theme.colorScheme.surfaceVariant,
-                    label: Text(
-                      players[index].active ? 'Activo' : 'Inactivo',
-                      style: theme.textTheme.labelLarge?.copyWith(
+              if (!isMobile)
+                DataCell(
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Chip(
+                      avatar: Icon(
+                        players[index].active ? Icons.check_circle : Icons.pause_circle,
+                        size: 18,
                         color: players[index].active
                             ? theme.colorScheme.onPrimary
                             : theme.colorScheme.onSurfaceVariant,
                       ),
+                      backgroundColor: players[index].active
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.surfaceVariant,
+                      label: Text(
+                        players[index].active ? 'Activo' : 'Inactivo',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: players[index].active
+                              ? theme.colorScheme.onPrimary
+                              : theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
               DataCell(
-                Wrap(
-                  spacing: 8,
+                Row(
                   children: [
                     OutlinedButton.icon(
                       onPressed: () => onView(players[index]),
                       icon: const Icon(Icons.visibility_outlined),
                       label: const Text('Detalle'),
                     ),
+                    const SizedBox(width: 8),
                     FilledButton.tonalIcon(
                       onPressed: canEdit ? () => onEdit(players[index]) : null,
                       icon: const Icon(Icons.edit_outlined),
@@ -976,6 +1401,390 @@ class _PlayersDataTable extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+
+class _DniScanCancelledException implements Exception {}
+
+class _ScannedPlayerAssignmentSelection {
+  const _ScannedPlayerAssignmentSelection({
+    this.tournamentId,
+    this.clubId,
+  });
+
+  final int? tournamentId;
+  final int? clubId;
+}
+
+class _ScannedPlayerConfirmationDialog extends ConsumerStatefulWidget {
+  const _ScannedPlayerConfirmationDialog({required this.player});
+
+  final _ScannedDniPlayer player;
+
+  @override
+  ConsumerState<_ScannedPlayerConfirmationDialog> createState() =>
+      _ScannedPlayerConfirmationDialogState();
+}
+
+class _ScannedPlayerConfirmationDialogState
+    extends ConsumerState<_ScannedPlayerConfirmationDialog> {
+  List<_SimpleOption> _tournaments = const [];
+  List<_SimpleOption> _clubs = const [];
+  int? _selectedTournamentId;
+  int? _selectedClubId;
+  bool _loadingTournaments = true;
+  bool _loadingClubs = false;
+  String? _loadingError;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadTournaments());
+  }
+
+  Future<void> _loadTournaments() async {
+    setState(() {
+      _loadingTournaments = true;
+      _loadingError = null;
+    });
+    try {
+      final api = ref.read(apiClientProvider);
+      final response = await api.get<List<dynamic>>('/tournaments');
+      final activeTournaments = (response.data ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map((json) => _SimpleOption.fromJson(json))
+          .toList();
+      final playerBirthYear = widget.player.birthDate.year;
+      final playerGender = widget.player.gender;
+
+      final eligibility = await Future.wait(
+        activeTournaments.map((tournament) async {
+          final categoriesResponse = await api.get<List<dynamic>>(
+            '/tournaments/${tournament.id}/categories',
+          );
+          final categories = (categoriesResponse.data ?? const [])
+              .whereType<Map<String, dynamic>>();
+          final hasEligibleCategory = categories.any((category) {
+            final birthYearMin = category['birthYearMin'] as int?;
+            final birthYearMax = category['birthYearMax'] as int?;
+            final categoryGender = (category['gender'] as String? ?? '').trim();
+            if (birthYearMin == null || birthYearMax == null || categoryGender.isEmpty) {
+              return false;
+            }
+            final isBirthYearEligible =
+                playerBirthYear >= birthYearMin && playerBirthYear <= birthYearMax;
+            final isGenderEligible =
+                categoryGender == 'MIXTO' || categoryGender == playerGender;
+            return isBirthYearEligible && isGenderEligible;
+          });
+          return (tournamentId: tournament.id, eligible: hasEligibleCategory);
+        }),
+      );
+      final eligibleTournamentIds = eligibility
+          .where((item) => item.eligible)
+          .map((item) => item.tournamentId)
+          .toSet();
+      final eligibleTournaments = activeTournaments
+          .where((tournament) => eligibleTournamentIds.contains(tournament.id))
+          .toList();
+
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _tournaments = eligibleTournaments;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _loadingError = 'No se pudieron cargar los torneos.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingTournaments = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _selectTournament(int? tournamentId) async {
+    setState(() {
+      _selectedTournamentId = tournamentId;
+      _selectedClubId = null;
+      _clubs = const [];
+    });
+    if (tournamentId == null) {
+      return;
+    }
+    setState(() {
+      _loadingClubs = true;
+      _loadingError = null;
+    });
+    try {
+      final api = ref.read(apiClientProvider);
+      final response = await api.get<List<dynamic>>(
+        '/tournaments/$tournamentId/participating-clubs',
+      );
+      final clubs = (response.data ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map((json) => _SimpleOption.fromJson(json))
+          .toList();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _clubs = clubs;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _loadingError = 'No se pudieron cargar los clubes del torneo.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingClubs = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Confirmar alta rápida'),
+      content: SizedBox(
+        width: 460,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _InfoRow(label: 'Apellido', value: widget.player.lastName),
+              _InfoRow(label: 'Nombre', value: widget.player.firstName),
+              _InfoRow(label: 'Sexo', value: widget.player.sex),
+              _InfoRow(label: 'DNI', value: widget.player.dni),
+              _InfoRow(
+                label: 'Fecha nacimiento',
+                value: DateFormat('dd/MM/yyyy').format(widget.player.birthDate),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<int?>(
+                value: _selectedTournamentId,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Torneo vigente (opcional)',
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  const DropdownMenuItem<int?>(value: null, child: Text('Sin asignar')),
+                  ..._tournaments.map(
+                    (tournament) => DropdownMenuItem<int?>(
+                      value: tournament.id,
+                      child: Text(tournament.name),
+                    ),
+                  ),
+                ],
+                onChanged: _loadingTournaments ? null : _selectTournament,
+              ),
+              if (!_loadingTournaments && _tournaments.isEmpty && _loadingError == null) ...[
+                const SizedBox(height: 8),
+                const Text('No hay categorias acorde a los datos'),
+              ],
+              if (_loadingTournaments) ...[
+                const SizedBox(height: 8),
+                const LinearProgressIndicator(minHeight: 2),
+              ],
+              const SizedBox(height: 12),
+              DropdownButtonFormField<int?>(
+                value: _selectedClubId,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Club participante (opcional)',
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  const DropdownMenuItem<int?>(value: null, child: Text('Sin asignar')),
+                  ..._clubs.map(
+                    (club) => DropdownMenuItem<int?>(
+                      value: club.id,
+                      child: Text(club.name),
+                    ),
+                  ),
+                ],
+                onChanged: _selectedTournamentId == null || _loadingClubs
+                    ? null
+                    : (value) => setState(() => _selectedClubId = value),
+              ),
+              if (_loadingClubs) ...[
+                const SizedBox(height: 8),
+                const LinearProgressIndicator(minHeight: 2),
+              ],
+              if (_loadingError != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _loadingError!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: () {
+            Navigator.of(context).pop(
+              _ScannedPlayerAssignmentSelection(
+                tournamentId: _selectedTournamentId,
+                clubId: _selectedClubId,
+              ),
+            );
+          },
+          child: const Text('Confirmar'),
+        ),
+      ],
+    );
+  }
+}
+
+class _ScannedDniPlayer {
+  _ScannedDniPlayer({
+    required this.lastName,
+    required this.firstName,
+    required this.sex,
+    required this.dni,
+    required this.birthDate,
+  });
+
+  factory _ScannedDniPlayer.fromJson(Map<String, dynamic> json) {
+    final birthDateRaw = (json['birthDate'] as String? ?? '').trim();
+    final parsedBirthDate = DateTime.tryParse(birthDateRaw);
+    final player = _ScannedDniPlayer(
+      lastName: (json['lastName'] as String? ?? '').trim(),
+      firstName: (json['firstName'] as String? ?? '').trim(),
+      sex: (json['sex'] as String? ?? '').trim().toUpperCase(),
+      dni: (json['dni'] as String? ?? '').trim(),
+      birthDate: parsedBirthDate ?? DateTime(1900),
+    );
+
+    if (player.lastName.isEmpty ||
+        player.firstName.isEmpty ||
+        player.dni.isEmpty ||
+        !RegExp(r'^\d{6,9}$').hasMatch(player.dni) ||
+        parsedBirthDate == null) {
+      throw const FormatException('Respuesta inválida de escaneo DNI.');
+    }
+
+    return player;
+  }
+
+  final String lastName;
+  final String firstName;
+  final String sex;
+  final String dni;
+  final DateTime birthDate;
+
+  String get gender {
+    switch (sex) {
+      case 'F':
+        return 'FEMENINO';
+      case 'M':
+        return 'MASCULINO';
+      default:
+        return 'MIXTO';
+    }
+  }
+}
+
+class _SimpleOption {
+  const _SimpleOption({
+    required this.id,
+    required this.name,
+  });
+
+  factory _SimpleOption.fromJson(Map<String, dynamic> json) {
+    return _SimpleOption(
+      id: json['id'] as int,
+      name: (json['name'] as String? ?? '').trim(),
+    );
+  }
+
+  final int id;
+  final String name;
+}
+
+
+class _DebugCopyField extends StatelessWidget {
+  const _DebugCopyField({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(label, style: Theme.of(context).textTheme.titleSmall),
+            ),
+            IconButton(
+              tooltip: 'Copiar',
+              icon: const Icon(Icons.copy, size: 18),
+              onPressed: () => Clipboard.setData(ClipboardData(text: value)),
+            ),
+          ],
+        ),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.04),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: SelectableText(value),
+        ),
+      ],
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text.rich(
+        TextSpan(
+          text: '$label: ',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+          children: [
+            TextSpan(
+              text: value,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w400),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1072,11 +1881,13 @@ class _PlayersEmptyState extends StatelessWidget {
     required this.canCreate,
     required this.onCreate,
     required this.onMassive,
+    required this.onScanDni,
   });
 
   final bool canCreate;
   final VoidCallback onCreate;
   final VoidCallback onMassive;
+  final VoidCallback onScanDni;
 
   @override
   Widget build(BuildContext context) {
@@ -1119,6 +1930,11 @@ class _PlayersEmptyState extends StatelessWidget {
                     icon: const Icon(Icons.table_chart_outlined),
                     label: const Text('Masivo'),
                   ),
+                  OutlinedButton.icon(
+                    onPressed: onScanDni,
+                    icon: const Icon(Icons.qr_code_scanner_outlined),
+                    label: const Text('Escanear DNI'),
+                  ),
                 ],
               ),
           ],
@@ -1132,10 +1948,12 @@ class _PlayersFloatingActions extends StatelessWidget {
   const _PlayersFloatingActions({
     required this.onCreate,
     required this.onMassive,
+    required this.onScanDni,
   });
 
   final VoidCallback onCreate;
   final VoidCallback onMassive;
+  final VoidCallback onScanDni;
 
   @override
   Widget build(BuildContext context) {
@@ -1143,6 +1961,13 @@ class _PlayersFloatingActions extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
+        FloatingActionButton.extended(
+          heroTag: 'players-scan-dni',
+          onPressed: onScanDni,
+          icon: const Icon(Icons.qr_code_scanner_outlined),
+          label: const Text('Escanear DNI'),
+        ),
+        const SizedBox(height: 12),
         FloatingActionButton.extended(
           heroTag: 'players-massive',
           onPressed: onMassive,
@@ -1222,6 +2047,8 @@ class _MassivePlayersPageState extends ConsumerState<_MassivePlayersPage> {
   final _formKey = GlobalKey<FormState>();
   final List<_MassivePlayerRow> _rows = [];
   final ScrollController _horizontalScrollController = ScrollController();
+  final RegExp _dniRegex = RegExp(r'^\d{6,9}$');
+  Map<int, String> _dniErrors = {};
   bool _isSaving = false;
 
   @override
@@ -1280,6 +2107,67 @@ class _MassivePlayersPageState extends ConsumerState<_MassivePlayersPage> {
     return null;
   }
 
+  String? _dniValidator(String? value, _MassivePlayerRow row, int rowIndex) {
+    if (_rowIsBlank(row)) {
+      return null;
+    }
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) {
+      return 'Obligatorio';
+    }
+    if (!_dniRegex.hasMatch(text)) {
+      return 'DNI inválido (6 a 9 dígitos)';
+    }
+    return _dniErrors[rowIndex];
+  }
+
+  Map<int, String> _collectDniErrors(List<_IndexedMassiveRow> rows) {
+    final errors = <int, String>{};
+    final seen = <String, int>{};
+
+    for (final entry in rows) {
+      final dni = entry.row.dniController.text.trim();
+      if (!_dniRegex.hasMatch(dni)) {
+        errors[entry.index] = 'DNI inválido (6 a 9 dígitos)';
+        continue;
+      }
+
+      final duplicatedAt = seen[dni];
+      if (duplicatedAt != null) {
+        errors[duplicatedAt] = 'DNI duplicado en la planilla';
+        errors[entry.index] = 'DNI duplicado en la planilla';
+        continue;
+      }
+
+      seen[dni] = entry.index;
+    }
+
+    return errors;
+  }
+
+  Future<Set<String>> _findExistingDnis(Set<String> dnis) async {
+    final api = ref.read(apiClientProvider);
+    final existingDnis = <String>{};
+
+    for (final dni in dnis) {
+      final response = await api.get<Map<String, dynamic>>(
+        '/players',
+        queryParameters: {
+          'dni': dni,
+          'page': 1,
+          'pageSize': 1,
+        },
+      );
+      final data = response.data ?? const <String, dynamic>{};
+      final paginated = PaginatedPlayers.fromJson(data);
+      if (paginated.players.any((player) => player.dni.trim() == dni)) {
+        existingDnis.add(dni);
+      }
+    }
+
+    return existingDnis;
+  }
+
   Future<void> _saveRows() async {
     if (_isSaving) {
       return;
@@ -1292,13 +2180,32 @@ class _MassivePlayersPageState extends ConsumerState<_MassivePlayersPage> {
       return;
     }
 
-    final playersToSave = _rows.where((row) => !row.isBlank).toList();
-    if (playersToSave.isEmpty) {
+    final rowsToSave = [
+      for (var index = 0; index < _rows.length; index++)
+        if (!_rows[index].isBlank) _IndexedMassiveRow(index: index, row: _rows[index]),
+    ];
+    if (rowsToSave.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Cargá al menos un jugador.')),
       );
       return;
     }
+
+    final dniErrors = _collectDniErrors(rowsToSave);
+    if (dniErrors.isNotEmpty) {
+      setState(() {
+        _dniErrors = dniErrors;
+      });
+      _formKey.currentState?.validate();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Revisá los DNI marcados en rojo.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _dniErrors = {};
+    });
 
     setState(() {
       _isSaving = true;
@@ -1307,7 +2214,23 @@ class _MassivePlayersPageState extends ConsumerState<_MassivePlayersPage> {
     final api = ref.read(apiClientProvider);
 
     try {
-      for (final row in playersToSave) {
+      final uniqueDnis = rowsToSave
+          .map((entry) => entry.row.dniController.text.trim())
+          .toSet();
+      final existingDnis = await _findExistingDnis(uniqueDnis);
+
+      var createdCount = 0;
+      var skippedExistingCount = 0;
+
+      for (final entry in rowsToSave) {
+        final row = entry.row;
+        final dni = row.dniController.text.trim();
+
+        if (existingDnis.contains(dni)) {
+          skippedExistingCount++;
+          continue;
+        }
+
         final birthDate = _parseBirthDate(row.birthDateController.text.trim());
         final payload = {
           'firstName': row.firstNameController.text.trim(),
@@ -1331,12 +2254,18 @@ class _MassivePlayersPageState extends ConsumerState<_MassivePlayersPage> {
         };
 
         await api.post('/players', data: payload);
+        createdCount++;
       }
 
       if (!mounted) {
         return;
       }
-      Navigator.of(context).pop(true);
+      Navigator.of(context).pop(
+        _MassivePlayersSaveResult(
+          createdCount: createdCount,
+          skippedExistingCount: skippedExistingCount,
+        ),
+      );
     } on DioException catch (error) {
       if (!mounted) {
         return;
@@ -1482,14 +2411,21 @@ class _MassivePlayersPageState extends ConsumerState<_MassivePlayersPage> {
                   width: 130,
                   child: TextFormField(
                     controller: _rows[index].dniController,
+                    onChanged: (_) {
+                      if (_dniErrors.containsKey(index)) {
+                        setState(() {
+                          _dniErrors = {..._dniErrors}..remove(index);
+                        });
+                      }
+                    },
                     decoration: const InputDecoration(
                       hintText: 'DNI',
                     ),
                     keyboardType: TextInputType.number,
-                    validator: (value) => _requiredValidator(
+                    validator: (value) => _dniValidator(
                       value,
                       _rows[index],
-                      'Obligatorio',
+                      index,
                     ),
                   ),
                 ),
@@ -1502,11 +2438,6 @@ class _MassivePlayersPageState extends ConsumerState<_MassivePlayersPage> {
                     decoration: const InputDecoration(
                       hintText: 'Calle',
                     ),
-                    validator: (value) => _requiredValidator(
-                      value,
-                      _rows[index],
-                      'Obligatorio',
-                    ),
                   ),
                 ),
               ),
@@ -1518,11 +2449,6 @@ class _MassivePlayersPageState extends ConsumerState<_MassivePlayersPage> {
                     decoration: const InputDecoration(
                       hintText: 'N°',
                     ),
-                    validator: (value) => _requiredValidator(
-                      value,
-                      _rows[index],
-                      'Obligatorio',
-                    ),
                   ),
                 ),
               ),
@@ -1533,11 +2459,6 @@ class _MassivePlayersPageState extends ConsumerState<_MassivePlayersPage> {
                     controller: _rows[index].cityController,
                     decoration: const InputDecoration(
                       hintText: 'Localidad',
-                    ),
-                    validator: (value) => _requiredValidator(
-                      value,
-                      _rows[index],
-                      'Obligatorio',
                     ),
                   ),
                 ),
@@ -1732,6 +2653,35 @@ class _MassivePlayerRow {
     emergencyNameController.dispose();
     emergencyRelationshipController.dispose();
     emergencyPhoneController.dispose();
+  }
+}
+
+class _IndexedMassiveRow {
+  _IndexedMassiveRow({required this.index, required this.row});
+
+  final int index;
+  final _MassivePlayerRow row;
+}
+
+class _MassivePlayersSaveResult {
+  _MassivePlayersSaveResult({
+    required this.createdCount,
+    required this.skippedExistingCount,
+  });
+
+  final int createdCount;
+  final int skippedExistingCount;
+
+  bool get hasChanges => createdCount > 0 || skippedExistingCount > 0;
+
+  String get message {
+    if (createdCount > 0 && skippedExistingCount > 0) {
+      return 'Se cargaron $createdCount jugadores. Se omitieron $skippedExistingCount por DNI ya existente.';
+    }
+    if (createdCount > 0) {
+      return 'Se cargaron $createdCount jugadores correctamente.';
+    }
+    return 'No se cargaron jugadores nuevos. Se omitieron $skippedExistingCount por DNI ya existente.';
   }
 }
 
@@ -2316,12 +3266,6 @@ class _PlayerFormDialogState extends ConsumerState<_PlayerFormDialog> {
                     decoration: const InputDecoration(
                       labelText: 'Calle',
                     ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'La calle es obligatoria.';
-                      }
-                      return null;
-                    },
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -2332,12 +3276,6 @@ class _PlayerFormDialogState extends ConsumerState<_PlayerFormDialog> {
                     decoration: const InputDecoration(
                       labelText: 'Número',
                     ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Obligatorio';
-                      }
-                      return null;
-                    },
                   ),
                 ),
               ],
@@ -2349,12 +3287,6 @@ class _PlayerFormDialogState extends ConsumerState<_PlayerFormDialog> {
               decoration: const InputDecoration(
                 labelText: 'Localidad',
               ),
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'La localidad es obligatoria.';
-                }
-                return null;
-              },
             ),
             const SizedBox(height: 16),
             SwitchListTile.adaptive(

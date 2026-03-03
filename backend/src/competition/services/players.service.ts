@@ -1,5 +1,20 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  InternalServerErrorException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  UnprocessableEntityException,
+  UnsupportedMediaTypeException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { constants } from 'node:fs';
+import { access, mkdir, unlink, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { Action, Gender, Module, Prisma, Scope } from '@prisma/client';
+import * as sharp from 'sharp';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { RequestUser } from '../../common/interfaces/request-user.interface';
@@ -7,6 +22,51 @@ import { CreatePlayerDto } from '../dto/create-player.dto';
 import { ListPlayersDto } from '../dto/list-players.dto';
 import { SearchPlayersDto } from '../dto/search-players.dto';
 import { UpdatePlayerDto } from '../dto/update-player.dto';
+import { ScanDniResultDto } from '../dto/scan-dni-result.dto';
+import { parseDniPdf417Payload } from '../utils/dni-pdf417-parser';
+
+const DEFAULT_DNI_SCAN_DECODER_COMMAND = '/usr/local/bin/dni-pdf417-decoder';
+const DEFAULT_DECODER_TIMEOUT_MS = 1_200;
+const DEFAULT_SCAN_DEADLINE_MS = 8_000;
+const DECODER_FILE_PLACEHOLDER_TOKENS = new Set(['{file}', '__INPUT_FILE__']);
+
+class DecoderUnavailableError extends Error {}
+class DecoderTimeoutError extends Error {}
+class ScanDeadlineExceededError extends Error {}
+
+type DecoderInputMode = 'stdin' | 'file';
+
+type DecoderCommandSpec = {
+  binary: string;
+  args: string[];
+  inputMode: DecoderInputMode;
+  inputFileToken?: string;
+};
+
+type DecoderRunResult = {
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+  spawnElapsedMs?: number;
+  wrapperElapsedMs?: number;
+};
+
+type DecoderAttemptDetail = DecoderRunResult & {
+  elapsedMs: number;
+  payloadRaw: string;
+};
+
+type DecodePdf417Detail = {
+  payloadRaw: string;
+  stdoutRaw: string;
+  stderrRaw: string;
+  exitCode: number | null;
+  elapsedMs: number;
+  decoderCommand: string;
+  decoderBinary: string;
+  requestId: string;
+  tempRoiPath?: string;
+};
 
 type PlayerWithMemberships = Prisma.PlayerGetPayload<{
   include: {
@@ -21,7 +81,12 @@ type PlayerWithMemberships = Prisma.PlayerGetPayload<{
 
 @Injectable()
 export class PlayersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
+  ) {}
+
+  private readonly logger = new Logger(PlayersService.name);
 
   private readonly include = {
     playerTournamentClubs: {
@@ -36,6 +101,8 @@ export class PlayersService {
       },
     },
   } satisfies Prisma.PlayerInclude;
+
+  private writableTmpDirPromise: Promise<string> | null = null;
 
   async create(dto: CreatePlayerDto) {
     await this.ensureUniqueDni(dto.dni);
@@ -63,6 +130,741 @@ export class PlayersService {
     } catch (error) {
       throw this.handlePrismaError(error);
     }
+  }
+
+  async scanDniFromImage(file?: Express.Multer.File): Promise<ScanDniResultDto> {
+    if (!file) {
+      throw new BadRequestException('Debe adjuntar una imagen.');
+    }
+
+    if (!file.mimetype.startsWith('image/')) {
+      throw new UnsupportedMediaTypeException('Solo se admiten imágenes para escanear DNI.');
+    }
+
+    const metadata = await sharp(file.buffer, { failOn: 'none' }).metadata();
+    const debugEnabled = this.isScanDebugEnabled();
+    const requestId = randomUUID();
+    const scanDeadlineMs = this.getScanDeadlineMs();
+
+    const t0 = Date.now();
+    this.logger.log(
+      `[DNI_SCAN][requestId=${requestId}][t0] incoming file mimetype=${file.mimetype} size=${file.size} width=${metadata.width ?? 'unknown'} height=${metadata.height ?? 'unknown'}`,
+    );
+    this.logger.log(
+      `[DNI_SCAN][requestId=${requestId}][phase=scan][start] deadlineMs=${scanDeadlineMs}`,
+    );
+
+    try {
+      const decodeDetail = await this.decodePdf417Payload(file.buffer, t0, requestId, false, scanDeadlineMs);
+      const payload = decodeDetail.payloadRaw;
+      const tokensCount = payload.split('@').length;
+      if (debugEnabled) {
+        this.logger.log(`[DNI_SCAN][requestId=${requestId}] payloadRaw=${payload}`);
+      }
+      this.logger.log(
+        `[DNI_SCAN][requestId=${requestId}] decoder payload stats payloadLength=${payload.length} tokensCount=${tokensCount}`,
+      );
+      if (tokensCount < 5) {
+        throw new UnprocessableEntityException(
+          debugEnabled
+            ? {
+                message: 'decoded but unexpected format',
+                payloadRaw: payload,
+                stdoutRaw: decodeDetail.stdoutRaw,
+              }
+            : 'decoded but unexpected format',
+        );
+      }
+      const parsed = parseDniPdf417Payload(payload);
+      return parsed;
+    } finally {
+      this.logger.log(
+        `[DNI_SCAN][requestId=${requestId}][phase=scan][end] elapsedMs=${Date.now() - t0}`,
+      );
+      this.logger.log(`[DNI_SCAN][requestId=${requestId}][tEnd] totalElapsedMs=${Date.now() - t0}`);
+    }
+  }
+
+  async scanDniDiagnostic(file?: Express.Multer.File) {
+    if (!this.isScanDebugEnabled()) {
+      throw new NotFoundException('Not Found');
+    }
+
+    if (!file) {
+      throw new BadRequestException('Debe adjuntar una imagen.');
+    }
+
+    if (!file.mimetype.startsWith('image/')) {
+      throw new UnsupportedMediaTypeException('Solo se admiten imágenes para escanear DNI.');
+    }
+
+    const requestId = randomUUID();
+    const decodeDetail = await this.decodePdf417Payload(
+      file.buffer,
+      Date.now(),
+      requestId,
+      true,
+      this.getScanDeadlineMs(),
+    );
+    const payloadLength = decodeDetail.payloadRaw.length;
+    const tokensCount = decodeDetail.payloadRaw ? decodeDetail.payloadRaw.split('@').length : 0;
+    return {
+      requestId,
+      decoderCommand: decodeDetail.decoderCommand,
+      decoderBinary: decodeDetail.decoderBinary,
+      mimetype: file.mimetype,
+      size: file.size,
+      payloadRaw: decodeDetail.payloadRaw,
+      stdoutRaw: decodeDetail.stdoutRaw,
+      stderrRaw: decodeDetail.stderrRaw,
+      payloadLength,
+      tokensCount,
+      exitCode: decodeDetail.exitCode,
+      elapsedMs: decodeDetail.elapsedMs,
+      tempRoiPath: decodeDetail.tempRoiPath,
+    };
+  }
+
+  private async decodePdf417Payload(
+    imageBuffer: Buffer,
+    t0: number,
+    requestId: string,
+    diagnosticsMode = false,
+    scanDeadlineMs = DEFAULT_SCAN_DEADLINE_MS,
+  ): Promise<DecodePdf417Detail> {
+    const decoderSpec = this.resolveDecoderCommandSpec();
+    const debugEnabled = this.isScanDebugEnabled();
+    const debugKeepTmpEnabled = this.isScanDebugKeepTmpEnabled();
+    const decoderCommand = `${decoderSpec.binary} ${decoderSpec.args.join(' ')}`.trim();
+    const resolvedBinary = await this.resolveBinaryPath(decoderSpec.binary);
+    let lastAttempt: DecoderAttemptDetail | null = null;
+    let tempRoiPath: string | undefined;
+
+    try {
+      const preprocessed = await this.preprocessDecodeImage(imageBuffer);
+      this.logger.log(
+        `[DNI_SCAN][requestId=${requestId}][t1] preprocess elapsedMs=${Date.now() - t0} resized=${preprocessed.resizedWidth}x${preprocessed.resizedHeight} roi=${preprocessed.roiWidth}x${preprocessed.roiHeight}`,
+      );
+      this.logger.log(
+        `[DNI_SCAN][requestId=${requestId}][t1b] roi buffer info byteLength=${preprocessed.roiRawByteLength}`,
+      );
+      this.logger.log(
+        `[DNI_SCAN][requestId=${requestId}][t1c] png encode info byteLength=${preprocessed.roiPngByteLength}`,
+      );
+      if (debugEnabled) {
+        this.logger.log(
+          `[DNI_SCAN][requestId=${requestId}][debug] resizedW,H=${preprocessed.resizedWidth},${preprocessed.resizedHeight}`,
+        );
+        this.logger.log(
+          `[DNI_SCAN][requestId=${requestId}][debug] extract params ${JSON.stringify(preprocessed.extractParams)}`,
+        );
+
+        const tmpDir = '/tmp';
+        const tempFullPath = join(tmpDir, `dni-full-${requestId}.png`);
+        tempRoiPath = join(tmpDir, `dni-roi-${requestId}.png`);
+        await writeFile(tempFullPath, preprocessed.resizedBuffer);
+        await writeFile(tempRoiPath, preprocessed.roiBuffer);
+        this.logger.log(
+          `[DNI_SCAN][requestId=${requestId}][tmp] savedFull=${tempFullPath} bytes=${preprocessed.resizedBuffer.byteLength}`,
+        );
+        this.logger.log(
+          `[DNI_SCAN][requestId=${requestId}][tmp] savedBaseRoi=${tempRoiPath} bytes=${preprocessed.roiBuffer.byteLength}`,
+        );
+      }
+
+      this.logger.log(
+        `[DNI_SCAN][requestId=${requestId}] commandFinal=${decoderCommand} resolvedBinary=${resolvedBinary}`,
+      );
+      this.logger.log(`[DNI_SCAN][requestId=${requestId}][t1d] enter decode loop`);
+      const decoderTimeoutMs = this.getDecoderTimeoutMs();
+      const decodeTargets = {
+        roi: preprocessed.roiBuffer,
+        full: preprocessed.resizedBuffer,
+      } as const;
+      let attemptIndex = 0;
+      const runAttempt = async (
+        targetName: 'roi' | 'full',
+        strategy: { name: string; rotation: number; buffer: Buffer },
+      ) => {
+        attemptIndex += 1;
+        this.throwIfDeadlineExceeded(t0, scanDeadlineMs, requestId, `before variant ${attemptIndex}`);
+        this.logger.log(
+          `[DNI_SCAN][requestId=${requestId}][phase=variant][start] variant=${attemptIndex} target=${targetName} strategy=${strategy.name} rotation=${strategy.rotation} totalElapsedMs=${Date.now() - t0}`,
+        );
+
+        if (debugEnabled && debugKeepTmpEnabled) {
+          const tmpDir = await this.resolveWritableTmpDir();
+          const strategyPath = join(
+            tmpDir,
+            `dni-${targetName}-${requestId}-${strategy.name}-rot${strategy.rotation}.png`,
+          );
+          await writeFile(strategyPath, strategy.buffer);
+          this.logger.log(
+            `[DNI_SCAN][requestId=${requestId}][tmp] savedVariant=${strategyPath} bytes=${strategy.buffer.byteLength}`,
+          );
+        }
+
+        const startedAt = Date.now();
+        try {
+          const result = await this.runDecoder(
+            decoderSpec,
+            strategy.buffer,
+            decoderTimeoutMs,
+            requestId,
+          );
+          const elapsedMs = Date.now() - startedAt;
+          const stdoutRaw = result.stdout.trim();
+          const stderrRaw = result.stderr.trim();
+          const payload = this.extractPayloadFromDecoderOutput(stdoutRaw);
+          lastAttempt = { ...result, elapsedMs, payloadRaw: payload };
+          if (debugEnabled) {
+            this.logger.log(`[DNI_SCAN][requestId=${requestId}] stdoutRaw=${stdoutRaw}`);
+            this.logger.log(`[DNI_SCAN][requestId=${requestId}] stderrRaw=${stderrRaw}`);
+          } else {
+            this.logger.log(
+              `[DNI_SCAN][requestId=${requestId}] decoder io stdoutLength=${stdoutRaw.length} stderrLength=${stderrRaw.length}`,
+            );
+          }
+          this.logger.log(
+            `[DNI_SCAN][requestId=${requestId}] decoder run exitCode=${result.exitCode} elapsedMs=${elapsedMs} spawnElapsedMs=${result.spawnElapsedMs ?? -1} wrapperElapsedMs=${result.wrapperElapsedMs ?? -1}`,
+          );
+          if (result.exitCode !== 0) {
+            throw new Error(
+              `decoder exited with code ${result.exitCode}${stderrRaw ? ` stderr=${stderrRaw}` : ''}`,
+            );
+          }
+          if (!payload) {
+            throw new Error('empty decoder output');
+          }
+          if (debugEnabled) {
+            this.logger.log(`[DNI_SCAN][requestId=${requestId}] payloadRaw=${payload}`);
+          }
+          this.logger.log(
+            `[DNI_SCAN][requestId=${requestId}] payloadLength=${payload.length} tokensCount=${payload.split('@').length}`,
+          );
+          this.logger.log(
+            `[DNI_SCAN][requestId=${requestId}][phase=variant][end] variant=${attemptIndex} target=${targetName} strategy=${strategy.name} rotation=${strategy.rotation} result=ok elapsedMs=${elapsedMs} totalElapsedMs=${Date.now() - t0}`,
+          );
+
+          return {
+            payloadRaw: payload,
+            stdoutRaw,
+            stderrRaw,
+            exitCode: result.exitCode,
+            elapsedMs,
+            decoderCommand,
+            decoderBinary: resolvedBinary,
+            requestId,
+            tempRoiPath,
+          };
+        } catch (error) {
+          if (error instanceof DecoderUnavailableError) {
+            if (debugEnabled) {
+              this.logger.error(`[DNI_SCAN] decoder unavailable error=${error.message}`);
+            }
+            throw new InternalServerErrorException(`DNI scan decoder unavailable: ${error.message}`);
+          }
+
+          const elapsedMs = Date.now() - startedAt;
+          const errorMessage =
+            error instanceof DecoderTimeoutError
+              ? 'timeout'
+              : error instanceof Error
+                ? error.message
+                : 'unknown decoder error';
+          this.logger.warn(
+            `[DNI_SCAN][requestId=${requestId}][phase=variant][end] variant=${attemptIndex} target=${targetName} strategy=${strategy.name} rotation=${strategy.rotation} result=fail elapsedMs=${elapsedMs} totalElapsedMs=${Date.now() - t0} error=${errorMessage}`,
+          );
+          return null;
+        }
+      };
+
+      const roiRawResult = await runAttempt('roi', {
+        name: 'raw',
+        rotation: 0,
+        buffer: decodeTargets.roi,
+      });
+      if (roiRawResult) {
+        return roiRawResult;
+      }
+
+      const fullRawResult = await runAttempt('full', {
+        name: 'raw',
+        rotation: 0,
+        buffer: decodeTargets.full,
+      });
+      if (fullRawResult) {
+        return fullRawResult;
+      }
+
+      this.throwIfDeadlineExceeded(t0, scanDeadlineMs, requestId, 'before fallback strategies');
+      this.logger.log(
+        `[DNI_SCAN][requestId=${requestId}][phase=fallback][start] totalElapsedMs=${Date.now() - t0}`,
+      );
+
+      const fallbackAttempts = [
+        {
+          targetName: 'full' as const,
+          strategies: (await this.buildDecodeStrategies(decodeTargets.full)).filter(
+            (strategy) => !(strategy.name === 'raw' && strategy.rotation === 0),
+          ),
+        },
+        {
+          targetName: 'roi' as const,
+          strategies: (await this.buildDecodeStrategies(decodeTargets.roi)).filter(
+            (strategy) => !(strategy.name === 'raw' && strategy.rotation === 0),
+          ),
+        },
+      ];
+
+      for (const attemptGroup of fallbackAttempts) {
+        for (const strategy of attemptGroup.strategies) {
+          const fallbackResult = await runAttempt(attemptGroup.targetName, strategy);
+          if (fallbackResult) {
+            this.logger.log(
+              `[DNI_SCAN][requestId=${requestId}][phase=fallback][end] result=ok totalElapsedMs=${Date.now() - t0}`,
+            );
+            return fallbackResult;
+          }
+        }
+      }
+
+      this.logger.log(
+        `[DNI_SCAN][requestId=${requestId}][phase=fallback][end] result=fail totalElapsedMs=${Date.now() - t0}`,
+      );
+
+      if (diagnosticsMode) {
+        return {
+          payloadRaw: lastAttempt?.payloadRaw ?? '',
+          stdoutRaw: lastAttempt?.stdout ?? '',
+          stderrRaw: lastAttempt?.stderr ?? '',
+          exitCode: lastAttempt?.exitCode ?? null,
+          elapsedMs: lastAttempt?.elapsedMs ?? 0,
+          decoderCommand,
+          decoderBinary: resolvedBinary,
+          requestId,
+          tempRoiPath,
+        };
+      }
+      throw new Error('all decoder variants failed');
+    } catch (error) {
+      if (error instanceof InternalServerErrorException) {
+        throw error;
+      }
+      if (error instanceof ScanDeadlineExceededError) {
+        throw new UnprocessableEntityException('timeout scan');
+      }
+      if (debugEnabled) {
+        this.logger.warn('DNI scan failed to decode.');
+      }
+      throw new UnprocessableEntityException('No se pudo decodificar el PDF417.');
+    } finally {
+      if (tempRoiPath && debugEnabled) {
+        this.logger.log(`[DNI_SCAN][requestId=${requestId}][tmp] keepingRoi=${tempRoiPath}`);
+      }
+    }
+  }
+
+  private throwIfDeadlineExceeded(
+    startedAt: number,
+    deadlineMs: number,
+    requestId: string,
+    phase: string,
+  ): void {
+    const elapsedMs = Date.now() - startedAt;
+    if (elapsedMs <= deadlineMs) {
+      return;
+    }
+
+    this.logger.warn(
+      `[DNI_SCAN][requestId=${requestId}][phase=deadline] exceeded=true elapsedMs=${elapsedMs} deadlineMs=${deadlineMs} at=${phase}`,
+    );
+    throw new ScanDeadlineExceededError(`deadline exceeded after ${elapsedMs}ms`);
+  }
+
+  private getScanDeadlineMs(): number {
+    const raw = this.configService.get('SCAN_DEADLINE_MS') ?? process.env.SCAN_DEADLINE_MS;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : DEFAULT_SCAN_DEADLINE_MS;
+  }
+
+  private getDecoderTimeoutMs(): number {
+    const raw =
+      this.configService.get('SCAN_DECODER_TIMEOUT_MS') ?? process.env.SCAN_DECODER_TIMEOUT_MS;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : DEFAULT_DECODER_TIMEOUT_MS;
+  }
+
+  private resolveDecoderCommandSpec(): DecoderCommandSpec {
+    const rawCommand = this.configService.get('DNI_SCAN_DECODER_COMMAND');
+    const command =
+      typeof rawCommand === 'string' && rawCommand.trim().length > 0
+        ? rawCommand.trim()
+        : DEFAULT_DNI_SCAN_DECODER_COMMAND;
+    const [binary, ...args] = command.split(/\s+/).filter(Boolean);
+    const inputFileToken = args.find((arg) => DECODER_FILE_PLACEHOLDER_TOKENS.has(arg));
+    return {
+      binary,
+      args,
+      inputMode: inputFileToken ? 'file' : 'stdin',
+      inputFileToken,
+    };
+  }
+
+  private runDecoder(
+    decoderSpec: DecoderCommandSpec,
+    input: Buffer,
+    timeoutMs: number,
+    requestId?: string,
+  ): Promise<DecoderRunResult> {
+    if (decoderSpec.inputMode === 'file') {
+      return this.runDecoderUsingInputFile(decoderSpec, input, timeoutMs, requestId);
+    }
+    return this.runDecoderUsingStdin(
+      decoderSpec.binary,
+      decoderSpec.args,
+      input,
+      timeoutMs,
+      requestId,
+    );
+  }
+
+  private runDecoderUsingStdin(
+    binary: string,
+    args: string[],
+    input: Buffer,
+    timeoutMs: number,
+    requestId?: string,
+  ): Promise<DecoderRunResult> {
+    return new Promise<DecoderRunResult>((resolve, reject) => {
+      const wrapperStartedAt = Date.now();
+      const spawnStartedAt = Date.now();
+      const child = spawn(binary, args, { stdio: ['pipe', 'pipe', 'pipe'] });
+      const spawnElapsedMs = Date.now() - spawnStartedAt;
+      if (requestId) {
+        this.logger.log(
+          `[DNI_SCAN][requestId=${requestId}][t1f] after spawn started spawnElapsedMs=${spawnElapsedMs} binary=${binary}`,
+        );
+      }
+      const chunks: Buffer[] = [];
+      const errors: Buffer[] = [];
+      let settled = false;
+
+      const timeoutHandle = setTimeout(() => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        child.kill('SIGKILL');
+        this.logger.warn(`[DNI_SCAN] decoder timeout timeoutMs=${timeoutMs}`);
+        reject(new DecoderTimeoutError(`timeout after ${timeoutMs}ms`));
+      }, timeoutMs);
+
+      child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
+      child.stderr.on('data', (chunk: Buffer) => errors.push(chunk));
+      child.on('error', (error: NodeJS.ErrnoException) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timeoutHandle);
+        if (error.code === 'ENOENT' || error.code === 'EACCES') {
+          reject(new DecoderUnavailableError(`${binary} (${error.code ?? 'spawn error'})`));
+          return;
+        }
+        reject(error);
+      });
+      child.on('close', (code) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timeoutHandle);
+        const wrapperElapsedMs = Date.now() - wrapperStartedAt;
+        resolve({
+          exitCode: code,
+          stdout: Buffer.concat(chunks).toString('utf-8'),
+          stderr: Buffer.concat(errors).toString('utf-8').trim(),
+          spawnElapsedMs,
+          wrapperElapsedMs,
+        });
+      });
+
+      child.stdin.write(input);
+      child.stdin.end();
+    });
+  }
+
+  private async resolveBinaryPath(binary: string): Promise<string> {
+    if (!binary) {
+      return '';
+    }
+
+    const executableExists = async (path: string): Promise<boolean> => {
+      try {
+        await access(path, constants.X_OK);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    if (binary.includes('/')) {
+      return (await executableExists(binary)) ? binary : `UNRESOLVED:${binary}`;
+    }
+
+    const pathEnv = process.env.PATH ?? '';
+    for (const dir of pathEnv.split(':').filter(Boolean)) {
+      const candidate = join(dir, binary);
+      if (await executableExists(candidate)) {
+        return candidate;
+      }
+    }
+
+    return `UNRESOLVED:${binary}`;
+  }
+
+  private async runDecoderUsingInputFile(
+    decoderSpec: DecoderCommandSpec,
+    input: Buffer,
+    timeoutMs: number,
+    requestId?: string,
+  ): Promise<DecoderRunResult> {
+    const tmpDir = await this.resolveWritableTmpDir();
+    const tempPath = join(tmpDir, `dni-scan-input-${randomUUID()}.png`);
+    await writeFile(tempPath, input);
+
+    try {
+      const args = decoderSpec.args.map((arg) =>
+        arg === decoderSpec.inputFileToken ? tempPath : arg,
+      );
+      return await this.runDecoderUsingStdin(
+        decoderSpec.binary,
+        args,
+        Buffer.alloc(0),
+        timeoutMs,
+        requestId,
+      );
+    } finally {
+      await this.cleanupTempInputFile(tempPath);
+    }
+  }
+
+  private isScanDebugKeepTmpEnabled(): boolean {
+    const rawValue =
+      this.configService.get('SCAN_DEBUG_KEEP_TMP') ?? process.env.SCAN_DEBUG_KEEP_TMP;
+    return this.parseEnvBool(rawValue, false);
+  }
+
+  private resolveWritableTmpDir(): Promise<string> {
+    if (!this.writableTmpDirPromise) {
+      this.writableTmpDirPromise = this.findWritableTmpDir();
+    }
+    return this.writableTmpDirPromise;
+  }
+
+  private async findWritableTmpDir(): Promise<string> {
+    const candidates = ['/tmp', '/app/tmp'];
+
+    for (const candidate of candidates) {
+      try {
+        await mkdir(candidate, { recursive: true });
+        await access(candidate, constants.W_OK);
+        this.logger.log(`[DNI_SCAN] writable tmp dir selected path=${candidate}`);
+        return candidate;
+      } catch {
+        this.logger.warn(`[DNI_SCAN] tmp dir unavailable path=${candidate}`);
+      }
+    }
+
+    throw new InternalServerErrorException('No writable tmp directory available for DNI scan.');
+  }
+
+  private async cleanupTempInputFile(path: string): Promise<void> {
+    try {
+      await unlink(path);
+    } catch (error) {
+      if (
+        error &&
+        typeof error === 'object' &&
+        'code' in error &&
+        (error as { code?: string }).code === 'ENOENT'
+      ) {
+        return;
+      }
+      this.logger.warn(
+        `[DNI_SCAN] input temp file cleanup failed path=${path} error=${error instanceof Error ? error.message : 'unknown'}`,
+      );
+    }
+  }
+
+  private async preprocessDecodeImage(imageBuffer: Buffer) {
+    const normalized = sharp(imageBuffer, { failOn: 'none' }).rotate();
+    const metadata = await normalized.metadata();
+    const resizedBuffer = await normalized
+      .clone()
+      .resize({ width: 1800, height: 1350, fit: 'fill' })
+      .png({ compressionLevel: 3 })
+      .toBuffer();
+    const resizedMetadata = await sharp(resizedBuffer, { failOn: 'none' }).metadata();
+
+    const resizedWidth = resizedMetadata.width ?? metadata.width ?? 0;
+    const resizedHeight = resizedMetadata.height ?? metadata.height ?? 0;
+    const extractLeft = Math.max(0, Math.floor(resizedWidth * 0.05));
+    const extractTop = Math.max(0, Math.floor(resizedHeight * 0.55));
+    const extractWidth = Math.max(
+      1,
+      Math.min(resizedWidth - extractLeft, Math.floor(resizedWidth * 0.9)),
+    );
+    const extractHeight = Math.max(
+      1,
+      Math.min(resizedHeight - extractTop, Math.floor(resizedHeight * 0.4)),
+    );
+
+    const extracted = sharp(resizedBuffer, { failOn: 'none' }).extract({
+      left: extractLeft,
+      top: extractTop,
+      width: extractWidth,
+      height: extractHeight,
+    });
+    const roiRawBuffer = await extracted.clone().raw().toBuffer();
+    const roiBuffer = await extracted.clone().png({ compressionLevel: 3 }).toBuffer();
+
+    return {
+      roiBuffer,
+      roiRawByteLength: roiRawBuffer.length,
+      roiPngByteLength: roiBuffer.length,
+      resizedBuffer,
+      resizedWidth,
+      resizedHeight,
+      roiWidth: extractWidth,
+      roiHeight: extractHeight,
+      extractParams: {
+        left: extractLeft,
+        top: extractTop,
+        width: extractWidth,
+        height: extractHeight,
+      },
+    };
+  }
+
+  private async buildDecodeStrategies(imageBuffer: Buffer) {
+    const rotations = [0, 90, 180, 270] as const;
+    const strategies: Array<{ name: string; rotation: number; buffer: Buffer }> = [];
+    const image = sharp(imageBuffer, { failOn: 'none' }).rotate();
+    const metadata = await image.metadata();
+
+    const pushUnique = (name: string, rotation: number, buffer: Buffer) => {
+      if (!strategies.some((strategy) => strategy.buffer.equals(buffer))) {
+        strategies.push({ name, rotation, buffer });
+      }
+    };
+
+    for (const rotation of rotations) {
+      const base = image.clone().rotate(rotation);
+      pushUnique('raw', rotation, await base.clone().png({ compressionLevel: 3 }).toBuffer());
+      pushUnique(
+        'grayscale',
+        rotation,
+        await base.clone().greyscale().normalize().png({ compressionLevel: 3 }).toBuffer(),
+      );
+      pushUnique(
+        'threshold',
+        rotation,
+        await base
+          .clone()
+          .greyscale()
+          .normalize()
+          .threshold(165)
+          .png({ compressionLevel: 3 })
+          .toBuffer(),
+      );
+
+      if (metadata.width && metadata.height) {
+        pushUnique(
+          'upscale_x2',
+          rotation,
+          await base
+            .clone()
+            .resize({
+              width: metadata.width * 2,
+              height: metadata.height * 2,
+              kernel: sharp.kernel.nearest,
+            })
+            .normalize()
+            .sharpen()
+            .png({ compressionLevel: 3 })
+            .toBuffer(),
+        );
+        pushUnique(
+          'upscale_x3',
+          rotation,
+          await base
+            .clone()
+            .resize({
+              width: metadata.width * 3,
+              height: metadata.height * 3,
+              kernel: sharp.kernel.nearest,
+            })
+            .normalize()
+            .sharpen()
+            .png({ compressionLevel: 3 })
+            .toBuffer(),
+        );
+      }
+    }
+
+    return strategies;
+  }
+
+  private isScanDebugEnabled(): boolean {
+    const rawValue =
+      this.configService.get('SCAN_DEBUG') ??
+      this.configService.get('DNI_SCAN_DEBUG') ??
+      process.env.SCAN_DEBUG;
+    return this.parseEnvBool(rawValue, false);
+  }
+
+  private parseEnvBool(v: unknown, defaultValue = false): boolean {
+    if (v === undefined || v === null) return defaultValue;
+    if (typeof v === 'boolean') return v;
+    if (typeof v === 'number') return v === 1;
+    if (typeof v !== 'string') return defaultValue;
+
+    const s = v.trim().toLowerCase();
+    if (['1', 'true', 'yes', 'y', 'on'].includes(s)) return true;
+    if (['0', 'false', 'no', 'n', 'off', ''].includes(s)) return false;
+    return defaultValue;
+  }
+
+  private extractPayloadFromDecoderOutput(output: string): string {
+    const trimmed = output.trim();
+    if (!trimmed) {
+      return '';
+    }
+
+    const lines = trimmed
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    for (const line of lines) {
+      const atIndex = line.indexOf('@');
+      if (atIndex >= 0) {
+        return line.slice(atIndex).trim();
+      }
+
+      const prefixedMatch = line.match(/^(Text|Content|Raw\s+text|Payload)\s*:\s*(.+)$/i);
+      if (prefixedMatch?.[2]) {
+        return prefixedMatch[2].trim();
+      }
+
+      if (!line.includes(':')) {
+        return line;
+      }
+    }
+
+    return '';
   }
 
   async findAll(query: ListPlayersDto, user?: RequestUser) {
@@ -108,32 +910,21 @@ export class PlayersService {
       where.gender = gender;
     }
 
-    if (
-      birthYear !== undefined &&
-      (birthYearMin !== undefined || birthYearMax !== undefined)
-    ) {
+    if (birthYear !== undefined && (birthYearMin !== undefined || birthYearMax !== undefined)) {
       throw new BadRequestException(
         'No se puede combinar el filtro por año de nacimiento único con un rango.',
       );
     }
 
-    if (
-      birthYearMin !== undefined &&
-      birthYearMax !== undefined &&
-      birthYearMin > birthYearMax
-    ) {
-      throw new BadRequestException(
-        'El año mínimo no puede ser mayor al año máximo.',
-      );
+    if (birthYearMin !== undefined && birthYearMax !== undefined && birthYearMin > birthYearMax) {
+      throw new BadRequestException('El año mínimo no puede ser mayor al año máximo.');
     }
 
     if (birthYear !== undefined) {
       const start = new Date(Date.UTC(birthYear, 0, 1));
       const end = new Date(Date.UTC(birthYear + 1, 0, 1));
       const existingBirthDateFilter =
-        where.birthDate &&
-        typeof where.birthDate === 'object' &&
-        !(where.birthDate instanceof Date)
+        where.birthDate && typeof where.birthDate === 'object' && !(where.birthDate instanceof Date)
           ? (where.birthDate as Prisma.DateTimeFilter)
           : undefined;
       where.birthDate = {
@@ -145,9 +936,7 @@ export class PlayersService {
 
     if (birthYearMin !== undefined || birthYearMax !== undefined) {
       const existingBirthDateFilter =
-        where.birthDate &&
-        typeof where.birthDate === 'object' &&
-        !(where.birthDate instanceof Date)
+        where.birthDate && typeof where.birthDate === 'object' && !(where.birthDate instanceof Date)
           ? (where.birthDate as Prisma.DateTimeFilter)
           : undefined;
       const filter: Prisma.DateTimeFilter = {
@@ -222,50 +1011,120 @@ export class PlayersService {
 
   async searchByDniAndCategory(query: SearchPlayersDto) {
     const trimmedDni = query.dni?.trim();
-    const [category, tournamentCategory] = await Promise.all([
-      this.prisma.category.findUnique({
-        where: { id: query.categoryId },
-      }),
-      this.prisma.tournamentCategory.findFirst({
-        where: {
-          tournamentId: query.tournamentId,
-          categoryId: query.categoryId,
-          enabled: true,
+    const { tournamentId, categoryId, clubId } = query;
+    let tournamentGender: Gender | null = null;
+
+    if (
+      !trimmedDni &&
+      tournamentId === undefined &&
+      categoryId === undefined &&
+      query.onlyFree !== true &&
+      clubId === undefined
+    ) {
+      throw new BadRequestException('Debe enviar al menos un filtro de búsqueda.');
+    }
+
+    if (query.onlyFree === true && clubId !== undefined) {
+      throw new BadRequestException('No se puede combinar club y jugadores libres.');
+    }
+
+    if ((query.onlyFree === true || clubId !== undefined) && tournamentId === undefined) {
+      throw new BadRequestException('El filtro por club requiere un torneo.');
+    }
+
+    if (tournamentId !== undefined) {
+      const tournament = await this.prisma.tournament.findUnique({
+        where: { id: tournamentId },
+        select: { gender: true },
+      });
+
+      if (!tournament) {
+        throw new BadRequestException('Torneo inválido.');
+      }
+
+      tournamentGender = tournament.gender;
+    }
+
+    let category: {
+      birthYearMin: number;
+      birthYearMax: number;
+      gender: Gender;
+      active: boolean;
+    } | null = null;
+
+    if (categoryId !== undefined) {
+      category = await this.prisma.category.findUnique({
+        where: { id: categoryId },
+        select: {
+          birthYearMin: true,
+          birthYearMax: true,
+          gender: true,
+          active: true,
         },
-        select: { id: true },
-      }),
-    ]);
+      });
 
-    if (!category || !category.active) {
-      throw new BadRequestException('Categoría inválida o inactiva.');
+      if (!category || !category.active) {
+        throw new BadRequestException('Categoría inválida o inactiva.');
+      }
+
+      if (tournamentId !== undefined) {
+        const tournamentCategory = await this.prisma.tournamentCategory.findFirst({
+          where: {
+            tournamentId,
+            categoryId,
+            enabled: true,
+          },
+          select: { id: true },
+        });
+
+        if (!tournamentCategory) {
+          throw new BadRequestException('La categoría no está habilitada en el torneo.');
+        }
+      }
     }
-    if (!tournamentCategory) {
-      throw new BadRequestException('La categoría no está habilitada en el torneo.');
-    }
 
-    const startDate = new Date(Date.UTC(category.birthYearMin, 0, 1));
-    const endDate = new Date(Date.UTC(category.birthYearMax, 11, 31, 23, 59, 59, 999));
-
-    const where: Prisma.PlayerWhereInput = {
-      active: true,
-      birthDate: {
-        gte: startDate,
-        lte: endDate,
-      },
-    };
+    const where: Prisma.PlayerWhereInput = { active: true };
 
     if (trimmedDni) {
-      where.dni = trimmedDni;
+      where.dni = { contains: trimmedDni, mode: 'insensitive' };
     }
 
-    if (category.gender !== Gender.MIXTO) {
-      where.gender = category.gender;
+    if (category) {
+      const startDate = new Date(Date.UTC(category.birthYearMin, 0, 1));
+      const endDate = new Date(Date.UTC(category.birthYearMax, 11, 31, 23, 59, 59, 999));
+      where.birthDate = {
+        gte: startDate,
+        lte: endDate,
+      };
+
+    }
+
+    const categoryGender =
+      category !== null && category.gender !== Gender.MIXTO ? category.gender : null;
+    const tournamentGenderFilter =
+      tournamentGender !== null && tournamentGender !== Gender.MIXTO ? tournamentGender : null;
+    if (
+      categoryGender !== null &&
+      tournamentGenderFilter !== null &&
+      categoryGender !== tournamentGenderFilter
+    ) {
+      return [];
+    }
+    if (categoryGender !== null || tournamentGenderFilter !== null) {
+      where.gender = categoryGender ?? tournamentGenderFilter;
     }
 
     const onlyFree = query.onlyFree === true;
     if (onlyFree) {
       where.playerTournamentClubs = {
-        none: { tournamentId: query.tournamentId },
+        none: { tournamentId },
+      };
+    } else if (clubId !== undefined) {
+      where.playerTournamentClubs = {
+        some: {
+          tournamentId,
+          clubId,
+        },
       };
     }
 
@@ -273,7 +1132,7 @@ export class PlayersService {
       where,
       include: {
         playerTournamentClubs: {
-          where: { tournamentId: query.tournamentId },
+          ...(tournamentId !== undefined ? { where: { tournamentId } } : { where: { id: -1 } }),
           select: {
             clubId: true,
             club: { select: { id: true, name: true } },
@@ -285,7 +1144,7 @@ export class PlayersService {
     });
 
     return players.map((player) => {
-      const assignment = player.playerTournamentClubs[0];
+      const assignment = tournamentId !== undefined ? player.playerTournamentClubs[0] : null;
       return {
         id: player.id,
         firstName: player.firstName,
@@ -306,7 +1165,7 @@ export class PlayersService {
     const relevantGrants = user.permissions.filter(
       (grant) =>
         grant.module === Module.JUGADORES &&
-        (grant.action === Action.VIEW || grant.action === Action.MANAGE)
+        (grant.action === Action.VIEW || grant.action === Action.MANAGE),
     );
 
     if (relevantGrants.length === 0) {

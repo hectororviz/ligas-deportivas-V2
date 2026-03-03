@@ -1,5 +1,5 @@
 import { Transform, Type } from 'class-transformer';
-import { IsInt, ValidateIf } from 'class-validator';
+import { IsInt, IsOptional, ValidateIf } from 'class-validator';
 
 export class AssignPlayerClubDto {
   @Type(() => Number)
@@ -11,7 +11,8 @@ export class AssignPlayerClubDto {
   @IsInt()
   clubId!: number | null;
 
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
-  categoryId!: number;
+  categoryId?: number;
 }

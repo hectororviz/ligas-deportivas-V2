@@ -8,10 +8,12 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../../core/utils/csv_download.dart';
 import '../../../core/utils/responsive.dart';
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
@@ -23,7 +25,11 @@ import 'widgets/authenticated_image.dart';
 const _moduleClubes = 'CLUBES';
 const _actionCreate = 'CREATE';
 const _actionUpdate = 'UPDATE';
+const _actionView = 'VIEW';
+const _dateFormat = 'dd/MM/yyyy';
 const double _clubLogoSize = 200;
+const int _clubLogoMinSize = 200;
+const int _clubLogoMaxSize = 500;
 
 Map<String, String> _buildImageHeaders(WidgetRef ref) {
   final token = ref.read(authControllerProvider).accessToken;
@@ -194,6 +200,13 @@ class _ClubsPageState extends ConsumerState<ClubsPage> {
       );
     }
   }
+  Future<void> _openClubRoster(Club club) async {
+    GoRouter.of(context).push(
+      '/clubs/${club.id}/roster',
+      extra: club,
+    );
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -203,6 +216,10 @@ class _ClubsPageState extends ConsumerState<ClubsPage> {
         user?.hasPermission(module: _moduleClubes, action: _actionCreate) ?? false;
     final canEdit =
         user?.hasPermission(module: _moduleClubes, action: _actionUpdate) ?? false;
+    final canViewRoster =
+        user != null &&
+        user.hasAnyRole(const ['ADMIN', 'COLLABORATOR', 'DELEGATE']) &&
+        user.hasPermission(module: _moduleClubes, action: _actionView);
     final clubsAsync = ref.watch(clubsProvider);
     final filters = ref.watch(clubsFiltersProvider);
 
@@ -356,6 +373,9 @@ class _ClubsPageState extends ConsumerState<ClubsPage> {
                             canEdit: canEdit,
                             onEdit: _openEditClub,
                             onView: _openClubDetails,
+                            onViewRoster: _openClubRoster,
+                            canViewRoster: canViewRoster,
+                            delegateClubId: user?.clubId,
                           ),
                         ),
                         const Divider(height: 1),
@@ -467,12 +487,18 @@ class _ClubsDataTable extends StatelessWidget {
     required this.canEdit,
     required this.onEdit,
     required this.onView,
+    required this.onViewRoster,
+    required this.canViewRoster,
+    required this.delegateClubId,
   });
 
   final PaginatedClubs data;
   final bool canEdit;
   final ValueChanged<Club> onEdit;
   final ValueChanged<Club> onView;
+  final ValueChanged<Club> onViewRoster;
+  final bool canViewRoster;
+  final int? delegateClubId;
 
   @override
   Widget build(BuildContext context) {
@@ -484,6 +510,7 @@ class _ClubsDataTable extends StatelessWidget {
     final headerStyle =
         theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: colors.headerText);
     final isMobile = Responsive.isMobile(context);
+    final delegateClubIdIsRequired = delegateClubId != null;
 
     final table = DataTable(
       columns: [
@@ -562,6 +589,15 @@ class _ClubsDataTable extends StatelessWidget {
                         icon: const Icon(Icons.visibility_outlined),
                         label: const Text('Detalles'),
                       ),
+                      if (canViewRoster &&
+                          (!delegateClubIdIsRequired || delegateClubId == clubs[index].id)) ...[
+                        const SizedBox(width: 8),
+                        FilledButton.icon(
+                          onPressed: () => onViewRoster(clubs[index]),
+                          icon: const Icon(Icons.groups_outlined),
+                          label: const Text('Plantel'),
+                        ),
+                      ],
                       const SizedBox(width: 8),
                       FilledButton.tonalIcon(
                         onPressed: canEdit ? () => onEdit(clubs[index]) : null,
@@ -599,6 +635,392 @@ class _ClubsDataTable extends StatelessWidget {
       },
     );
   }
+}
+
+
+class ClubRosterPage extends ConsumerStatefulWidget {
+  const ClubRosterPage({
+    super.key,
+    required this.clubId,
+    required this.clubName,
+  });
+
+  final int clubId;
+  final String clubName;
+
+  @override
+  ConsumerState<ClubRosterPage> createState() => _ClubRosterPageState();
+}
+
+class _ClubRosterPageState extends ConsumerState<ClubRosterPage> {
+  final DateFormat _birthDateFormat = DateFormat(_dateFormat);
+  bool _loading = true;
+  bool _exporting = false;
+  String? _error;
+  int? _selectedTournamentId;
+  int? _selectedCategoryId;
+  List<_RosterFilterOption> _tournaments = const [];
+  List<_RosterFilterOption> _categories = const [];
+  List<_ClubRosterRow> _rows = const [];
+  final ScrollController _tableVerticalController = ScrollController();
+  final ScrollController _tableHorizontalController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadRoster(initialLoad: true));
+  }
+
+  @override
+  void dispose() {
+    _tableVerticalController.dispose();
+    _tableHorizontalController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadRoster({required bool initialLoad}) async {
+    if (initialLoad) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
+
+    try {
+      final api = ref.read(apiClientProvider);
+      final query = <String, dynamic>{
+        if (_selectedTournamentId != null) 'tournamentId': _selectedTournamentId,
+      };
+
+      final response = await api.get<Map<String, dynamic>>(
+        '/clubs/${widget.clubId}/roster',
+        queryParameters: query,
+        options: Options(
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+          },
+        ),
+      );
+      final data = response.data ?? {};
+      final selectedTournamentId = data['selectedTournamentId'] as int?;
+      final filters = data['filters'] as Map<String, dynamic>? ?? {};
+      final tournaments = (filters['tournaments'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(_RosterFilterOption.fromJson)
+          .toList();
+      final categories = (filters['categories'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(_RosterFilterOption.fromJson)
+          .toList();
+      final rows = (data['rows'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(_ClubRosterRow.fromJson)
+          .toList();
+      setState(() {
+        _tournaments = tournaments;
+        if (selectedTournamentId != null) {
+          _selectedTournamentId = selectedTournamentId;
+        }
+        _categories = categories;
+        if (_selectedTournamentId != null &&
+            !_tournaments.any((item) => item.id == _selectedTournamentId)) {
+          _selectedTournamentId = _tournaments.isNotEmpty ? _tournaments.first.id : null;
+        }
+        if (_selectedCategoryId != null && !_categories.any((item) => item.id == _selectedCategoryId)) {
+          _selectedCategoryId = null;
+        }
+
+        final selectedCategoryName = _selectedCategoryId == null
+            ? null
+            : _categories.firstWhere(
+                (item) => item.id == _selectedCategoryId,
+                orElse: () => const _RosterFilterOption(id: 0, name: ''),
+              ).name;
+
+        final selectedRows = _selectedCategoryId == null
+            ? rows
+            : rows
+                .where(
+                  (row) =>
+                      (row.categoryId != null && row.categoryId == _selectedCategoryId) ||
+                      (selectedCategoryName != null && row.categoryName == selectedCategoryName),
+                )
+                .toList();
+        _rows = _sortRosterRows(selectedRows);
+        _loading = false;
+        _error = null;
+      });
+    } catch (error) {
+      setState(() {
+        _loading = false;
+        _error = 'No se pudo cargar el plantel: $error';
+      });
+    }
+  }
+
+  List<_ClubRosterRow> _sortRosterRows(List<_ClubRosterRow> rows) {
+    final sortedRows = List<_ClubRosterRow>.from(rows);
+    sortedRows.sort((a, b) {
+      final categoryComparison =
+          a.categoryName.toLowerCase().compareTo(b.categoryName.toLowerCase());
+      if (categoryComparison != 0) {
+        return categoryComparison;
+      }
+      final lastNameComparison = a.lastName.toLowerCase().compareTo(b.lastName.toLowerCase());
+      if (lastNameComparison != 0) {
+        return lastNameComparison;
+      }
+      return a.firstName.toLowerCase().compareTo(b.firstName.toLowerCase());
+    });
+    return sortedRows;
+  }
+
+  Future<void> _exportCsv() async {
+    if (_rows.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay datos para exportar.')),
+      );
+      return;
+    }
+
+    setState(() => _exporting = true);
+    try {
+      final buffer = StringBuffer();
+      buffer.writeln('Nombre,Apellido,Fecha de nacimiento,DNI,Torneo,Categoría');
+      for (final row in _rows) {
+        buffer.writeln([
+          _escapeCsv(row.firstName),
+          _escapeCsv(row.lastName),
+          _escapeCsv(_birthDateFormat.format(row.birthDate)),
+          _escapeCsv(row.dni),
+          _escapeCsv(row.tournamentName),
+          _escapeCsv(row.categoryName),
+        ].join(','));
+      }
+      final now = DateTime.now();
+      final fileName = 'plantel_${widget.clubId}_${DateFormat('yyyyMMdd_HHmm').format(now)}.csv';
+      await downloadCsv(content: buffer.toString(), filename: fileName);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo exportar el CSV: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _exporting = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return PageScaffold(
+      backgroundColor: Colors.transparent,
+      builder: (context, scrollController) => ListView(
+        controller: scrollController,
+        padding: Responsive.pagePadding(context),
+        children: [
+          Text(
+            'Plantel · ${widget.clubName}',
+            style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Wrap(
+                spacing: 16,
+                runSpacing: 12,
+                crossAxisAlignment: WrapCrossAlignment.end,
+                children: [
+                  SizedBox(
+                    width: 320,
+                    child: DropdownButtonFormField<int>(
+                      value: _selectedTournamentId,
+                      decoration: const InputDecoration(labelText: 'Torneo *'),
+                      items: _tournaments
+                          .map(
+                            (item) => DropdownMenuItem<int>(
+                              value: item.id,
+                              child: Text(item.name),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() {
+                          _selectedTournamentId = value;
+                          _selectedCategoryId = null;
+                        });
+                        unawaited(_loadRoster(initialLoad: true));
+                      },
+                    ),
+                  ),
+                  SizedBox(
+                    width: 240,
+                    child: DropdownButtonFormField<int?>(
+                      value: _selectedCategoryId,
+                      decoration: const InputDecoration(labelText: 'Categoría'),
+                      items: [
+                        const DropdownMenuItem<int?>(
+                          value: null,
+                          child: Text('Todas'),
+                        ),
+                        ..._categories.map(
+                          (item) => DropdownMenuItem<int?>(
+                            value: item.id,
+                            child: Text(item.name),
+                          ),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        setState(() => _selectedCategoryId = value);
+                        unawaited(_loadRoster(initialLoad: true));
+                      },
+                    ),
+                  ),
+                  FilledButton.icon(
+                    onPressed: _exporting ? null : _exportCsv,
+                    icon: _exporting
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.download_outlined),
+                    label: const Text('Exportar CSV'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: SizedBox(
+              height: 560,
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _error != null
+                      ? Center(child: Text(_error!))
+                      : _rows.isEmpty
+                          ? const Center(
+                              child: Text('No hay jugadores para los filtros seleccionados.'),
+                            )
+                          : Scrollbar(
+                              controller: _tableVerticalController,
+                              thumbVisibility: true,
+                              child: SingleChildScrollView(
+                                controller: _tableVerticalController,
+                                child: Scrollbar(
+                                  controller: _tableHorizontalController,
+                                  thumbVisibility: true,
+                                  notificationPredicate: (notification) =>
+                                      notification.metrics.axis == Axis.horizontal,
+                                  child: SingleChildScrollView(
+                                    controller: _tableHorizontalController,
+                                    scrollDirection: Axis.horizontal,
+                                    child: DataTable(
+                                      columns: const [
+                                        DataColumn(label: Text('Apellido')),
+                                        DataColumn(label: Text('Nombre')),
+                                        DataColumn(label: Text('Fecha de nacimiento')),
+                                        DataColumn(label: Text('DNI')),
+                                        DataColumn(label: Text('Torneo')),
+                                        DataColumn(label: Text('Categoría')),
+                                      ],
+                                      rows: _rows
+                                          .map(
+                                            (row) => DataRow(cells: [
+                                              DataCell(Text(row.lastName)),
+                                              DataCell(Text(row.firstName)),
+                                              DataCell(Text(_birthDateFormat.format(row.birthDate))),
+                                              DataCell(Text(row.dni)),
+                                              DataCell(Text(row.tournamentName)),
+                                              DataCell(Text(row.categoryName)),
+                                            ]),
+                                          )
+                                          .toList(),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+}
+
+class _RosterFilterOption {
+  const _RosterFilterOption({required this.id, required this.name});
+
+  factory _RosterFilterOption.fromJson(Map<String, dynamic> json) {
+    return _RosterFilterOption(
+      id: json['id'] as int,
+      name: json['name'] as String? ?? '—',
+    );
+  }
+
+  final int id;
+  final String name;
+}
+
+class _ClubRosterRow {
+  const _ClubRosterRow({
+    required this.firstName,
+    required this.lastName,
+    required this.birthDate,
+    required this.dni,
+    required this.categoryId,
+    required this.tournamentName,
+    required this.categoryName,
+  });
+
+  factory _ClubRosterRow.fromJson(Map<String, dynamic> json) {
+    return _ClubRosterRow(
+      firstName: json['firstName'] as String? ?? '—',
+      lastName: json['lastName'] as String? ?? '—',
+      birthDate: DateTime.tryParse(json['birthDate'] as String? ?? '') ?? DateTime(1900),
+      dni: json['dni'] as String? ?? '—',
+      categoryId: _parseCategoryId(json['categoryId']),
+      tournamentName: json['tournamentName'] as String? ?? '—',
+      categoryName: json['categoryName'] as String? ?? '—',
+    );
+  }
+
+  final String firstName;
+  final String lastName;
+  final DateTime birthDate;
+  final String dni;
+  final int? categoryId;
+  final String tournamentName;
+  final String categoryName;
+}
+
+
+int? _parseCategoryId(dynamic value) {
+  if (value is int) {
+    return value;
+  }
+  if (value is String) {
+    return int.tryParse(value);
+  }
+  if (value is num) {
+    return value.toInt();
+  }
+  return null;
+}
+
+String _escapeCsv(String value) {
+  final escaped = value.replaceAll('"', '""');
+  return '"$escaped"';
 }
 
 class _ClubsPaginationFooter extends StatelessWidget {
@@ -1165,6 +1587,7 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
   late final TextEditingController _secondaryColorController;
   late final TextEditingController _instagramController;
   late final TextEditingController _facebookController;
+  late final TextEditingController _homeAddressController;
   late final TextEditingController _latitudeController;
   late final TextEditingController _longitudeController;
   late final TextEditingController _addressController;
@@ -1202,6 +1625,7 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
       text: club?.instagramUrl ?? '',
     );
     _facebookController = TextEditingController(text: club?.facebookUrl ?? '');
+    _homeAddressController = TextEditingController(text: club?.homeAddress ?? '');
     _latitudeController = TextEditingController(
       text: club?.latitude != null ? club!.latitude!.toStringAsFixed(6) : '',
     );
@@ -1224,6 +1648,7 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
       secondaryColor: _secondaryColorController.text,
       instagram: _instagramController.text,
       facebook: _facebookController.text,
+      homeAddress: _homeAddressController.text,
       latitude: _latitudeController.text,
       longitude: _longitudeController.text,
       active: _active,
@@ -1239,6 +1664,7 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
     _secondaryColorController.addListener(_handleFieldChanged);
     _instagramController.addListener(_handleFieldChanged);
     _facebookController.addListener(_handleFieldChanged);
+    _homeAddressController.addListener(_handleFieldChanged);
     _latitudeController.addListener(_handleFieldChanged);
     _longitudeController.addListener(_handleFieldChanged);
   }
@@ -1254,6 +1680,7 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
     _secondaryColorController.dispose();
     _instagramController.dispose();
     _facebookController.dispose();
+    _homeAddressController.dispose();
     _latitudeController.dispose();
     _longitudeController.dispose();
     _addressController.dispose();
@@ -1309,6 +1736,7 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
       secondaryColor: _secondaryColorController.text,
       instagram: _instagramController.text,
       facebook: _facebookController.text,
+      homeAddress: _homeAddressController.text,
       latitude: _latitudeController.text,
       longitude: _longitudeController.text,
       active: _active,
@@ -1354,6 +1782,9 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
       'facebook': _facebookController.text.trim().isEmpty
           ? null
           : _facebookController.text.trim(),
+      'homeAddress': _homeAddressController.text.trim().isEmpty
+          ? null
+          : _homeAddressController.text.trim(),
       'active': _active,
       'latitude': _latitudeController.text.trim().isEmpty
           ? null
@@ -1522,10 +1953,17 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
       final frame = await codec.getNextFrame();
       final image = frame.image;
       codec.dispose();
-      if (image.width != _clubLogoSize || image.height != _clubLogoSize) {
+      final isSquare = image.width == image.height;
+      final isInRange =
+          image.width >= _clubLogoMinSize && image.width <= _clubLogoMaxSize;
+      if (!isSquare || !isInRange) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('El escudo debe medir 200x200 píxeles.')),
+          const SnackBar(
+            content: Text(
+              'El escudo debe ser cuadrado y medir entre 200x200 y 500x500 píxeles.',
+            ),
+          ),
         );
         return;
       }
@@ -1616,7 +2054,7 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
                 SizedBox(
                   width: 260,
                   child: Text(
-                    'Formato PNG cuadrado de ${_clubLogoSize.toInt()}×${_clubLogoSize.toInt()} píxeles.',
+                    'Formato PNG cuadrado entre ${_clubLogoMinSize}×${_clubLogoMinSize} y ${_clubLogoMaxSize}×${_clubLogoMaxSize} píxeles.',
                     style: theme.textTheme.bodySmall,
                   ),
                 ),
@@ -1887,6 +2325,16 @@ class _ClubFormDialogState extends ConsumerState<_ClubFormDialog> {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _homeAddressController,
+            enabled: !readOnly,
+            decoration: const InputDecoration(
+              labelText: 'Dirección de localía',
+              hintText: 'Ej. Estadio Central · Av. Principal 123',
+            ),
+            textCapitalization: TextCapitalization.words,
           ),
           const SizedBox(height: 20),
           Text('Geolocalización',
@@ -2165,6 +2613,7 @@ class _ClubFormSnapshot {
     required this.secondaryColor,
     required this.instagram,
     required this.facebook,
+    required this.homeAddress,
     required this.latitude,
     required this.longitude,
     required this.active,
@@ -2181,6 +2630,7 @@ class _ClubFormSnapshot {
   final String secondaryColor;
   final String instagram;
   final String facebook;
+  final String homeAddress;
   final String latitude;
   final String longitude;
   final bool active;
@@ -2199,6 +2649,7 @@ class _ClubFormSnapshot {
         other.secondaryColor == secondaryColor &&
         other.instagram == instagram &&
         other.facebook == facebook &&
+        other.homeAddress == homeAddress &&
         other.latitude == latitude &&
         other.longitude == longitude &&
         other.active == active &&
@@ -2219,6 +2670,7 @@ class _ClubFormSnapshot {
       secondaryColor,
       instagram,
       facebook,
+      homeAddress,
       latitude,
       longitude,
       active,
@@ -2266,6 +2718,7 @@ class Club {
     this.secondaryHex,
     this.instagramUrl,
     this.facebookUrl,
+    this.homeAddress,
     this.latitude,
     this.longitude,
     this.logoUrl,
@@ -2284,6 +2737,7 @@ class Club {
       secondaryHex: secondary,
       instagramUrl: json['instagramUrl'] as String?,
       facebookUrl: json['facebookUrl'] as String?,
+      homeAddress: json['homeAddress'] as String?,
       latitude: _parseCoordinate(json['latitude']),
       longitude: _parseCoordinate(json['longitude']),
       logoUrl: json['logoUrl'] as String?,
@@ -2299,6 +2753,7 @@ class Club {
   final String? secondaryHex;
   final String? instagramUrl;
   final String? facebookUrl;
+  final String? homeAddress;
   final double? latitude;
   final double? longitude;
   final String? logoUrl;

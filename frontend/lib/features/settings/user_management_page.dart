@@ -38,6 +38,27 @@ final rolesCatalogProvider = FutureProvider<List<RoleSummary>>((ref) async {
   return roles;
 });
 
+final tournamentsCatalogProvider = FutureProvider<List<TournamentPermissionOption>>((ref) async {
+  final api = ref.read(apiClientProvider);
+  final response = await api.get<List<dynamic>>('/tournaments');
+  final data = response.data ?? <dynamic>[];
+  final tournaments = data
+      .map((entry) => TournamentPermissionOption.fromJson(entry as Map<String, dynamic>))
+      .toList()
+    ..sort((a, b) {
+      final leagueCompare = a.leagueName.toLowerCase().compareTo(b.leagueName.toLowerCase());
+      if (leagueCompare != 0) {
+        return leagueCompare;
+      }
+      final yearCompare = b.year.compareTo(a.year);
+      if (yearCompare != 0) {
+        return yearCompare;
+      }
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
+  return tournaments;
+});
+
 class UserManagementPage extends ConsumerStatefulWidget {
   const UserManagementPage({super.key});
 
@@ -345,6 +366,14 @@ class _UsersTableHeader extends StatelessWidget {
           Expanded(flex: 2, child: Text('Perfil', style: style)),
           Expanded(flex: 2, child: Text('Club', style: style)),
           SizedBox(
+            width: 140,
+            child: Text(
+              'Permisos',
+              style: style,
+              textAlign: TextAlign.center,
+            ),
+          ),
+          SizedBox(
             width: 160,
             child: Text(
               'Restablecer clave',
@@ -380,9 +409,12 @@ class _UserRowState extends ConsumerState<_UserRow> {
   bool _isUpdatingRole = false;
   bool _isUpdatingClub = false;
   bool _isDeleting = false;
+  bool _isSavingPermissions = false;
   int? _selectedClubId;
   String? _selectedRoleKey;
   int? _currentRoleAssignmentId;
+  bool _canUpdateMatchResults = false;
+  List<int> _selectedTournamentIds = [];
 
   @override
   void initState() {
@@ -405,6 +437,155 @@ class _UserRowState extends ConsumerState<_UserRow> {
       _selectedRoleKey = newRoleKey;
       _currentRoleAssignmentId = widget.user.primaryRole?.assignmentId;
     }
+  }
+
+  Future<void> _openPermissionsDialog() async {
+    final result = await showDialog<_PermissionsDialogResult>(
+      context: context,
+      builder: (context) {
+        var localCanUpdate = _canUpdateMatchResults;
+        var localTournamentIds = List<int>.from(_selectedTournamentIds);
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Permisos granulares'),
+              content: Consumer(
+                builder: (context, ref, _) {
+                  final tournamentsAsync = ref.watch(tournamentsCatalogProvider);
+                  return SizedBox(
+                    width: 520,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.user.fullName,
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Define permisos puntuales sin asignar un perfil completo.',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                        const SizedBox(height: 16),
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Cargar resultados de partidos'),
+                          subtitle: const Text('Permite ingresar goles y resultados finales.'),
+                          value: localCanUpdate,
+                          onChanged: (value) {
+                            setDialogState(() {
+                              localCanUpdate = value;
+                              if (!value) {
+                                localTournamentIds = [];
+                              }
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Torneos habilitados',
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 8),
+                        tournamentsAsync.when(
+                          data: (tournaments) {
+                            if (tournaments.isEmpty) {
+                              return Text(
+                                'No hay torneos disponibles para asignar.',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              );
+                            }
+                            return Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: tournaments
+                                  .map(
+                                    (tournament) => FilterChip(
+                                      label: Text(tournament.displayName),
+                                      selected: localTournamentIds.contains(tournament.id),
+                                      onSelected: localCanUpdate
+                                          ? (selected) {
+                                              setDialogState(() {
+                                                if (selected) {
+                                                  localTournamentIds.add(tournament.id);
+                                                } else {
+                                                  localTournamentIds.remove(tournament.id);
+                                                }
+                                              });
+                                            }
+                                          : null,
+                                    ),
+                                  )
+                                  .toList(),
+                            );
+                          },
+                          loading: () => const LinearProgressIndicator(),
+                          error: (error, _) => Text(
+                            'No pudimos cargar los torneos: $error',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                          ),
+                        ),
+                        if (localCanUpdate) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                            localTournamentIds.isEmpty
+                                ? 'Selecciona al menos un torneo.'
+                                : 'Torneos seleccionados: ${localTournamentIds.length}.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ],
+                    ),
+                  );
+                },
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    Navigator.of(context).pop(
+                      _PermissionsDialogResult(
+                        canUpdateMatchResults: localCanUpdate,
+                        tournamentIds: localTournamentIds,
+                      ),
+                    );
+                  },
+                  child: const Text('Guardar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result == null) {
+      return;
+    }
+
+    if (_isSavingPermissions) {
+      return;
+    }
+
+    setState(() => _isSavingPermissions = true);
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _canUpdateMatchResults = result.canUpdateMatchResults;
+      _selectedTournamentIds = result.tournamentIds;
+      _isSavingPermissions = false;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Permisos granulares actualizados.')),
+    );
   }
 
   Future<bool> _showConfirmationDialog({
@@ -774,6 +955,34 @@ class _UserRowState extends ConsumerState<_UserRow> {
             ),
           ),
           SizedBox(
+            width: 140,
+            child: Align(
+              alignment: Alignment.center,
+              child: TextButton(
+                onPressed: _isSavingPermissions ? null : _openPermissionsDialog,
+                child: _isSavingPermissions
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('Permisos'),
+                          const SizedBox(height: 2),
+                          Text(
+                            _canUpdateMatchResults
+                                ? '${_selectedTournamentIds.length} torneos'
+                                : 'Sin asignar',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+          ),
+          SizedBox(
             width: 160,
             child: Align(
               alignment: Alignment.center,
@@ -990,6 +1199,45 @@ class RoleSummary {
   final String key;
   final String name;
   final String? description;
+}
+
+class TournamentPermissionOption {
+  TournamentPermissionOption({
+    required this.id,
+    required this.name,
+    required this.year,
+    required this.leagueName,
+  });
+
+  factory TournamentPermissionOption.fromJson(Map<String, dynamic> json) => TournamentPermissionOption(
+        id: json['id'] as int? ?? 0,
+        name: json['name'] as String? ?? 'Torneo',
+        year: json['year'] as int? ?? 0,
+        leagueName: json['leagueName'] as String? ?? '',
+      );
+
+  final int id;
+  final String name;
+  final int year;
+  final String leagueName;
+
+  String get displayName {
+    final yearLabel = year > 0 ? ' $year' : '';
+    if (leagueName.isEmpty) {
+      return '$name$yearLabel';
+    }
+    return '$leagueName · $name$yearLabel';
+  }
+}
+
+class _PermissionsDialogResult {
+  const _PermissionsDialogResult({
+    required this.canUpdateMatchResults,
+    required this.tournamentIds,
+  });
+
+  final bool canUpdateMatchResults;
+  final List<int> tournamentIds;
 }
 
 class _UserListFilters {

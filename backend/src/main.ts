@@ -1,11 +1,22 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
 import * as cookieParser from 'cookie-parser';
 import { extname, join, sep } from 'path';
 import { NestExpressApplication } from '@nestjs/platform-express';
+
+function parseEnvBool(v: unknown, defaultValue = false): boolean {
+  if (v === undefined || v === null) return defaultValue;
+  if (typeof v === 'boolean') return v;
+  if (typeof v === 'number') return v === 1;
+  if (typeof v !== 'string') return defaultValue;
+  const s = v.trim().toLowerCase();
+  if (['1', 'true', 'yes', 'y', 'on'].includes(s)) return true;
+  if (['0', 'false', 'no', 'n', 'off', ''].includes(s)) return false;
+  return defaultValue;
+}
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
@@ -13,6 +24,13 @@ async function bootstrap() {
   // Allow frontend (Flutter web) to call the API during development
   const configService = app.get(ConfigService);
   const frontendUrl = configService.get<string>('app.frontendUrl') ?? 'http://localhost:8080';
+
+  const scanDebug = parseEnvBool(
+    configService.get('SCAN_DEBUG') ?? configService.get('DNI_SCAN_DEBUG'),
+    false,
+  );
+  const keepTmp = parseEnvBool(configService.get('SCAN_DEBUG_KEEP_TMP'), false);
+  Logger.log(`[DNI_SCAN] debugEnabled=${scanDebug} keepTmp=${keepTmp}`, 'Bootstrap');
   const localhostRegex = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
   app.enableCors({
     origin: (origin, callback) => {
@@ -27,7 +45,7 @@ async function bootstrap() {
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
-    optionsSuccessStatus: 204
+    optionsSuccessStatus: 204,
   });
 
   app.setGlobalPrefix('api/v1');
@@ -56,8 +74,8 @@ async function bootstrap() {
     new ValidationPipe({
       whitelist: true,
       transform: true,
-      forbidNonWhitelisted: true
-    })
+      forbidNonWhitelisted: true,
+    }),
   );
 
   const port = process.env.PORT || 3000;
@@ -69,7 +87,7 @@ bootstrap().catch((error) => {
     const databaseLocation = describeDatabaseLocation(process.env.DATABASE_URL);
     const locationMessage = databaseLocation ? ` at ${databaseLocation}` : '';
     console.error(
-      `Failed to connect to the database${locationMessage}. Ensure your database is running and that the DATABASE_URL environment variable matches your local setup.`
+      `Failed to connect to the database${locationMessage}. Ensure your database is running and that the DATABASE_URL environment variable matches your local setup.`,
     );
   } else {
     console.error(error);

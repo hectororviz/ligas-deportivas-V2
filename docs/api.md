@@ -127,13 +127,79 @@ Requiere JWT + permisos de roles/permisos.
 | Método | Ruta | Auth | Descripción | Query/Notas |
 | --- | --- | --- | --- | --- |
 | GET | `/tournaments` | Público | Listar todos los torneos. | - |
+| GET | `/tournaments/active` | Público | Listar solo torneos activos. | Atajo equivalente a `/tournaments` sin `includeInactive`. |
 | GET | `/leagues/:leagueId/tournaments` | Público | Torneos por liga. | - |
 | GET | `/tournaments/:id` | Público | Detalle del torneo. | - |
+| GET | `/tournaments/:tournamentId/zones` | Público | Zonas del torneo con equipos (clubes) por zona. | Ordenado por nombre de zona y de equipo. Retorna `404` si el torneo no existe. |
 | GET | `/tournaments/:id/zones/clubs` | Público | Clubes para asignación de zonas | Query opcional `zoneId` para filtrar. |
 | POST | `/tournaments` | JWT + permisos | Crear torneo. | `CreateTournamentDto`. |
 | PUT | `/tournaments/:id` | JWT + permisos | Actualizar torneo. | `UpdateTournamentDto`. |
 | POST | `/tournaments/:id/zones` | JWT + permisos | Crear zona en torneo. | `CreateZoneDto`. |
 | POST | `/tournaments/:id/categories` | JWT + permisos | Agregar categoría al torneo. | `AddTournamentCategoryDto`. |
+
+
+
+**Ejemplo de respuesta (`GET /tournaments/:tournamentId/zones`)**
+
+```json
+[
+  {
+    "id": 11,
+    "name": "Zona A",
+    "teams": [
+      {
+        "id": 5,
+        "name": "Club Soler",
+        "shortName": "Soler",
+        "slug": "club-soler"
+      },
+      {
+        "id": 9,
+        "name": "San Martín",
+        "shortName": "San Martin",
+        "slug": "san-martin"
+      }
+    ]
+  },
+  {
+    "id": 12,
+    "name": "Zona B",
+    "teams": []
+  }
+]
+```
+
+**Ejemplo de respuesta (`GET /tournaments/active`)**
+
+```json
+[
+  {
+    "id": 3,
+    "leagueId": 1,
+    "name": "Apertura",
+    "year": 2026,
+    "gender": "MIXTO",
+    "status": "ACTIVE",
+    "pointsWin": 3,
+    "pointsDraw": 1,
+    "pointsLoss": 0,
+    "championMode": "GLOBAL",
+    "startDate": "2026-03-10T00:00:00.000Z",
+    "endDate": null,
+    "createdAt": "2026-03-01T12:00:00.000Z",
+    "updatedAt": "2026-03-12T09:30:00.000Z",
+    "league": {
+      "id": 1,
+      "name": "Liga Regional",
+      "slug": "liga-regional",
+      "colorHex": "#0057b8",
+      "gameDay": "DOMINGO",
+      "createdAt": "2026-02-20T10:00:00.000Z",
+      "updatedAt": "2026-03-12T09:00:00.000Z"
+    }
+  }
+]
+```
 
 #### Zonas (`/zones`)
 

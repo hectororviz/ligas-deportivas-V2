@@ -486,11 +486,11 @@ String _nextMatchdayLabel(HomeNextMatchday? matchday) {
   }
   final dateFormatter = DateFormat('EEEE dd/MM', 'es');
   final timeFormatter = DateFormat('HH:mm');
-  final dateLabel = dateFormatter.format(matchday.date!.toLocal());
+  final dateLabel = dateFormatter.format(matchday.date!);
   final capitalizedDate = toBeginningOfSentenceCase(dateLabel) ?? dateLabel;
   final kickoffTime = (matchday.kickoffTime?.isNotEmpty ?? false)
       ? matchday.kickoffTime!
-      : timeFormatter.format(matchday.date!.toLocal());
+      : timeFormatter.format(matchday.date!);
   return 'Próxima fecha: Fecha ${matchday.matchday} - $capitalizedDate - $kickoffTime';
 }
 

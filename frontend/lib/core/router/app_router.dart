@@ -30,6 +30,7 @@ import '../../features/tournaments/presentation/tournament_players_page.dart';
 import '../../features/tournaments/presentation/poster_template_page.dart';
 import '../../features/zones/presentation/zones_page.dart';
 import '../../features/zones/domain/zone_match_models.dart';
+import '../../features/zones/presentation/manual_fixture_builder_page.dart';
 import '../../features/zones/presentation/zone_fixture_page.dart';
 import '../../features/zones/presentation/zone_match_detail_page.dart';
 import '../../features/zones/presentation/zone_matchday_summary_page.dart';
@@ -111,6 +112,22 @@ GoRouter createRouter(Ref ref) {
           GoRoute(path: '/leagues', builder: (context, state) => const LeaguesPage()),
           GoRoute(path: '/clubs', builder: (context, state) => const ClubsPage()),
           GoRoute(
+            path: '/clubs/:clubId/roster',
+            builder: (context, state) {
+              final clubId = int.tryParse(state.pathParameters['clubId'] ?? '');
+              final club = state.extra is Club ? state.extra as Club : null;
+              if (clubId == null) {
+                return const Scaffold(
+                  body: Center(child: Text('Club inválido para plantel.')),
+                );
+              }
+              return ClubRosterPage(
+                clubId: clubId,
+                clubName: club?.name ?? 'Club #$clubId',
+              );
+            },
+          ),
+          GoRoute(
             path: '/club/:slug',
             builder: (context, state) {
               final slug = state.pathParameters['slug']!;
@@ -188,6 +205,17 @@ GoRouter createRouter(Ref ref) {
               return ZoneFixturePage(zoneId: zoneId, viewOnly: viewOnly);
             },
             routes: [
+              GoRoute(
+                path: 'manual',
+                builder: (context, state) {
+                  final rawId = state.pathParameters['zoneId'];
+                  final zoneId = rawId != null ? int.tryParse(rawId) : null;
+                  if (zoneId == null) {
+                    return const Center(child: Text('Zona no válida'));
+                  }
+                  return ManualFixtureBuilderPage(zoneId: zoneId);
+                },
+              ),
               GoRoute(
                 path: 'matches/:matchId',
                 builder: (context, state) {
