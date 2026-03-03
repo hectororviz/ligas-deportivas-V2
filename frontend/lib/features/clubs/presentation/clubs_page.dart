@@ -367,7 +367,7 @@ class _ClubsPageState extends ConsumerState<ClubsPage> {
                         const Divider(height: 1),
                         Padding(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
+                              horizontal: 4, vertical: 8),
                           child: _ClubsDataTable(
                             data: paginated,
                             canEdit: canEdit,
