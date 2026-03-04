@@ -547,15 +547,26 @@ class _PlayersPageState extends ConsumerState<PlayersPage> with WidgetsBindingOb
   }
 
   Future<void> _openPlayerDetails(Player player) async {
+    final user = ref.read(authControllerProvider).user;
+    final canEdit = user?.hasPermission(module: _modulePlayers, action: _actionUpdate) ?? false;
+
     await showDialog<void>(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return AlertDialog(
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          content: _PlayerDetailsView(player: player),
+          content: _PlayerDetailsView(
+            player: player,
+            onEdit: canEdit
+                ? () {
+                    Navigator.of(dialogContext).pop();
+                    _openEditPlayer(player);
+                  }
+                : null,
+          ),
         );
       },
     );
@@ -3458,9 +3469,10 @@ class _PlayerFormDialogState extends ConsumerState<_PlayerFormDialog> {
 }
 
 class _PlayerDetailsView extends StatelessWidget {
-  const _PlayerDetailsView({required this.player});
+  const _PlayerDetailsView({required this.player, this.onEdit});
 
   final Player player;
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -3469,12 +3481,24 @@ class _PlayerDetailsView extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            player.fullName,
-            style: Theme.of(context)
-                .textTheme
-                .titleLarge
-                ?.copyWith(fontWeight: FontWeight.w700),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  player.fullName,
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
+              if (onEdit != null)
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined),
+                  onPressed: onEdit,
+                  tooltip: 'Editar jugador',
+                ),
+            ],
           ),
           const SizedBox(height: 4),
           Text(
