@@ -116,6 +116,20 @@ class _ZonesPageState extends ConsumerState<ZonesPage> {
   }
 
   Future<void> _openZoneDetails(ZoneSummary zone) async {
+    final authState = ref.read(authControllerProvider);
+    final isAdmin = authState.user?.roles.contains('ADMIN') ?? false;
+    final canEdit = isAdmin && zone.isEditable;
+
+    void handleFixture() {
+      Navigator.pop(context);
+      _openZoneFixture(zone);
+    }
+
+    void handleEdit() {
+      Navigator.pop(context);
+      _openZoneEditor(zone);
+    }
+
     final size = MediaQuery.sizeOf(context);
     final isCompact = size.width < 640;
     if (isCompact) {
@@ -128,11 +142,15 @@ class _ZonesPageState extends ConsumerState<ZonesPage> {
           return Padding(
             padding: EdgeInsets.only(
               bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-              left: 24,
-              right: 24,
+              left: 20,
+              right: 20,
               top: 12,
             ),
-            child: _ZoneDetailsDialog(zoneId: zone.id),
+            child: _ZoneDetailsDialog(
+              zoneId: zone.id,
+              onFixture: handleFixture,
+              onEdit: canEdit ? handleEdit : null,
+            ),
           );
         },
       );
@@ -150,7 +168,11 @@ class _ZonesPageState extends ConsumerState<ZonesPage> {
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
               child: SizedBox(
                 width: double.infinity,
-                child: _ZoneDetailsDialog(zoneId: zone.id),
+                child: _ZoneDetailsDialog(
+                  zoneId: zone.id,
+                  onFixture: handleFixture,
+                  onEdit: canEdit ? handleEdit : null,
+                ),
               ),
             ),
           ),
@@ -222,6 +244,8 @@ class _ZonesPageState extends ConsumerState<ZonesPage> {
     final isAdmin = authState.user?.roles.contains('ADMIN') ?? false;
     final filters = ref.watch(zonesFiltersProvider);
 
+    final isMobile = Responsive.isMobile(context);
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: isAdmin
@@ -232,7 +256,7 @@ class _ZonesPageState extends ConsumerState<ZonesPage> {
             )
           : null,
       body: Padding(
-        padding: const EdgeInsets.all(24.0),
+        padding: EdgeInsets.all(isMobile ? 12.0 : 24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -497,6 +521,43 @@ class _ZonesDataTable extends StatelessWidget {
     final headerStyle =
         theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: colors.headerText);
 
+    final isMobile = Responsive.isMobile(context);
+
+    if (isMobile) {
+      return ListView.separated(
+        padding: const EdgeInsets.only(bottom: 12),
+        itemCount: zones.length,
+        separatorBuilder: (context, index) => const Divider(height: 1),
+        itemBuilder: (context, index) {
+          final zone = zones[index];
+          return ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            title: Text(
+              '${zone.leagueName} - ${zone.tournamentName}',
+              style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w500),
+            ),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${zone.name} - ${zone.status.label}',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  _ZoneStatusChip(status: zone.status, isCompact: true),
+                ],
+              ),
+            ),
+            onTap: () => onView(zone),
+          );
+        },
+      );
+    }
+
     final table = DataTable(
       headingRowHeight: 52,
       dataRowMinHeight: 64,
@@ -574,12 +635,30 @@ class _ZonesDataTable extends StatelessWidget {
 }
 
 class _ZoneStatusChip extends StatelessWidget {
-  const _ZoneStatusChip({required this.status});
+  const _ZoneStatusChip({required this.status, this.isCompact = false});
 
   final ZoneStatus status;
+  final bool isCompact;
 
   @override
   Widget build(BuildContext context) {
+    if (isCompact) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: status.color.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: status.color.withOpacity(0.4)),
+        ),
+        child: Text(
+          status.label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: status.color,
+                fontWeight: FontWeight.w600,
+              ),
+        ),
+      );
+    }
     return Chip(
       label: Text(status.label),
       backgroundColor: status.color.withOpacity(0.12),
@@ -1224,9 +1303,15 @@ class _ZoneEditorDialogState extends ConsumerState<_ZoneEditorDialog> {
 }
 
 class _ZoneDetailsDialog extends ConsumerStatefulWidget {
-  const _ZoneDetailsDialog({required this.zoneId});
+  const _ZoneDetailsDialog({
+    required this.zoneId,
+    this.onFixture,
+    this.onEdit,
+  });
 
   final int zoneId;
+  final VoidCallback? onFixture;
+  final VoidCallback? onEdit;
 
   @override
   ConsumerState<_ZoneDetailsDialog> createState() => _ZoneDetailsDialogState();
@@ -1340,6 +1425,25 @@ class _ZoneDetailsDialogState extends ConsumerState<_ZoneDetailsDialog> {
                     ),
                   ],
                 ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: widget.onFixture,
+                    icon: const Icon(Icons.sports_soccer_outlined),
+                    label: const Text('Fixture'),
+                  ),
+                  if (widget.onEdit != null) ...[
+                    const SizedBox(width: 8),
+                    FilledButton.tonalIcon(
+                      onPressed: widget.onEdit,
+                      icon: const Icon(Icons.edit_outlined),
+                      label: const Text('Editar'),
+                    ),
+                  ],
+                ],
+              ),
             ],
           ),
         );
