@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/utils/responsive.dart';
 import '../../../services/api_client.dart';
 import '../../../services/auth_controller.dart';
 import '../../shared/widgets/app_data_table_style.dart';
