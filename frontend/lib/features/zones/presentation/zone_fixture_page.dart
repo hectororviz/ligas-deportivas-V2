@@ -912,26 +912,15 @@ class _FixtureMatchdayCard extends StatelessWidget {
                 child: titleWidget,
               ),
               const SizedBox(height: 8),
-              Row(
+              Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 8,
                 children: [
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: dateField,
-                    ),
-                  ),
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.center,
-                      child: showSummaryButton ? summaryButton : const SizedBox.shrink(),
-                    ),
-                  ),
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: _FixtureMatchdayStatusIndicator(status: status),
-                    ),
-                  ),
+                  dateField,
+                  if (showSummaryButton) summaryButton,
+                  _FixtureMatchdayStatusIndicator(status: status),
                 ],
               ),
               if (showFinalizeButton) ...[
