@@ -1317,13 +1317,14 @@ class _PlayersDataTable extends StatelessWidget {
     final isMobile = Responsive.isMobile(context);
 
     final table = DataTable(
+      showCheckboxColumn: false,
       columns: [
         const DataColumn(label: Text('Apellido')),
         const DataColumn(label: Text('Nombre')),
         const DataColumn(label: Text('Género')),
         const DataColumn(label: Text('Nacimiento')),
         if (!isMobile) const DataColumn(label: Text('Estado')),
-        const DataColumn(label: Text('Acciones')),
+        if (!isMobile) const DataColumn(label: Text('Acciones')),
       ],
       dataRowMinHeight: 44,
       dataRowMaxHeight: 60,
@@ -1334,6 +1335,7 @@ class _PlayersDataTable extends StatelessWidget {
         for (var index = 0; index < players.length; index++)
           DataRow(
             color: buildStripedRowColor(index: index, colors: colors),
+            onSelectChanged: isMobile ? (_) => onView(players[index]) : null,
             cells: [
               DataCell(Text(players[index].lastName)),
               DataCell(Text(players[index].firstName)),
@@ -1365,35 +1367,24 @@ class _PlayersDataTable extends StatelessWidget {
                     ),
                   ),
                 ),
-              DataCell(
-                Row(
-                  children: [
-                    isMobile
-                        ? IconButton.outlined(
-                            onPressed: () => onView(players[index]),
-                            icon: const Icon(Icons.visibility_outlined),
-                            tooltip: 'Detalle',
-                          )
-                        : OutlinedButton.icon(
-                            onPressed: () => onView(players[index]),
-                            icon: const Icon(Icons.visibility_outlined),
-                            label: const Text('Detalle'),
-                          ),
-                    const SizedBox(width: 8),
-                    isMobile
-                        ? IconButton.filledTonal(
-                            onPressed: canEdit ? () => onEdit(players[index]) : null,
-                            icon: const Icon(Icons.edit_outlined),
-                            tooltip: 'Editar',
-                          )
-                        : FilledButton.tonalIcon(
-                            onPressed: canEdit ? () => onEdit(players[index]) : null,
-                            icon: const Icon(Icons.edit_outlined),
-                            label: const Text('Editar'),
-                          ),
-                  ],
+              if (!isMobile)
+                DataCell(
+                  Row(
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: () => onView(players[index]),
+                        icon: const Icon(Icons.visibility_outlined),
+                        label: const Text('Detalle'),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton.tonalIcon(
+                        onPressed: canEdit ? () => onEdit(players[index]) : null,
+                        icon: const Icon(Icons.edit_outlined),
+                        label: const Text('Editar'),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
             ],
           ),
       ],
@@ -1957,7 +1948,7 @@ class _PlayersEmptyState extends StatelessWidget {
   }
 }
 
-class _PlayersFloatingActions extends StatelessWidget {
+class _PlayersFloatingActions extends StatefulWidget {
   const _PlayersFloatingActions({
     required this.onCreate,
     required this.onMassive,
@@ -1969,30 +1960,54 @@ class _PlayersFloatingActions extends StatelessWidget {
   final VoidCallback onScanDni;
 
   @override
+  State<_PlayersFloatingActions> createState() => _PlayersFloatingActionsState();
+}
+
+class _PlayersFloatingActionsState extends State<_PlayersFloatingActions> {
+  bool _isExpanded = false;
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        FloatingActionButton.extended(
-          heroTag: 'players-scan-dni',
-          onPressed: onScanDni,
-          icon: const Icon(Icons.qr_code_scanner_outlined),
-          label: const Text('Escanear DNI'),
-        ),
-        const SizedBox(height: 12),
-        FloatingActionButton.extended(
-          heroTag: 'players-massive',
-          onPressed: onMassive,
-          icon: const Icon(Icons.table_chart_outlined),
-          label: const Text('Masivo'),
-        ),
-        const SizedBox(height: 12),
-        FloatingActionButton.extended(
-          heroTag: 'players-add',
-          onPressed: onCreate,
-          icon: const Icon(Icons.add),
-          label: const Text('Agregar jugador'),
+        if (_isExpanded) ...[
+          FloatingActionButton.extended(
+            heroTag: 'players-scan-dni',
+            onPressed: () {
+              setState(() => _isExpanded = false);
+              widget.onScanDni();
+            },
+            icon: const Icon(Icons.qr_code_scanner_outlined),
+            label: const Text('DNI'),
+          ),
+          const SizedBox(height: 12),
+          FloatingActionButton.extended(
+            heroTag: 'players-massive',
+            onPressed: () {
+              setState(() => _isExpanded = false);
+              widget.onMassive();
+            },
+            icon: const Icon(Icons.table_chart_outlined),
+            label: const Text('Masivo'),
+          ),
+          const SizedBox(height: 12),
+          FloatingActionButton.extended(
+            heroTag: 'players-add',
+            onPressed: () {
+              setState(() => _isExpanded = false);
+              widget.onCreate();
+            },
+            icon: const Icon(Icons.add),
+            label: const Text('Individual'),
+          ),
+          const SizedBox(height: 12),
+        ],
+        FloatingActionButton(
+          heroTag: 'players-toggle',
+          onPressed: () => setState(() => _isExpanded = !_isExpanded),
+          child: Icon(_isExpanded ? Icons.close : Icons.add),
         ),
       ],
     );
