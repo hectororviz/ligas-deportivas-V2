@@ -707,9 +707,10 @@ class _PlayersPageState extends ConsumerState<PlayersPage> with WidgetsBindingOb
             )
           : null,
       builder: (context, scrollController) {
+        final isMobile = Responsive.isMobile(context);
         return ListView(
           controller: scrollController,
-          padding: const EdgeInsets.all(24.0),
+          padding: isMobile ? const EdgeInsets.symmetric(horizontal: 12, vertical: 16) : const EdgeInsets.all(24.0),
           children: [
             Text(
               'Jugadores',
@@ -1336,8 +1337,8 @@ class _PlayersDataTable extends StatelessWidget {
             cells: [
               DataCell(Text(players[index].lastName)),
               DataCell(Text(players[index].firstName)),
-              DataCell(Text(players[index].genderLabel)),
-              DataCell(Text(players[index].formattedBirthDateWithAge)),
+              DataCell(Text(isMobile ? players[index].genderLabel.substring(0, 4) : players[index].genderLabel)),
+              DataCell(Text(isMobile ? players[index].formattedBirthDate : players[index].formattedBirthDateWithAge)),
               if (!isMobile)
                 DataCell(
                   Align(
@@ -1367,17 +1368,29 @@ class _PlayersDataTable extends StatelessWidget {
               DataCell(
                 Row(
                   children: [
-                    OutlinedButton.icon(
-                      onPressed: () => onView(players[index]),
-                      icon: const Icon(Icons.visibility_outlined),
-                      label: const Text('Detalle'),
-                    ),
+                    isMobile
+                        ? IconButton.outlined(
+                            onPressed: () => onView(players[index]),
+                            icon: const Icon(Icons.visibility_outlined),
+                            tooltip: 'Detalle',
+                          )
+                        : OutlinedButton.icon(
+                            onPressed: () => onView(players[index]),
+                            icon: const Icon(Icons.visibility_outlined),
+                            label: const Text('Detalle'),
+                          ),
                     const SizedBox(width: 8),
-                    FilledButton.tonalIcon(
-                      onPressed: canEdit ? () => onEdit(players[index]) : null,
-                      icon: const Icon(Icons.edit_outlined),
-                      label: const Text('Editar'),
-                    ),
+                    isMobile
+                        ? IconButton.filledTonal(
+                            onPressed: canEdit ? () => onEdit(players[index]) : null,
+                            icon: const Icon(Icons.edit_outlined),
+                            tooltip: 'Editar',
+                          )
+                        : FilledButton.tonalIcon(
+                            onPressed: canEdit ? () => onEdit(players[index]) : null,
+                            icon: const Icon(Icons.edit_outlined),
+                            label: const Text('Editar'),
+                          ),
                   ],
                 ),
               ),
