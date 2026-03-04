@@ -37,7 +37,7 @@ export class SiteIdentityService {
     private readonly prisma: PrismaService,
     private readonly storageService: StorageService,
     private readonly schemaHealth: DatabaseSchemaHealthService,
-  ) {}
+  ) { }
 
   async getIdentity(): Promise<SiteIdentityResponse> {
     const identity = await this.ensureIdentity();
@@ -168,8 +168,8 @@ export class SiteIdentityService {
           type: 'image/png',
         },
       ],
-      start_url: '.',
-      scope: '.',
+      start_url: '/',
+      scope: '/',
       display: 'standalone',
     };
     await fs.writeFile(
