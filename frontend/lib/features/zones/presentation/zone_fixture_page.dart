@@ -669,7 +669,7 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
     );
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (zone.fixtureSeed != null) ...[
           Text('Semilla utilizada: ${zone.fixtureSeed}', style: Theme.of(context).textTheme.bodyMedium),
