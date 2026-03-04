@@ -54,8 +54,10 @@ class StandingsTable extends StatelessWidget {
           const DataColumn(label: Text('PG'), numeric: true),
           const DataColumn(label: Text('PE'), numeric: true),
           const DataColumn(label: Text('PP'), numeric: true),
-          const DataColumn(label: Text('GF'), numeric: true),
-          const DataColumn(label: Text('GC'), numeric: true),
+          if (!isMobile) ...[
+            const DataColumn(label: Text('GF'), numeric: true),
+            const DataColumn(label: Text('GC'), numeric: true),
+          ],
           const DataColumn(label: Text('DG'), numeric: true),
           const DataColumn(label: Text('Pts'), numeric: true),
         ],
@@ -70,8 +72,10 @@ class StandingsTable extends StatelessWidget {
                 DataCell(Text(rows[index].wins.toString())),
                 DataCell(Text(rows[index].draws.toString())),
                 DataCell(Text(rows[index].losses.toString())),
-                DataCell(Text(rows[index].goalsFor.toString())),
-                DataCell(Text(rows[index].goalsAgainst.toString())),
+                if (!isMobile) ...[
+                  DataCell(Text(rows[index].goalsFor.toString())),
+                  DataCell(Text(rows[index].goalsAgainst.toString())),
+                ],
                 DataCell(Text(rows[index].goalDifference.toString())),
                 DataCell(Text(
                   rows[index].points.toString(),
