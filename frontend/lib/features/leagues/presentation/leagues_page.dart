@@ -129,9 +129,10 @@ class _LeaguesPageState extends ConsumerState<LeaguesPage> {
         label: const Text('Agregar liga'),
       ),
       builder: (context, scrollController) {
+        final isMobile = Responsive.isMobile(context);
         return ListView(
           controller: scrollController,
-          padding: const EdgeInsets.all(24.0),
+          padding: isMobile ? const EdgeInsets.symmetric(horizontal: 12, vertical: 16) : const EdgeInsets.all(24.0),
           children: [
             Text(
               'Ligas',
@@ -156,7 +157,10 @@ class _LeaguesPageState extends ConsumerState<LeaguesPage> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isMobile ? 12 : 24,
+                          vertical: 12,
+                        ),
                         child: Row(
                           children: [
                             Icon(
@@ -181,7 +185,10 @@ class _LeaguesPageState extends ConsumerState<LeaguesPage> {
                       ),
                       const Divider(height: 1),
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isMobile ? 8 : 16,
+                          vertical: 8,
+                        ),
                         child: _LeaguesDataTable(
                           leagues: leagues,
                           isAdmin: isAdmin,
@@ -282,11 +289,19 @@ class _LeaguesDataTable extends StatelessWidget {
                   ),
                 ),
               DataCell(
-                FilledButton.tonalIcon(
-                  onPressed: isAdmin ? () => onEdit(leagues[index]) : null,
-                  icon: const Icon(Icons.edit_outlined),
-                  label: const Text('Editar'),
-                ),
+                isAdmin
+                    ? isMobile
+                        ? IconButton.filledTonal(
+                            onPressed: () => onEdit(leagues[index]),
+                            icon: const Icon(Icons.edit_outlined),
+                            tooltip: 'Editar',
+                          )
+                        : FilledButton.tonalIcon(
+                            onPressed: () => onEdit(leagues[index]),
+                            icon: const Icon(Icons.edit_outlined),
+                            label: const Text('Editar'),
+                          )
+                    : const SizedBox.shrink(),
               ),
             ],
           ),
