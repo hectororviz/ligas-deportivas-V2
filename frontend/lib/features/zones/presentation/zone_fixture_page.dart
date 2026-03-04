@@ -333,71 +333,77 @@ class _ZoneFixturePageState extends ConsumerState<ZoneFixturePage> {
                         ) ??
                     false));
         final hasPreview = _preview != null;
-        return Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+        return Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 800),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.sports_soccer_outlined, color: Theme.of(context).colorScheme.primary),
-                  const SizedBox(width: 12),
+                  Row(
+                    children: [
+                      Icon(Icons.sports_soccer_outlined, color: Theme.of(context).colorScheme.primary),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Fixture de ${zone.name}',
+                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${zone.tournament.leagueName} · ${zone.tournament.name}',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                          ],
+                        ),
+                      ),
+                      ZoneStatusChip(status: zone.status),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Fixture de ${zone.name}',
-                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${zone.tournament.leagueName} · ${zone.tournament.name}',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ],
+                    child: fixtureAsync.when(
+                      data: (fixtureData) {
+                        Widget content;
+                        final matches = fixtureData.matches;
+                        if (matches.isEmpty && !hasPreview) {
+                          content = _buildGenerationPrompt(zone, canManageFixture);
+                        } else if (hasPreview) {
+                          content = _buildPreview(zone, _preview!);
+                        } else {
+                          content = _buildFixtureSchedule(zone, fixtureData, canManageFixture);
+                        }
+
+                        final scrollView = SingleChildScrollView(
+                          controller: _contentScrollController,
+                          child: content,
+                        );
+
+                        if (Responsive.isMobile(context)) {
+                          return scrollView;
+                        }
+
+                        return Scrollbar(
+                          thumbVisibility: true,
+                          controller: _contentScrollController,
+                          child: scrollView,
+                        );
+                      },
+                      loading: () => const Center(child: CircularProgressIndicator()),
+                      error: (error, stack) => _ErrorMessage(
+                        message: 'No se pudieron cargar los partidos: $error',
+                        onRetry: () => ref.invalidate(zoneMatchesProvider(widget.zoneId)),
+                      ),
                     ),
                   ),
-                  ZoneStatusChip(status: zone.status),
                 ],
               ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: fixtureAsync.when(
-                  data: (fixtureData) {
-                    Widget content;
-                    final matches = fixtureData.matches;
-                    if (matches.isEmpty && !hasPreview) {
-                      content = _buildGenerationPrompt(zone, canManageFixture);
-                    } else if (hasPreview) {
-                      content = _buildPreview(zone, _preview!);
-                    } else {
-                      content = _buildFixtureSchedule(zone, fixtureData, canManageFixture);
-                    }
-
-                    final scrollView = SingleChildScrollView(
-                      controller: _contentScrollController,
-                      child: content,
-                    );
-
-                    if (Responsive.isMobile(context)) {
-                      return scrollView;
-                    }
-
-                    return Scrollbar(
-                      thumbVisibility: true,
-                      controller: _contentScrollController,
-                      child: scrollView,
-                    );
-                  },
-                  loading: () => const Center(child: CircularProgressIndicator()),
-                  error: (error, stack) => _ErrorMessage(
-                    message: 'No se pudieron cargar los partidos: $error',
-                    onRetry: () => ref.invalidate(zoneMatchesProvider(widget.zoneId)),
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
         );
       },
@@ -960,29 +966,23 @@ class _FixtureMatchdayCard extends StatelessWidget {
               ),
             ],
           );
-    return Align(
-      alignment: Alignment.center,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 800),
-        child: Card(
-          margin: const EdgeInsets.only(bottom: 16),
-          child: ExpansionTile(
-            tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            title: header,
-            children: [
-              const Divider(height: 24),
-              ...matches,
-              if (byeClubName != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'Libre: $byeClubName',
-                  style: theme.textTheme.bodyMedium?.copyWith(fontStyle: FontStyle.italic),
-                ),
-              ],
-            ],
-          ),
-        ),
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        title: header,
+        children: [
+          const Divider(height: 24),
+          ...matches,
+          if (byeClubName != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Libre: $byeClubName',
+              style: theme.textTheme.bodyMedium?.copyWith(fontStyle: FontStyle.italic),
+            ),
+          ],
+        ],
       ),
     );
   }
