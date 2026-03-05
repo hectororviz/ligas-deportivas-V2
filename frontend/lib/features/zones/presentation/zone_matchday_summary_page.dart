@@ -82,7 +82,7 @@ class _MatchdaySummaryView extends ConsumerWidget {
     final leagueColor = leagueColors[data.zone.leagueId] ?? theme.colorScheme.primary;
     final subtitle = '${data.zone.tournamentName} ${data.zone.tournamentYear} · ${data.zone.leagueName}';
     final dateLabel = data.matchday.date != null
-        ? DateFormat('dd/MM/yyyy').format(data.matchday.date!.toLocal())
+        ? DateFormat('dd/MM/yyyy').format(data.matchday.date!.toUtc())
         : 'Sin fecha definida';
     final scoreboardGrouping = _buildScoreboardGrouping(data.scoreboard, data.matches);
     final matchdayPoints = _buildMatchdayPoints(data.matches);

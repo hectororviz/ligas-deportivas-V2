@@ -98,16 +98,22 @@ class FixturesPage extends ConsumerWidget {
           );
         }
 
-        return ListView.builder(
-          padding: padding,
-          itemCount: tournaments.length,
-          itemBuilder: (context, index) {
-            final tournament = tournaments[index];
-            return _TournamentAccordion(
-              tournament: tournament,
-              onOpenZone: (zone) => _openZoneFixture(context, zone),
-            );
-          },
+        return Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 800),
+            child: ListView.builder(
+              padding: padding,
+              itemCount: tournaments.length,
+              itemBuilder: (context, index) {
+                final tournament = tournaments[index];
+                return _TournamentAccordion(
+                  tournament: tournament,
+                  onOpenZone: (zone) => _openZoneFixture(context, zone),
+                );
+              },
+            ),
+          ),
         );
       },
       loading: () => const Center(child: CircularProgressIndicator()),

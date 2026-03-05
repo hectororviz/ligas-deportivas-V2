@@ -163,15 +163,15 @@ class _ZoneStandingsViewState extends ConsumerState<_ZoneStandingsView> {
     final leagueColor = leagueColors[data.zone.leagueId] ?? theme.colorScheme.primary;
     final subtitle = '${data.zone.tournamentName} ${data.zone.tournamentYear} · ${data.zone.leagueName}';
     final isMobile = Responsive.isMobile(context);
-    final cardPadding = isMobile ? const EdgeInsets.all(12) : const EdgeInsets.all(20);
+    final cardPadding = isMobile ? const EdgeInsets.all(8) : const EdgeInsets.all(20);
     final tilePadding = isMobile
-        ? const EdgeInsets.symmetric(horizontal: 12, vertical: 10)
+        ? const EdgeInsets.symmetric(horizontal: 8, vertical: 8)
         : const EdgeInsets.symmetric(horizontal: 20, vertical: 12);
     final tileChildrenPadding =
-        isMobile ? const EdgeInsets.fromLTRB(12, 0, 12, 12) : const EdgeInsets.fromLTRB(20, 0, 20, 16);
+        isMobile ? const EdgeInsets.fromLTRB(8, 0, 8, 8) : const EdgeInsets.fromLTRB(20, 0, 20, 16);
 
     final listPadding = isMobile
-        ? const EdgeInsets.fromLTRB(8, 16, 8, 16)
+        ? const EdgeInsets.fromLTRB(4, 12, 4, 12)
         : const EdgeInsets.all(24);
 
     return ListView(

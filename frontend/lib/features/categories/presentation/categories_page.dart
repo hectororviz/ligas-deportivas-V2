@@ -344,9 +344,10 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage> {
             )
           : null,
       builder: (context, scrollController) {
+        final isMobile = Responsive.isMobile(context);
         return ListView(
           controller: scrollController,
-          padding: const EdgeInsets.all(24.0),
+          padding: isMobile ? const EdgeInsets.symmetric(horizontal: 12, vertical: 16) : const EdgeInsets.all(24.0),
           children: [
             Text(
               'Categorias',
@@ -562,8 +563,8 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 24, vertical: 16),
+                          padding: EdgeInsets.symmetric(
+                              horizontal: isMobile ? 12 : 24, vertical: 16),
                           child: Row(
                             children: [
                               Icon(
@@ -588,8 +589,8 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage> {
                         ),
                         const Divider(height: 1),
                         Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
+                          padding: EdgeInsets.symmetric(
+                              horizontal: isMobile ? 8 : 16, vertical: 8),
                           child: _CategoriesDataTable(
                             categories: categories,
                             canEdit: canEdit,
@@ -673,7 +674,7 @@ class _CategoriesDataTable extends StatelessWidget {
       headingTextStyle: headerStyle,
       columns: [
         const DataColumn(label: Text('Nombre')),
-        const DataColumn(label: Text('Años de nacimiento')),
+        DataColumn(label: Text(isMobile ? 'Año' : 'Años de nacimiento')),
         const DataColumn(label: Text('Género')),
         if (!isMobile) const DataColumn(label: Text('Mín. jugadores')),
         if (!isMobile) const DataColumn(label: Text('Obligatoria')),
@@ -687,24 +688,36 @@ class _CategoriesDataTable extends StatelessWidget {
             cells: [
               DataCell(Text(categories[index].name)),
               DataCell(Text(categories[index].birthYearRangeLabel)),
-              DataCell(Text(categories[index].genderLabel)),
+              DataCell(Text(isMobile ? categories[index].genderLabel.substring(0, 3 + (categories[index].gender == 'MIXTO' ? 0 : 1)) : categories[index].genderLabel)),
               if (!isMobile) DataCell(Text(categories[index].minPlayers.toString())),
               if (!isMobile) DataCell(Text(categories[index].mandatory ? 'Sí' : 'No')),
               if (!isMobile) DataCell(Text(categories[index].active ? 'Activo' : 'Inactivo')),
               DataCell(
                 Row(
                   children: [
-                    OutlinedButton.icon(
-                      onPressed: () => onDetails(categories[index]),
-                      icon: const Icon(Icons.visibility_outlined),
-                      label: const Text('Detalles'),
-                    ),
+                    isMobile
+                        ? IconButton.outlined(
+                            onPressed: () => onDetails(categories[index]),
+                            icon: const Icon(Icons.visibility_outlined),
+                            tooltip: 'Detalles',
+                          )
+                        : OutlinedButton.icon(
+                            onPressed: () => onDetails(categories[index]),
+                            icon: const Icon(Icons.visibility_outlined),
+                            label: const Text('Detalles'),
+                          ),
                     const SizedBox(width: 8),
-                    FilledButton.tonalIcon(
-                      onPressed: canEdit ? () => onEdit(categories[index]) : null,
-                      icon: const Icon(Icons.edit_outlined),
-                      label: const Text('Editar'),
-                    ),
+                    isMobile
+                        ? IconButton.filledTonal(
+                            onPressed: canEdit ? () => onEdit(categories[index]) : null,
+                            icon: const Icon(Icons.edit_outlined),
+                            tooltip: 'Editar',
+                          )
+                        : FilledButton.tonalIcon(
+                            onPressed: canEdit ? () => onEdit(categories[index]) : null,
+                            icon: const Icon(Icons.edit_outlined),
+                            label: const Text('Editar'),
+                          ),
                   ],
                 ),
               ),
