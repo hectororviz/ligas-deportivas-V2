@@ -51,6 +51,17 @@ async function bootstrap() {
   app.setGlobalPrefix('api/v1');
   app.use(helmet());
   app.use(cookieParser());
+
+  // Some previously generated PWA manifests can resolve `start_url` to the
+  // favicon directory (`/site-identity/icons/<hash>/`). Redirect that path to
+  // the app root so installed apps keep opening correctly.
+  app.use((req, res, next) => {
+    if (/^\/site-identity\/icons\/[a-f0-9]{64}\/?$/.test(req.path)) {
+      return res.redirect(302, '/');
+    }
+    return next();
+  });
+
   const uploadsDir = join(process.cwd(), 'storage', 'uploads');
   const publicDir = join(process.cwd(), 'public');
 
