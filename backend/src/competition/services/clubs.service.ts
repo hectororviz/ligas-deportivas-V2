@@ -37,6 +37,13 @@ export class ClubsService {
   private readonly defaultInclude: Prisma.ClubInclude = {
     league: true,
     teams: {
+      where: {
+        tournamentCategory: {
+          tournament: {
+            status: TournamentStatus.ACTIVE,
+          },
+        },
+      },
       select: {
         tournamentCategory: {
           select: {
@@ -45,6 +52,7 @@ export class ClubsService {
                 id: true,
                 name: true,
                 year: true,
+                status: true,
               },
             },
           },
