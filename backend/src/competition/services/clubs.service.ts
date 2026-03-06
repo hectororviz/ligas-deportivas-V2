@@ -25,32 +25,62 @@ const CLUB_LOGO_MIN_SIZE = 200;
 const CLUB_LOGO_MAX_SIZE = 500;
 const MAX_LOGO_BYTES = 512 * 1024;
 
-interface FindClubsInput extends ListClubsDto {}
+interface FindClubsInput extends ListClubsDto { }
 
 @Injectable()
 export class ClubsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storageService: StorageService,
-  ) {}
+  ) { }
 
   private readonly defaultInclude: Prisma.ClubInclude = {
     league: true,
     teams: {
-      include: {
+      select: {
         tournamentCategory: {
-          include: { category: true, tournament: true },
+          select: {
+            tournament: {
+              select: {
+                id: true,
+                name: true,
+                year: true,
+              },
+            },
+          },
         },
       },
     },
   };
+
+  private mapToConciseClub(club: any) {
+    const { teams, ...clubData } = club;
+    const uniqueTournaments = new Map<number, any>();
+
+    if (teams) {
+      for (const team of teams) {
+        const tournament = team.tournamentCategory?.tournament;
+        if (tournament && !uniqueTournaments.has(tournament.id)) {
+          uniqueTournaments.set(tournament.id, tournament);
+        }
+      }
+    }
+
+    return {
+      ...clubData,
+      tournaments: Array.from(uniqueTournaments.values()).sort((a, b) => {
+        if (a.year !== b.year) return b.year - a.year;
+        return a.name.localeCompare(b.name);
+      }),
+    };
+  }
 
   async create(dto: CreateClubDto) {
     await this.ensureUniqueName(dto.name, dto.leagueId);
     const slug = await this.resolveSlug(dto.slug, dto.name);
 
     try {
-      return await this.prisma.club.create({
+      const club = await this.prisma.club.create({
         data: {
           name: dto.name.trim(),
           shortName: dto.shortName?.trim(),
@@ -68,6 +98,8 @@ export class ClubsService {
         },
         include: this.defaultInclude,
       });
+
+      return this.mapToConciseClub(club);
     } catch (error) {
       throw this.handlePrismaError(error);
     }
@@ -104,7 +136,7 @@ export class ClubsService {
     ]);
 
     return {
-      data: clubs,
+      data: clubs.map((c) => this.mapToConciseClub(c)),
       total,
       page,
       pageSize,
@@ -119,7 +151,7 @@ export class ClubsService {
     if (!club) {
       throw new NotFoundException('Club no encontrado');
     }
-    return club;
+    return this.mapToConciseClub(club);
   }
 
   async findAdminOverviewBySlug(slug: string) {
@@ -293,10 +325,10 @@ export class ClubsService {
           ...tournament,
           zone: zone
             ? {
-                id: zone.id,
-                name: zone.name,
-                status: zone.status,
-              }
+              id: zone.id,
+              name: zone.name,
+              status: zone.status,
+            }
             : null,
           canLeave: !zone || zone.status === ZoneStatus.OPEN,
         };
