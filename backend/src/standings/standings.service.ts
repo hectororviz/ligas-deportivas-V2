@@ -13,7 +13,7 @@ interface StandingAccumulator {
 
 @Injectable()
 export class StandingsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async recalculateForMatch(matchId: number) {
     const match = await this.prisma.match.findUnique({
@@ -302,6 +302,7 @@ export class StandingsService {
       {
         clubId: number;
         clubName: string;
+        shortName: string | null;
         played: number;
         wins: number;
         draws: number;
@@ -327,6 +328,7 @@ export class StandingsService {
     for (const entry of entries) {
       const category = entry.tournamentCategory;
       const clubName = entry.club.name;
+      const clubShortName = entry.club.shortName;
 
       if (!categories.has(entry.tournamentCategoryId)) {
         categories.set(entry.tournamentCategoryId, {
@@ -341,6 +343,7 @@ export class StandingsService {
       categories.get(entry.tournamentCategoryId)?.standings.push({
         clubId: entry.clubId,
         clubName,
+        shortName: clubShortName,
         played: entry.played,
         wins: entry.wins,
         draws: entry.draws,
@@ -355,6 +358,7 @@ export class StandingsService {
         general.set(entry.clubId, {
           clubId: entry.clubId,
           clubName,
+          shortName: clubShortName,
           played: 0,
           wins: 0,
           draws: 0,
