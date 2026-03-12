@@ -18,7 +18,7 @@ export class MatchesService {
     private readonly prisma: PrismaService,
     private readonly storageService: StorageService,
     private readonly standingsService: StandingsService
-  ) {}
+  ) { }
 
   async listByZone(zoneId: number) {
     const [matches, matchdays] = await this.prisma.$transaction([
@@ -63,7 +63,7 @@ export class MatchesService {
     return { matches, matchdays };
   }
 
-  async finalizeMatchday(zoneId: number, matchday: number) {
+  async finalizeMatchday(zoneId: number, matchday: number, userId: number) {
     return this.prisma.$transaction(async (tx) => {
       const entry = await tx.zoneMatchday.findUnique({
         where: { zoneId_matchday: { zoneId, matchday } }
@@ -75,17 +75,58 @@ export class MatchesService {
 
       const matches = await tx.match.findMany({
         where: { zoneId, matchday },
-        select: { status: true }
+        include: {
+          categories: true
+        }
       });
 
       if (!matches.length) {
         throw new BadRequestException('No hay partidos asignados a esta fecha');
       }
 
-      const allFinished = matches.every((match) => match.status === MatchStatus.FINISHED);
-      const newStatus = allFinished ? MatchdayStatus.PLAYED : MatchdayStatus.INCOMPLETE;
-
       const updates: Promise<unknown>[] = [];
+
+      // Auto-close matches and categories without results
+      for (const match of matches) {
+        let matchChanged = false;
+
+        for (const category of match.categories) {
+          if (!category.closedAt) {
+            updates.push(
+              tx.matchCategory.update({
+                where: { id: category.id },
+                data: {
+                  closedAt: new Date(),
+                  closedById: userId
+                }
+              })
+            );
+            matchChanged = true;
+          }
+        }
+
+        if (match.status !== MatchStatus.FINISHED) {
+          updates.push(
+            tx.match.update({
+              where: { id: match.id },
+              data: { status: MatchStatus.FINISHED }
+            })
+          );
+          matchChanged = true;
+        }
+
+        if (matchChanged) {
+          // Recalculate standings for the match
+          // We need to do this outside the categories loop but inside the match loop
+          // standinsService.recalculateForMatch uses the match instance, so it's safe to call here
+          // However, we must ensure the transaction finishes or use the transaction client if possible.
+          // Since recalculateForMatch doesn't accept a transaction client, we'll mark it to be run after transaction.
+        }
+      }
+
+      const allFinished = true; // They are all finished now or being finished
+      const newStatus = MatchdayStatus.PLAYED;
+
       updates.push(
         tx.zoneMatchday.update({
           where: { zoneId_matchday: { zoneId, matchday } },
@@ -113,6 +154,21 @@ export class MatchesService {
         where: { zoneId },
         orderBy: { matchday: 'asc' }
       });
+    });
+
+    // Recalculate standings for all matches in the matchday to ensure they are up to date
+    const matchesToRecalculate = await this.prisma.match.findMany({
+      where: { zoneId, matchday },
+      select: { id: true }
+    });
+
+    for (const match of matchesToRecalculate) {
+      await this.standingsService.recalculateForMatch(match.id);
+    }
+
+    return this.prisma.zoneMatchday.findMany({
+      where: { zoneId },
+      orderBy: { matchday: 'asc' }
     });
   }
 
@@ -239,19 +295,19 @@ export class MatchesService {
         round: match.round,
         homeClub: match.homeClub
           ? {
-              id: match.homeClub.id,
-              name: match.homeClub.name,
-              shortName: match.homeClub.shortName,
-              logoUrl: match.homeClub.logoUrl
-            }
+            id: match.homeClub.id,
+            name: match.homeClub.name,
+            shortName: match.homeClub.shortName,
+            logoUrl: match.homeClub.logoUrl
+          }
           : null,
         awayClub: match.awayClub
           ? {
-              id: match.awayClub.id,
-              name: match.awayClub.name,
-              shortName: match.awayClub.shortName,
-              logoUrl: match.awayClub.logoUrl
-            }
+            id: match.awayClub.id,
+            name: match.awayClub.name,
+            shortName: match.awayClub.shortName,
+            logoUrl: match.awayClub.logoUrl
+          }
           : null,
         categories: match.categories.map((category) => ({
           tournamentCategoryId: category.tournamentCategoryId,
@@ -317,15 +373,15 @@ export class MatchesService {
       zone.matchdays.length > 0
         ? zone.matchdays
         : Array.from(matchesByMatchday.entries())
-            .map(([matchday, matchdayMatches]) => {
-              const allFinished = matchdayMatches.every((match) => match.status === MatchStatus.FINISHED);
-              return {
-                matchday,
-                status: allFinished ? MatchdayStatus.PLAYED : MatchdayStatus.INCOMPLETE,
-                date: null
-              };
-            })
-            .sort((a, b) => a.matchday - b.matchday);
+          .map(([matchday, matchdayMatches]) => {
+            const allFinished = matchdayMatches.every((match) => match.status === MatchStatus.FINISHED);
+            return {
+              matchday,
+              status: allFinished ? MatchdayStatus.PLAYED : MatchdayStatus.INCOMPLETE,
+              date: null
+            };
+          })
+          .sort((a, b) => a.matchday - b.matchday);
 
     return {
       zoneId: zone.id,

@@ -36,7 +36,7 @@ export class MatchesController {
     private readonly matchFlyerService: MatchFlyerService,
     private readonly matchPosterService: MatchPosterService,
     private readonly matchSheetService: MatchSheetService,
-  ) {}
+  ) { }
 
   @Get('zones/:zoneId/matches')
   getByZone(@Param('zoneId', ParseIntPipe) zoneId: number) {
@@ -58,9 +58,10 @@ export class MatchesController {
   @Permissions({ module: Module.FIXTURE, action: Action.UPDATE })
   finalizeMatchday(
     @Param('zoneId', ParseIntPipe) zoneId: number,
-    @Param('matchday', ParseIntPipe) matchday: number
+    @Param('matchday', ParseIntPipe) matchday: number,
+    @CurrentUser() user: RequestUser,
   ) {
-    return this.matchesService.finalizeMatchday(zoneId, matchday);
+    return this.matchesService.finalizeMatchday(zoneId, matchday, user.id);
   }
 
   @Get('zones/:zoneId/matchdays/:matchday/summary')
