@@ -64,7 +64,7 @@ export class MatchesService {
   }
 
   async finalizeMatchday(zoneId: number, matchday: number, userId: number) {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const entry = await tx.zoneMatchday.findUnique({
         where: { zoneId_matchday: { zoneId, matchday } }
       });
@@ -88,8 +88,6 @@ export class MatchesService {
 
       // Auto-close matches and categories without results
       for (const match of matches) {
-        let matchChanged = false;
-
         for (const category of match.categories) {
           if (!category.closedAt) {
             updates.push(
@@ -101,7 +99,6 @@ export class MatchesService {
                 }
               })
             );
-            matchChanged = true;
           }
         }
 
@@ -112,19 +109,9 @@ export class MatchesService {
               data: { status: MatchStatus.FINISHED }
             })
           );
-          matchChanged = true;
-        }
-
-        if (matchChanged) {
-          // Recalculate standings for the match
-          // We need to do this outside the categories loop but inside the match loop
-          // standinsService.recalculateForMatch uses the match instance, so it's safe to call here
-          // However, we must ensure the transaction finishes or use the transaction client if possible.
-          // Since recalculateForMatch doesn't accept a transaction client, we'll mark it to be run after transaction.
         }
       }
 
-      const allFinished = true; // They are all finished now or being finished
       const newStatus = MatchdayStatus.PLAYED;
 
       updates.push(
@@ -156,20 +143,24 @@ export class MatchesService {
       });
     });
 
-    // Recalculate standings for all matches in the matchday to ensure they are up to date
-    const matchesToRecalculate = await this.prisma.match.findMany({
+    // Recalculate standings for all unique categories in this matchday
+    const matches = await this.prisma.match.findMany({
       where: { zoneId, matchday },
-      select: { id: true }
+      include: { categories: true }
     });
 
-    for (const match of matchesToRecalculate) {
-      await this.standingsService.recalculateForMatch(match.id);
+    const categoryIds = new Set<number>();
+    for (const match of matches) {
+      for (const cat of match.categories) {
+        categoryIds.add(cat.tournamentCategoryId);
+      }
     }
 
-    return this.prisma.zoneMatchday.findMany({
-      where: { zoneId },
-      orderBy: { matchday: 'asc' }
-    });
+    for (const categoryId of categoryIds) {
+      await this.standingsService.recalculateForCategory(zoneId, categoryId);
+    }
+
+    return result;
   }
 
   async updateMatchdayDate(zoneId: number, matchday: number, dto: UpdateMatchdayDto) {
