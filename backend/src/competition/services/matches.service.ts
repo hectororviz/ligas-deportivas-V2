@@ -799,6 +799,22 @@ export class MatchesService {
         }
       });
 
+      if (dto.homeScore > 0 || dto.awayScore > 0) {
+        const zoneId = matchCategory.match.zoneId;
+        const matchday = matchCategory.match.matchday;
+
+        const currentMatchday = await tx.zoneMatchday.findUnique({
+          where: { zoneId_matchday: { zoneId, matchday } }
+        });
+
+        if (currentMatchday && currentMatchday.status === MatchdayStatus.PENDING) {
+          await tx.zoneMatchday.update({
+            where: { zoneId_matchday: { zoneId, matchday } },
+            data: { status: MatchdayStatus.IN_PROGRESS }
+          });
+        }
+      }
+
       if (dto.confirm) {
         const categories = await tx.matchCategory.findMany({
           where: { matchId },
