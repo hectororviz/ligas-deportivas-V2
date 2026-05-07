@@ -1,8 +1,52 @@
 ligas.csdsoler.com.ar {
+  encode zstd gzip
+
   reverse_proxy /api/* backend:3000
   reverse_proxy frontend:80
 }
 pos.csdsoler.com.ar {
-  reverse_proxy /api/* pos-backend:3000
+  handle_path /api/* {
+    reverse_proxy pos-backend:3000
+  }
+
+  reverse_proxy /uploads/* pos-backend:3000
+
   reverse_proxy pos-frontend:80
+}
+automat.csdsoler.com.ar {
+  encode zstd gzip
+
+  # 1) /wa (Meta) -> reescritura a los webhooks de n8n
+  @wa_verify {
+    path /wa
+    method GET
+  }
+  handle @wa_verify {
+    rewrite * /webhook/whatsapp-verify
+    reverse_proxy n8n:5678
+  }
+
+  @wa_in {
+    path /wa
+    method POST
+  }
+  handle @wa_in {
+    rewrite * /webhook/whatsapp-in
+    reverse_proxy n8n:5678
+  }
+
+  # 2) Todo lo demás al UI/API de n8n
+  handle {
+    reverse_proxy n8n:5678 {
+      header_up Host {host}
+      header_up X-Real-IP {remote_host}
+      header_up X-Forwarded-For {remote_host}
+      header_up X-Forwarded-Proto {scheme}
+    }
+  }
+}
+
+push.csdsoler.com.ar {
+  encode zstd gzip
+  reverse_proxy gotify:80
 }

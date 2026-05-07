@@ -36,6 +36,8 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_FROM: ${SMTP_FROM:-noreply@ligas.local}
+      SCAN_DEBUG: false
+      SCAN_DEBUG_KEEP_TMP: false
     depends_on:
       db:
         condition: service_healthy
