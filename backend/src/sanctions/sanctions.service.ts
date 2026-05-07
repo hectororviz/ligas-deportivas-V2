@@ -371,6 +371,10 @@ export class SanctionsService {
       throw new NotFoundException('Torneo no encontrado');
     }
 
+    // Obtener reglas disciplinarias para calcular acumulación
+    const rules = await this.getOrCreateDisciplinaryRules(tournamentId);
+    const yellowCardLimit = rules.yellowCardLimit;
+
     // Tarjetas PENDING sin suspensión
     const pendingCards = await this.prisma.playerCard.findMany({
       where: {
@@ -432,7 +436,38 @@ export class SanctionsService {
       },
     });
 
-    // Suspensiones ACTIVE
+    // Contar amarillas pendientes por jugador
+    const yellowCardCountByPlayer = new Map<number, number>();
+    for (const card of pendingCards) {
+      if (card.cardType === CardType.YELLOW) {
+        const current = yellowCardCountByPlayer.get(card.playerId) || 0;
+        yellowCardCountByPlayer.set(card.playerId, current + 1);
+      }
+    }
+
+    // Calcular canSuspend para cada tarjeta
+    const pendingCardsWithStatus = pendingCards.map(card => {
+      let canSuspend = false;
+      let yellowCount = 0;
+
+      if (card.cardType === CardType.RED) {
+        // Roja directa: siempre se puede suspender
+        canSuspend = true;
+      } else {
+        // Amarilla: solo si el jugador llegó al límite
+        const playerYellowCount = yellowCardCountByPlayer.get(card.playerId) || 0;
+        yellowCount = playerYellowCount;
+        canSuspend = playerYellowCount >= yellowCardLimit;
+      }
+
+      return {
+        ...card,
+        canSuspend,
+        yellowCount,
+      };
+    });
+
+    // Suspensiones ACTIVE (vigentes - aún tienen partidos pendientes)
     const activeSuspensions = await this.prisma.playerSuspension.findMany({
       where: {
         tournamentId,
@@ -472,11 +507,50 @@ export class SanctionsService {
       },
     });
 
-    // Suspensiones COMPLETED/CANCELLED
+    // Suspensiones COMPLETED (cumplidas)
     const completedSuspensions = await this.prisma.playerSuspension.findMany({
       where: {
         tournamentId,
-        status: { in: [SuspensionStatus.COMPLETED, SuspensionStatus.CANCELLED] },
+        status: SuspensionStatus.COMPLETED,
+      },
+      include: {
+        player: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            dni: true,
+          },
+        },
+        originCards: {
+          include: {
+            card: {
+              select: {
+                id: true,
+                cardType: true,
+                matchCategoryId: true,
+              },
+            },
+          },
+        },
+        servedMatches: {
+          select: {
+            id: true,
+            matchCategoryId: true,
+            servedAt: true,
+          },
+        },
+      },
+      orderBy: {
+        updatedAt: 'desc',
+      },
+    });
+
+    // Suspensiones CANCELLED (canceladas)
+    const cancelledSuspensions = await this.prisma.playerSuspension.findMany({
+      where: {
+        tournamentId,
+        status: SuspensionStatus.CANCELLED,
       },
       include: {
         player: {
@@ -538,27 +612,21 @@ export class SanctionsService {
       },
     });
 
-    return {
-      pending: pendingCards,
-      active: activeSuspensions.map(s => ({
-        ...s,
-        originCards: s.originCards.map(oc => ({
-          id: oc.card.id,
-          cardType: oc.card.cardType,
-          matchCategoryId: oc.card.matchCategoryId,
-        })),
+    const mapSuspension = (s: typeof activeSuspensions[0]): SuspensionResponseDto => ({
+      ...s,
+      originCards: s.originCards.map(oc => ({
+        id: oc.card.id,
+        cardType: oc.card.cardType,
+        matchCategoryId: oc.card.matchCategoryId,
       })),
-      history: [
-        ...completedSuspensions.map(s => ({
-          ...s,
-          originCards: s.originCards.map(oc => ({
-            id: oc.card.id,
-            cardType: oc.card.cardType,
-            matchCategoryId: oc.card.matchCategoryId,
-          })),
-        })),
-        ...deductions,
-      ],
+    });
+
+    return {
+      pending: pendingCardsWithStatus,
+      active: activeSuspensions.map(mapSuspension),
+      completed: completedSuspensions.map(mapSuspension),
+      cancelled: cancelledSuspensions.map(mapSuspension),
+      deductions,
     };
   }
 

@@ -222,7 +222,7 @@ class _SanctionsDetailPage extends ConsumerWidget {
                     const SizedBox(height: 16),
                   ],
 
-                  // Suspensiones activas
+                  // Sanciones Vigentes (activas con partidos pendientes)
                   if (sanctions.active.isNotEmpty) ...[
                     _ActiveSuspensionsSection(
                       suspensions: sanctions.active,
@@ -235,9 +235,27 @@ class _SanctionsDetailPage extends ConsumerWidget {
                     const SizedBox(height: 16),
                   ],
 
-                  // Historial
-                  if (sanctions.history.isNotEmpty)
-                    _HistorySection(history: sanctions.history),
+                  // Sanciones Cumplidas (completed)
+                  if (sanctions.completed.isNotEmpty) ...[
+                    _CompletedSuspensionsSection(
+                      suspensions: sanctions.completed,
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // Sanciones Canceladas
+                  if (sanctions.cancelled.isNotEmpty) ...[
+                    _CancelledSuspensionsSection(
+                      suspensions: sanctions.cancelled,
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // Deducciones de Puntos
+                  if (sanctions.deductions.isNotEmpty) ...[
+                    _DeductionsSection(deductions: sanctions.deductions),
+                    const SizedBox(height: 16),
+                  ],
                 ],
               ),
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -594,6 +612,19 @@ class _PendingCardsSection extends StatelessWidget {
                 final matchInfo = card.matchCategory?.match;
                 final matchDisplay = matchInfo?.displayName ?? 'Partido desconocido';
                 
+                // Determinar estado de la tarjeta
+                String? statusText;
+                Color? statusColor;
+                if (card.cardType == CardType.YELLOW) {
+                  if (card.canSuspend) {
+                    statusText = 'Límite alcanzado (${card.yellowCount}/${card.yellowCount})';
+                    statusColor = Colors.orange;
+                  } else {
+                    statusText = '${card.yellowCount} amarilla(s)';
+                    statusColor = Colors.grey;
+                  }
+                }
+                
                 return ListTile(
                   leading: _CardTypeIcon(cardType: card.cardType),
                   title: Text(card.player?.fullName ?? 'Jugador ${card.playerId}'),
@@ -613,13 +644,39 @@ class _PendingCardsSection extends StatelessWidget {
                           'Minuto: ${card.minute}',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
+                      if (statusText != null)
+                        Container(
+                          margin: const EdgeInsets.only(top: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: statusColor?.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            statusText,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: statusColor,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
                     ],
                   ),
-                  trailing: TextButton.icon(
-                    onPressed: () => onCreateSuspension(card),
-                    icon: const Icon(Icons.add),
-                    label: const Text('Suspender'),
-                  ),
+                  trailing: card.canSuspend
+                    ? TextButton.icon(
+                        onPressed: () => onCreateSuspension(card),
+                        icon: const Icon(Icons.add),
+                        label: const Text('Suspender'),
+                      )
+                    : Chip(
+                        label: const Text('No aplica'),
+                        backgroundColor: Colors.grey.shade200,
+                        labelStyle: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
                 );
               },
             ),
@@ -676,7 +733,7 @@ class _ActiveSuspensionsSection extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'Suspensiones Activas',
+                    'Sanciones Vigentes',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                         ),
@@ -802,6 +859,206 @@ class _HistorySection extends StatelessWidget {
                   );
                 }
                 return const SizedBox.shrink();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CompletedSuspensionsSection extends StatelessWidget {
+  final List<PlayerSuspension> suspensions;
+
+  const _CompletedSuspensionsSection({required this.suspensions});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.check_circle_outlined,
+                  color: Colors.green,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Sanciones Cumplidas',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                ),
+                Chip(
+                  label: Text('${suspensions.length}'),
+                  backgroundColor: Colors.green.shade100,
+                ),
+              ],
+            ),
+            const Divider(height: 24),
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: suspensions.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (context, index) {
+                final suspension = suspensions[index];
+                return ListTile(
+                  leading: const Icon(
+                    Icons.check_circle,
+                    color: Colors.green,
+                  ),
+                  title: Text(suspension.player?.fullName ?? 'Jugador ${suspension.playerId}'),
+                  subtitle: Text(
+                    '${suspension.originalMatches} fecha(s) - Cumplida',
+                  ),
+                  trailing: suspension.reason != null
+                      ? Tooltip(
+                          message: suspension.reason!,
+                          child: const Icon(Icons.info_outline),
+                        )
+                      : null,
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CancelledSuspensionsSection extends StatelessWidget {
+  final List<PlayerSuspension> suspensions;
+
+  const _CancelledSuspensionsSection({required this.suspensions});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.cancel_outlined,
+                  color: Colors.grey,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Sanciones Canceladas',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                ),
+                Chip(
+                  label: Text('${suspensions.length}'),
+                  backgroundColor: Colors.grey.shade200,
+                ),
+              ],
+            ),
+            const Divider(height: 24),
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: suspensions.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (context, index) {
+                final suspension = suspensions[index];
+                return ListTile(
+                  leading: const Icon(
+                    Icons.cancel,
+                    color: Colors.grey,
+                  ),
+                  title: Text(suspension.player?.fullName ?? 'Jugador ${suspension.playerId}'),
+                  subtitle: Text(
+                    '${suspension.originalMatches} fecha(s) - Cancelada',
+                  ),
+                  trailing: suspension.reason != null
+                      ? Tooltip(
+                          message: suspension.reason!,
+                          child: const Icon(Icons.info_outline),
+                        )
+                      : null,
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DeductionsSection extends StatelessWidget {
+  final List<PointDeduction> deductions;
+
+  const _DeductionsSection({required this.deductions});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.remove_circle_outline,
+                  color: Colors.red,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Deducciones de Puntos',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                ),
+                Chip(
+                  label: Text('${deductions.length}'),
+                  backgroundColor: Colors.red.shade100,
+                ),
+              ],
+            ),
+            const Divider(height: 24),
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: deductions.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (context, index) {
+                final deduction = deductions[index];
+                return ListTile(
+                  leading: const Icon(
+                    Icons.remove_circle,
+                    color: Colors.red,
+                  ),
+                  title: Text(deduction.club?.name ?? 'Club ${deduction.clubId}'),
+                  subtitle: Text(deduction.reason),
+                  trailing: Text(
+                    '-${deduction.points} pts',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Colors.red,
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                );
               },
             ),
           ],

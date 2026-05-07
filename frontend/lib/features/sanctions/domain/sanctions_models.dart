@@ -18,6 +18,9 @@ class PlayerCard {
   final PlayerSummary? player;
   final ClubSummary? club;
   final MatchCategoryInfo? matchCategory;
+  // Campos adicionales para UI
+  final bool canSuspend;
+  final int? yellowCount;
 
   PlayerCard({
     required this.id,
@@ -31,6 +34,8 @@ class PlayerCard {
     this.player,
     this.club,
     this.matchCategory,
+    this.canSuspend = false,
+    this.yellowCount,
   });
 
   factory PlayerCard.fromJson(Map<String, dynamic> json) {
@@ -58,6 +63,8 @@ class PlayerCard {
       matchCategory: json['matchCategory'] != null
           ? MatchCategoryInfo.fromJson(json['matchCategory'] as Map<String, dynamic>)
           : null,
+      canSuspend: json['canSuspend'] as bool? ?? false,
+      yellowCount: json['yellowCount'] as int?,
     );
   }
 }
@@ -490,13 +497,17 @@ class UpdateDisciplinaryRulesDto {
 
 class TournamentSanctionsSummary {
   final List<PlayerCard> pending;
-  final List<PlayerSuspension> active;
-  final List<dynamic> history;
+  final List<PlayerSuspension> active; // Sanciones vigentes (con partidos pendientes)
+  final List<PlayerSuspension> completed; // Sanciones cumplidas
+  final List<PlayerSuspension> cancelled; // Sanciones canceladas
+  final List<PointDeduction> deductions; // Deducciones de puntos
 
   TournamentSanctionsSummary({
     required this.pending,
     required this.active,
-    required this.history,
+    required this.completed,
+    required this.cancelled,
+    required this.deductions,
   });
 
   factory TournamentSanctionsSummary.fromJson(Map<String, dynamic> json) {
@@ -507,15 +518,15 @@ class TournamentSanctionsSummary {
       active: (json['active'] as List)
           .map((e) => PlayerSuspension.fromJson(e as Map<String, dynamic>))
           .toList(),
-      history: (json['history'] as List).map((e) {
-        final map = e as Map<String, dynamic>;
-        // Determinar si es suspensión o deducción por los campos
-        if (map.containsKey('originalMatches')) {
-          return PlayerSuspension.fromJson(map);
-        } else {
-          return PointDeduction.fromJson(map);
-        }
-      }).toList(),
+      completed: (json['completed'] as List)
+          .map((e) => PlayerSuspension.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      cancelled: (json['cancelled'] as List)
+          .map((e) => PlayerSuspension.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      deductions: (json['deductions'] as List)
+          .map((e) => PointDeduction.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
   }
 }

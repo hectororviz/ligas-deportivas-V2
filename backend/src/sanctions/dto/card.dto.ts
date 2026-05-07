@@ -37,6 +37,26 @@ export class CardResponseDto {
     id: number;
     name: string;
   };
+  // Campos adicionales para UI
+  canSuspend?: boolean;
+  yellowCount?: number;
+  matchCategory?: {
+    id: number;
+    match?: {
+      id: number;
+      matchday: number;
+      round?: string;
+      date?: Date;
+      homeClub?: {
+        id: number;
+        name: string;
+      };
+      awayClub?: {
+        id: number;
+        name: string;
+      };
+    };
+  };
 }
 
 export class CardAlertDto {

@@ -5,5 +5,7 @@ import { DeductionResponseDto } from './deduction.dto';
 export class TournamentSanctionsSummaryDto {
   pending: CardResponseDto[];
   active: SuspensionResponseDto[];
-  history: (SuspensionResponseDto | DeductionResponseDto)[];
+  completed: SuspensionResponseDto[];  // Sanciones cumplidas
+  cancelled: SuspensionResponseDto[];  // Sanciones canceladas
+  deductions: DeductionResponseDto[];  // Deducciones de puntos
 }
