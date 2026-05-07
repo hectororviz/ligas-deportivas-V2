@@ -91,7 +91,7 @@ const _navigationItems = <NavigationItem>[
   ),
   NavigationItem(
     label: 'Sanciones',
-    icon: Icons.gavel_outlined,
+    icon: Icons.warning_amber,
     route: '/sanctions',
     requiredPermission: _NavigationPermission(module: 'SANCIONES'),
   ),

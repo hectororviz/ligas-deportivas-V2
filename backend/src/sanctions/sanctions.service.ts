@@ -401,6 +401,31 @@ export class SanctionsService {
             name: true,
           },
         },
+        matchCategory: {
+          select: {
+            id: true,
+            match: {
+              select: {
+                id: true,
+                matchday: true,
+                round: true,
+                date: true,
+                homeClub: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+                awayClub: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+        },
       },
       orderBy: {
         createdAt: 'desc',

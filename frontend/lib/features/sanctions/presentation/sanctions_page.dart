@@ -6,6 +6,8 @@ import '../../../services/api_client.dart';
 import '../../shared/widgets/page_scaffold.dart';
 import '../domain/sanctions_models.dart';
 import '../providers/sanctions_provider.dart';
+import 'create_suspension_dialog.dart';
+import 'edit_rules_dialog.dart';
 
 // Provider para lista de torneos activos
 final activeTournamentsProvider = FutureProvider<List<_TournamentSummary>>((ref) async {
@@ -214,8 +216,7 @@ class _SanctionsDetailPage extends ConsumerWidget {
                       onCreateSuspension: (card) => _showCreateSuspensionDialog(
                         context,
                         ref,
-                        card.playerId,
-                        [card.id],
+                        card,
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -286,16 +287,88 @@ class _SanctionsDetailPage extends ConsumerWidget {
   }
 
   void _showEditRulesDialog(BuildContext context, WidgetRef ref, DisciplinaryRules rules) {
-    // TODO: Implementar diálogo de edición de reglas
+    showDialog(
+      context: context,
+      builder: (context) => EditRulesDialog(
+        rules: rules,
+        onSave: (updated) async {
+          final service = ref.read(sanctionsServiceProvider);
+          try {
+            await service.updateDisciplinaryRules(
+              tournamentId,
+              UpdateDisciplinaryRulesDto(
+                yellowCardLimit: updated.yellowCardLimit,
+                yellowLimitSuspensionMatches: updated.yellowLimitSuspensionMatches,
+                directRedSuspensionMatches: updated.directRedSuspensionMatches,
+                doubleYellowSuspensionMatches: updated.doubleYellowSuspensionMatches,
+                resetYellowsOnPhaseChange: updated.resetYellowsOnPhaseChange,
+              ),
+            );
+            ref.invalidate(disciplinaryRulesProvider(tournamentId));
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Reglas actualizadas correctamente')),
+              );
+            }
+          } catch (error) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Error al actualizar reglas: $error')),
+              );
+            }
+          }
+        },
+      ),
+    );
   }
 
   void _showCreateSuspensionDialog(
     BuildContext context,
     WidgetRef ref,
-    int playerId,
-    List<int> cardIds,
+    PlayerCard card,
   ) {
-    // TODO: Implementar diálogo de creación de suspensión
+    final playerName = card.player?.fullName ?? 'Jugador ${card.playerId}';
+    
+    showDialog(
+      context: context,
+      builder: (context) => CreateSuspensionDialog(
+        playerId: card.playerId,
+        playerName: playerName,
+        cardIds: [card.id],
+        onCreated: () async {
+          final service = ref.read(sanctionsServiceProvider);
+          final notifier = ref.read(sanctionsNotifierProvider.notifier);
+          
+          try {
+            await service.createSuspension(
+              tournamentId,
+              CreateSuspensionDto(
+                playerId: card.playerId,
+                originalMatches: 1,
+                cardIds: [card.id],
+              ),
+            );
+            
+            notifier.invalidateTournamentSanctions(tournamentId);
+            
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Suspensión creada para $playerName')),
+              );
+            }
+          } catch (error) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Error al crear suspensión: $error'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          }
+        },
+      ),
+    );
   }
 
   void _showUpdateSuspensionDialog(
@@ -304,6 +377,59 @@ class _SanctionsDetailPage extends ConsumerWidget {
     PlayerSuspension suspension,
   ) {
     // TODO: Implementar diálogo de actualización de suspensión
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Gestionar Suspensión'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Jugador: ${suspension.player?.fullName ?? suspension.playerId}'),
+            Text('Fechas restantes: ${suspension.remainingMatches}'),
+            const SizedBox(height: 16),
+            if (suspension.reason != null)
+              Text('Motivo: ${suspension.reason}'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cerrar'),
+          ),
+          if (suspension.status == SuspensionStatus.ACTIVE)
+            TextButton(
+              onPressed: () async {
+                final service = ref.read(sanctionsServiceProvider);
+                final notifier = ref.read(sanctionsNotifierProvider.notifier);
+                
+                try {
+                  await service.updateSuspension(
+                    suspension.id,
+                    UpdateSuspensionDto(status: SuspensionStatus.CANCELLED),
+                  );
+                  
+                  notifier.invalidateTournamentSanctions(tournamentId);
+                  
+                  if (context.mounted) {
+                    Navigator.of(context).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Suspensión cancelada')),
+                    );
+                  }
+                } catch (error) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error: $error')),
+                    );
+                  }
+                }
+              },
+              child: const Text('Cancelar Suspensión'),
+            ),
+        ],
+      ),
+    );
   }
 }
 
@@ -465,10 +591,30 @@ class _PendingCardsSection extends StatelessWidget {
               separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 final card = cards[index];
+                final matchInfo = card.matchCategory?.match;
+                final matchDisplay = matchInfo?.displayName ?? 'Partido desconocido';
+                
                 return ListTile(
                   leading: _CardTypeIcon(cardType: card.cardType),
                   title: Text(card.player?.fullName ?? 'Jugador ${card.playerId}'),
-                  subtitle: Text(card.club?.name ?? 'Club ${card.clubId}'),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(card.club?.name ?? 'Club ${card.clubId}'),
+                      const SizedBox(height: 2),
+                      Text(
+                        matchDisplay,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                      ),
+                      if (card.minute != null)
+                        Text(
+                          'Minuto: ${card.minute}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                    ],
+                  ),
                   trailing: TextButton.icon(
                     onPressed: () => onCreateSuspension(card),
                     icon: const Icon(Icons.add),

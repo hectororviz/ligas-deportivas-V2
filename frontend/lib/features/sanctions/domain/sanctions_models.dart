@@ -17,6 +17,7 @@ class PlayerCard {
   final DateTime createdAt;
   final PlayerSummary? player;
   final ClubSummary? club;
+  final MatchCategoryInfo? matchCategory;
 
   PlayerCard({
     required this.id,
@@ -29,6 +30,7 @@ class PlayerCard {
     required this.createdAt,
     this.player,
     this.club,
+    this.matchCategory,
   });
 
   factory PlayerCard.fromJson(Map<String, dynamic> json) {
@@ -52,6 +54,9 @@ class PlayerCard {
           : null,
       club: json['club'] != null
           ? ClubSummary.fromJson(json['club'] as Map<String, dynamic>)
+          : null,
+      matchCategory: json['matchCategory'] != null
+          ? MatchCategoryInfo.fromJson(json['matchCategory'] as Map<String, dynamic>)
           : null,
     );
   }
@@ -512,5 +517,65 @@ class TournamentSanctionsSummary {
         }
       }).toList(),
     );
+  }
+}
+
+// Clase auxiliar para información del partido en tarjetas
+class MatchCategoryInfo {
+  final int id;
+  final MatchInfo? match;
+
+  MatchCategoryInfo({
+    required this.id,
+    this.match,
+  });
+
+  factory MatchCategoryInfo.fromJson(Map<String, dynamic> json) {
+    return MatchCategoryInfo(
+      id: json['id'] as int,
+      match: json['match'] != null
+          ? MatchInfo.fromJson(json['match'] as Map<String, dynamic>)
+          : null,
+    );
+  }
+}
+
+class MatchInfo {
+  final int id;
+  final int matchday;
+  final String? round;
+  final DateTime? date;
+  final ClubSummary? homeClub;
+  final ClubSummary? awayClub;
+
+  MatchInfo({
+    required this.id,
+    required this.matchday,
+    this.round,
+    this.date,
+    this.homeClub,
+    this.awayClub,
+  });
+
+  factory MatchInfo.fromJson(Map<String, dynamic> json) {
+    return MatchInfo(
+      id: json['id'] as int,
+      matchday: json['matchday'] as int,
+      round: json['round'] as String?,
+      date: json['date'] != null ? DateTime.parse(json['date'] as String) : null,
+      homeClub: json['homeClub'] != null
+          ? ClubSummary.fromJson(json['homeClub'] as Map<String, dynamic>)
+          : null,
+      awayClub: json['awayClub'] != null
+          ? ClubSummary.fromJson(json['awayClub'] as Map<String, dynamic>)
+          : null,
+    );
+  }
+
+  String get displayName {
+    final home = homeClub?.name ?? 'Local';
+    final away = awayClub?.name ?? 'Visitante';
+    final dateStr = date != null ? ' - ${date!.day}/${date!.month}' : '';
+    return 'Fecha $matchday$dateStr: $home vs $away';
   }
 }
