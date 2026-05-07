@@ -1,19 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../domain/sanctions_models.dart';
+
+class CreateSuspensionResult {
+  final int originalMatches;
+  final String? reason;
+
+  CreateSuspensionResult({
+    required this.originalMatches,
+    this.reason,
+  });
+}
 
 class CreateSuspensionDialog extends ConsumerStatefulWidget {
-  final int playerId;
   final String playerName;
-  final List<int> cardIds;
-  final VoidCallback onCreated;
+  final int yellowCardCount;
 
   const CreateSuspensionDialog({
     super.key,
-    required this.playerId,
     required this.playerName,
-    required this.cardIds,
-    required this.onCreated,
+    this.yellowCardCount = 0,
   });
 
   @override
@@ -21,9 +26,16 @@ class CreateSuspensionDialog extends ConsumerStatefulWidget {
 }
 
 class _CreateSuspensionDialogState extends ConsumerState<CreateSuspensionDialog> {
-  int _originalMatches = 1;
+  late int _originalMatches;
   String _reason = '';
   bool _creating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Default: 1 match for yellow limit accumulation, more could be configured
+    _originalMatches = widget.yellowCardCount > 0 ? 1 : 1;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -42,11 +54,21 @@ class _CreateSuspensionDialogState extends ConsumerState<CreateSuspensionDialog>
                       fontWeight: FontWeight.w600,
                     ),
               ),
-              if (widget.cardIds.isNotEmpty) ...[
+              if (widget.yellowCardCount > 0) ...[
                 const SizedBox(height: 8),
-                Text(
-                  'Tarjetas vinculadas: ${widget.cardIds.length}',
-                  style: Theme.of(context).textTheme.bodySmall,
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    'Acumulación de ${widget.yellowCardCount} amarillas',
+                    style: TextStyle(
+                      color: Colors.orange.shade800,
+                      fontSize: 12,
+                    ),
+                  ),
                 ),
               ],
               const SizedBox(height: 24),
@@ -71,7 +93,7 @@ class _CreateSuspensionDialogState extends ConsumerState<CreateSuspensionDialog>
                   border: OutlineInputBorder(),
                 ),
                 maxLines: 3,
-                onChanged: (v) => setState(() => _reason = v),
+                onChanged: (v) => setState(() => _reason = v.isEmpty ? '' : v),
               ),
             ],
           ),
@@ -98,7 +120,11 @@ class _CreateSuspensionDialogState extends ConsumerState<CreateSuspensionDialog>
 
   void _create() {
     setState(() => _creating = true);
-    widget.onCreated();
-    Navigator.of(context).pop();
+    
+    // Return the result to the caller
+    Navigator.of(context).pop(CreateSuspensionResult(
+      originalMatches: _originalMatches,
+      reason: _reason.isEmpty ? null : _reason,
+    ));
   }
 }

@@ -344,49 +344,54 @@ class _SanctionsDetailPage extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     PlayerCard card,
-  ) {
+  ) async {
     final playerName = card.player?.fullName ?? 'Jugador ${card.playerId}';
     
-    showDialog(
+    final result = await showDialog<CreateSuspensionResult>(
       context: context,
       builder: (context) => CreateSuspensionDialog(
-        playerId: card.playerId,
         playerName: playerName,
-        cardIds: [card.id],
-        onCreated: () async {
-          final service = ref.read(sanctionsServiceProvider);
-          final notifier = ref.read(sanctionsNotifierProvider.notifier);
-          
-          try {
-            await service.createSuspension(
-              tournamentId,
-              CreateSuspensionDto(
-                playerId: card.playerId,
-                originalMatches: 1,
-                cardIds: [card.id],
-              ),
-            );
-            
-            notifier.invalidateTournamentSanctions(tournamentId);
-            
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Suspensión creada para $playerName')),
-              );
-            }
-          } catch (error) {
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Error al crear suspensión: $error'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            }
-          }
-        },
+        yellowCardCount: card.yellowCount ?? 0,
       ),
     );
+    
+    // If user cancelled, result is null
+    if (result == null) return;
+    
+    final service = ref.read(sanctionsServiceProvider);
+    
+    try {
+      await service.createSuspension(
+        tournamentId,
+        CreateSuspensionDto(
+          playerId: card.playerId,
+          originalMatches: result.originalMatches,
+          cardIds: [card.id],
+          reason: result.reason,
+        ),
+      );
+      
+      // Invalidate the cache to refresh the data
+      ref.invalidate(tournamentSanctionsProvider(tournamentId));
+      
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Suspensión creada para $playerName'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al crear suspensión: $error'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   void _showUpdateSuspensionDialog(
