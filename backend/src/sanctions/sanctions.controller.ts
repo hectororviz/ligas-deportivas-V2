@@ -58,7 +58,7 @@ export class SanctionsController {
     @Body() dto: CreateSuspensionDto,
     @Request() req,
   ): Promise<SuspensionResponseDto> {
-    return this.sanctionsService.createSuspension(tournamentId, dto, req.user.userId);
+    return this.sanctionsService.createSuspension(tournamentId, dto, req.user.id);
   }
 
   @Patch('suspensions/:id')
@@ -81,7 +81,7 @@ export class SanctionsController {
     @Body() dto: CreateDeductionDto,
     @Request() req,
   ): Promise<DeductionResponseDto> {
-    return this.sanctionsService.createDeduction(tournamentId, dto, req.user.userId);
+    return this.sanctionsService.createDeduction(tournamentId, dto, req.user.id);
   }
 
   @Delete('deductions/:id')
