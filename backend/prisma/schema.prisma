@@ -132,12 +132,15 @@ model Tournament {
   createdAt       DateTime               @default(now())
   updatedAt       DateTime               @updatedAt
   league          League                 @relation(fields: [leagueId], references: [id])
-  zones           Zone[]
-  categories      TournamentCategory[]
-  matches               Match[]
-  flyerTemplate         FlyerTemplate?
-  posterTemplate        TournamentPosterTemplate?
-  playerTournamentClubs PlayerTournamentClub[]
+  zones                  Zone[]
+  categories             TournamentCategory[]
+  matches                Match[]
+  flyerTemplate          FlyerTemplate?
+  posterTemplate         TournamentPosterTemplate?
+  playerTournamentClubs  PlayerTournamentClub[]
+  suspensions            PlayerSuspension[]
+  pointDeductions        PointDeduction[]
+  disciplinaryRules      TournamentDisciplinaryRules?
 
   @@map("tournament")
 }
@@ -190,6 +193,8 @@ model Club {
   categoryStandings     CategoryStanding[]
   teams                 Team[]
   playerTournamentClubs PlayerTournamentClub[]
+  cards                 PlayerCard[]
+  pointDeductions       PointDeduction[]
 }
 
 model SiteIdentity {
@@ -249,6 +254,7 @@ model TournamentCategory {
   rosters          Roster[]
   standings        CategoryStanding[]
   teams            Team[]
+  pointDeductions  PointDeduction[]
 
   @@unique([tournamentId, categoryId])
 }
@@ -300,6 +306,8 @@ model Player {
   goals                 Goal[]
   rosters               RosterPlayer[]
   playerTournamentClubs PlayerTournamentClub[]
+  cards                 PlayerCard[]
+  suspensions           PlayerSuspension[]
 }
 
 model PlayerTournamentClub {
@@ -380,6 +388,8 @@ model MatchCategory {
   goals                Goal[]
   otherGoals           OtherGoal[]
   closedBy             User?              @relation(fields: [closedById], references: [id])
+  cards                PlayerCard[]
+  suspensionServedMatches SuspensionServedMatch[]
 }
 
 model Goal {
@@ -447,8 +457,10 @@ model User {
   matchCategories MatchCategory[]
   attachments     MatchAttachment[]
   matchLogs       MatchLog[]
-  auditLogs       AuditLog[]
-  club            Club?                    @relation(fields: [clubId], references: [id])
+  auditLogs            AuditLog[]
+  club                 Club?                    @relation(fields: [clubId], references: [id])
+  suspensionsCreated   PlayerSuspension[]
+  deductionsCreated    PointDeduction[]
 }
 
 model Role {
@@ -615,4 +627,127 @@ model AuditLog {
   metadata  Json?
   createdAt DateTime @default(now())
   user      User?    @relation(fields: [userId], references: [id])
+}
+
+// ============================================================================
+// MÓDULO DE SANCIONES - Modelos disciplinarios
+// ============================================================================
+
+enum CardType {
+  YELLOW
+  RED
+}
+
+enum CardDisciplinaryStatus {
+  PENDING
+  PROCESSED
+  IGNORED
+}
+
+enum SuspensionStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+model PlayerCard {
+  id                 Int                    @id @default(autoincrement())
+  matchCategoryId    Int
+  playerId           Int
+  clubId             Int
+  cardType           CardType
+  minute             Int?
+  disciplinaryStatus CardDisciplinaryStatus @default(PENDING)
+  createdAt          DateTime               @default(now())
+
+  matchCategory      MatchCategory          @relation(fields: [matchCategoryId], references: [id])
+  player             Player                 @relation(fields: [playerId], references: [id])
+  club               Club                   @relation(fields: [clubId], references: [id])
+  suspensionCards    SuspensionOriginCard[]
+
+  @@index([playerId, disciplinaryStatus])
+  @@index([matchCategoryId])
+  @@index([clubId])
+}
+
+model PlayerSuspension {
+  id               Int               @id @default(autoincrement())
+  playerId         Int
+  tournamentId     Int
+  originalMatches  Int
+  remainingMatches Int
+  status           SuspensionStatus  @default(ACTIVE)
+  reason           String?
+  createdById      Int
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  player           Player            @relation(fields: [playerId], references: [id])
+  tournament       Tournament        @relation(fields: [tournamentId], references: [id])
+  createdBy        User              @relation(fields: [createdById], references: [id])
+  originCards      SuspensionOriginCard[]
+  servedMatches    SuspensionServedMatch[]
+
+  @@index([playerId, tournamentId, status])
+  @@index([tournamentId, status])
+}
+
+model SuspensionOriginCard {
+  suspensionId  Int
+  cardId        Int
+
+  suspension    PlayerSuspension @relation(fields: [suspensionId], references: [id], onDelete: Cascade)
+  card          PlayerCard       @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@id([suspensionId, cardId])
+  @@index([suspensionId])
+  @@index([cardId])
+}
+
+model SuspensionServedMatch {
+  id              Int              @id @default(autoincrement())
+  suspensionId    Int
+  matchCategoryId Int
+  servedAt        DateTime         @default(now())
+
+  suspension      PlayerSuspension @relation(fields: [suspensionId], references: [id], onDelete: Cascade)
+  matchCategory   MatchCategory    @relation(fields: [matchCategoryId], references: [id])
+
+  @@unique([suspensionId, matchCategoryId])
+  @@index([suspensionId])
+  @@index([matchCategoryId])
+}
+
+model PointDeduction {
+  id                   Int                  @id @default(autoincrement())
+  clubId               Int
+  tournamentId         Int
+  tournamentCategoryId Int?
+  points               Int
+  reason               String
+  createdById          Int
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+
+  club                 Club                 @relation(fields: [clubId], references: [id])
+  tournament           Tournament           @relation(fields: [tournamentId], references: [id])
+  tournamentCategory   TournamentCategory?  @relation(fields: [tournamentCategoryId], references: [id])
+  createdBy            User                 @relation(fields: [createdById], references: [id])
+
+  @@index([tournamentId, tournamentCategoryId])
+  @@index([clubId, tournamentId])
+}
+
+model TournamentDisciplinaryRules {
+  id                            Int        @id @default(autoincrement())
+  tournamentId                  Int        @unique
+  yellowCardLimit               Int        @default(3)
+  yellowLimitSuspensionMatches  Int        @default(1)
+  directRedSuspensionMatches    Int        @default(2)
+  doubleYellowSuspensionMatches Int        @default(1)
+  resetYellowsOnPhaseChange     Boolean    @default(false)
+  createdAt                     DateTime   @default(now())
+  updatedAt                     DateTime   @updatedAt
+
+  tournament                    Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
 }

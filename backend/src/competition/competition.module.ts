@@ -18,6 +18,7 @@ import { StandingsController } from './controllers/standings.controller';
 import { StandingsService } from '../standings/standings.service';
 import { StorageModule } from '../storage/storage.module';
 import { AccessControlModule } from '../rbac/access-control.module';
+import { SanctionsModule } from '../sanctions/sanctions.module';
 import { TeamsService } from './services/teams.service';
 import { TeamsController } from './controllers/teams.controller';
 import { ZonesService } from './services/zones.service';
@@ -34,7 +35,7 @@ import { LeaderboardsService } from './services/leaderboards.service';
 import { LeaderboardsController } from './controllers/leaderboards.controller';
 
 @Module({
-  imports: [PrismaModule, StorageModule, AccessControlModule],
+  imports: [PrismaModule, StorageModule, AccessControlModule, SanctionsModule],
   providers: [
     LeaguesService,
     ClubsService,

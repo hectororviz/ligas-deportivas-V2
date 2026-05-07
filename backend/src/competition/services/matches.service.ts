@@ -10,6 +10,7 @@ import { RecordMatchResultDto } from '../dto/record-match-result.dto';
 import { MatchStatus, MatchdayStatus, Round } from '@prisma/client';
 import { StorageService } from '../../storage/storage.service';
 import { StandingsService } from '../../standings/standings.service';
+import { SanctionsService } from '../../sanctions/sanctions.service';
 import { UpdateMatchdayDto } from '../dto/update-matchday.dto';
 
 @Injectable()
@@ -17,7 +18,8 @@ export class MatchesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storageService: StorageService,
-    private readonly standingsService: StandingsService
+    private readonly standingsService: StandingsService,
+    private readonly sanctionsService: SanctionsService
   ) { }
 
   async listByZone(zoneId: number) {
@@ -158,6 +160,20 @@ export class MatchesService {
 
     for (const categoryId of categoryIds) {
       await this.standingsService.recalculateForCategory(zoneId, categoryId);
+    }
+
+    // Procesar cumplimiento de suspensiones para esta jornada
+    const finalizedMatchday = await this.prisma.zoneMatchday.findUnique({
+      where: { zoneId_matchday: { zoneId, matchday } },
+    });
+
+    if (finalizedMatchday) {
+      try {
+        await this.sanctionsService.processMatchdaySuspensions(finalizedMatchday.id);
+      } catch (error) {
+        // Log error but don't fail the operation
+        console.error('Error processing matchday suspensions:', error);
+      }
     }
 
     return result;

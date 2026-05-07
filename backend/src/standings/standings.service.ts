@@ -130,6 +130,24 @@ export class StandingsService {
       goalDifference: row.goalsFor - row.goalsAgainst,
     }));
 
+    // Aplicar deducciones de puntos
+    const deductions = await this.prisma.pointDeduction.findMany({
+      where: {
+        tournamentId: tournament.id,
+        OR: [
+          { tournamentCategoryId },
+          { tournamentCategoryId: null },
+        ],
+      },
+    });
+
+    for (const deduction of deductions) {
+      const row = standings.find((s) => s.clubId === deduction.clubId);
+      if (row) {
+        row.points = Math.max(0, row.points - deduction.points);
+      }
+    }
+
     if (standings.length) {
       await this.prisma.categoryStanding.createMany({ data: standings });
     }

@@ -17,6 +17,7 @@ import { MeModule } from './me/me.module';
 import { SiteIdentityModule } from './site-identity/site-identity.module';
 import { DatabaseReadyGuard } from './prisma/database-ready.guard';
 import { HealthModule } from './health/health.module';
+import { SanctionsModule } from './sanctions/sanctions.module';
 
 const envFileCandidates = [
   '.env.local',
@@ -52,6 +53,7 @@ const envFilePath = envFileCandidates
     MeModule,
     SiteIdentityModule,
     HealthModule,
+    SanctionsModule,
   ],
   providers: [
     {
