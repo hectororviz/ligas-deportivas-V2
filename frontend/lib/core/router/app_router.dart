@@ -22,6 +22,7 @@ import '../../features/settings/site_identity_page.dart';
 import '../../features/settings/settings_page.dart';
 import '../../features/settings/user_management_page.dart';
 import '../../features/shared/widgets/app_shell.dart';
+import '../../features/sanctions/presentation/sanctions_page.dart';
 import '../../features/stats/presentation/stats_page.dart';
 import '../../features/standings/presentation/standings_page.dart';
 import '../../features/standings/presentation/zone_standings_page.dart';
@@ -258,6 +259,7 @@ GoRouter createRouter(Ref ref) {
           GoRoute(path: '/fixtures', builder: (context, state) => const FixturesPage()),
           GoRoute(path: '/standings', builder: (context, state) => const StandingsPage()),
           GoRoute(path: '/stats', builder: (context, state) => const StatsPage()),
+          GoRoute(path: '/sanctions', builder: (context, state) => const SanctionsPage()),
           GoRoute(
             path: '/settings',
             builder: (context, state) => const SettingsPage(),

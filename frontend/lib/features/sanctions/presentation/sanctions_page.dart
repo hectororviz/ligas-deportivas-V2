@@ -1,18 +1,166 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/utils/responsive.dart';
+import '../../../services/api_client.dart';
 import '../../shared/widgets/page_scaffold.dart';
 import '../domain/sanctions_models.dart';
 import '../providers/sanctions_provider.dart';
 
-class SanctionsPage extends ConsumerWidget {
-  final int tournamentId;
-  final String tournamentName;
+// Provider para lista de torneos activos
+final activeTournamentsProvider = FutureProvider<List<_TournamentSummary>>((ref) async {
+  final api = ref.read(apiClientProvider);
+  final response = await api.get<List<dynamic>>('/tournaments');
+  final data = response.data ?? [];
+  return data
+      .whereType<Map<String, dynamic>>()
+      .where((t) => t['status'] == 'ACTIVE')
+      .map((t) => _TournamentSummary(
+            id: t['id'] as int,
+            name: '${t['name']} ${t['year']}',
+          ))
+      .toList();
+});
+
+class _TournamentSummary {
+  final int id;
+  final String name;
+
+  _TournamentSummary({required this.id, required this.name});
+}
+
+class SanctionsPage extends ConsumerStatefulWidget {
+  final int? tournamentId;
+  final String? tournamentName;
 
   const SanctionsPage({
     super.key,
+    this.tournamentId,
+    this.tournamentName,
+  });
+
+  @override
+  ConsumerState<SanctionsPage> createState() => _SanctionsPageState();
+}
+
+class _SanctionsPageState extends ConsumerState<SanctionsPage> {
+  int? _selectedTournamentId;
+  String? _selectedTournamentName;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedTournamentId = widget.tournamentId;
+    _selectedTournamentName = widget.tournamentName;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Si no hay torneo seleccionado, mostrar selector
+    if (_selectedTournamentId == null) {
+      return _TournamentSelector(
+        onSelect: (id, name) {
+          setState(() {
+            _selectedTournamentId = id;
+            _selectedTournamentName = name;
+          });
+        },
+      );
+    }
+
+    return _SanctionsDetailPage(
+      tournamentId: _selectedTournamentId!,
+      tournamentName: _selectedTournamentName!,
+      onBack: () {
+        setState(() {
+          _selectedTournamentId = null;
+          _selectedTournamentName = null;
+        });
+      },
+    );
+  }
+}
+
+class _TournamentSelector extends ConsumerWidget {
+  final Function(int, String) onSelect;
+
+  const _TournamentSelector({required this.onSelect});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tournamentsAsync = ref.watch(activeTournamentsProvider);
+
+    return PageScaffold(
+      backgroundColor: Colors.transparent,
+      builder: (context, scrollController) {
+        final padding = Responsive.pagePadding(context);
+
+        return ListView(
+          controller: scrollController,
+          padding: padding,
+          children: [
+            Text(
+              'Sanciones',
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Selecciona un torneo para ver y gestionar las sanciones disciplinarias.',
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
+            const SizedBox(height: 24),
+            tournamentsAsync.when(
+              data: (tournaments) {
+                if (tournaments.isEmpty) {
+                  return const Card(
+                    child: Padding(
+                      padding: EdgeInsets.all(32),
+                      child: Center(
+                        child: Text('No hay torneos activos disponibles.'),
+                      ),
+                    ),
+                  );
+                }
+                return Column(
+                  children: tournaments.map((t) {
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      child: ListTile(
+                        leading: Icon(
+                          Icons.emoji_events_outlined,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        title: Text(t.name),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => onSelect(t.id, t.name),
+                      ),
+                    );
+                  }).toList(),
+                );
+              },
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, _) => Center(
+                child: Text('Error cargando torneos: $error'),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _SanctionsDetailPage extends ConsumerWidget {
+  final int tournamentId;
+  final String tournamentName;
+  final VoidCallback onBack;
+
+  const _SanctionsDetailPage({
     required this.tournamentId,
     required this.tournamentName,
+    required this.onBack,
   });
 
   @override
@@ -106,6 +254,15 @@ class SanctionsPage extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Row(
+          children: [
+            TextButton.icon(
+              onPressed: onBack,
+              icon: const Icon(Icons.arrow_back),
+              label: const Text('Volver'),
+            ),
+          ],
+        ),
         Text(
           'Sanciones',
           style: Theme.of(context).textTheme.headlineMedium?.copyWith(

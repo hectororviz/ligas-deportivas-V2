@@ -1,0 +1,114 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: ligas_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ligas
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ligas"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ../backend
+    restart: "no"
+    environment:
+      APP_URL: ${APP_URL}
+      FRONTEND_URL: ${FRONTEND_URL}
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@db:5432/ligas
+      DB_SCHEMA_ENFORCEMENT: ${DB_SCHEMA_ENFORCEMENT:-strict}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      AUTH_DISABLED_EMAILS: ${AUTH_DISABLED_EMAILS:-}
+      SMTP_HOST: ${SMTP_HOST:-mailhog}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@ligas.local}
+      SCAN_DEBUG: false
+      SCAN_DEBUG_KEEP_TMP: false
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - backend-storage:/app/storage
+
+  migrate:
+    build:
+      context: ../backend
+    restart: "no"
+    environment:
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@db:5432/ligas
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@ligas.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin123!}
+      SEED_RESET_ADMIN_PASSWORD: ${SEED_RESET_ADMIN_PASSWORD:-false}
+      RUN_SEED: ${RUN_SEED:-false}
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: ["/app/entrypoint-migrate.sh"]
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        API_BASE_URL: /api/v1
+    restart: unless-stopped
+    depends_on:
+      - backend
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+  proxy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - default
+      - shared_proxy
+
+  seed:
+    build:
+      context: ../backend
+      target: builder
+    environment:
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@db:5432/ligas
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@ligas.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin123!}
+      SEED_RESET_ADMIN_PASSWORD: ${SEED_RESET_ADMIN_PASSWORD:-false}
+    depends_on:
+      db:
+        condition: service_healthy
+    command: sh -lc "npx prisma db seed"
+
+
+volumes:
+  postgres-data:
+  backend-storage:
+  caddy_data:
+  caddy_config:
+
+networks:
+  shared_proxy:
+    external: true

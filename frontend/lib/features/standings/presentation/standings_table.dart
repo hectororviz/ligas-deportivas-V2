@@ -36,55 +36,73 @@ class StandingsTable extends StatelessWidget {
     final headerStyle =
         theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: colors.headerText);
 
-    return SingleChildScrollView(
-      key: PageStorageKey<String>(storageKey),
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        columnSpacing: isMobile ? 12 : 28,
-        horizontalMargin: isMobile ? 8 : 24,
-        headingRowHeight: isMobile ? 46 : 56,
-        dataRowMinHeight: isMobile ? 44 : 48,
-        dataRowMaxHeight: isMobile ? 50 : 56,
-        headingRowColor: buildHeaderColor(colors.headerBackground),
-        headingTextStyle: headerStyle,
-        columns: [
-          DataColumn(label: Text(isMobile ? '' : 'Posición')),
-          const DataColumn(label: Text('Club')),
-          const DataColumn(label: Text('PJ'), numeric: true),
-          const DataColumn(label: Text('PG'), numeric: true),
-          const DataColumn(label: Text('PE'), numeric: true),
-          const DataColumn(label: Text('PP'), numeric: true),
-          if (!isMobile) ...[
-            const DataColumn(label: Text('GF'), numeric: true),
-            const DataColumn(label: Text('GC'), numeric: true),
-          ],
-          const DataColumn(label: Text('DG'), numeric: true),
-          const DataColumn(label: Text('Pts'), numeric: true),
-        ],
-        rows: [
-          for (var index = 0; index < rows.length; index++)
-            DataRow(
-              color: buildStripedRowColor(index: index, colors: colors),
-              cells: [
-                DataCell(Text('${index + 1}')),
-                DataCell(SizedBox(width: isMobile ? 170 : 260, child: Text(rows[index].displayClubName))),
-                DataCell(Text(rows[index].played.toString())),
-                DataCell(Text(rows[index].wins.toString())),
-                DataCell(Text(rows[index].draws.toString())),
-                DataCell(Text(rows[index].losses.toString())),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final scrollView = SingleChildScrollView(
+          key: PageStorageKey<String>(storageKey),
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: constraints.maxWidth),
+            child: DataTable(
+              columnSpacing: isMobile ? 12 : 28,
+              horizontalMargin: isMobile ? 8 : 24,
+              headingRowHeight: isMobile ? 46 : 56,
+              dataRowMinHeight: isMobile ? 44 : 48,
+              dataRowMaxHeight: isMobile ? 50 : 56,
+              headingRowColor: buildHeaderColor(colors.headerBackground),
+              headingTextStyle: headerStyle,
+              columns: [
+                DataColumn(label: Text(isMobile ? '' : 'Posición')),
+                const DataColumn(label: Text('Club')),
+                const DataColumn(label: Text('PJ'), numeric: true),
+                const DataColumn(label: Text('PG'), numeric: true),
+                const DataColumn(label: Text('PE'), numeric: true),
+                const DataColumn(label: Text('PP'), numeric: true),
                 if (!isMobile) ...[
-                  DataCell(Text(rows[index].goalsFor.toString())),
-                  DataCell(Text(rows[index].goalsAgainst.toString())),
+                  const DataColumn(label: Text('GF'), numeric: true),
+                  const DataColumn(label: Text('GC'), numeric: true),
                 ],
-                DataCell(Text(rows[index].goalDifference.toString())),
-                DataCell(Text(
-                  rows[index].points.toString(),
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                )),
+                const DataColumn(label: Text('DG'), numeric: true),
+                const DataColumn(label: Text('Pts'), numeric: true),
+              ],
+              rows: [
+                for (var index = 0; index < rows.length; index++)
+                  DataRow(
+                    color: buildStripedRowColor(index: index, colors: colors),
+                    cells: [
+                      DataCell(Text('${index + 1}')),
+                      DataCell(SizedBox(width: isMobile ? 170 : 260, child: Text(rows[index].displayClubName))),
+                      DataCell(Text(rows[index].played.toString())),
+                      DataCell(Text(rows[index].wins.toString())),
+                      DataCell(Text(rows[index].draws.toString())),
+                      DataCell(Text(rows[index].losses.toString())),
+                      if (!isMobile) ...[
+                        DataCell(Text(rows[index].goalsFor.toString())),
+                        DataCell(Text(rows[index].goalsAgainst.toString())),
+                      ],
+                      DataCell(Text(rows[index].goalDifference.toString())),
+                      DataCell(Text(
+                        rows[index].points.toString(),
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      )),
+                    ],
+                  ),
               ],
             ),
-        ],
-      ),
+          ),
+        );
+
+        if (isMobile) {
+          return scrollView;
+        }
+
+        return Scrollbar(
+          thumbVisibility: true,
+          notificationPredicate: (notification) =>
+              notification.metrics.axis == Axis.horizontal,
+          child: scrollView,
+        );
+      },
     );
   }
 }

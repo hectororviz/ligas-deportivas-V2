@@ -322,49 +322,68 @@ class _MatchdayScoreboardTable extends StatelessWidget {
       color: theme.colorScheme.primary,
     );
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        headingRowColor: buildHeaderColor(colors.headerBackground),
-        headingTextStyle: headerStyle,
-        columns: columns,
-        rows: [
-          for (var index = 0; index < rows.length; index++)
-            DataRow(
-              color: _buildMatchRowColor(
-                index: index,
-                groupIndex: _resolveGroupIndex(rows[index]),
-                colors: colors,
-              ),
-              cells: [
-                DataCell(Text(rows[index].clubName)),
-                ...generalCategories.map(
-                  (category) => DataCell(Text(formatGoals(rows[index], category))),
-                ),
-                DataCell(
-                  Container(
-                    padding: const EdgeInsets.only(right: 12),
-                    decoration: BoxDecoration(
-                      border: Border(right: BorderSide(color: dividerColor)),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = Responsive.isMobile(context);
+        final scrollView = SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: constraints.maxWidth),
+            child: DataTable(
+              headingRowColor: buildHeaderColor(colors.headerBackground),
+              headingTextStyle: headerStyle,
+              columns: columns,
+              rows: [
+                for (var index = 0; index < rows.length; index++)
+                  DataRow(
+                    color: _buildMatchRowColor(
+                      index: index,
+                      groupIndex: _resolveGroupIndex(rows[index]),
+                      colors: colors,
                     ),
-                    child: Text(
-                      resolvePoints(rows[index]).toString(),
-                      style: pointsStyle,
-                    ),
+                    cells: [
+                      DataCell(Text(rows[index].clubName)),
+                      ...generalCategories.map(
+                        (category) => DataCell(Text(formatGoals(rows[index], category))),
+                      ),
+                      DataCell(
+                        Container(
+                          padding: const EdgeInsets.only(right: 12),
+                          decoration: BoxDecoration(
+                            border: Border(right: BorderSide(color: dividerColor)),
+                          ),
+                          child: Text(
+                            resolvePoints(rows[index]).toString(),
+                            style: pointsStyle,
+                          ),
+                        ),
+                      ),
+                      ...promotionalCategories.map(
+                        (category) => DataCell(
+                          Padding(
+                            padding: promoPadding,
+                            child: Text(formatGoals(rows[index], category)),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                ...promotionalCategories.map(
-                  (category) => DataCell(
-                    Padding(
-                      padding: promoPadding,
-                      child: Text(formatGoals(rows[index], category)),
-                    ),
-                  ),
-                ),
               ],
             ),
-        ],
-      ),
+          ),
+        );
+
+        if (isMobile) {
+          return scrollView;
+        }
+
+        return Scrollbar(
+          thumbVisibility: true,
+          notificationPredicate: (notification) =>
+              notification.metrics.axis == Axis.horizontal,
+          child: scrollView,
+        );
+      },
     );
   }
 

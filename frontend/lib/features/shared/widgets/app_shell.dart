@@ -90,6 +90,12 @@ const _navigationItems = <NavigationItem>[
     route: '/stats',
   ),
   NavigationItem(
+    label: 'Sanciones',
+    icon: Icons.gavel_outlined,
+    route: '/sanctions',
+    requiredPermission: _NavigationPermission(module: 'SANCIONES'),
+  ),
+  NavigationItem(
     label: 'Configuración',
     icon: Icons.settings_outlined,
     route: '/settings',
@@ -127,13 +133,11 @@ class AppShell extends ConsumerStatefulWidget {
 }
 
 class _AppShellState extends ConsumerState<AppShell> {
-  late final ScrollController _horizontalScrollController;
   ProviderSubscription<AsyncValue<SiteIdentity>>? _identitySubscription;
 
   @override
   void initState() {
     super.initState();
-    _horizontalScrollController = ScrollController();
     _identitySubscription =
         ref.listenManual(siteIdentityProvider, (previous, next) {
       final identity = next.valueOrNull;
@@ -144,7 +148,6 @@ class _AppShellState extends ConsumerState<AppShell> {
   @override
   void dispose() {
     _identitySubscription?.close();
-    _horizontalScrollController.dispose();
     super.dispose();
   }
 
@@ -201,7 +204,7 @@ class _AppShellState extends ConsumerState<AppShell> {
           siteIdentity: siteIdentity,
           onNavigate: (route) => context.go(route),
         ),
-        body: _buildPageBody(location, enableHorizontalScroll: false),
+        body: _buildPageBody(location),
       );
     }
 
@@ -265,7 +268,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                   ),
                   const Divider(height: 1),
                   Expanded(
-                    child: _buildPageBody(location, enableHorizontalScroll: true),
+                    child: _buildPageBody(location),
                   ),
                 ],
               ),
@@ -276,55 +279,15 @@ class _AppShellState extends ConsumerState<AppShell> {
     );
   }
 
-  Widget _buildPageBody(String location, {required bool enableHorizontalScroll}) {
-    if (!enableHorizontalScroll) {
-      return AnimatedSwitcher(
-        duration: const Duration(milliseconds: 250),
-        child: KeyedSubtree(
-          key: ValueKey(location),
-          child: widget.child,
-        ),
-      );
-    }
-
-    return LayoutBuilder(
-      key: ValueKey(location),
-      builder: (context, constraints) {
-        final maxViewportWidth = constraints.maxWidth.isFinite
-            ? constraints.maxWidth
-            : MediaQuery.sizeOf(context).width;
-        final viewportWidth =
-            maxViewportWidth.isFinite ? maxViewportWidth : MediaQuery.sizeOf(context).width;
-        final overflowAllowance = viewportWidth >= 1280.0 ? 0.0 : 640.0;
-        final maxContentWidth = viewportWidth + overflowAllowance;
-
-        return Scrollbar(
-          controller: _horizontalScrollController,
-          thumbVisibility: true,
-          trackVisibility: true,
-          interactive: true,
-          scrollbarOrientation: ScrollbarOrientation.bottom,
-          thickness: 12,
-          radius: const Radius.circular(999),
-          child: SingleChildScrollView(
-            controller: _horizontalScrollController,
-            scrollDirection: Axis.horizontal,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minWidth: maxViewportWidth,
-                maxWidth: maxContentWidth,
-              ),
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 250),
-                child: KeyedSubtree(
-                  key: ValueKey(location),
-                  child: widget.child,
-                ),
-              ),
-            ),
-          ),
-        );
-      },
+  Widget _buildPageBody(String location) {
+    // El scroll horizontal global ha sido eliminado para evitar problemas de responsive.
+    // Las tablas y contenido individual deben manejar su propio scroll horizontal cuando sea necesario.
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 250),
+      child: KeyedSubtree(
+        key: ValueKey(location),
+        child: widget.child,
+      ),
     );
   }
 }

@@ -8,6 +8,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
 import '../../clubs/presentation/widgets/authenticated_image.dart';
+import '../../sanctions/domain/sanctions_models.dart';
+import '../../sanctions/providers/sanctions_provider.dart';
 import '../domain/zone_match_models.dart';
 import 'zone_providers.dart';
 import '../../../services/api_client.dart';
@@ -1214,6 +1216,84 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
     }
   }
 
+  Future<void> _registerCard(_PlayerGoalInput entry, CardType cardType) async {
+    if (!widget.canEdit) return;
+
+    try {
+      final sanctionsService = ref.read(sanctionsServiceProvider);
+      final matchCategoryId = widget.category.id;
+
+      final response = await sanctionsService.createCard(
+        matchCategoryId,
+        CreateCardDto(
+          playerId: entry.playerId,
+          clubId: entry.clubId,
+          cardType: cardType,
+        ),
+      );
+
+      if (mounted) {
+        // Mostrar snackbar de éxito
+        final cardTypeLabel = cardType == CardType.YELLOW ? 'Amarilla' : 'Roja';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Tarjeta $cardTypeLabel registrada para ${entry.fullName}'),
+            backgroundColor: cardType == CardType.YELLOW ? Colors.amber : Colors.red,
+          ),
+        );
+
+        // Mostrar alerta si corresponde
+        if (response.alert.shouldShow) {
+          _showCardAlert(response.alert);
+        }
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al registrar tarjeta: $error'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showCardAlert(CardAlert alert) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Alerta Disciplinaria'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.warning_amber_outlined,
+              color: Colors.amber,
+              size: 48,
+            ),
+            const SizedBox(height: 16),
+            Text(alert.message),
+            if (alert.yellowCount > 0) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Amarillas acumuladas: ${alert.yellowCount}',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
+  }
+
   String _controllerKey(_PlayerGoalInput entry) => '${entry.clubId}-${entry.playerId}';
 
   TextEditingController _goalControllerFor(_PlayerGoalInput entry) {
@@ -1307,7 +1387,7 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
                         itemBuilder: (context, index) {
                           final entry = entries[index];
                           return Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             child: Row(
                               children: [
                                 Expanded(
@@ -1316,6 +1396,19 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
                                     style: theme.textTheme.bodyMedium,
                                   ),
                                 ),
+                                // Botones de tarjeta (solo si puede editar)
+                                if (enableEditing) ...[
+                                  _CardButton(
+                                    cardType: CardType.YELLOW,
+                                    onTap: () => _registerCard(entry, CardType.YELLOW),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  _CardButton(
+                                    cardType: CardType.RED,
+                                    onTap: () => _registerCard(entry, CardType.RED),
+                                  ),
+                                  const SizedBox(width: 12),
+                                ],
                                 _buildGoalInput(
                                   controller: _goalControllerFor(entry),
                                   enableEditing: enableEditing,
@@ -1483,6 +1576,46 @@ class _GoalStepper extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _CardButton extends StatelessWidget {
+  const _CardButton({
+    required this.cardType,
+    required this.onTap,
+  });
+
+  final CardType cardType;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = cardType == CardType.RED ? Colors.red : Colors.amber;
+    final tooltip = cardType == CardType.RED ? 'Tarjeta roja' : 'Tarjeta amarilla';
+
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(4),
+        child: Container(
+          width: 24,
+          height: 32,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: color.darken(0.2)),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+extension on Color {
+  Color darken(double amount) {
+    final hsl = HSLColor.fromColor(this);
+    return hsl.withLightness((hsl.lightness - amount).clamp(0.0, 1.0)).toColor();
   }
 }
 
