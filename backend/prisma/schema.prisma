@@ -33,6 +33,7 @@ enum Module {
   ROLES
   PERMISOS
   REPORTES
+  SANCIONES
 }
 
 enum Action {
