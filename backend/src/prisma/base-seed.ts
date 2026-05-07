@@ -13,6 +13,7 @@ const baseModules: Module[] = [
   Module.CATEGORIAS,
   Module.JUGADORES,
   Module.PLANTELES,
+  Module.SANCIONES,
   Module.CONFIGURACION,
   Module.USUARIOS,
   Module.ROLES,
