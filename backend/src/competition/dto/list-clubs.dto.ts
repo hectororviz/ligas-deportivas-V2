@@ -1,5 +1,5 @@
-import { Transform } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, Min } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { IsIn, IsInt, IsOptional, Max, Min } from 'class-validator';
 
 export class ListClubsDto {
   @IsOptional()
@@ -22,14 +22,9 @@ export class ListClubsDto {
   page: number = 1;
 
   @IsOptional()
-  @Transform(({ value }) => {
-    const parsed = Number.parseInt(value, 10);
-    if (parsed === 50) {
-      return 50;
-    }
-    return 25;
-  })
+  @Type(() => Number)
   @IsInt()
-  @IsIn([25, 50])
+  @Min(1)
+  @Max(1000)
   pageSize: number = 25;
 }
