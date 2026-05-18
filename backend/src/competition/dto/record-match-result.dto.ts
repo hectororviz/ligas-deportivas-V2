@@ -31,6 +31,10 @@ export class RecordMatchResultDto {
   @IsBoolean()
   confirm?: boolean = true;
 
+  @IsOptional()
+  @IsBoolean()
+  suspended?: boolean = false;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => PlayerGoalDto)

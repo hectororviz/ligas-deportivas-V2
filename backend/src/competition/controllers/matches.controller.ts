@@ -157,4 +157,15 @@ export class MatchesController {
   ) {
     return this.matchesService.recordResult(matchId, categoryId, dto, user.id, attachment);
   }
+
+  @Patch('matches/:matchId/categories/:categoryId/suspended')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @Permissions({ module: Module.RESULTADOS, action: Action.UPDATE })
+  toggleCategorySuspended(
+    @Param('matchId', ParseIntPipe) matchId: number,
+    @Param('categoryId', ParseIntPipe) categoryId: number,
+    @Body('suspended') suspended: boolean
+  ) {
+    return this.matchesService.toggleCategorySuspended(matchId, categoryId, suspended);
+  }
 }

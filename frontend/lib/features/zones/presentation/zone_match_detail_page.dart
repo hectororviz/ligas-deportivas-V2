@@ -559,6 +559,7 @@ class _CategoriesTableState extends ConsumerState<_CategoriesTable> {
         match: widget.match,
         category: category,
         canEdit: widget.canEditScores,
+        zoneId: widget.zoneId,
       ),
     );
 
@@ -878,11 +879,13 @@ class _MatchCategoryGoalsDialog extends ConsumerStatefulWidget {
     required this.match,
     required this.category,
     required this.canEdit,
+    required this.zoneId,
   });
 
   final ZoneMatch match;
   final ZoneMatchCategory category;
   final bool canEdit;
+  final int zoneId;
 
   @override
   ConsumerState<_MatchCategoryGoalsDialog> createState() => _MatchCategoryGoalsDialogState();
@@ -891,6 +894,8 @@ class _MatchCategoryGoalsDialog extends ConsumerStatefulWidget {
 class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDialog> {
   bool _loading = true;
   bool _saving = false;
+  bool _togglingSuspended = false;
+  late bool _suspended;
   String? _errorMessage;
   List<_PlayerGoalInput> _homeEntries = const <_PlayerGoalInput>[];
   List<_PlayerGoalInput> _awayEntries = const <_PlayerGoalInput>[];
@@ -903,6 +908,7 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
   @override
   void initState() {
     super.initState();
+    _suspended = widget.category.suspended;
     _homeOtherGoalsController = TextEditingController(text: '0');
     _awayOtherGoalsController = TextEditingController(text: '0');
     _loadData();
@@ -1182,6 +1188,7 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
           'homeScore': _homeTotal,
           'awayScore': _awayTotal,
           'confirm': true,
+          'suspended': _suspended,
           'playerGoals': playerGoals,
           'otherGoals': otherGoals,
         },
@@ -1211,6 +1218,53 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
       if (mounted) {
         setState(() {
           _saving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _toggleSuspended(bool value) async {
+    setState(() {
+      _togglingSuspended = true;
+    });
+
+    try {
+      final api = ref.read(apiClientProvider);
+      await api.patch(
+        '/matches/${widget.match.id}/categories/${widget.category.tournamentCategoryId}/suspended',
+        data: {'suspended': value},
+      );
+
+      if (mounted) {
+        setState(() {
+          _suspended = value;
+        });
+        ref.invalidate(zoneMatchesProvider(widget.zoneId));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(value
+                ? 'Categoría marcada como suspendida / no jugada.'
+                : 'Categoría reactivada.'),
+          ),
+        );
+      }
+    } on DioException catch (error) {
+      if (mounted) {
+        final message = mapDioError(error);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo actualizar: $message')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo actualizar: $error')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _togglingSuspended = false;
         });
       }
     }
@@ -1525,21 +1579,57 @@ class _MatchCategoryGoalsDialogState extends ConsumerState<_MatchCategoryGoalsDi
       title: Text('Goles · ${widget.category.categoryName}'),
       content: SizedBox(width: 720, child: content),
       actions: [
-        TextButton(
-          onPressed: _saving ? null : () => Navigator.of(context).pop(false),
-          child: Text(widget.canEdit ? 'Cancelar' : 'Cerrar'),
+        Row(
+          children: [
+            Expanded(
+              child: widget.canEdit
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Checkbox(
+                          value: _suspended,
+                          onChanged: _togglingSuspended
+                              ? null
+                              : (value) => _toggleSuspended(value ?? false),
+                        ),
+                        Flexible(
+                          child: GestureDetector(
+                            onTap: _togglingSuspended
+                                ? null
+                                : () => _toggleSuspended(!_suspended),
+                            child: Text(
+                              'Suspendido / No jugado',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: _suspended
+                                        ? Theme.of(context).colorScheme.error
+                                        : null,
+                                    fontWeight:
+                                        _suspended ? FontWeight.w600 : null,
+                                  ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : const SizedBox.shrink(),
+            ),
+            TextButton(
+              onPressed: _saving ? null : () => Navigator.of(context).pop(false),
+              child: Text(widget.canEdit ? 'Cancelar' : 'Cerrar'),
+            ),
+            if (widget.canEdit)
+              FilledButton(
+                onPressed: _saving || _loading || _errorMessage != null ? null : _onSave,
+                child: _saving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Guardar'),
+              ),
+          ],
         ),
-        if (widget.canEdit)
-          FilledButton(
-            onPressed: _saving || _loading || _errorMessage != null ? null : _onSave,
-            child: _saving
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Guardar'),
-          ),
       ],
     );
   }

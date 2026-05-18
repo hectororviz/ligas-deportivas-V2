@@ -96,6 +96,7 @@ class ZoneMatchCategory {
     required this.homeScore,
     required this.awayScore,
     required this.isPromocional,
+    this.suspended = false,
     this.kickoffTime,
     this.birthYearMin,
     this.birthYearMax,
@@ -116,6 +117,7 @@ class ZoneMatchCategory {
       homeScore: homeScoreValue is num ? homeScoreValue.toInt() : null,
       awayScore: awayScoreValue is num ? awayScoreValue.toInt() : null,
       isPromocional: json['isPromocional'] as bool? ?? false,
+      suspended: json['suspended'] as bool? ?? false,
       kickoffTime: json['kickoffTime'] as String?,
       birthYearMin: birthYearMin,
       birthYearMax: birthYearMax,
@@ -128,6 +130,7 @@ class ZoneMatchCategory {
   final int? homeScore;
   final int? awayScore;
   final bool isPromocional;
+  final bool suspended;
   final String? kickoffTime;
   final int? birthYearMin;
   final int? birthYearMax;
@@ -227,6 +230,10 @@ class ZoneMatch {
     }
     var total = 0;
     for (final category in categories) {
+      // Skip suspended categories - they give 0 points
+      if (category.suspended) {
+        continue;
+      }
       final homeScore = category.homeScore;
       final awayScore = category.awayScore;
       if (homeScore == null || awayScore == null) {

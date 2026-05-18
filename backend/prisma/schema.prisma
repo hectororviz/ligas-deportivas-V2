@@ -378,6 +378,7 @@ model MatchCategory {
   tournamentCategoryId Int
   kickoffTime          String?
   isPromocional        Boolean            @default(false)
+  suspended            Boolean            @default(false)
   homeScore            Int                @default(0)
   awayScore            Int                @default(0)
   closedAt             DateTime?

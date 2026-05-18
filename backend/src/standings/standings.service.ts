@@ -63,7 +63,13 @@ export class StandingsService {
         },
       },
       include: {
-        match: true,
+        match: {
+          select: {
+            id: true,
+            homeClubId: true,
+            awayClubId: true,
+          },
+        },
       },
     });
 
@@ -93,6 +99,10 @@ export class StandingsService {
 
       home.played += 1;
       away.played += 1;
+
+      if (entry.suspended) {
+        continue;
+      }
 
       home.goalsFor += entry.homeScore;
       home.goalsAgainst += entry.awayScore;

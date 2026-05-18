@@ -612,6 +612,21 @@ export class MatchesService {
     });
   }
 
+  async toggleCategorySuspended(matchId: number, tournamentCategoryId: number, suspended: boolean) {
+    const matchCategory = await this.prisma.matchCategory.findFirst({
+      where: { matchId, tournamentCategoryId }
+    });
+
+    if (!matchCategory) {
+      throw new NotFoundException('Categoría de partido no encontrada');
+    }
+
+    return this.prisma.matchCategory.update({
+      where: { id: matchCategory.id },
+      data: { suspended }
+    });
+  }
+
   private buildMatchdayScoreboard(
     categories: Array<{
       tournamentCategoryId: number;
@@ -810,6 +825,7 @@ export class MatchesService {
         data: {
           homeScore: dto.homeScore,
           awayScore: dto.awayScore,
+          suspended: dto.suspended ?? false,
           closedAt: closedAt ?? undefined,
           closedById: closedAt ? userId : null
         }
