@@ -82,7 +82,7 @@ input:focus { border-color: #759b51; box-shadow: 0 0 0 3px #d0e87c55; }
 .migration-note span { color: #66736c; }
 code { color: #527638; }
 
-.clubs-layout { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(300px, .6fr); gap: 1rem; align-items: start; }
+.clubs-layout { align-items: start; }
 .club-table { margin-top: .5rem; }
 .club-row { display: flex; align-items: center; gap: .8rem; padding: 1rem 0; border-top: 1px solid #edf0e9; }
 .club-color { width: 2.5rem; height: 2.5rem; display: grid; place-items: center; flex: 0 0 auto; border-radius: .75rem; color: #fff; background: var(--club-color); font-family: 'Space Grotesk', sans-serif; font-weight: 700; }
@@ -134,6 +134,5 @@ select { width: 100%; border: 1px solid #d7ddd3; border-radius: .7rem; padding: 
   .user-summary { justify-items: start; }
   .dashboard-actions { justify-content: start; }
   .page-header { align-items: start; }
-  .leagues-layout { grid-template-columns: 1fr; }
   .clubs-layout { grid-template-columns: 1fr; }
 }

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { createLeague, getLeagues, getProfile, updateLeague, type AuthUser, type League } from '$lib/api';
+  import Modal from '$lib/Modal.svelte';
 
   const days = [
     ['DOMINGO', 'Domingo'], ['LUNES', 'Lunes'], ['MARTES', 'Martes'],
@@ -40,13 +41,14 @@
     error = '';
   }
 
+  function closeModal() { editing = null; error = ''; }
+
   function slugify(value: string) {
     return value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
   }
 
   async function save() {
     error = '';
-    notice = '';
     if (!form.name.trim()) { error = 'Ingresa el nombre de la liga.'; return; }
     saving = true;
     const input = { ...form, name: form.name.trim(), slug: form.slug.trim() || slugify(form.name) };
@@ -74,39 +76,53 @@
   {#if loading}
     <section class="loading-card">Cargando ligas...</section>
   {:else}
-    {#if error}<p class="error-banner">{error}</p>{/if}
+    {#if error && !editing}<p class="error-banner">{error}</p>{/if}
     {#if notice}<p class="success-banner">{notice}</p>{/if}
-    <div class="leagues-layout">
-      <section class="league-list card-surface">
-        <div class="list-header"><div><p class="eyebrow">Catálogo</p><h2>Ligas registradas</h2></div><span class="count-pill">{leagues.length}</span></div>
-        {#if leagues.length === 0}
-          <div class="empty-state compact-empty"><h2>Sin ligas todavía</h2><p>Crea la primera liga para comenzar.</p></div>
-        {:else}
-          <div class="league-table">
-            {#each leagues as league}
-              <article class="league-row">
-                <span class="league-color" style={`--league-color: ${league.colorHex}`}>{league.name.slice(0, 2).toUpperCase()}</span>
-                <div class="league-info"><strong>{league.name}</strong><span>{league.slug} · {days.find(([value]) => value === league.gameDay)?.[1] ?? league.gameDay}</span></div>
-                {#if canManage}<button class="icon-button" onclick={() => openEdit(league)} aria-label={`Editar ${league.name}`}>Editar</button>{/if}
-              </article>
-            {/each}
-          </div>
-        {/if}
-      </section>
 
-      {#if canManage}
-        <section class="form-card card-surface">
-          <p class="eyebrow">{editing ? 'Editar liga' : 'Nueva liga'}</p>
-          <h2>{editing ? editing.name : 'Crear liga'}</h2>
-          <form onsubmit={(event) => { event.preventDefault(); save(); }}>
-            <label>Nombre<input bind:value={form.name} placeholder="Liga Metropolitana" disabled={saving} /></label>
-            <label>Identificador<input bind:value={form.slug} placeholder="liga-metropolitana" disabled={saving} /></label>
-            <label>Día de juego<select bind:value={form.gameDay} disabled={saving}>{#each days as [value, label]}<option value={value}>{label}</option>{/each}</select></label>
-            <label>Color distintivo<div class="color-input"><input type="color" bind:value={form.colorHex} disabled={saving} /><input bind:value={form.colorHex} disabled={saving} /></div></label>
-            <div class="form-actions"><button class="button primary" type="submit" disabled={saving}>{saving ? 'Guardando...' : editing ? 'Guardar cambios' : 'Crear liga'}</button>{#if editing}<button class="button secondary" type="button" onclick={openCreate} disabled={saving}>Cancelar</button>{/if}</div>
-          </form>
-        </section>
+    <section class="card-surface">
+      <div class="list-header">
+        <div><p class="eyebrow">Catálogo</p><h2>Ligas registradas</h2></div>
+        <div class="list-header-right">
+          <span class="count-pill">{leagues.length}</span>
+          {#if canManage}<button class="button primary" onclick={openCreate}>Agregar liga</button>{/if}
+        </div>
+      </div>
+      {#if leagues.length === 0}
+        <div class="empty-state compact-empty"><h2>Sin ligas todavía</h2><p>Crea la primera liga para comenzar.</p></div>
+      {:else}
+        <div class="league-table">
+          {#each leagues as league}
+            <article class="league-row">
+              <span class="league-color" style={`--league-color: ${league.colorHex}`}>{league.name.slice(0, 2).toUpperCase()}</span>
+              <div class="league-info"><strong>{league.name}</strong><span>{league.slug} · {days.find(([value]) => value === league.gameDay)?.[1] ?? league.gameDay}</span></div>
+              {#if canManage}<button class="icon-button" onclick={() => openEdit(league)} aria-label={`Editar ${league.name}`}>Editar</button>{/if}
+            </article>
+          {/each}
+        </div>
       {/if}
-    </div>
+    </section>
   {/if}
 </main>
+
+{#if editing !== null}
+  <Modal onclose={closeModal}>
+    <div class="modal-form">
+      <p class="eyebrow">{editing ? 'Editar liga' : 'Nueva liga'}</p>
+      <h2>{editing ? editing.name || 'Editar' : 'Crear liga'}</h2>
+      {#if error}<p class="form-error">{error}</p>{/if}
+      <form onsubmit={(event) => { event.preventDefault(); save(); }}>
+        <label>Nombre<input bind:value={form.name} placeholder="Liga Metropolitana" disabled={saving} /></label>
+        <label>Identificador<input bind:value={form.slug} placeholder="liga-metropolitana" disabled={saving} /></label>
+        <label>Día de juego<select bind:value={form.gameDay} disabled={saving}>{#each days as [value, label]}<option value={value}>{label}</option>{/each}</select></label>
+        <label>Color distintivo<div class="color-input"><input type="color" bind:value={form.colorHex} disabled={saving} /><input bind:value={form.colorHex} disabled={saving} /></div></label>
+        <div class="form-actions"><button class="button primary" type="submit" disabled={saving}>{saving ? 'Guardando...' : editing ? 'Guardar cambios' : 'Crear liga'}</button></div>
+      </form>
+    </div>
+  </Modal>
+{/if}
+
+<style>
+  .list-header-right { display: flex; align-items: center; gap: .6rem; }
+  .modal-form h2 { margin: .5rem 0 1.5rem; font-family: 'Space Grotesk', sans-serif; font-size: 1.6rem; letter-spacing: -.04em; }
+  .modal-form form { margin-top: 0; }
+</style>
