@@ -58,6 +58,30 @@ export interface League {
   gameDay: string;
 }
 
+export interface Club {
+  id: number;
+  name: string;
+  active: boolean;
+  slug?: string | null;
+  shortName?: string | null;
+  primaryColor?: string | null;
+  secondaryColor?: string | null;
+  instagramUrl?: string | null;
+  facebookUrl?: string | null;
+  homeAddress?: string | null;
+  latitude?: string | number | null;
+  longitude?: string | number | null;
+  logoUrl?: string | null;
+  league?: { name: string } | null;
+}
+
+export interface PaginatedClubs {
+  data: Club[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 interface AuthResponse {
   user: AuthUser;
   accessToken: string;
@@ -146,6 +170,29 @@ export async function createLeague(input: Omit<League, 'id'>): Promise<League> {
 
 export async function updateLeague(id: number, input: Partial<Omit<League, 'id'>>): Promise<League> {
   return request<League>(`/leagues/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input)
+  });
+}
+
+export async function getClubs(search = '', status = '', page = 1): Promise<PaginatedClubs> {
+  const params = new URLSearchParams();
+  if (search) params.set('search', search);
+  if (status) params.set('status', status);
+  params.set('page', String(page));
+  params.set('pageSize', '25');
+  return request<PaginatedClubs>(`/clubs?${params}`);
+}
+
+export async function createClub(input: Record<string, unknown>): Promise<Club> {
+  return request<Club>('/clubs', {
+    method: 'POST',
+    body: JSON.stringify(input)
+  });
+}
+
+export async function updateClub(id: number, input: Record<string, unknown>): Promise<Club> {
+  return request<Club>(`/clubs/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(input)
   });
