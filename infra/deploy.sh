@@ -91,7 +91,7 @@ git -C "$REPO_ROOT" pull
 log "Commit actual: $(git -C "$REPO_ROOT" rev-parse --short HEAD)"
 
 log "Descargando imágenes publicadas desde GHCR..."
-docker compose pull db mailhog backend migrate frontend proxy
+docker compose pull db mailhog backend migrate frontend
 
 if [ "$no_down" = "false" ]; then
   if [ "$reset_db" = "true" ]; then

@@ -197,7 +197,7 @@ FRONTEND_URL=http://ligas.local
 # SMTP_FROM=noreply@ligas.local
 ```
 
-Los servicios quedan detrás del proxy Nginx en `http://localhost`, que enruta `/api` y `/storage` al backend y sirve el frontend para el resto de las rutas. La base de datos y los contenedores internos no exponen puertos hacia el host para evitar accesos directos; si necesitas acceder a Mailhog o a PostgreSQL desde fuera del clúster, utiliza `docker compose exec` o agrega temporalmente un `ports:` en tu entorno local.
+Los servicios quedan detrás del `caddy-docker-proxy` compartido del VPS. Las labels del frontend publican `ligas.csdsoler.com.ar`, enrutan `/api/*` al backend y el resto de las rutas al frontend. El Compose se conecta a la red externa `caddy_net`; esa red debe existir antes del despliegue. La base de datos y los contenedores internos no exponen puertos hacia el host para evitar accesos directos; si necesitas acceder a Mailhog o a PostgreSQL desde fuera del clúster, utiliza `docker compose exec` o agrega temporalmente un `ports:` en tu entorno local.
 
 La base de datos y los archivos subidos se persisten en volúmenes (`postgres-data`, `backend-storage`) definidos en el Compose.
 

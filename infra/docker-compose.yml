@@ -40,6 +40,9 @@ services:
         condition: service_healthy
     volumes:
       - backend-storage:/app/storage
+    networks:
+      - default
+      - caddy_net
 
   migrate:
     image: ${BACKEND_IMAGE:-ghcr.io/hectororviz/ligas-deportivas-v2/backend}:${IMAGE_TAG:-latest}
@@ -60,30 +63,20 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
-
-  proxy:
-    image: caddy:2
-    restart: unless-stopped
-    depends_on:
-      - backend
-      - frontend
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
     networks:
       - default
-      - shared_proxy
+      - caddy_net
+    labels:
+      caddy: ligas.csdsoler.com.ar
+      caddy.0_handle: /api/*
+      caddy.0_handle.0_reverse_proxy: backend:3000
+      caddy.1_handle: /*
+      caddy.1_handle.0_reverse_proxy: "{{upstreams 3000}}"
 
 volumes:
   postgres-data:
   backend-storage:
-  caddy_data:
-  caddy_config:
 
 networks:
-  shared_proxy:
+  caddy_net:
     external: true
