@@ -82,6 +82,8 @@ describe('LeaderboardsService', () => {
         homeScore: 4,
         awayScore: 1,
         match: {
+          zoneId: 1,
+          matchday: 1,
           zone: { name: 'Zona 1' },
           homeClub: { id: 1, name: 'Club A', shortName: 'A' },
           awayClub: { id: 2, name: 'Club B', shortName: 'B' },
@@ -94,6 +96,8 @@ describe('LeaderboardsService', () => {
         homeScore: 0,
         awayScore: 2,
         match: {
+          zoneId: 1,
+          matchday: 1,
           zone: { name: 'Zona 1' },
           homeClub: { id: 2, name: 'Club B', shortName: 'B' },
           awayClub: { id: 1, name: 'Club A', shortName: 'A' },
@@ -106,6 +110,8 @@ describe('LeaderboardsService', () => {
         homeScore: 1,
         awayScore: 1,
         match: {
+          zoneId: 2,
+          matchday: 1,
           zone: { name: 'Zona 2' },
           homeClub: { id: 3, name: 'Club C', shortName: 'C' },
           awayClub: { id: 1, name: 'Club A', shortName: 'A' },
@@ -115,6 +121,12 @@ describe('LeaderboardsService', () => {
     ];
 
     const prisma = {
+      zoneMatchday: {
+        findMany: jest.fn().mockResolvedValue([
+          { zoneId: 1, matchday: 1 },
+          { zoneId: 2, matchday: 1 },
+        ]),
+      },
       goal: {
         findMany: jest.fn().mockResolvedValue(goals),
       },

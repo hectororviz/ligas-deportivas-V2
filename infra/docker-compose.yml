@@ -20,8 +20,7 @@ services:
     restart: unless-stopped
 
   backend:
-    build:
-      context: ../backend
+    image: ${BACKEND_IMAGE:-ghcr.io/hectororviz/ligas-deportivas-v2/backend}:${IMAGE_TAG:-latest}
     restart: "no"
     environment:
       APP_URL: ${APP_URL}
@@ -43,8 +42,7 @@ services:
       - backend-storage:/app/storage
 
   migrate:
-    build:
-      context: ../backend
+    image: ${BACKEND_IMAGE:-ghcr.io/hectororviz/ligas-deportivas-v2/backend}:${IMAGE_TAG:-latest}
     restart: "no"
     environment:
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@db:5432/ligas
@@ -58,16 +56,10 @@ services:
     entrypoint: ["/app/entrypoint-migrate.sh"]
 
   frontend:
-    build:
-      context: ../frontend
-      dockerfile: Dockerfile
-      args:
-        API_BASE_URL: /api/v1
+    image: ${FRONTEND_IMAGE:-ghcr.io/hectororviz/ligas-deportivas-v2/frontend}:${IMAGE_TAG:-latest}
     restart: unless-stopped
     depends_on:
       - backend
-    volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
 
   proxy:
     image: caddy:2
@@ -85,21 +77,6 @@ services:
     networks:
       - default
       - shared_proxy
-
-  seed:
-    build:
-      context: ../backend
-      target: builder
-    environment:
-      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@db:5432/ligas
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@ligas.local}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin123!}
-      SEED_RESET_ADMIN_PASSWORD: ${SEED_RESET_ADMIN_PASSWORD:-false}
-    depends_on:
-      db:
-        condition: service_healthy
-    command: sh -lc "npx prisma db seed"
-
 
 volumes:
   postgres-data:

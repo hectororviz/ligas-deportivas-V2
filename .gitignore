@@ -1,6 +1,7 @@
 # -------- Node / Nest / Angular --------
 node_modules/
 dist/
+.svelte-kit/
 tmp/
 temp/
 nyc_output/

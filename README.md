@@ -160,12 +160,26 @@ En Docker, el backend instala `zxing-cpp-tools` y publica el wrapper `/usr/local
 
 ## Infraestructura con Docker Compose
 
-Puedes levantar toda la plataforma con un único comando:
+Las imágenes de `backend` y `frontend` se construyen y publican automáticamente en
+GitHub Container Registry mediante `.github/workflows/docker-publish.yml`. Para
+levantar la plataforma desde esas imágenes:
 
 ```bash
 cd infra
-docker compose up --build
+docker login ghcr.io
+docker compose pull
+docker compose up -d
 ```
+
+Por defecto Compose utiliza:
+
+```text
+ghcr.io/hectororviz/ligas-deportivas-v2/backend:latest
+ghcr.io/hectororviz/ligas-deportivas-v2/frontend:latest
+```
+
+Puedes seleccionar otro registro o una etiqueta concreta mediante `BACKEND_IMAGE`,
+`FRONTEND_IMAGE` e `IMAGE_TAG` en `infra/.env`.
 
 Antes de iniciar, crea el archivo `infra/.env` con las variables requeridas:
 
@@ -203,10 +217,11 @@ El flujo obligatorio y automatizable es ejecutar `infra/deploy.sh`, que realiza 
 
 1. `docker compose down` (sin `-v` por defecto, con opción para resetear DB).
 2. `git fetch --all` + `git pull` (opcionalmente checkout de una rama).
-3. `docker compose up -d db` y espera el healthcheck.
-4. `docker compose run --rm migrate` (si falla, el deploy se aborta).
-5. `docker compose up -d backend frontend`.
-6. `docker compose ps` y logs resumidos si algo queda unhealthy.
+3. `docker compose pull` para descargar las imágenes publicadas.
+4. `docker compose up -d db` y espera el healthcheck.
+5. `docker compose run --rm migrate` (si falla, el deploy se aborta).
+6. `docker compose up -d backend frontend proxy`.
+7. `docker compose ps` y logs resumidos si algo queda unhealthy.
 
 ```bash
 cd infra

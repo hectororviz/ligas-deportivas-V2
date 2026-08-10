@@ -90,6 +90,9 @@ fi
 git -C "$REPO_ROOT" pull
 log "Commit actual: $(git -C "$REPO_ROOT" rev-parse --short HEAD)"
 
+log "Descargando imágenes publicadas desde GHCR..."
+docker compose pull db mailhog backend migrate frontend proxy
+
 if [ "$no_down" = "false" ]; then
   if [ "$reset_db" = "true" ]; then
     log "Deteniendo servicios y eliminando volúmenes (reset DB)."
@@ -167,8 +170,8 @@ if [ "$migrate_status" -ne 0 ]; then
   exit 1
 fi
 
-log "Levantando stack completo..."
-docker compose up -d --build --remove-orphans
+log "Levantando stack completo desde imágenes..."
+docker compose up -d --remove-orphans
 
 log "Estado final de servicios:"
 docker compose ps
