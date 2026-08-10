@@ -75,6 +75,75 @@ export interface Club {
   league?: { name: string } | null;
 }
 
+export interface Category {
+  id: number;
+  name: string;
+  birthYearMin: number;
+  birthYearMax: number;
+  gender: string;
+  minPlayers: number;
+  mandatory: boolean;
+  promotional: boolean;
+  active: boolean;
+}
+
+export interface Tournament {
+  id: number;
+  name: string;
+  year: number;
+  gender: string;
+  status: string;
+  championMode: string;
+  pointsWin: number;
+  pointsDraw: number;
+  pointsLoss: number;
+  startDate?: string | null;
+  endDate?: string | null;
+  leagueId: number;
+  league: { name: string };
+}
+
+export interface Zone {
+  id: number;
+  name: string;
+  tournamentId: number;
+  status: string;
+  lockedAt?: string | null;
+  tournament: { name: string; year: number; league: { name: string } };
+  clubZones?: { club: Club }[];
+}
+
+export interface StandingRow {
+  clubId: number;
+  clubName: string;
+  played: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  goalDifference: number;
+  points: number;
+}
+
+export interface ZoneStanding {
+  zoneId: number;
+  zoneName: string;
+  tournamentName: string;
+  categories: { categoryId: number; categoryName: string; standings: StandingRow[] }[];
+}
+
+export interface SiteIdentity {
+  title: string;
+  iconKey?: string | null;
+  flyerKey?: string | null;
+  backgroundImage?: string | null;
+  layoutSvg?: string | null;
+  faviconHash?: string | null;
+  iconUrl?: string;
+  flyerUrl?: string;
+}
+
 export interface PaginatedClubs {
   data: Club[];
   total: number;
@@ -196,6 +265,89 @@ export async function updateClub(id: number, input: Record<string, unknown>): Pr
     method: 'PATCH',
     body: JSON.stringify(input)
   });
+}
+
+export async function getCategories(): Promise<Category[]> {
+  return request<Category[]>('/categories');
+}
+
+export async function createCategory(input: Record<string, unknown>): Promise<Category> {
+  return request<Category>('/categories', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export async function updateCategory(id: number, input: Record<string, unknown>): Promise<Category> {
+  return request<Category>(`/categories/${id}`, { method: 'PATCH', body: JSON.stringify(input) });
+}
+
+export async function getTournaments(includeInactive = false): Promise<Tournament[]> {
+  return request<Tournament[]>(`/tournaments${includeInactive ? '?includeInactive=true' : ''}`);
+}
+
+export async function createTournament(input: Record<string, unknown>): Promise<Tournament> {
+  return request<Tournament>('/tournaments', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export async function updateTournament(id: number, input: Record<string, unknown>): Promise<Tournament> {
+  return request<Tournament>(`/tournaments/${id}`, { method: 'PUT', body: JSON.stringify(input) });
+}
+
+export async function getZones(includeInactive = false): Promise<Zone[]> {
+  return request<Zone[]>(`/zones${includeInactive ? '?includeInactive=true' : ''}`);
+}
+
+export async function assignClubToZone(zoneId: number, clubId: number): Promise<void> {
+  return request(`/zones/${zoneId}/clubs`, { method: 'POST', body: JSON.stringify({ clubId }) });
+}
+
+export async function removeClubFromZone(zoneId: number, clubId: number): Promise<void> {
+  return request(`/zones/${zoneId}/clubs/${clubId}`, { method: 'DELETE' });
+}
+
+export async function generateFixture(zoneId: number, idaVuelta: boolean): Promise<unknown> {
+  return request(`/zones/${zoneId}/fixture`, { method: 'POST', body: JSON.stringify({ idaVuelta }) });
+}
+
+export async function generateTournamentFixture(tournamentId: number, idaVuelta: boolean): Promise<unknown> {
+  return request(`/tournaments/${tournamentId}/fixtures/generate`, { method: 'POST', body: JSON.stringify({ idaVuelta }) });
+}
+
+export async function getZoneStandings(zoneId: number): Promise<ZoneStanding> {
+  return request<ZoneStanding>(`/zones/${zoneId}/standings`);
+}
+
+export async function getTournamentStandings(tournamentId: number): Promise<unknown> {
+  return request(`/tournaments/${tournamentId}/standings`);
+}
+
+export async function getSiteIdentity(): Promise<SiteIdentity> {
+  return request<SiteIdentity>('/site-identity');
+}
+
+export async function updateProfile(input: Record<string, unknown>): Promise<AuthUser> {
+  return request<AuthUser>('/me', { method: 'PUT', body: JSON.stringify(input) });
+}
+
+export async function changePassword(input: { currentPassword: string; newPassword: string }): Promise<void> {
+  return request('/me/password', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export async function updateSiteIdentity(input: FormData): Promise<SiteIdentity> {
+  const headers = new Headers();
+  const accessToken = getStored(ACCESS_TOKEN_KEY);
+  if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
+  const response = await fetch(`${API_BASE_URL}/site-identity`, { method: 'PUT', headers, body: input });
+  if (!response.ok) throw new Error('No se pudo actualizar la identidad del sitio.');
+  return response.json();
+}
+
+export async function uploadFavicon(file: File): Promise<void> {
+  const form = new FormData();
+  form.append('file', file);
+  const headers = new Headers();
+  const accessToken = getStored(ACCESS_TOKEN_KEY);
+  if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
+  const response = await fetch(`${API_BASE_URL}/site-identity/favicon`, { method: 'POST', headers, body: form });
+  if (!response.ok) throw new Error('No se pudo subir el favicon.');
 }
 
 export async function logout(): Promise<void> {

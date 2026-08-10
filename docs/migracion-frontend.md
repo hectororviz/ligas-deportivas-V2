@@ -25,6 +25,13 @@ El backend NestJS, la API REST y el esquema Prisma se conservan durante la trans
 | Inicio | Resumen del panel | `/` | `GET /home/summary` | Migrado | Torneos, zonas y top 3 por zona |
 | Ligas | Listado y edición de ligas | `/leagues` | `GET /leagues`, `POST/PATCH /leagues` | Migrado | Listado responsive y formulario admin |
 | Clubes | Listado y administración de clubes | `/clubs` | `GET /clubs`, `POST/PATCH /clubs` | Migrado | Búsqueda, paginación y formulario admin |
+| Categorías | Catálogo y edición | `/categories` | `GET /categories`, `POST/PATCH /categories` | Migrado | CRUD con filtros visuales |
+| Torneos | Listado y configuración | `/tournaments` | `GET /tournaments`, `POST/PUT /tournaments` | Migrado | CRUD con select de liga y fechas |
+| Zonas | Gestión de zonas | `/zones` | `GET /zones` | Migrado | Con enlaces a tablas y fixture |
+| Tablas | Tabla general | `/standings` | `/zones/:zoneId/standings`, `/tournaments/:tournamentId/standings` | Migrado | Selector de zona/torneo con tabla de posiciones |
+| Configuración | Menú de configuración | `/settings` | RBAC | Migrado | Hub con enlaces a subpáginas |
+| Configuración | Cuenta y avatar | `/settings/account` | `/me` | Migrado | Perfil y cambio de contraseña |
+| Configuración | Identidad del sitio | `/settings/site-identity` | `/site-identity` | Migrado | Título, icono, flyer y favicon |
 | Clubes | Administración pública/privada de club | `/club/:slug` | `/clubs/*` | Pendiente | |
 | Clubes | Plantel de club | `/clubs/:clubId/roster` | `/rosters/*`, `/players/*` | Pendiente | |
 | Categorías | Catálogo y edición | `/categories` | `/categories` | Pendiente | |
@@ -63,4 +70,4 @@ Una pantalla pasa a `Validado` cuando:
 | Fecha | Cambio |
 |---|---|
 | 2026-08-10 | Creado frontend SvelteKit, login, refresh, perfil, logout y pantalla protegida inicial. |
-| 2026-08-10 | Migrados panel de torneos activos, gestión de ligas y gestión de clubes. |
+| 2026-08-10 | Migrados panel de torneos activos, gestión de ligas, clubes, categorías, torneos, zonas, tablas y configuración. |
