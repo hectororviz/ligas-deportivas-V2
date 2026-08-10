@@ -1,12 +1,10 @@
 import { PrismaClient } from '@prisma/client';
 import { seedBaseData } from '../src/prisma/base-seed';
-import { seedPlayers } from '../src/prisma/seed-players';
 
 const prisma = new PrismaClient();
 
 async function main() {
   await seedBaseData(prisma);
-  await seedPlayers(prisma);
 }
 
 main()
