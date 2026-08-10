@@ -22,8 +22,8 @@ El backend NestJS, la API REST y el esquema Prisma se conservan durante la trans
 | Auth | Registro | `/register` | `POST /auth/register` | Pendiente | |
 | Auth | Verificación de correo | `/verify-email` | `POST /auth/verify-email` | Pendiente | |
 | Auth | Recuperación de contraseña | `/reset-password` | `POST /auth/password/*` | Pendiente | |
-| Inicio | Resumen del panel | `/home` | `GET /competition/home-summary` | Pendiente | |
-| Ligas | Listado y edición de ligas | `/leagues` | `/leagues` | Pendiente | |
+| Inicio | Resumen del panel | `/` | `GET /home/summary` | Migrado | Torneos, zonas y top 3 por zona |
+| Ligas | Listado y edición de ligas | `/leagues` | `GET /leagues`, `POST/PATCH /leagues` | Migrado | Listado responsive y formulario admin |
 | Clubes | Listado y administración de clubes | `/clubs` | `/clubs` | Pendiente | |
 | Clubes | Administración pública/privada de club | `/club/:slug` | `/clubs/*` | Pendiente | |
 | Clubes | Plantel de club | `/clubs/:clubId/roster` | `/rosters/*`, `/players/*` | Pendiente | |
@@ -63,3 +63,4 @@ Una pantalla pasa a `Validado` cuando:
 | Fecha | Cambio |
 |---|---|
 | 2026-08-10 | Creado frontend SvelteKit, login, refresh, perfil, logout y pantalla protegida inicial. |
+| 2026-08-10 | Migrados panel de torneos activos y gestión básica de ligas. |

@@ -1,0 +1,112 @@
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import { createLeague, getLeagues, getProfile, updateLeague, type AuthUser, type League } from '$lib/api';
+
+  const days = [
+    ['DOMINGO', 'Domingo'], ['LUNES', 'Lunes'], ['MARTES', 'Martes'],
+    ['MIERCOLES', 'Miércoles'], ['JUEVES', 'Jueves'], ['VIERNES', 'Viernes'], ['SABADO', 'Sábado']
+  ];
+
+  let user: AuthUser | null = null;
+  let leagues: League[] = [];
+  let loading = true;
+  let saving = false;
+  let error = '';
+  let notice = '';
+  let editing: League | null = null;
+  let form = { name: '', slug: '', colorHex: '#0057B8', gameDay: 'DOMINGO' };
+
+  onMount(async () => {
+    try {
+      [user, leagues] = await Promise.all([getProfile(), getLeagues()]);
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'No se pudieron cargar las ligas.';
+    } finally {
+      loading = false;
+    }
+  });
+
+  $: canManage = user?.roles.includes('ADMIN') ?? false;
+
+  function openCreate() {
+    editing = null;
+    form = { name: '', slug: '', colorHex: '#0057B8', gameDay: 'DOMINGO' };
+    error = '';
+  }
+
+  function openEdit(league: League) {
+    editing = league;
+    form = { name: league.name, slug: league.slug, colorHex: league.colorHex, gameDay: league.gameDay };
+    error = '';
+  }
+
+  function slugify(value: string) {
+    return value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  }
+
+  async function save() {
+    error = '';
+    notice = '';
+    if (!form.name.trim()) { error = 'Ingresa el nombre de la liga.'; return; }
+    saving = true;
+    const input = { ...form, name: form.name.trim(), slug: form.slug.trim() || slugify(form.name) };
+    try {
+      const saved = editing ? await updateLeague(editing.id, input) : await createLeague(input);
+      leagues = editing ? leagues.map((league) => league.id === saved.id ? saved : league) : [...leagues, saved].sort((a, b) => a.name.localeCompare(b.name));
+      notice = editing ? 'Liga actualizada correctamente.' : 'Liga creada correctamente.';
+      editing = null;
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'No se pudo guardar la liga.';
+    } finally {
+      saving = false;
+    }
+  }
+</script>
+
+<svelte:head><title>Ligas | Ligas Deportivas</title></svelte:head>
+
+<main class="page-shell">
+  <header class="page-header">
+    <div><p class="eyebrow">Configuración deportiva</p><h1>Ligas</h1><p class="muted">Organiza competiciones y define su día de juego.</p></div>
+    <a class="button secondary" href="/">Volver al panel</a>
+  </header>
+
+  {#if loading}
+    <section class="loading-card">Cargando ligas...</section>
+  {:else}
+    {#if error}<p class="error-banner">{error}</p>{/if}
+    {#if notice}<p class="success-banner">{notice}</p>{/if}
+    <div class="leagues-layout">
+      <section class="league-list card-surface">
+        <div class="list-header"><div><p class="eyebrow">Catálogo</p><h2>Ligas registradas</h2></div><span class="count-pill">{leagues.length}</span></div>
+        {#if leagues.length === 0}
+          <div class="empty-state compact-empty"><h2>Sin ligas todavía</h2><p>Crea la primera liga para comenzar.</p></div>
+        {:else}
+          <div class="league-table">
+            {#each leagues as league}
+              <article class="league-row">
+                <span class="league-color" style={`--league-color: ${league.colorHex}`}>{league.name.slice(0, 2).toUpperCase()}</span>
+                <div class="league-info"><strong>{league.name}</strong><span>{league.slug} · {days.find(([value]) => value === league.gameDay)?.[1] ?? league.gameDay}</span></div>
+                {#if canManage}<button class="icon-button" onclick={() => openEdit(league)} aria-label={`Editar ${league.name}`}>Editar</button>{/if}
+              </article>
+            {/each}
+          </div>
+        {/if}
+      </section>
+
+      {#if canManage}
+        <section class="form-card card-surface">
+          <p class="eyebrow">{editing ? 'Editar liga' : 'Nueva liga'}</p>
+          <h2>{editing ? editing.name : 'Crear liga'}</h2>
+          <form onsubmit={(event) => { event.preventDefault(); save(); }}>
+            <label>Nombre<input bind:value={form.name} placeholder="Liga Metropolitana" disabled={saving} /></label>
+            <label>Identificador<input bind:value={form.slug} placeholder="liga-metropolitana" disabled={saving} /></label>
+            <label>Día de juego<select bind:value={form.gameDay} disabled={saving}>{#each days as [value, label]}<option value={value}>{label}</option>{/each}</select></label>
+            <label>Color distintivo<div class="color-input"><input type="color" bind:value={form.colorHex} disabled={saving} /><input bind:value={form.colorHex} disabled={saving} /></div></label>
+            <div class="form-actions"><button class="button primary" type="submit" disabled={saving}>{saving ? 'Guardando...' : editing ? 'Guardar cambios' : 'Crear liga'}</button>{#if editing}<button class="button secondary" type="button" onclick={openCreate} disabled={saving}>Cancelar</button>{/if}</div>
+          </form>
+        </section>
+      {/if}
+    </div>
+  {/if}
+</main>

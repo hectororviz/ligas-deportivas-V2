@@ -14,6 +14,50 @@ export interface AuthUser {
   club: { id: number; name: string } | null;
 }
 
+export interface HomeStanding {
+  clubId: number;
+  clubName: string;
+  points: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  goalDifference: number;
+}
+
+export interface HomeMatchday {
+  matchday: number;
+  date: string | null;
+  status: string;
+  kickoffTime: string | null;
+}
+
+export interface HomeZone {
+  id: number;
+  name: string;
+  top: HomeStanding[];
+  nextMatchday: HomeMatchday | null;
+}
+
+export interface HomeTournament {
+  id: number;
+  leagueName: string;
+  name: string;
+  year: number;
+  zones: HomeZone[];
+}
+
+export interface HomeSummary {
+  generatedAt: string;
+  tournaments: HomeTournament[];
+}
+
+export interface League {
+  id: number;
+  name: string;
+  slug: string;
+  colorHex: string;
+  gameDay: string;
+}
+
 interface AuthResponse {
   user: AuthUser;
   accessToken: string;
@@ -83,6 +127,28 @@ export async function login(email: string, password: string): Promise<AuthUser> 
 
 export async function getProfile(): Promise<AuthUser> {
   return request<AuthUser>('/auth/profile');
+}
+
+export async function getHomeSummary(): Promise<HomeSummary> {
+  return request<HomeSummary>('/home/summary');
+}
+
+export async function getLeagues(): Promise<League[]> {
+  return request<League[]>('/leagues');
+}
+
+export async function createLeague(input: Omit<League, 'id'>): Promise<League> {
+  return request<League>('/leagues', {
+    method: 'POST',
+    body: JSON.stringify(input)
+  });
+}
+
+export async function updateLeague(id: number, input: Partial<Omit<League, 'id'>>): Promise<League> {
+  return request<League>(`/leagues/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input)
+  });
 }
 
 export async function logout(): Promise<void> {
