@@ -33,8 +33,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV DNI_SCAN_DECODER_COMMAND="/usr/local/bin/dni-pdf417-decoder"
 
 COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/tsconfig.json ./tsconfig.json
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/src/prisma ./src/prisma
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/entrypoint-backend.sh ./entrypoint-backend.sh
 COPY --from=builder /app/entrypoint-migrate.sh ./entrypoint-migrate.sh
