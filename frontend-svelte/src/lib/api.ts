@@ -257,6 +257,27 @@ export async function login(email: string, password: string): Promise<AuthUser> 
   return response.user;
 }
 
+export async function register(input: { firstName: string; lastName: string; email: string; password: string }): Promise<AuthUser> {
+  const response = await request<AuthResponse>('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({ ...input, captchaToken: 'bypass-captcha' })
+  }, false);
+  storeAuth(response);
+  return response.user;
+}
+
+export async function verifyEmail(token: string): Promise<void> {
+  await request('/auth/verify-email', { method: 'POST', body: JSON.stringify({ token }) });
+}
+
+export async function requestPasswordReset(email: string): Promise<void> {
+  await request('/auth/password/request-reset', { method: 'POST', body: JSON.stringify({ email }) });
+}
+
+export async function resetPassword(token: string, password: string): Promise<void> {
+  await request('/auth/password/reset', { method: 'POST', body: JSON.stringify({ token, password }) });
+}
+
 export async function getProfile(): Promise<AuthUser> {
   return request<AuthUser>('/auth/profile');
 }
@@ -408,6 +429,40 @@ export async function updateSiteIdentity(input: FormData): Promise<SiteIdentity>
   const response = await fetch(`${API_BASE_URL}/site-identity`, { method: 'PUT', headers, body: input });
   if (!response.ok) throw new Error('No se pudo actualizar la identidad del sitio.');
   return response.json();
+}
+
+export interface ClubAdminTournament {
+  id: number; name: string; year: number;
+  categories: { id: number; category: { id: number; name: string }; kickoffTime?: string|null; countsForGeneral: boolean }[];
+  zone?: { id: number; name: string }|null;
+}
+
+export interface ClubAdminOverview {
+  club: { id: number; name: string; shortName?: string|null; slug: string; logoUrl?: string|null; primaryColor?: string|null; secondaryColor?: string|null; instagramUrl?: string|null; facebookUrl?: string|null; homeAddress?: string|null; latitude?: number|null; longitude?: number|null; active: boolean };
+  tournaments: ClubAdminTournament[];
+}
+
+export interface RosterPlayer {
+  id: number; playerId: number; jersey?: number|null;
+  player: { id: number; firstName: string; lastName: string; dni: string };
+}
+
+export interface RosterCategory {
+  id: number; clubId: number; tournamentCategoryId: number; lockedAt?: string|null;
+  tournamentCategory: { tournament: { id: number; name: string }; category: { id: number; name: string } };
+  players: RosterPlayer[];
+}
+
+export async function getClubAdmin(slug: string): Promise<ClubAdminOverview> {
+  return request<ClubAdminOverview>(`/clubs/${slug}/admin`);
+}
+
+export async function leaveTournament(clubId: number, tournamentId: number): Promise<void> {
+  return request(`/clubs/${clubId}/tournaments/${tournamentId}`, { method: 'DELETE' });
+}
+
+export async function getClubRoster(clubId: number): Promise<{ tournamentCategories: RosterCategory[] }> {
+  return request(`/clubs/${clubId}/roster`);
 }
 
 export async function uploadFavicon(file: File): Promise<void> {
