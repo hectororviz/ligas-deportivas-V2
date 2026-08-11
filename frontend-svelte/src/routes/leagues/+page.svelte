@@ -8,18 +8,20 @@
     ['MIERCOLES', 'Miércoles'], ['JUEVES', 'Jueves'], ['VIERNES', 'Viernes'], ['SABADO', 'Sábado']
   ];
 
-  let user: AuthUser | null = null;
-  let leagues: League[] = [];
-  let loading = true;
-  let saving = false;
-  let error = '';
-  let notice = '';
-  let editing: League | null = null;
-  let form = { name: '', slug: '', colorHex: '#0057B8', gameDay: 'DOMINGO' };
+  let user: AuthUser | null = $state(null);
+  let leagues: League[] = $state([]);
+  let loading = $state(true);
+  let saving = $state(false);
+  let error = $state('');
+  let notice = $state('');
+  let editing: League | null = $state(null);
+  let showForm = $state(false);
+  let form = $state({ name: '', slug: '', colorHex: '#0057B8', gameDay: 'DOMINGO' });
 
   onMount(async () => {
     try {
-      [user, leagues] = await Promise.all([getProfile(), getLeagues()]);
+      const [u, l] = await Promise.all([getProfile(), getLeagues()]);
+      user = u; leagues = l;
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudieron cargar las ligas.';
     } finally {
@@ -27,21 +29,21 @@
     }
   });
 
-  $: canManage = user?.roles.includes('ADMIN') ?? false;
+  let canManage = $derived(((user as AuthUser | null)?.roles ?? []).includes('ADMIN'));
 
   function openCreate() {
-    editing = null;
+    editing = null; showForm = true;
     form = { name: '', slug: '', colorHex: '#0057B8', gameDay: 'DOMINGO' };
     error = '';
   }
 
   function openEdit(league: League) {
-    editing = league;
+    editing = league; showForm = true;
     form = { name: league.name, slug: league.slug, colorHex: league.colorHex, gameDay: league.gameDay };
     error = '';
   }
 
-  function closeModal() { editing = null; error = ''; }
+  function closeModal() { showForm = false; editing = null; error = ''; }
 
   function slugify(value: string) {
     return value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -56,7 +58,7 @@
       const saved = editing ? await updateLeague(editing.id, input) : await createLeague(input);
       leagues = editing ? leagues.map((league) => league.id === saved.id ? saved : league) : [...leagues, saved].sort((a, b) => a.name.localeCompare(b.name));
       notice = editing ? 'Liga actualizada correctamente.' : 'Liga creada correctamente.';
-      editing = null;
+      editing = null; showForm = false;
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudo guardar la liga.';
     } finally {
@@ -75,7 +77,7 @@
   {#if loading}
     <section class="loading-card">Cargando ligas...</section>
   {:else}
-    {#if error && !editing}<p class="error-banner">{error}</p>{/if}
+    {#if error && !showForm}<p class="error-banner">{error}</p>{/if}
     {#if notice}<p class="success-banner">{notice}</p>{/if}
 
     <section class="card-surface">
@@ -103,7 +105,7 @@
   {/if}
 </main>
 
-{#if editing !== null}
+{#if showForm}
   <Modal onclose={closeModal}>
     <div class="modal-form">
       <p class="eyebrow">{editing ? 'Editar liga' : 'Nueva liga'}</p>
