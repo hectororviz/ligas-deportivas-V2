@@ -79,6 +79,21 @@ export class ZonesService {
     });
   }
 
+  async delete(id: number) {
+    const zone = await this.prisma.zone.findUnique({
+      where: { id },
+      include: { matches: true },
+    });
+    if (!zone) throw new NotFoundException('Zona inexistente');
+    if (zone.status !== ZoneStatus.OPEN) {
+      throw new BadRequestException('Solo se pueden eliminar zonas en estado Abierto');
+    }
+    if (zone.matches.length > 0) {
+      throw new BadRequestException('No se puede eliminar una zona con partidos generados');
+    }
+    await this.prisma.zone.delete({ where: { id } });
+  }
+
   async assignClub(zoneId: number, clubId: number) {
     return this.prisma.$transaction(async (tx) => {
       const zone = await this.getZoneContext(tx, zoneId);

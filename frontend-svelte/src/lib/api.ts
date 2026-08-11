@@ -442,6 +442,10 @@ export async function createZone(tournamentId: number, name: string): Promise<Zo
   return request<Zone>(`/tournaments/${tournamentId}/zones`, { method: 'POST', body: JSON.stringify({ name }) });
 }
 
+export async function deleteZone(zoneId: number): Promise<void> {
+  return request(`/zones/${zoneId}`, { method: 'DELETE' });
+}
+
 export async function generateTournamentFixture(tournamentId: number, idaVuelta: boolean): Promise<unknown> {
   return request(`/tournaments/${tournamentId}/fixtures/generate`, { method: 'POST', body: JSON.stringify({ idaVuelta }) });
 }
@@ -481,12 +485,10 @@ export interface ZoneMatchesResponse {
 
 export interface TournamentZoneClub {
   id: number;
-  clubId: number;
-  clubName: string;
-  zoneId: number;
-  zoneName: string;
-  categoryCount: number;
-  playerCount: number;
+  name: string;
+  shortName?: string | null;
+  eligible: boolean;
+  categories: { tournamentCategoryId: number; categoryId: number; categoryName: string; mandatory: boolean; minPlayers: number; hasTeam: boolean; playersCount: number; meetsMinPlayers: boolean }[];
 }
 
 export interface TournamentZone {
@@ -515,8 +517,9 @@ export async function getZoneClubs(zoneId: number): Promise<TournamentZoneClub[]
   return request<TournamentZoneClub[]>(`/zones/${zoneId}/clubs`);
 }
 
-export async function getTournamentZoneClubs(tournamentId: number): Promise<TournamentZoneClub[]> {
-  return request<TournamentZoneClub[]>(`/tournaments/${tournamentId}/zones/clubs`);
+export async function getTournamentZoneClubs(tournamentId: number, zoneId?: number): Promise<TournamentZoneClub[]> {
+  const params = zoneId ? `?zoneId=${zoneId}` : '';
+  return request<TournamentZoneClub[]>(`/tournaments/${tournamentId}/zones/clubs${params}`);
 }
 
 export interface AssignedPlayer {

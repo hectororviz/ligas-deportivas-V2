@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { assignClubToZone, createZone, generateFixture, getProfile, getTournamentZoneClubs, getTournaments, getZones, removeClubFromZone, type AuthUser, type Tournament, type TournamentZoneClub, type Zone } from '$lib/api';
+  import { assignClubToZone, createZone, deleteZone, generateFixture, getProfile, getTournamentZoneClubs, getTournaments, getZones, removeClubFromZone, type AuthUser, type Tournament, type TournamentZoneClub, type Zone } from '$lib/api';
   import Modal from '$lib/Modal.svelte';
 
   let user: AuthUser | null = $state(null);
@@ -9,15 +9,13 @@
   let loading = $state(true);
   let error = $state('');
   let notice = $state('');
-  let generatingZoneId: number | null = $state(null);
-  let generating = $state(false);
+  let saving = $state(false);
 
   let showFixtureModal = $state(false);
   let fixtureZone: Zone | null = $state(null);
   let idaVuelta = $state(true);
 
   let expandedZone = $state<number | null>(null);
-  let zoneClubs = $state<TournamentZoneClub[]>([]);
   let availableClubs = $state<TournamentZoneClub[]>([]);
   let loadingClubs = $state(false);
 
@@ -32,24 +30,23 @@
       user = u; zones = z; tournaments = t;
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudieron cargar las zonas.';
-    } finally {
-      loading = false;
-    }
+    } finally { loading = false; }
   });
 
   let canManage = $derived(((user as AuthUser | null)?.roles ?? []).includes('ADMIN'));
   let activeTournaments = $derived(tournaments.filter(t => t.status === 'ACTIVE'));
+
+  function assignedClubs(zone: Zone): { clubId: number; clubName: string }[] {
+    return (zone.clubZones || []).map(cz => ({ clubId: cz.club.id, clubName: cz.club.name }));
+  }
 
   async function toggleZone(zone: Zone) {
     if (expandedZone === zone.id) { expandedZone = null; return; }
     expandedZone = zone.id;
     loadingClubs = true;
     try {
-      const clubs = await getTournamentZoneClubs(zone.tournamentId);
-      zoneClubs = clubs.filter(c => c.zoneId === zone.id);
-      availableClubs = clubs.filter(c => !c.zoneId);
+      availableClubs = await getTournamentZoneClubs(zone.tournamentId, zone.id);
     } catch {
-      zoneClubs = [];
       availableClubs = [];
     } finally {
       loadingClubs = false;
@@ -57,36 +54,66 @@
   }
 
   async function addClub(zoneId: number, clubId: number) {
+    saving = true; error = '';
     try {
       await assignClubToZone(zoneId, clubId);
       notice = 'Club agregado a la zona.';
       zones = await getZones(true);
-      if (expandedZone === zoneId) toggleZone(zones.find(z => z.id === zoneId)!);
+      if (expandedZone === zoneId) {
+        const zone = zones.find(z => z.id === zoneId);
+        if (zone) toggleZone(zone);
+        else expandedZone = null;
+      }
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'Error al agregar club.';
+    } finally {
+      saving = false;
+      setTimeout(() => notice = '', 2500);
     }
-    setTimeout(() => notice = '', 2500);
   }
 
   async function removeClub(zoneId: number, clubId: number) {
+    saving = true; error = '';
     try {
       await removeClubFromZone(zoneId, clubId);
       notice = 'Club removido de la zona.';
       zones = await getZones(true);
-      if (expandedZone === zoneId) toggleZone(zones.find(z => z.id === zoneId)!);
+      if (expandedZone === zoneId) {
+        const zone = zones.find(z => z.id === zoneId);
+        if (zone) toggleZone(zone);
+        else expandedZone = null;
+      }
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'Error al remover club.';
+    } finally {
+      saving = false;
+      setTimeout(() => notice = '', 2500);
     }
-    setTimeout(() => notice = '', 2500);
+  }
+
+  async function handleDeleteZone(zone: Zone) {
+    if (!confirm(`¿Eliminar la Zona ${zone.name}?`)) return;
+    saving = true; error = '';
+    try {
+      await deleteZone(zone.id);
+      notice = `Zona ${zone.name} eliminada.`;
+      expandedZone = null;
+      zones = await getZones(true);
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'No se pudo eliminar la zona.';
+    } finally {
+      saving = false;
+      setTimeout(() => notice = '', 2500);
+    }
   }
 
   function statusLabel(status: string) {
-    const map: Record<string, string> = { ACTIVE: 'Activa', INACTIVE: 'Inactiva', DRAFT: 'Borrador', CLOSED: 'Cerrada' };
+    const map: Record<string, string> = { ACTIVE: 'Activa', INACTIVE: 'Inactiva', DRAFT: 'Borrador', CLOSED: 'Cerrada', OPEN: 'Abierta' };
     return map[status] ?? status;
   }
 
   function statusClass(status: string) {
-    const map: Record<string, string> = { ACTIVE: 'badge-active', INACTIVE: 'badge-inactive', DRAFT: 'badge-draft', CLOSED: 'badge-closed' };
+    const map: Record<string, string> = { ACTIVE: 'badge-active', INACTIVE: 'badge-inactive', DRAFT: 'badge-draft', CLOSED: 'badge-closed', OPEN: 'badge-muted' };
     return map[status] ?? 'badge-default';
   }
 
@@ -96,7 +123,7 @@
   async function confirmGenerateFixture() {
     if (!fixtureZone) return;
     error = ''; notice = '';
-    generating = true;
+    saving = true;
     try {
       await generateFixture(fixtureZone.id, idaVuelta);
       notice = `Fixture generado para Zona ${fixtureZone.name}.`;
@@ -104,16 +131,10 @@
       zones = await getZones(true);
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudo generar el fixture.';
-    } finally { generating = false; }
+    } finally { saving = false; }
   }
 
-  function openCreateZone() {
-    newZoneName = '';
-    newZoneTournamentId = null;
-    error = '';
-    showCreateZone = true;
-  }
-
+  function openCreateZone() { newZoneName = ''; newZoneTournamentId = null; error = ''; showCreateZone = true; }
   function closeCreateZone() { showCreateZone = false; }
 
   async function saveZone() {
@@ -164,6 +185,7 @@
       {:else}
         <div class="zone-table">
           {#each zones as zone}
+            {@const clubs = assignedClubs(zone)}
             <div>
               <article class="zone-row" class:expanded={expandedZone === zone.id}>
                 <div class="zone-row-main" onclick={() => toggleZone(zone)} onkeydown={(e) => e.key === 'Enter' && toggleZone(zone)} role="button" tabindex="0">
@@ -173,13 +195,16 @@
                       <strong>Zona {zone.name}</strong>
                       <span class="status-badge {statusClass(zone.status)}">{statusLabel(zone.status)}</span>
                     </div>
-                    <span>{zone.tournament.name} {zone.tournament.year} · {zone.tournament.league.name}{#if zone.clubZones?.length} · {zone.clubZones.length} clubes{/if}</span>
+                    <span>{zone.tournament.name} {zone.tournament.year} · {zone.tournament.league.name}{#if clubs.length} · {clubs.length} clubes{/if}</span>
                   </div>
                   <div class="zone-actions" onclick={(e) => e.stopPropagation()}>
                     <a class="button secondary" href={`/zones/${zone.id}/standings`}>Posiciones</a>
                     {#if canManage}
-                      <button class="button primary" disabled={generating && generatingZoneId === zone.id} onclick={() => openFixtureModal(zone)}>
-                        Generar fixture
+                      <button class="button primary" disabled={saving} onclick={() => openFixtureModal(zone)}>Generar fixture</button>
+                    {/if}
+                    {#if canManage && zone.status === 'OPEN'}
+                      <button class="icon-button delete-zone" disabled={saving} onclick={() => handleDeleteZone(zone)} aria-label={`Eliminar zona ${zone.name}`}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
                       </button>
                     {/if}
                   </div>
@@ -194,13 +219,13 @@
                       <div class="zone-clubs-grid">
                         <div class="clubs-col">
                           <h4>Clubes en la zona</h4>
-                          {#if zoneClubs.length === 0}
+                          {#if clubs.length === 0}
                             <p class="muted empty-hint">Sin clubes asignados.</p>
                           {:else}
-                            {#each zoneClubs as c}
+                            {#each clubs as c}
                               <div class="club-chip">
                                 <span>{c.clubName}</span>
-                                <button class="icon-button remove-club" onclick={() => removeClub(zone.id, c.clubId)} aria-label="Remover club">
+                                <button class="icon-button remove-club" disabled={saving} onclick={() => removeClub(zone.id, c.clubId)} aria-label="Remover club">
                                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
                                 </button>
                               </div>
@@ -210,12 +235,15 @@
                         <div class="clubs-col">
                           <h4>Agregar club</h4>
                           {#if availableClubs.length === 0}
-                            <p class="muted empty-hint">No hay mas clubes disponibles.</p>
+                            <p class="muted empty-hint">No hay clubes disponibles.</p>
                           {:else}
                             {#each availableClubs as c}
-                              <div class="club-chip addable">
-                                <span>{c.clubName}</span>
-                                <button class="icon-button add-club" onclick={() => addClub(zone.id, c.clubId)} aria-label="Agregar club">
+                              <div class="club-chip addable {c.eligible ? '' : 'ineligible'}">
+                                <div>
+                                  <span>{c.name}</span>
+                                  {#if !c.eligible}<span class="ineligible-badge">Sin requisitos</span>{/if}
+                                </div>
+                                <button class="icon-button add-club" disabled={saving} onclick={() => addClub(zone.id, c.id)} aria-label="Agregar club">
                                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>
                                 </button>
                               </div>
@@ -243,10 +271,10 @@
       <p class="muted">{fixtureZone.tournament.name} {fixtureZone.tournament.year} · {fixtureZone.tournament.league.name}</p>
       {#if error}<p class="form-error">{error}</p>{/if}
       <form onsubmit={(event) => { event.preventDefault(); confirmGenerateFixture(); }}>
-        <label class="checkbox-label"><input type="checkbox" bind:checked={idaVuelta} disabled={generating} /> Ida y vuelta</label>
+        <label class="checkbox-label"><input type="checkbox" bind:checked={idaVuelta} disabled={saving} /> Ida y vuelta</label>
         <div class="form-actions">
-          <button class="button secondary" type="button" disabled={generating} onclick={closeFixtureModal}>Cancelar</button>
-          <button class="button primary" type="submit" disabled={generating}>{generating ? 'Generando...' : 'Generar fixture'}</button>
+          <button class="button secondary" type="button" disabled={saving} onclick={closeFixtureModal}>Cancelar</button>
+          <button class="button primary" type="submit" disabled={saving}>{saving ? 'Generando...' : 'Generar fixture'}</button>
         </div>
       </form>
     </div>
@@ -286,26 +314,31 @@
   .zone-info { flex: 1; min-width: 0; }
   .zone-name-row { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
   .zone-name-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .zone-actions { display: flex; gap: .4rem; flex-shrink: 0; }
+  .zone-actions { display: flex; gap: .4rem; align-items: center; flex-shrink: 0; }
   .chevron { flex-shrink: 0; color: var(--color-text-muted); transition: transform 150ms ease; }
   .chevron.rotated { transform: rotate(180deg); }
+
+  .delete-zone { color: var(--color-error); opacity: .5; }
+  .delete-zone:hover { opacity: 1; }
 
   .zone-clubs-panel { padding: 0 0 1rem 3rem; }
   .zone-clubs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
   .clubs-col h4 { margin: 0 0 .5rem; font-family: 'Space Grotesk', sans-serif; font-size: .85rem; color: var(--color-text-muted); }
   .club-chip {
-    display: flex; align-items: center; justify-content: space-between;
+    display: flex; align-items: center; justify-content: space-between; gap: .5rem;
     padding: .4rem .6rem; border: 1px solid var(--color-border);
     border-radius: .4rem; margin-bottom: .3rem; font-size: .82rem;
   }
-  .club-chip.addable { cursor: pointer; background: var(--color-input); }
+  .club-chip.addable { background: var(--color-input); }
   .club-chip.addable:hover { border-color: var(--color-accent); }
+  .club-chip.ineligible { opacity: .6; background: var(--color-error-bg); }
+  .ineligible-badge { font-size: .65rem; color: var(--color-error); margin-left: .5rem; font-weight: 600; }
   .remove-club { color: var(--color-error); }
   .add-club { color: var(--color-accent); }
   .empty-hint { font-size: .8rem; font-style: italic; }
 
   @media (max-width: 767px) {
     .zone-clubs-grid { grid-template-columns: 1fr; }
-    .zone-actions { flex-direction: column; }
+    .zone-actions { flex-direction: row; flex-wrap: wrap; }
   }
 </style>

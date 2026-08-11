@@ -58,6 +58,13 @@ export class ZonesController {
     return this.zonesService.removeClub(zoneId, clubId);
   }
 
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @Permissions({ module: Module.ZONAS, action: Action.DELETE })
+  deleteZone(@Param('id', ParseIntPipe) id: number) {
+    return this.zonesService.delete(id);
+  }
+
   @Post(':zoneId/finalize')
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @Permissions({ module: Module.ZONAS, action: Action.UPDATE })
