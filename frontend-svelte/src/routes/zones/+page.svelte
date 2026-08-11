@@ -1,7 +1,6 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
-  import { assignClubToZone, generateFixture, generateTournamentFixture, getProfile, getTournamentZoneClubs, getTournaments, getZones, removeClubFromZone, type AuthUser, type Tournament, type TournamentZoneClub, type Zone } from '$lib/api';
+  import { assignClubToZone, createZone, generateFixture, getProfile, getTournamentZoneClubs, getTournaments, getZones, removeClubFromZone, type AuthUser, type Tournament, type TournamentZoneClub, type Zone } from '$lib/api';
   import Modal from '$lib/Modal.svelte';
 
   let user: AuthUser | null = $state(null);
@@ -17,13 +16,15 @@
   let fixtureZone: Zone | null = $state(null);
   let idaVuelta = $state(true);
 
-  let selectedTournament: number | null = $state(null);
-  let generatingTournament = $state(false);
-
   let expandedZone = $state<number | null>(null);
   let zoneClubs = $state<TournamentZoneClub[]>([]);
   let availableClubs = $state<TournamentZoneClub[]>([]);
   let loadingClubs = $state(false);
+
+  let showCreateZone = $state(false);
+  let newZoneName = $state('');
+  let newZoneTournamentId = $state<number | null>(null);
+  let creatingZone = $state(false);
 
   onMount(async () => {
     try {
@@ -108,17 +109,31 @@
     } finally { generating = false; }
   }
 
-  async function handleGenerateTournament() {
-    if (!selectedTournament) return;
-    error = ''; notice = '';
-    generatingTournament = true;
+  function openCreateZone() {
+    newZoneName = '';
+    newZoneTournamentId = null;
+    error = '';
+    showCreateZone = true;
+  }
+
+  function closeCreateZone() { showCreateZone = false; }
+
+  async function saveZone() {
+    error = '';
+    if (!newZoneName.trim()) { error = 'Ingresa el nombre de la zona.'; return; }
+    if (!newZoneTournamentId) { error = 'Selecciona un torneo.'; return; }
+    creatingZone = true;
     try {
-      await generateTournamentFixture(selectedTournament, true);
-      notice = 'Fixture generado para el torneo.';
+      await createZone(newZoneTournamentId, newZoneName.trim());
+      notice = `Zona "${newZoneName.trim()}" creada.`;
+      showCreateZone = false;
       zones = await getZones(true);
     } catch (cause) {
-      error = cause instanceof Error ? cause.message : 'No se pudo generar el fixture del torneo.';
-    } finally { generatingTournament = false; }
+      error = cause instanceof Error ? cause.message : 'No se pudo crear la zona.';
+    } finally {
+      creatingZone = false;
+      setTimeout(() => notice = '', 2500);
+    }
   }
 </script>
 
@@ -126,7 +141,7 @@
 
 <main class="page-shell">
   <header class="page-header">
-    <div><p class="eyebrow">Competencia</p><h1>Zonas</h1><p class="muted">Administra las zonas de cada torneo, sus posiciones y la generacion de partidos.</p></div>
+    <div><p class="eyebrow">Competencia</p><h1>Zonas</h1><p class="muted">Administra las zonas de cada torneo, sus clubes, posiciones y generacion de partidos.</p></div>
     <div class="header-actions">
       <a class="button secondary" href="/fixtures">Ver partidos</a>
     </div>
@@ -138,42 +153,22 @@
     {#if error}<p class="error-banner">{error}</p>{/if}
     {#if notice}<p class="success-banner">{notice}</p>{/if}
 
-    {#if canManage}
-      <section class="card-surface tournament-fixture-card">
-        <div class="list-header">
-          <div><p class="eyebrow">Generacion masiva</p><h2>Fixture del torneo</h2></div>
-        </div>
-        <p class="muted">Genera los partidos para todas las zonas de un torneo de una vez.</p>
-        <div class="tournament-fixture-controls">
-          <label>
-            Torneo
-            <select bind:value={selectedTournament}>
-              <option value={null}>Seleccionar torneo...</option>
-              {#each tournaments as t}<option value={t.id}>{t.name} {t.year} · {t.league.name}</option>{/each}
-            </select>
-          </label>
-          <button class="button primary" disabled={!selectedTournament || generatingTournament} onclick={handleGenerateTournament}>
-            {generatingTournament ? 'Generando...' : 'Generar fixture del torneo'}
-          </button>
-        </div>
-      </section>
-    {/if}
-
     <section class="zone-list card-surface">
       <div class="list-header">
         <div><p class="eyebrow">Catalogo</p><h2>Zonas registradas</h2></div>
-        <span class="count-pill">{zones.length}</span>
+        <div class="list-header-right">
+          {#if canManage}<button class="button primary add-btn" onclick={openCreateZone} aria-label="Crear zona">+</button>{/if}
+          <span class="count-pill">{zones.length}</span>
+        </div>
       </div>
       {#if zones.length === 0}
-        <div class="empty-state compact-empty"><h2>Sin zonas todavia</h2><p>Crea torneos y zonas para comenzar.</p></div>
+        <div class="empty-state compact-empty"><h2>Sin zonas todavia</h2><p>Crea la primera zona para comenzar.</p></div>
       {:else}
         <div class="zone-table">
           {#each zones as zone}
             <div>
               <article class="zone-row" class:expanded={expandedZone === zone.id}>
-                <!-- svelte-ignore a11y_click_events_have_key_events -->
-                <!-- svelte-ignore a11y_no_static_element_interactions -->
-                <div class="zone-row-main" onclick={() => toggleZone(zone)}>
+                <div class="zone-row-main" onclick={() => toggleZone(zone)} onkeydown={(e) => e.key === 'Enter' && toggleZone(zone)} role="button" tabindex="0">
                   <span class="zone-icon">Z{zone.name.slice(0, 1)}</span>
                   <div class="zone-info">
                     <div class="zone-name-row">
@@ -260,11 +255,30 @@
   </Modal>
 {/if}
 
+{#if showCreateZone && canManage}
+  <Modal onclose={closeCreateZone}>
+    <div class="modal-form">
+      <p class="eyebrow">Nueva zona</p>
+      <h2>Crear zona</h2>
+      {#if error}<p class="form-error">{error}</p>{/if}
+      <form onsubmit={(event) => { event.preventDefault(); saveZone(); }}>
+        <label>Nombre<input bind:value={newZoneName} placeholder="A" disabled={creatingZone} /></label>
+        <label>Torneo
+          <select bind:value={newZoneTournamentId} disabled={creatingZone}>
+            <option value={null}>Seleccionar torneo...</option>
+            {#each tournaments as t}<option value={t.id}>{t.name} {t.year} · {t.league.name}</option>{/each}
+          </select>
+        </label>
+        <div class="form-actions">
+          <button class="button primary" type="submit" disabled={creatingZone}>{creatingZone ? 'Creando...' : 'Crear zona'}</button>
+        </div>
+      </form>
+    </div>
+  </Modal>
+{/if}
+
 <style>
-  .tournament-fixture-card { margin-bottom: 1.5rem; padding: 1.5rem clamp(1.5rem, 4vw, 2.5rem); }
-  .tournament-fixture-card .muted { margin: .5rem 0 1rem; }
-  .tournament-fixture-controls { display: flex; gap: .6rem; align-items: end; flex-wrap: wrap; }
-  .tournament-fixture-controls label { flex: 1; min-width: 200px; }
+  .list-header-right { display: flex; align-items: center; gap: .6rem; }
 
   .zone-row { border-top: 1px solid var(--color-border); }
   .zone-row:first-child { border-top: 0; }

@@ -438,6 +438,10 @@ export async function generateFixture(zoneId: number, idaVuelta: boolean): Promi
   return request(`/zones/${zoneId}/fixture`, { method: 'POST', body: JSON.stringify({ idaVuelta }) });
 }
 
+export async function createZone(tournamentId: number, name: string): Promise<Zone> {
+  return request<Zone>(`/tournaments/${tournamentId}/zones`, { method: 'POST', body: JSON.stringify({ name }) });
+}
+
 export async function generateTournamentFixture(tournamentId: number, idaVuelta: boolean): Promise<unknown> {
   return request(`/tournaments/${tournamentId}/fixtures/generate`, { method: 'POST', body: JSON.stringify({ idaVuelta }) });
 }
