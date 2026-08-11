@@ -24,8 +24,8 @@
   {:else if user}
     <section class="card-surface" style="display:grid; gap:.8rem;">
       <a class="league-row settings-link" href="/settings/account"><span class="league-color settings-avatar">{user.firstName.charAt(0)}{user.lastName.charAt(0)}</span><div class="league-info"><strong>Cuenta y perfil</strong><span>Actualiza tu nombre, apellido y contraseña.</span></div></a>
-      <a class="league-row settings-link" href="/settings/site-identity"><span class="league-color settings-icon">SI</span><div class="league-info"><strong>Identidad del sitio</strong><span>Cambia el título, ícono y favicon de la plataforma.</span></div></a>
-      <a class="league-row settings-link" href="/settings/palette"><span class="league-color settings-icon">PC</span><div class="league-info"><strong>Paleta de colores</strong><span>Elige entre 8 combinaciones de colores para todo el sistema.</span></div></a>
+      <a class="league-row settings-link" href="/settings/users"><span class="league-color settings-icon">UP</span><div class="league-info"><strong>Usuarios y permisos</strong><span>Gestiona los usuarios registrados y sus roles asignados.</span></div></a>
+      <a class="league-row settings-link" href="/settings/site-identity"><span class="league-color settings-icon">SI</span><div class="league-info"><strong>Identidad del sitio</strong><span>Cambia el título, ícono, favicon y paleta de colores.</span></div></a>
     </section>
   {/if}
 </main>

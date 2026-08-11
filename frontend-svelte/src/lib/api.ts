@@ -428,6 +428,37 @@ export async function getUsers(search?: string, page?: number): Promise<Paginate
   return request<PaginatedUsers>(`/users${params.toString() ? `?${params}` : ''}`);
 }
 
+export interface RoleData {
+  id: number;
+  key: string;
+  name: string;
+  description?: string | null;
+}
+
+export interface PermissionData {
+  id: number;
+  module: string;
+  action: string;
+  scope: string;
+  description?: string | null;
+}
+
+export async function getRoles(): Promise<RoleData[]> {
+  return request<RoleData[]>('/roles');
+}
+
+export async function getPermissions(): Promise<PermissionData[]> {
+  return request<PermissionData[]>('/roles/permissions');
+}
+
+export async function assignRole(userId: number, input: { roleKey: string; leagueId?: number; clubId?: number; categoryId?: number }): Promise<void> {
+  return request(`/users/${userId}/roles`, { method: 'POST', body: JSON.stringify(input) });
+}
+
+export async function removeRole(assignmentId: number): Promise<void> {
+  return request(`/users/roles/${assignmentId}`, { method: 'DELETE' });
+}
+
 export async function getLeaderboards(tournamentId: number, zoneId?: number, categoryId?: number): Promise<unknown> {
   const params = new URLSearchParams();
   params.set('tournamentId', String(tournamentId));

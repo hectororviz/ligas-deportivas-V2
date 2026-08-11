@@ -1,23 +1,46 @@
 import { browser } from '$app/environment';
 
+export interface NavChild {
+  id: string;
+  label: string;
+  path: string;
+}
+
 export interface NavItem {
   id: string;
   label: string;
   icon: string;
-  path: string;
+  path?: string;
+  children?: NavChild[];
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { id: 'dashboard', label: 'Panel', icon: 'home', path: '/' },
-  { id: 'leagues', label: 'Ligas', icon: 'trophy', path: '/leagues' },
+  { id: 'dashboard', label: 'Home', icon: 'home', path: '/' },
+  {
+    id: 'gestion',
+    label: 'Gestión',
+    icon: 'trophy',
+    children: [
+      { id: 'leagues', label: 'Ligas', path: '/leagues' },
+      { id: 'tournaments', label: 'Torneos', path: '/tournaments' },
+      { id: 'zones', label: 'Zonas', path: '/zones' },
+      { id: 'categories', label: 'Categorías', path: '/categories' },
+    ]
+  },
   { id: 'clubs', label: 'Clubes', icon: 'shield', path: '/clubs' },
   { id: 'players', label: 'Jugadores', icon: 'users', path: '/players' },
-  { id: 'categories', label: 'Categorías', icon: 'layers', path: '/categories' },
-  { id: 'tournaments', label: 'Torneos', icon: 'tournament', path: '/tournaments' },
-  { id: 'zones', label: 'Zonas', icon: 'grid', path: '/zones' },
   { id: 'standings', label: 'Tablas', icon: 'table', path: '/standings' },
-  { id: 'settings', label: 'Configuración', icon: 'settings', path: '/settings' },
-  { id: 'palette', label: 'Paleta', icon: 'palette', path: '/settings/palette' },
+  {
+    id: 'settings',
+    label: 'Configuración',
+    icon: 'settings',
+    path: '/settings',
+    children: [
+      { id: 'account', label: 'Cuenta y perfil', path: '/settings/account' },
+      { id: 'users', label: 'Usuarios y permisos', path: '/settings/users' },
+      { id: 'site-identity', label: 'Identidad del sitio', path: '/settings/site-identity' },
+    ]
+  },
 ];
 
 const COLLAPSED_KEY = 'sidebar:collapsed';

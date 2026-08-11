@@ -1,10 +1,11 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { NAV_ITEMS, sidebarState, type NavItem } from './navigation.svelte';
+  import { NAV_ITEMS, sidebarState, type NavItem, type NavChild } from './navigation.svelte';
   import { getProfile, hasSession, clearAuth, type AuthUser } from './api';
 
   let user: AuthUser | null = $state(null);
+  let expandedGroups = $state<Record<string, boolean>>({});
 
   $effect(() => {
     sidebarState.initMobile();
@@ -14,8 +15,24 @@
 
   function isActive(item: NavItem): boolean {
     const path = $page.url.pathname;
+    if (item.children) return item.children.some((c) => path === c.path || path.startsWith(c.path + '/'));
+    if (!item.path) return false;
     if (item.path === '/') return path === '/';
     return path === item.path || path.startsWith(item.path + '/');
+  }
+
+  function isChildActive(child: NavChild): boolean {
+    const path = $page.url.pathname;
+    return path === child.path || path.startsWith(child.path + '/');
+  }
+
+  function handleGroupClick(item: NavItem) {
+    if (sidebarState.collapsed) {
+      sidebarState.toggleCollapsed();
+      expandedGroups[item.id] = true;
+    } else if (item.children) {
+      expandedGroups[item.id] = !expandedGroups[item.id];
+    }
   }
 
   async function navigate(path: string) {
@@ -44,6 +61,8 @@
     close: '<line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/>',
     palette: '<circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20"/><path d="M12 2a4 4 0 0 0 0 8 4 4 0 0 1 0 8"/><path d="M12 18a4 4 0 0 0 0-8 4 4 0 0 1 0-8"/>',
     users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+    chevronRight: '<polyline points="9 18 15 12 9 6"/>',
+    chevronDown: '<polyline points="6 9 12 15 18 9"/>',
   };
 </script>
 
@@ -65,10 +84,27 @@
       {/if}
       <nav class="sidebar-nav">
         {#each NAV_ITEMS as item}
-          <button class="nav-item" class:active={isActive(item)} onclick={() => navigate(item.path)} aria-current={isActive(item) ? 'page' : undefined}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">{@html icons[item.icon]}</svg>
-            <span>{item.label}</span>
-          </button>
+          {#if item.children}
+            <button class="nav-item nav-group" class:active={isActive(item)} onclick={() => { expandedGroups[item.id] = !expandedGroups[item.id]; }} aria-expanded={expandedGroups[item.id] || isActive(item)}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">{@html icons[item.icon]}</svg>
+              <span>{item.label}</span>
+              <svg class="chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                {@html icons[expandedGroups[item.id] || isActive(item) ? 'chevronDown' : 'chevronRight']}
+              </svg>
+            </button>
+            {#if expandedGroups[item.id] || isActive(item)}
+              {#each item.children as child}
+                <button class="nav-item nav-child" class:active={isChildActive(child)} onclick={() => navigate(child.path)} aria-current={isChildActive(child) ? 'page' : undefined}>
+                  <span>{child.label}</span>
+                </button>
+              {/each}
+            {/if}
+          {:else}
+            <button class="nav-item" class:active={isActive(item)} onclick={() => navigate(item.path!)} aria-current={isActive(item) ? 'page' : undefined}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">{@html icons[item.icon]}</svg>
+              <span>{item.label}</span>
+            </button>
+          {/if}
         {/each}
       </nav>
       <div class="sidebar-footer">
@@ -96,16 +132,46 @@
 
     <nav class="sidebar-nav">
       {#each NAV_ITEMS as item}
-        <button
-          class="nav-item"
-          class:active={isActive(item)}
-          onclick={() => navigate(item.path)}
-          title={sidebarState.collapsed ? item.label : undefined}
-          aria-current={isActive(item) ? 'page' : undefined}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">{@html icons[item.icon]}</svg>
-          {#if !sidebarState.collapsed}<span>{item.label}</span>{/if}
-        </button>
+        {#if item.children}
+          <button
+            class="nav-item nav-group"
+            class:active={isActive(item)}
+            onclick={() => handleGroupClick(item)}
+            title={sidebarState.collapsed ? item.label : undefined}
+            aria-expanded={expandedGroups[item.id] || isActive(item)}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">{@html icons[item.icon]}</svg>
+            {#if !sidebarState.collapsed}
+              <span>{item.label}</span>
+              <svg class="chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                {@html icons[expandedGroups[item.id] || isActive(item) ? 'chevronDown' : 'chevronRight']}
+              </svg>
+            {/if}
+          </button>
+          {#if !sidebarState.collapsed && (expandedGroups[item.id] || isActive(item))}
+            {#each item.children as child}
+              <button
+                class="nav-item nav-child"
+                class:active={isChildActive(child)}
+                onclick={() => navigate(child.path)}
+                aria-current={isChildActive(child) ? 'page' : undefined}
+              >
+                <span>{child.label}</span>
+              </button>
+            {/each}
+          {/if}
+        {:else}
+          <button
+            class="nav-item"
+            class:active={isActive(item)}
+            onclick={() => navigate(item.path!)}
+            title={sidebarState.collapsed ? item.label : undefined}
+            aria-current={isActive(item) ? 'page' : undefined}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">{@html icons[item.icon]}</svg>
+            {#if !sidebarState.collapsed}<span>{item.label}</span>{/if}
+          </button>
+        {/if}
       {/each}
     </nav>
 
@@ -175,11 +241,25 @@
     color: var(--color-text-muted); background: transparent; cursor: pointer;
     font-size: .85rem; font-weight: 500; text-align: left;
     transition: background 150ms ease, color 150ms ease;
+    width: 100%;
   }
   .collapsed .nav-item { justify-content: center; padding: .6rem; }
   .nav-item:hover { background: var(--color-sidebar-hover); color: var(--color-text); }
   .nav-item.active { background: var(--color-sidebar-active); color: var(--color-sidebar-active-text); font-weight: 600; }
   .nav-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .nav-group { position: relative; }
+  .nav-group .chevron {
+    margin-left: auto; flex-shrink: 0;
+    transition: transform 200ms ease;
+  }
+
+  .nav-child {
+    padding-left: 3rem; font-size: .82rem; font-weight: 400;
+  }
+  .nav-child span { color: var(--color-text-muted); }
+  .nav-child:hover span { color: var(--color-text); }
+  .nav-child.active span { color: var(--color-sidebar-active-text); }
 
   .sidebar-footer { padding: .5rem; border-top: 1px solid var(--color-sidebar-border); display: flex; flex-direction: column; gap: .15rem; }
   .logout-item { color: var(--color-error); }
