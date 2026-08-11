@@ -2,7 +2,6 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { getClubAdmin, leaveTournament, type ClubAdminOverview } from '$lib/api';
-  import { browser } from '$app/environment';
 
   let data: ClubAdminOverview | null = $state(null);
   let loading = $state(true);
@@ -37,7 +36,8 @@
     }
   }
 
-  function initials(d: ClubAdminOverview): string {
+  function initials(d: ClubAdminOverview | null): string {
+    if (!d) return '??';
     return (d.club.shortName || d.club.name).slice(0, 2).toUpperCase();
   }
 
@@ -50,30 +50,30 @@
 <svelte:head><title>Club | Ligas Deportivas</title></svelte:head>
 
 <main class="page-shell">
-  <header class="page-header">
-    <div>
-      <p class="eyebrow">Club</p>
-      <div class="club-title-row">
-        {#if data?.club.logoUrl}
-          <img class="club-logo" src={data.club.logoUrl} alt={data.club.name} />
-        {:else}
-          <span class="club-avatar" style={data?.club.primaryColor ? `background:${data.club.primaryColor}` : ''}>{initials(data as ClubAdminOverview)}</span>
-        {/if}
-        <h1>{data?.club.name ?? '...'}</h1>
-      </div>
-      {#if data?.club.shortName && data.club.shortName !== data.club.name}
-        <p class="muted">{data.club.shortName}</p>
-      {/if}
-    </div>
-    <a class="button secondary" href="/clubs">Volver a clubes</a>
-  </header>
-
   {#if loading && !data}
     <section class="loading-card">Cargando club...</section>
   {:else if error && !data}
+    <header class="page-header"><div><p class="eyebrow">Club</p><h1>Error</h1></div></header>
     <p class="error-banner">{error}</p>
     <a class="button secondary" href="/clubs">Volver a clubes</a>
   {:else if data}
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">Club</p>
+        <div class="club-title-row">
+          {#if data.club.logoUrl}
+            <img class="club-logo" src={data.club.logoUrl} alt={data.club.name} />
+          {:else}
+            <span class="club-avatar" style={data.club.primaryColor ? `background:${data.club.primaryColor}` : ''}>{initials(data)}</span>
+          {/if}
+          <h1>{data.club.name}</h1>
+        </div>
+        {#if data.club.shortName && data.club.shortName !== data.club.name}
+          <p class="muted">{data.club.shortName}</p>
+        {/if}
+      </div>
+      <a class="button secondary" href="/clubs">Volver a clubes</a>
+    </header>
     {#if error}<p class="error-banner">{error}</p>{/if}
 
     <div class="club-detail-grid">
