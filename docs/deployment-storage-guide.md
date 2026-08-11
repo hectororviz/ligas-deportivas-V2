@@ -4,7 +4,7 @@ Esta guía resume los escenarios de despliegue para la plataforma, describe cóm
 
 ## 1. Elección de hosting
 
-La aplicación no es un sitio estático: expone una API NestJS (Node.js 20+), depende de PostgreSQL, genera un frontend Flutter Web y utiliza servicios auxiliares como correo SMTP y almacenamiento de archivos. Para conservar control sobre versiones y servicios conviene optar por:
+La aplicación no es un sitio estático: expone una API NestJS (Node.js 20+), depende de PostgreSQL, genera un frontend SvelteKit (adapter-node) y utiliza servicios auxiliares como correo SMTP y almacenamiento de archivos. Para conservar control sobre versiones y servicios conviene optar por:
 
 - **VPS o IaaS (EC2, Droplets, Compute Engine, etc.)** con acceso root: permite instalar Docker, definir versiones de Node/PostgreSQL y adjuntar almacenamiento local o discos adicionales.
 - **Plataformas de contenedores** (ECS, Cloud Run, Fly.io, Railway, Render, etc.) que acepten imágenes personalizadas y ofrezcan bases de datos/almacenamiento gestionado.
@@ -17,7 +17,7 @@ Los hostings “compartidos” tradicionales rara vez permiten ejecutar contened
 2. **Base de datos**: PostgreSQL 15+ (puede ser administrada externamente o dentro del VPS con volúmenes persistentes).
 3. **Almacenamiento de archivos**: carpeta local montada como volumen (ver sección 3) o servicio S3 compatible.
 4. **Correo**: servicio SMTP real (reemplaza Mailhog de desarrollo).
-5. **Frontend web**: archivos estáticos de Flutter servidos por Nginx/CDN u otro contenedor.
+5. **Frontend web**: servidor Node.js ejecutando el build de SvelteKit con adapter-node.
 
 ## 2. Ventajas de dockerizar la pila
 
@@ -88,9 +88,9 @@ services:
 
   frontend:
     build:
-      context: ../frontend
+      context: ../frontend-svelte
     ports:
-      - "8080:80"
+      - "3000:3000"
     depends_on:
       - backend
 
@@ -128,7 +128,7 @@ services:
       context: ../backend
     environment:
       APP_URL: http://localhost:3000
-      FRONTEND_URL: http://localhost:8080
+      FRONTEND_URL: http://localhost:3000
       DATABASE_URL: postgres://postgres:postgres@db:5432/ligas
       JWT_ACCESS_SECRET: change-me-access
       JWT_REFRESH_SECRET: change-me-refresh
@@ -146,9 +146,9 @@ services:
 
   frontend:
     build:
-      context: ../frontend
+      context: ../frontend-svelte
     ports:
-      - "8080:80"
+      - "5173:3000"
     depends_on:
       - backend
 

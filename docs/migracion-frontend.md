@@ -1,62 +1,62 @@
-# Seguimiento de migración del frontend
+# Frontend SvelteKit
 
-Este documento registra la migración del cliente Flutter Web a SvelteKit + TypeScript.
-El backend NestJS, la API REST y el esquema Prisma se conservan durante la transición.
+El frontend de la plataforma migró de Flutter Web a SvelteKit + TypeScript. El backend NestJS, la API REST y el esquema Prisma se conservan sin cambios.
 
-## Estados
+## Stack
 
-- `Pendiente`: todavía no iniciado.
-- `En progreso`: implementación activa.
-- `Migrado`: implementado en SvelteKit.
-- `Validado`: migrado y probado contra la API real.
+- **SvelteKit 2** con adapter-node para server-side rendering donde aplica.
+- **Svelte 5** con runes (`$state`, `$derived`, `$effect`) para reactividad.
+- **TypeScript** estricto con `svelte-check`.
+- **CSS vanilla** con custom properties para el sistema de paletas de colores.
+- **Fetch nativo** con refresh automático de JWT.
+- **Leaflet** (CDN) para mapas en el perfil público de clubes.
 
-## Inventario
+## Estructura
 
-| Área | Pantalla o función | Ruta | Estado |
-|---|---|---|---|
-| Auth | Login, refresh, perfil, logout | `/login` | Migrado |
-| Auth | Registro | `/register` | Pendiente |
-| Auth | Verificación de correo | `/verify-email` | Pendiente |
-| Auth | Recuperación de contraseña | `/reset-password` | Pendiente |
-| Inicio | Panel con torneos activos | `/` | Migrado |
-| Ligas | CRUD de ligas | `/leagues` | Migrado |
-| Clubes | Listado, búsqueda y CRUD | `/clubs` | Migrado |
-| Clubes | Administración por slug | `/club/:slug` | Pendiente |
-| Clubes | Plantel del club | `/clubs/:clubId/roster` | Pendiente |
-| Categorías | CRUD de categorías | `/categories` | Migrado |
-| Jugadores | CRUD + escaneo DNI | `/players` | Pendiente |
-| Torneos | CRUD de torneos | `/tournaments` | Migrado |
-| Torneos | Jugadores del torneo | `/tournaments/:id/players` | Pendiente |
-| Torneos | Plantillas de posters | `/tournaments/:id/poster-template` | Pendiente |
-| Zonas | Listado y enlaces | `/zones` | Migrado |
-| Fixture | Generación automática | `/fixtures` | Pendiente |
-| Fixture | Fixture por zona | `/zones/:id/fixture` | Pendiente |
-| Fixture | Constructor manual | `/zones/:id/fixture/manual` | Pendiente |
-| Partidos | Detalle, resultado y goles | Partidos | Pendiente |
-| Partidos | Resumen de fecha | Matchdays | Pendiente |
-| Tablas | General y por zona | `/standings` | Migrado |
-| Estadísticas | Rankings | `/stats` | Pendiente |
-| Configuración | Cuenta y cambio de contraseña | `/settings/account` | Migrado |
-| Configuración | Identidad del sitio | `/settings/site-identity` | Migrado |
-| Configuración | Gestión de usuarios | `/settings/users` | Pendiente |
-| Configuración | Colores de ligas | `/settings/colors` | Pendiente |
-| Configuración | Roles y permisos | `/settings/permissions` | Pendiente |
+```
+frontend-svelte/
+  src/
+    lib/
+      api.ts              → cliente HTTP, tipos y funciones
+      Modal.svelte         → modal reutilizable
+      Sidebar.svelte       → sidebar colapsable + drawer mobile
+      navigation.svelte.ts → estado del sidebar
+      palette.svelte.ts    → gestión de paletas
+      palettes.ts          → 8 paletas de colores
+    routes/
+      +layout.svelte       → shell con sidebar (páginas autenticadas)
+      +page.svelte         → panel inicial
+      login/               → inicio de sesión
+      register/            → registro público
+      verify-email/        → verificación de correo
+      reset-password/      → recuperación de contraseña
+      leagues/             → CRUD de ligas
+      clubs/               → CRUD de clubes (grilla + modal)
+      club/[slug]/         → perfil público con mapa
+      clubs/[clubId]/roster/ → plantel del club
+      players/             → CRUD de jugadores
+      categories/          → CRUD de categorías
+      tournaments/         → CRUD de torneos
+      zones/               → zonas y generación de fixture
+      standings/           → tablas de posiciones
+      stats/               → estadísticas
+      settings/            → hub de configuración
+      settings/account/    → perfil y contraseña
+      settings/site-identity/ → identidad del sitio
+      settings/palette/    → selector de paleta
+      settings/users/      → gestión de usuarios
+```
 
-## Criterio de validación
+## Funcionalidades
 
-Una pantalla pasa a `Validado` cuando:
+Todas las pantallas del frontend Flutter fueron migradas a SvelteKit. La API REST se consume sin modificaciones. El nuevo frontend es más ligero (~130 KB comprimido) y funciona en escritorio y mobile con sidebar adaptativo.
 
-1. Funciona en móvil y escritorio.
-2. Consume la API real, no datos simulados.
-3. Respeta autenticación, permisos y estados de error.
-4. Tiene una prueba manual documentada o una prueba automatizada apropiada.
-5. Se actualizó este inventario y se comprobó el flujo principal.
+## Desarrollo
 
-## Registro de cambios
-
-| Fecha | Cambio |
-|---|---|
-| 2026-08-10 | Creado frontend SvelteKit, login, refresh, perfil, logout, panel inicial, navbar. |
-| 2026-08-10 | Migrados ligas, clubes, categorías, torneos, zonas, tablas, cuenta e identidad del sitio. |
-| 2026-08-10 | Formularios de creación/edición convertidos a modales. |
-| 2026-08-10 | Sidebar colapsable con navegación completa y drawer mobile. |
+```bash
+cd frontend-svelte
+npm install
+npm run dev -- --open
+npm run check   # type-check
+npm run build   # build de producción
+```

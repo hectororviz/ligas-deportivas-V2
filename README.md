@@ -1,6 +1,6 @@
 # Ligas Deportivas
 
-Monorepo para una plataforma web que administra ligas deportivas, torneos, fixtures y resultados. El repositorio agrupa una API construida con NestJS + Prisma, un frontend Flutter Web y los artefactos de infraestructura para ejecutar la solución completa en entornos locales o de despliegue.
+Monorepo para una plataforma web que administra ligas deportivas, torneos, fixtures y resultados. El repositorio agrupa una API construida con NestJS + Prisma, un frontend SvelteKit + TypeScript y los artefactos de infraestructura para ejecutar la solución completa en entornos locales o de despliegue.
 
 ## Características principales
 
@@ -15,30 +15,34 @@ Monorepo para una plataforma web que administra ligas deportivas, torneos, fixtu
 - Servicio de standings que actualiza tablas zonales, por torneo y por liga aplicando la configuración de puntos definida en cada torneo. ([backend/src/standings/standings.service.ts](backend/src/standings/standings.service.ts))
 - Configuración centralizada, mailer SMTP y verificación de captchas integrados como módulos reutilizables. ([backend/src/app.module.ts](backend/src/app.module.ts)) ([backend/src/mail/mail.module.ts](backend/src/mail/mail.module.ts)) ([backend/src/captcha/captcha.service.ts](backend/src/captcha/captcha.service.ts))
 
-### Frontend Flutter Web
+### Frontend SvelteKit + TypeScript
 
-- Router con protección de rutas, shell con `NavigationRail` colapsable y menú de usuario persistente en `SharedPreferences`. ([frontend/lib/core/router/app_router.dart](frontend/lib/core/router/app_router.dart)) ([frontend/lib/features/shared/widgets/app_shell.dart](frontend/lib/features/shared/widgets/app_shell.dart))
-- Cliente HTTP basado en `dio` con interceptores para JWT y renovación automática de sesión. ([frontend/lib/services/api_client.dart](frontend/lib/services/api_client.dart)) ([frontend/lib/services/auth_controller.dart](frontend/lib/services/auth_controller.dart))
-- Pantallas de gestión para ligas, fixture y configuración de cuenta, incluyendo formularios adaptables y asistentes de guardado rápido. ([frontend/lib/features/leagues/presentation/leagues_page.dart](frontend/lib/features/leagues/presentation/leagues_page.dart)) ([frontend/lib/features/fixtures/presentation/fixtures_page.dart](frontend/lib/features/fixtures/presentation/fixtures_page.dart)) ([frontend/lib/features/settings/account_settings_page.dart](frontend/lib/features/settings/account_settings_page.dart))
+- Login con validación, refresh automático de JWT y cierre de sesión. ([frontend-svelte/src/lib/api.ts](frontend-svelte/src/lib/api.ts))
+- Sidebar colapsable en desktop y drawer deslizante en mobile, con estado persistido en `localStorage`. ([frontend-svelte/src/lib/Sidebar.svelte](frontend-svelte/src/lib/Sidebar.svelte))
+- Modales reutilizables para creación y edición de entidades. ([frontend-svelte/src/lib/Modal.svelte](frontend-svelte/src/lib/Modal.svelte))
+- Gestión completa de ligas, clubes, categorías, torneos, zonas, jugadores, tablas y configuración, con formularios adaptables y validación client-side.
+- Sistema de paletas de colores con 8 temas (2 oscuros) aplicables a todo el sitio. ([frontend-svelte/src/lib/palettes.ts](frontend-svelte/src/lib/palettes.ts))
+- Perfil público de club con mapa Leaflet, colores y redes sociales. ([frontend-svelte/src/routes/club/[slug]/+page.svelte](frontend-svelte/src/routes/club/[slug]/+page.svelte))
 
 ### Infraestructura
 
-- Orquestación con Docker Compose que levanta PostgreSQL, MinIO, Mailhog, la API NestJS y el frontend web compilado. ([infra/docker-compose.yml](infra/docker-compose.yml))
+- Imágenes Docker publicadas automáticamente en GitHub Container Registry mediante GitHub Actions. ([.github/workflows/docker-publish.yml](.github/workflows/docker-publish.yml))
+- Despliegue con `caddy-docker-proxy` compartido en el VPS, con labels para enrutamiento de `/api/*` y `/storage/*` al backend. ([infra/docker-compose.yml](infra/docker-compose.yml))
 
 ## Estructura del repositorio
 
 ```
-backend/   → API REST en Node.js + NestJS + Prisma
-frontend/  → Aplicación Flutter Web
-infra/     → Docker Compose y configuración de servicios auxiliares
-docs/      → Documentación técnica y funcional
+backend/         → API REST en Node.js + NestJS + Prisma
+frontend/        → Aplicación Flutter Web (legacy, en desuso)
+frontend-svelte/ → Aplicación SvelteKit + TypeScript (activa)
+infra/           → Docker Compose y configuración de servicios auxiliares
+docs/            → Documentación técnica y funcional
 ```
 
 ## Requisitos
 
-- Node.js 20 o superior para el backend. ([backend/package.json](backend/package.json))
+- Node.js 20 o superior. ([backend/package.json](backend/package.json))
 - PostgreSQL 15 o superior (local o en contenedor). ([infra/docker-compose.yml](infra/docker-compose.yml))
-- Flutter 3.19+ para ejecutar el cliente web. ([frontend/pubspec.yaml](frontend/pubspec.yaml))
 - Docker Desktop/Engine (opcional) para levantar la pila completa con `docker compose`. ([infra/docker-compose.yml](infra/docker-compose.yml))
 
 ## Configuración del backend
@@ -109,21 +113,20 @@ Si la API no puede conectarse al servidor SMTP, el panel te mostrará el error y
 
 ## Configuración del frontend
 
-1. Instala dependencias y genera código:
+1. Instala dependencias:
    ```bash
-   cd frontend
-   flutter pub get
-   flutter pub run build_runner build --delete-conflicting-outputs
+   cd frontend-svelte
+   npm install
    ```
-2. Ejecuta la aplicación en Chrome apuntando al backend local:
+2. Ejecuta en modo desarrollo apuntando al backend local:
    ```bash
-   flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:3000/api/v1
+   PUBLIC_API_BASE_URL=http://localhost:3000/api/v1 npm run dev
    ```
-   El cliente lee la URL base desde la variable `API_BASE_URL` y adjunta tokens automáticamente en cada solicitud. ([frontend/lib/services/api_client.dart](frontend/lib/services/api_client.dart))
-3. Pruebas y análisis estático:
+   El cliente lee la URL base desde la variable `PUBLIC_API_BASE_URL` y adjunta tokens automáticamente en cada solicitud. ([frontend-svelte/src/lib/api.ts](frontend-svelte/src/lib/api.ts))
+3. Type-check y build:
    ```bash
-   flutter test
-   flutter analyze
+   npm run check
+   npm run build
    ```
 
 ## Alta rápida de jugadores por escaneo DNI (PDF417)
