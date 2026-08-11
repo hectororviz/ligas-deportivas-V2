@@ -219,11 +219,6 @@
 {/if}
 
 <style>
-  .filter-bar { display: flex; align-items: center; gap: .6rem; margin-bottom: 1rem; }
-  .filter-bar .count-pill { margin-left: auto; }
-  .filter-row { display: flex; gap: .6rem; margin-bottom: 1rem; }
-  .filter-row input { flex: 1; }
-  .filter-row select { width: auto; min-width: 140px; }
   .club-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: .75rem; }
   .club-card { display: flex; align-items: center; gap: .75rem; padding: 1rem; border: 1px solid var(--color-border); border-radius: 1rem; background: var(--color-surface); cursor: pointer; transition: border-color 150ms, box-shadow 150ms; }
   .club-card:hover { border-color: var(--color-accent); box-shadow: 0 4px 20px var(--color-shadow); }

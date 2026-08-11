@@ -197,6 +197,13 @@ input:focus, select:focus { border-color: var(--color-input-focus); box-shadow: 
 /* Modals */
 .modal-form h2 { margin: .5rem 0 1.5rem; font-family: 'Space Grotesk', sans-serif; font-size: 1.6rem; letter-spacing: -.04em; }
 .modal-form form { margin-top: 0; }
+
+/* Collapsible filters */
+.filter-bar { display: flex; align-items: center; gap: .6rem; margin-bottom: 1rem; }
+.filter-bar .count-pill { margin-left: auto; }
+.filter-row { display: flex; gap: .6rem; margin-bottom: 1rem; }
+.filter-row input { flex: 1; }
+.filter-row select { width: auto; min-width: 140px; }
 .modal-panel > :first-child { margin-top: 0; }
 
 @media (max-width: 760px) {

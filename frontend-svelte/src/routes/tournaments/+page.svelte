@@ -26,6 +26,7 @@
   let editing: Tournament | null = null;
   let showInactive = false;
   let showForm = false;
+  let showFilters = $state(false);
   let form = {
     leagueId: '', name: '', year: new Date().getFullYear(), gender: 'MASCULINO',
     championMode: 'ROUND_AND_ANNUAL', pointsWin: 3, pointsDraw: 1, pointsLoss: 0,
@@ -35,6 +36,7 @@
   onMount(async () => {
     try {
       [user, tournaments, leagues] = await Promise.all([getProfile(), getTournaments(), getLeagues()]);
+      canManage = (user?.roles ?? []).includes('ADMIN');
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudieron cargar los torneos.';
     } finally {
@@ -42,7 +44,7 @@
     }
   });
 
-  $: canManage = user?.roles.includes('ADMIN') ?? false;
+  let canManage = $state(false);
 
   function openCreate() {
     editing = null;
@@ -138,9 +140,6 @@
       <h1>Torneos</h1>
       <p class="muted">Crea y administra los torneos de cada liga.</p>
     </div>
-    <div style="display:flex;align-items:center;gap:.6rem">
-      {#if canManage}<button class="button primary" onclick={openCreate}>Agregar torneo</button>{/if}
-    </div>
   </header>
 
   {#if loading}
@@ -150,13 +149,19 @@
     {#if notice}<p class="success-banner">{notice}</p>{/if}
 
     <section class="tournament-list card-surface">
-      <div class="list-header">
-        <div><p class="eyebrow">Catálogo</p><h2>Torneos registrados</h2></div>
-        <div style="display:flex;align-items:center;gap:.6rem">
-          <label class="checkbox-label"><input type="checkbox" bind:checked={showInactive} onchange={toggleInactive} /> Incluir inactivos</label>
-          <span class="count-pill">{tournaments.length}</span>
-        </div>
+      <div class="filter-bar">
+        <button class="button secondary" onclick={() => showFilters = !showFilters} aria-label="Filtros">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+          {showFilters ? 'Ocultar filtros' : 'Filtros'}
+        </button>
+        {#if canManage}<button class="button primary" onclick={openCreate}>Agregar torneo</button>{/if}
+        <span class="count-pill">{tournaments.length}</span>
       </div>
+      {#if showFilters}
+        <div class="filter-row">
+          <label class="checkbox-label"><input type="checkbox" bind:checked={showInactive} onchange={toggleInactive} /> Incluir inactivos</label>
+        </div>
+      {/if}
 
       {#if tournaments.length === 0}
         <div class="empty-state compact-empty">

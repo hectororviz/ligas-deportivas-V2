@@ -13,6 +13,7 @@
   let page = $state(1);
   let editing: Player | null = $state(null);
   let showForm = $state(false);
+  let showFilters = $state(false);
   let form = $state({
     firstName: '', lastName: '', dni: '', birthDate: '', gender: 'MASCULINO', active: true,
     addressStreet: '', addressNumber: '', addressCity: '',
@@ -130,10 +131,19 @@
     {#if notice}<p class="success-banner">{notice}</p>{/if}
 
     <section class="card-surface">
-      <div class="search-bar">
-        <input type="text" bind:value={search} oninput={onSearch} placeholder="Buscar por nombre o DNI..." />
+      <div class="filter-bar">
+        <button class="button secondary" onclick={() => showFilters = !showFilters} aria-label="Filtros">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+          {showFilters ? 'Ocultar filtros' : 'Filtros'}
+        </button>
         {#if canManage}<button class="button primary" onclick={openCreate}>Agregar jugador</button>{/if}
+        <span class="count-pill">{paginated?.total ?? 0}</span>
       </div>
+      {#if showFilters}
+        <div class="filter-row">
+          <input type="text" bind:value={search} oninput={onSearch} placeholder="Buscar por nombre o DNI..." />
+        </div>
+      {/if}
 
       {#if paginated && paginated.data.length === 0}
         <div class="empty-state compact-empty"><h2>Sin jugadores</h2><p>Crea el primer jugador para comenzar.</p></div>
