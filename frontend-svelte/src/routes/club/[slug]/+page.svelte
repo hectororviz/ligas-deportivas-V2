@@ -1,12 +1,21 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
-  import { getClubAdmin, leaveTournament, type ClubAdminOverview } from '$lib/api';
+  import { getClubAdmin, getAvailableTournaments, joinTournament, leaveTournament, type ClubAdminOverview, type AvailableTournament } from '$lib/api';
+  import Modal from '$lib/Modal.svelte';
 
   let data: ClubAdminOverview | null = $state(null);
   let loading = $state(true);
   let error = $state('');
+  let notice = $state('');
+  let saving = $state(false);
   let leaving: number | null = $state(null);
+
+  let showJoinModal = $state(false);
+  let availableTournaments = $state<AvailableTournament[]>([]);
+  let loadingAvailable = $state(false);
+  let selectedJoinTournament = $state<number | null>(null);
+  let selectedCategoryIds = $state<number[]>([]);
 
   onMount(() => { fetchData(); });
 
@@ -27,29 +36,83 @@
   });
 
   async function fetchData() {
-    loading = true;
-    error = '';
+    loading = true; error = '';
     try {
       data = await getClubAdmin($page.params.slug!);
     } catch (cause) {
-      error = cause instanceof Error ? cause.message : 'No se pudo cargar la información del club.';
+      error = cause instanceof Error ? cause.message : 'No se pudo cargar la informacion del club.';
+    } finally { loading = false; }
+  }
+
+  async function openJoinModal() {
+    if (!data) return;
+    showJoinModal = true;
+    loadingAvailable = true;
+    selectedJoinTournament = null;
+    selectedCategoryIds = [];
+    try {
+      availableTournaments = await getAvailableTournaments(data.club.id);
+      if (availableTournaments.length > 0) {
+        selectedJoinTournament = availableTournaments[0].id;
+      }
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'No se pudieron cargar los torneos disponibles.';
+    } finally { loadingAvailable = false; }
+  }
+
+  function closeJoinModal() { showJoinModal = false; }
+
+  $effect(() => {
+    if (selectedJoinTournament && availableTournaments.length > 0) {
+      selectedCategoryIds = [];
+    }
+  });
+
+  function toggleCat(id: number) {
+    if (selectedCategoryIds.includes(id)) {
+      selectedCategoryIds = selectedCategoryIds.filter(c => c !== id);
+    } else {
+      selectedCategoryIds = [...selectedCategoryIds, id];
+    }
+  }
+
+  let selectedTournamentCats = $derived(
+    selectedJoinTournament
+      ? availableTournaments.find(t => t.id === selectedJoinTournament)?.categories ?? []
+      : []
+  );
+
+  async function handleJoin() {
+    if (!data || !selectedJoinTournament || selectedCategoryIds.length === 0) {
+      error = 'Selecciona al menos una categoria.'; return;
+    }
+    saving = true; error = '';
+    try {
+      await joinTournament(data.club.id, {
+        tournamentId: selectedJoinTournament,
+        tournamentCategoryIds: selectedCategoryIds
+      });
+      notice = 'Club agregado al torneo.';
+      showJoinModal = false;
+      data = await getClubAdmin($page.params.slug!);
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'No se pudo agregar el club al torneo.';
     } finally {
-      loading = false;
+      saving = false;
+      setTimeout(() => notice = '', 2500);
     }
   }
 
   async function handleLeaveTournament(tournamentId: number) {
     if (!data) return;
-    if (!confirm('¿Salir del torneo? Esta acción no se puede deshacer.')) return;
+    if (!confirm('¿Salir del torneo? Esta accion no se puede deshacer.')) return;
     leaving = tournamentId;
     try {
       await leaveTournament(data.club.id, tournamentId);
       data = await getClubAdmin($page.params.slug!);
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudo salir del torneo.';
-    } finally {
-      leaving = null;
-    }
+    } finally { leaving = null; }
   }
 
   function initials(d: ClubAdminOverview | null): string {
@@ -87,12 +150,13 @@
         {/if}
       </div>
     </header>
-    {#if error}<p class="error-banner">{error}</p>{/if}
+    {#if error && !showJoinModal}<p class="error-banner">{error}</p>{/if}
+    {#if notice}<p class="success-banner">{notice}</p>{/if}
 
     <div class="club-detail-grid">
       <section class="club-sidebar">
         <div class="card-surface club-info-card">
-          <p class="eyebrow">Información</p>
+          <p class="eyebrow">Informacion</p>
 
           {#if data.club.primaryColor || data.club.secondaryColor}
             <div class="club-colors" style="margin-bottom:.75rem">
@@ -106,7 +170,7 @@
 
           {#if data.club.homeAddress}
             <div class="info-row">
-              <span class="info-label">Dirección</span>
+              <span class="info-label">Direccion</span>
               <span class="info-value">{data.club.homeAddress}</span>
             </div>
           {/if}
@@ -143,16 +207,22 @@
         <div class="card-surface">
           <div class="list-header">
             <div>
-              <p class="eyebrow">Participación</p>
+              <p class="eyebrow">Participacion</p>
               <h2>Torneos</h2>
             </div>
-            <span class="count-pill">{data.tournaments.length}</span>
+            <div style="display:flex;align-items:center;gap:.5rem">
+              <button class="button primary small" disabled={saving} onclick={openJoinModal}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>
+                Participar
+              </button>
+              <span class="count-pill">{data.tournaments.length}</span>
+            </div>
           </div>
 
           {#if data.tournaments.length === 0}
             <div class="empty-state compact-empty">
               <h2>Sin torneos</h2>
-              <p>El club no participa en ningún torneo actualmente.</p>
+              <p>El club no participa en ningun torneo actualmente.</p>
             </div>
           {:else}
             <div class="tournament-list">
@@ -189,7 +259,7 @@
                       {/each}
                     </div>
                   {:else}
-                    <p class="muted" style="margin-top:.5rem">Sin categorías asignadas.</p>
+                    <p class="muted" style="margin-top:.5rem">Sin categorias asignadas.</p>
                   {/if}
                 </article>
               {/each}
@@ -201,168 +271,117 @@
   {/if}
 </main>
 
+{#if showJoinModal}
+  <Modal onclose={closeJoinModal}>
+    <div class="modal-form" style="max-width:520px;">
+      <p class="eyebrow">Participar en torneo</p>
+      <h2>Agregar club a torneo</h2>
+      {#if error}<p class="form-error">{error}</p>{/if}
+
+      {#if loadingAvailable}
+        <p class="muted">Cargando torneos disponibles...</p>
+      {:else if availableTournaments.length === 0}
+        <p class="muted">El club ya participa en todos los torneos disponibles.</p>
+      {:else}
+        <label>Torneo
+          <select bind:value={selectedJoinTournament} disabled={saving}>
+            {#each availableTournaments as t}
+              <option value={t.id}>{t.name} {t.year} · {t.leagueName}</option>
+            {/each}
+          </select>
+        </label>
+
+        {#if selectedTournamentCats.length > 0}
+          <div class="cat-list">
+            <p class="muted" style="margin-bottom:.4rem;font-size:.78rem;font-weight:600;">CATEGORIAS</p>
+            {#each selectedTournamentCats as cat}
+              <label class="checkbox-label cat-item">
+                <input type="checkbox" checked={selectedCategoryIds.includes(cat.tournamentCategoryId)} onchange={() => toggleCat(cat.tournamentCategoryId)} disabled={saving} />
+                <span>
+                  <strong>{cat.categoryName}</strong>
+                  <span class="muted" style="font-size:.72rem;display:block;">
+                    {cat.birthYearMin}-{cat.birthYearMax} · {cat.gender === 'MASCULINO' ? 'Masculino' : cat.gender === 'FEMENINO' ? 'Femenino' : 'Mixto'} · Min {cat.minPlayers} jug.
+                    {#if cat.mandatory}<span style="color:var(--color-error);"> · Obligatoria</span>{/if}
+                  </span>
+                </span>
+              </label>
+            {/each}
+          </div>
+        {/if}
+
+        <div class="form-actions" style="margin-top:1rem;">
+          <button class="button secondary" type="button" onclick={closeJoinModal} disabled={saving}>Cancelar</button>
+          <button class="button primary" type="button" disabled={saving || selectedCategoryIds.length === 0} onclick={handleJoin}>
+            {saving ? 'Agregando...' : 'Participar'}
+          </button>
+        </div>
+      {/if}
+    </div>
+  </Modal>
+{/if}
+
 <style>
   .club-title-row {
-    display: flex;
-    align-items: center;
-    gap: .8rem;
-    margin-top: .35rem;
+    display: flex; align-items: center; gap: .8rem; margin-top: .35rem;
   }
   .club-title-row h1 {
-    margin: 0;
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: clamp(2.5rem, 5vw, 4.5rem);
-    color: var(--color-heading);
-    letter-spacing: -.04em;
+    margin: 0; font-family: 'Space Grotesk', sans-serif;
+    font-size: clamp(2.5rem, 5vw, 4.5rem); color: var(--color-heading); letter-spacing: -.04em;
   }
-  .club-logo {
-    width: 3.5rem;
-    height: 3.5rem;
-    border-radius: .75rem;
-    object-fit: contain;
-  }
+  .club-logo { width: 3.5rem; height: 3.5rem; border-radius: .75rem; object-fit: contain; }
   .club-avatar {
-    width: 3.5rem;
-    height: 3.5rem;
-    display: grid;
-    place-items: center;
-    border-radius: .75rem;
-    color: #fff;
-    background: var(--color-accent);
-    font-family: 'Space Grotesk', sans-serif;
-    font-weight: 700;
-    font-size: 1.2rem;
+    width: 3.5rem; height: 3.5rem; display: grid; place-items: center;
+    border-radius: .75rem; color: #fff; background: var(--color-accent);
+    font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 1.2rem;
   }
   .club-detail-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
-    gap: 1.5rem;
-    margin-top: 1rem;
+    display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); gap: 1.5rem; margin-top: 1rem;
   }
-  .club-info-card {
-    padding: 1.4rem;
-  }
-  .info-label {
-    color: var(--color-text-muted);
-    font-size: .78rem;
-    font-weight: 600;
-    text-transform: uppercase;
-  }
+  .club-info-card { padding: 1.4rem; }
+  .info-label { color: var(--color-text-muted); font-size: .78rem; font-weight: 600; text-transform: uppercase; }
   .info-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: .6rem 0;
-    border-top: 1px solid var(--color-border);
+    display: flex; justify-content: space-between; align-items: center;
+    padding: .6rem 0; border-top: 1px solid var(--color-border);
   }
-  .info-row:first-of-type {
-    border-top: 0;
-  }
-  .info-value {
-    color: var(--color-text);
-    font-weight: 500;
-    text-align: right;
-    max-width: 60%;
-  }
-  .color-swatches {
-    display: flex;
-    gap: .4rem;
-    margin-top: .3rem;
-  }
-  .color-swatch {
-    width: 1.5rem;
-    height: 1.5rem;
-    border-radius: .4rem;
-    border: 1px solid var(--color-border);
-  }
-  .social-links {
-    display: flex;
-    gap: .5rem;
-    margin-top: 1rem;
-    padding-top: 1rem;
-    border-top: 1px solid var(--color-border);
-  }
+  .info-row:first-of-type { border-top: 0; }
+  .info-value { color: var(--color-text); font-weight: 500; text-align: right; max-width: 60%; }
+  .color-swatches { display: flex; gap: .4rem; margin-top: .3rem; }
+  .color-swatch { width: 1.5rem; height: 1.5rem; border-radius: .4rem; border: 1px solid var(--color-border); }
+  .social-links { display: flex; gap: .5rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--color-border); }
   .social-link {
-    display: flex;
-    align-items: center;
-    gap: .4rem;
-    padding: .45rem .7rem;
-    border-radius: .5rem;
-    color: var(--color-text-muted);
-    text-decoration: none;
-    font-size: .82rem;
-    font-weight: 600;
-    transition: background 150ms ease;
+    display: flex; align-items: center; gap: .4rem; padding: .45rem .7rem;
+    border-radius: .5rem; color: var(--color-text-muted); text-decoration: none;
+    font-size: .82rem; font-weight: 600; transition: background 150ms ease;
   }
-  .social-link:hover {
-    background: var(--color-surface-hover);
-    color: var(--color-text);
-  }
-  .map-container {
-    padding: 0;
-    overflow: hidden;
-    height: 250px;
-    border-radius: .7rem;
-  }
-  .map-container :global(.leaflet-container) {
-    width: 100%;
-    height: 100%;
-    border-radius: .7rem;
-  }
-  .tournament-list {
-    margin-top: 1rem;
-    display: grid;
-    gap: .75rem;
-  }
-  .club-tournament {
-    padding: 1.4rem;
-  }
-  .club-tournament h3 {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 1.25rem;
-    margin: .25rem 0 0;
-  }
-  .tournament-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: start;
-    gap: 1rem;
-  }
-  .leave-btn {
-    white-space: nowrap;
-    font-size: .82rem;
-    padding: .55rem .85rem;
-  }
-  .category-list {
-    margin-top: .75rem;
-    display: grid;
-    gap: .35rem;
-  }
+  .social-link:hover { background: var(--color-surface-hover); color: var(--color-text); }
+  .map-container { padding: 0; overflow: hidden; height: 250px; border-radius: .7rem; }
+  .map-container :global(.leaflet-container) { width: 100%; height: 100%; border-radius: .7rem; }
+  .tournament-list { margin-top: 1rem; display: grid; gap: .75rem; }
+  .club-tournament { padding: 1.4rem; }
+  .club-tournament h3 { font-family: 'Space Grotesk', sans-serif; font-size: 1.25rem; margin: .25rem 0 0; }
+  .tournament-head { display: flex; justify-content: space-between; align-items: start; gap: 1rem; }
+  .leave-btn { white-space: nowrap; font-size: .82rem; padding: .55rem .85rem; }
+  .category-list { margin-top: .75rem; display: grid; gap: .35rem; }
   .category-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: .55rem .75rem;
-    border-radius: .5rem;
-    background: var(--color-surface-hover);
-    font-size: .88rem;
-    font-weight: 500;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: .55rem .75rem; border-radius: .5rem; background: var(--color-surface-hover);
+    font-size: .88rem; font-weight: 500;
   }
-  .category-meta {
-    display: flex;
-    align-items: center;
-    gap: .4rem;
+  .category-meta { display: flex; align-items: center; gap: .4rem; }
+  .club-title-row { margin-top: .35rem; }
+
+  .cat-list { margin-top: .75rem; display: grid; gap: .3rem; max-height: 40vh; overflow-y: auto; }
+  .cat-item {
+    display: flex !important; align-items: flex-start; gap: .6rem;
+    padding: .5rem .6rem; border: 1px solid var(--color-border); border-radius: .5rem;
+    margin: 0; background: var(--color-input);
   }
-  .club-title-row {
-    margin-top: .35rem;
-  }
+  .cat-item strong { font-size: .84rem; }
+
+  .button.small { padding: .4rem .7rem; font-size: .8rem; }
 
   @media (max-width: 767px) {
-    .club-detail-grid {
-      grid-template-columns: 1fr;
-    }
-    .tournament-head {
-      flex-direction: column;
-    }
+    .club-detail-grid { grid-template-columns: 1fr; }
+    .tournament-head { flex-direction: column; }
   }
 </style>

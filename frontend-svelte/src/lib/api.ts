@@ -551,6 +551,32 @@ export async function searchPlayersByDni(dni: string): Promise<Player[]> {
   return request<Player[]>(`/players/search?dni=${dni}`);
 }
 
+export interface AvailableTournament {
+  id: number;
+  name: string;
+  year: number;
+  leagueId: number;
+  leagueName: string;
+  categories: {
+    tournamentCategoryId: number;
+    categoryId: number;
+    categoryName: string;
+    birthYearMin: number;
+    birthYearMax: number;
+    gender: string;
+    minPlayers: number;
+    mandatory: boolean;
+  }[];
+}
+
+export async function getAvailableTournaments(clubId: number): Promise<AvailableTournament[]> {
+  return request<AvailableTournament[]>(`/clubs/${clubId}/available-tournaments`);
+}
+
+export async function joinTournament(clubId: number, data: { tournamentId: number; tournamentCategoryIds: number[] }): Promise<void> {
+  return request(`/clubs/${clubId}/available-tournaments`, { method: 'POST', body: JSON.stringify(data) });
+}
+
 export async function getUsers(search?: string, page?: number): Promise<PaginatedUsers> {
   const params = new URLSearchParams();
   if (search) params.set('search', search);
