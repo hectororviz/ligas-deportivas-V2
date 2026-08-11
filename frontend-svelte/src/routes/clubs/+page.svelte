@@ -68,7 +68,7 @@
     saving = true;
     const payload: Record<string, unknown> = {
       name: form.name.trim(), shortName: form.shortName.trim() || undefined,
-      slug: form.slug.trim() || slugify(form.name),
+      slug: slugify(form.slug) || slugify(form.name),
       primaryColor: form.primaryColor.trim() || undefined,
       secondaryColor: form.secondaryColor.trim() || undefined,
       instagram: form.instagram.trim() || undefined,
