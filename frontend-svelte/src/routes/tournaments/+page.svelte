@@ -16,22 +16,23 @@
     DRAFT: 'badge-muted', ACTIVE: 'badge-active', FINISHED: 'badge-finished', CANCELLED: 'badge-cancelled'
   };
 
-  let user: AuthUser | null = null;
-  let tournaments: Tournament[] = [];
-  let leagues: League[] = [];
-  let loading = true;
-  let saving = false;
-  let error = '';
-  let notice = '';
-  let editing: Tournament | null = null;
-  let showInactive = false;
-  let showForm = false;
+  let user: AuthUser | null = $state(null);
+  let tournaments: Tournament[] = $state([]);
+  let leagues: League[] = $state([]);
+  let loading = $state(true);
+  let saving = $state(false);
+  let error = $state('');
+  let notice = $state('');
+  let editing: Tournament | null = $state(null);
+  let showInactive = $state(false);
+  let showForm = $state(false);
   let showFilters = $state(false);
-  let form = {
+  let canManage = $state(false);
+  let form = $state({
     leagueId: '', name: '', year: new Date().getFullYear(), gender: 'MASCULINO',
     championMode: 'ROUND_AND_ANNUAL', pointsWin: 3, pointsDraw: 1, pointsLoss: 0,
     startDate: '', endDate: ''
-  };
+  });
 
   onMount(async () => {
     try {
@@ -43,8 +44,6 @@
       loading = false;
     }
   });
-
-  let canManage = $state(false);
 
   function openCreate() {
     editing = null;
