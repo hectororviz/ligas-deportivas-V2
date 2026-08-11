@@ -70,7 +70,6 @@
       <h1>Cuenta y perfil</h1>
       <p class="muted">Actualiza tu información personal y cambia tu contraseña.</p>
     </div>
-    <a class="button secondary" href="/settings">Volver a ajustes</a>
   </header>
 
   {#if loading}

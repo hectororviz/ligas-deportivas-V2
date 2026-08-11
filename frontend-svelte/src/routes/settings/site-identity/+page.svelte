@@ -5,20 +5,20 @@
 
   const paletteState = usePalette();
 
-  let identity: SiteIdentity | null = null;
-  let loading = true;
-  let saving = false;
-  let error = '';
-  let notice = '';
+  let identity = $state<SiteIdentity | null>(null);
+  let loading = $state(true);
+  let saving = $state(false);
+  let error = $state('');
+  let notice = $state('');
 
-  let title = '';
-  let iconFile: File | null = null;
-  let flyerFile: File | null = null;
-  let faviconFile: File | null = null;
+  let title = $state('');
+  let iconFile = $state<File | null>(null);
+  let flyerFile = $state<File | null>(null);
+  let faviconFile = $state<File | null>(null);
 
-  let iconInput: HTMLInputElement;
-  let flyerInput: HTMLInputElement;
-  let faviconInput: HTMLInputElement;
+  let iconInput = $state<HTMLInputElement>();
+  let flyerInput = $state<HTMLInputElement>();
+  let faviconInput = $state<HTMLInputElement>();
 
   let selectedPaletteId = $state(paletteState.id);
 
@@ -63,8 +63,8 @@
       if (flyerFile) formData.append('flyer', flyerFile);
       const updated = await updateSiteIdentity(formData);
       identity = updated;
-      if (iconFile) { iconFile = null; iconInput.value = ''; }
-      if (flyerFile) { flyerFile = null; flyerInput.value = ''; }
+      if (iconFile) { iconFile = null; if (iconInput) iconInput.value = ''; }
+      if (flyerFile) { flyerFile = null; if (flyerInput) flyerInput.value = ''; }
       notice = 'Identidad del sitio actualizada correctamente.';
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudo actualizar la identidad.';
@@ -83,7 +83,7 @@
       const updated = await getSiteIdentity();
       identity = updated;
       faviconFile = null;
-      faviconInput.value = '';
+      if (faviconInput) faviconInput.value = '';
       notice = 'Favicon actualizado correctamente.';
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudo subir el favicon.';
@@ -102,7 +102,6 @@
       <h1>Identidad del sitio</h1>
       <p class="muted">Personaliza el título, ícono, flyer, favicon y paleta de colores de la plataforma.</p>
     </div>
-    <a class="button secondary" href="/settings">Volver a ajustes</a>
   </header>
 
   {#if loading}

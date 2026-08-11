@@ -70,7 +70,6 @@
   {:else if error && !data}
     <header class="page-header"><div><p class="eyebrow">Club</p><h1>Error</h1></div></header>
     <p class="error-banner">{error}</p>
-    <a class="button secondary" href="/clubs">Volver a clubes</a>
   {:else if data}
     <header class="page-header">
       <div>
@@ -87,7 +86,6 @@
           <p class="muted">{data.club.shortName}</p>
         {/if}
       </div>
-      <a class="button secondary" href="/clubs">Volver a clubes</a>
     </header>
     {#if error}<p class="error-banner">{error}</p>{/if}
 

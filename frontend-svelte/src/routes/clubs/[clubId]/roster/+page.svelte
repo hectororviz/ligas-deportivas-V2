@@ -35,7 +35,6 @@
       <h1>Plantel</h1>
       <p class="muted">Jugadores registrados por torneo y categoría.</p>
     </div>
-    <a class="button secondary" href="/clubs">Volver a clubes</a>
   </header>
 
   {#if loading}
