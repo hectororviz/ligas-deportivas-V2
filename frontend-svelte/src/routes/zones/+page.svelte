@@ -38,6 +38,7 @@
   });
 
   let canManage = $derived(((user as AuthUser | null)?.roles ?? []).includes('ADMIN'));
+  let activeTournaments = $derived(tournaments.filter(t => t.status === 'ACTIVE'));
 
   async function toggleZone(zone: Zone) {
     if (expandedZone === zone.id) { expandedZone = null; return; }
@@ -266,7 +267,7 @@
         <label>Torneo
           <select bind:value={newZoneTournamentId} disabled={creatingZone}>
             <option value={null}>Seleccionar torneo...</option>
-            {#each tournaments as t}<option value={t.id}>{t.name} {t.year} · {t.league.name}</option>{/each}
+            {#each activeTournaments as t}<option value={t.id}>{t.name} {t.year} · {t.league.name}</option>{/each}
           </select>
         </label>
         <div class="form-actions">

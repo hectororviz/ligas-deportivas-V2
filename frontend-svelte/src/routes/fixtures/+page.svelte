@@ -15,7 +15,7 @@
 
   onMount(async () => {
     try {
-      zones = await getZones(true);
+      zones = await getZones();
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'Error al cargar zonas.';
     } finally {
