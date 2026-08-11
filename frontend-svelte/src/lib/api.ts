@@ -389,6 +389,10 @@ export async function updateTournament(id: number, input: Record<string, unknown
   return request<Tournament>(`/tournaments/${id}`, { method: 'PUT', body: JSON.stringify(input) });
 }
 
+export async function updateTournamentStatus(id: number, status: string): Promise<Tournament> {
+  return request<Tournament>(`/tournaments/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) });
+}
+
 export async function getZones(includeInactive = false): Promise<Zone[]> {
   return request<Zone[]>(`/zones${includeInactive ? '?includeInactive=true' : ''}`);
 }

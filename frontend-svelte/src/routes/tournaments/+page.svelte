@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Modal from '$lib/Modal.svelte';
-  import { getTournaments, getProfile, createTournament, updateTournament, getLeagues, type AuthUser, type Tournament, type League } from '$lib/api';
+  import { getTournaments, getProfile, createTournament, updateTournament, updateTournamentStatus, getLeagues, type AuthUser, type Tournament, type League } from '$lib/api';
 
   const genders = [
     ['MASCULINO', 'Masculino'], ['FEMENINO', 'Femenino'], ['MIXTO', 'Mixto']
@@ -36,13 +36,13 @@
 
   onMount(async () => {
     try {
-      [user, tournaments, leagues] = await Promise.all([getProfile(), getTournaments(), getLeagues()]);
-      canManage = (user?.roles ?? []).includes('ADMIN');
+      const [u, l] = await Promise.all([getProfile(), getLeagues()]);
+      user = u; leagues = l;
+      canManage = (u?.roles ?? []).includes('ADMIN');
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudieron cargar los torneos.';
-    } finally {
-      loading = false;
     }
+    await fetchTournaments();
   });
 
   function openCreate() {
@@ -82,15 +82,7 @@
 
   async function toggleInactive() {
     showInactive = !showInactive;
-    loading = true;
-    error = '';
-    try {
-      tournaments = await getTournaments(showInactive);
-    } catch (cause) {
-      error = cause instanceof Error ? cause.message : 'No se pudieron cargar los torneos.';
-    } finally {
-      loading = false;
-    }
+    await fetchTournaments();
   }
 
   async function save() {
@@ -101,12 +93,12 @@
     saving = true;
     const payload: Record<string, unknown> = {
       name: form.name.trim(),
-      year: form.year,
+      year: Number(form.year),
       gender: form.gender,
       championMode: form.championMode,
-      pointsWin: form.pointsWin,
-      pointsDraw: form.pointsDraw,
-      pointsLoss: form.pointsLoss,
+      pointsWin: Number(form.pointsWin),
+      pointsDraw: Number(form.pointsDraw),
+      pointsLoss: Number(form.pointsLoss),
       leagueId: Number(form.leagueId),
       startDate: form.startDate || undefined,
       endDate: form.endDate || undefined
@@ -117,16 +109,40 @@
         tournaments = tournaments.map((t) => t.id === updated.id ? updated : t);
       } else {
         const created = await createTournament(payload);
-        tournaments = [...tournaments, created].sort((a, b) => new Date(b.startDate ?? '').getTime() - new Date(a.startDate ?? '').getTime());
+        tournaments = [...tournaments, created];
       }
       notice = editing ? 'Torneo actualizado correctamente.' : 'Torneo creado correctamente.';
       editing = null;
       showForm = false;
+      await fetchTournaments();
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudo guardar el torneo.';
     } finally {
       saving = false;
     }
+  }
+
+  async function deleteTournament(tournament: Tournament) {
+    if (!tournament || !confirm(`¿Eliminar el torneo "${tournament.name}"?`)) return;
+    saving = true;
+    try {
+      await updateTournamentStatus(tournament.id, 'INACTIVE');
+      notice = 'Torneo eliminado correctamente.';
+      await fetchTournaments();
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'No se pudo eliminar el torneo.';
+    } finally {
+      saving = false;
+    }
+  }
+
+  async function fetchTournaments() {
+    loading = true; error = '';
+    try {
+      tournaments = await getTournaments(showInactive);
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'No se pudieron cargar los torneos.';
+    } finally { loading = false; }
   }
 </script>
 
@@ -144,7 +160,7 @@
   {#if loading}
     <section class="loading-card">Cargando torneos...</section>
   {:else}
-    {#if error}<p class="error-banner">{error}</p>{/if}
+    {#if error && !showForm}<p class="error-banner">{error}</p>{/if}
     {#if notice}<p class="success-banner">{notice}</p>{/if}
 
     <section class="tournament-list card-surface">
@@ -189,6 +205,7 @@
     <Modal onclose={closeModal}>
       <p class="eyebrow">{editing ? 'Editar torneo' : 'Nuevo torneo'}</p>
       <h2>{editing ? editing.name : 'Crear torneo'}</h2>
+      {#if error}<p class="form-error">{error}</p>{/if}
       <form onsubmit={(event) => { event.preventDefault(); save(); }}>
         <label>Liga
           <select bind:value={form.leagueId} disabled={saving}>
@@ -220,6 +237,7 @@
         <div class="form-actions">
           <button class="button primary" type="submit" disabled={saving}>{saving ? 'Guardando...' : editing ? 'Guardar cambios' : 'Crear torneo'}</button>
           {#if editing}<button class="button secondary" type="button" onclick={openCreate} disabled={saving}>Cancelar</button>{/if}
+          {#if editing}<button class="button secondary" type="button" onclick={() => deleteTournament(editing!)} disabled={saving} style="color:var(--color-error);">Eliminar torneo</button>{/if}
         </div>
       </form>
     </Modal>
