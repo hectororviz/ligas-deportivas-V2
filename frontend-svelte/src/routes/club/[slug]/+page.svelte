@@ -14,8 +14,6 @@
   let showJoinModal = $state(false);
   let availableTournaments = $state<AvailableTournament[]>([]);
   let loadingAvailable = $state(false);
-  let selectedJoinTournament = $state<number | null>(null);
-  let selectedCategoryIds = $state<number[]>([]);
 
   onMount(() => { fetchData(); });
 
@@ -48,13 +46,8 @@
     if (!data) return;
     showJoinModal = true;
     loadingAvailable = true;
-    selectedJoinTournament = null;
-    selectedCategoryIds = [];
     try {
       availableTournaments = await getAvailableTournaments(data.club.id);
-      if (availableTournaments.length > 0) {
-        selectedJoinTournament = availableTournaments[0].id;
-      }
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudieron cargar los torneos disponibles.';
     } finally { loadingAvailable = false; }
@@ -62,35 +55,14 @@
 
   function closeJoinModal() { showJoinModal = false; }
 
-  $effect(() => {
-    if (selectedJoinTournament && availableTournaments.length > 0) {
-      selectedCategoryIds = [];
-    }
-  });
-
-  function toggleCat(id: number) {
-    if (selectedCategoryIds.includes(id)) {
-      selectedCategoryIds = selectedCategoryIds.filter(c => c !== id);
-    } else {
-      selectedCategoryIds = [...selectedCategoryIds, id];
-    }
-  }
-
-  let selectedTournamentCats = $derived(
-    selectedJoinTournament
-      ? availableTournaments.find(t => t.id === selectedJoinTournament)?.categories ?? []
-      : []
-  );
-
-  async function handleJoin() {
-    if (!data || !selectedJoinTournament || selectedCategoryIds.length === 0) {
-      error = 'Selecciona al menos una categoria.'; return;
-    }
+  async function handleJoin(tournament: AvailableTournament) {
+    if (!data) return;
     saving = true; error = '';
+    const allCatIds = tournament.categories.map(c => c.tournamentCategoryId);
     try {
       await joinTournament(data.club.id, {
-        tournamentId: selectedJoinTournament,
-        tournamentCategoryIds: selectedCategoryIds
+        tournamentId: tournament.id,
+        tournamentCategoryIds: allCatIds
       });
       notice = 'Club agregado al torneo.';
       showJoinModal = false;
@@ -283,37 +255,18 @@
       {:else if availableTournaments.length === 0}
         <p class="muted">El club ya participa en todos los torneos disponibles.</p>
       {:else}
-        <label>Torneo
-          <select bind:value={selectedJoinTournament} disabled={saving}>
-            {#each availableTournaments as t}
-              <option value={t.id}>{t.name} {t.year} · {t.leagueName}</option>
-            {/each}
-          </select>
-        </label>
-
-        {#if selectedTournamentCats.length > 0}
-          <div class="cat-list">
-            <p class="muted" style="margin-bottom:.4rem;font-size:.78rem;font-weight:600;">CATEGORIAS</p>
-            {#each selectedTournamentCats as cat}
-              <label class="checkbox-label cat-item">
-                <input type="checkbox" checked={selectedCategoryIds.includes(cat.tournamentCategoryId)} onchange={() => toggleCat(cat.tournamentCategoryId)} disabled={saving} />
-                <span>
-                  <strong>{cat.categoryName}</strong>
-                  <span class="muted" style="font-size:.72rem;display:block;">
-                    {cat.birthYearMin}-{cat.birthYearMax} · {cat.gender === 'MASCULINO' ? 'Masculino' : cat.gender === 'FEMENINO' ? 'Femenino' : 'Mixto'} · Min {cat.minPlayers} jug.
-                    {#if cat.mandatory}<span style="color:var(--color-error);"> · Obligatoria</span>{/if}
-                  </span>
-                </span>
-              </label>
-            {/each}
-          </div>
-        {/if}
-
-        <div class="form-actions" style="margin-top:1rem;">
-          <button class="button secondary" type="button" onclick={closeJoinModal} disabled={saving}>Cancelar</button>
-          <button class="button primary" type="button" disabled={saving || selectedCategoryIds.length === 0} onclick={handleJoin}>
-            {saving ? 'Agregando...' : 'Participar'}
-          </button>
+        <div class="tournament-join-list">
+          {#each availableTournaments as t}
+            <div class="join-row">
+              <div>
+                <strong>{t.name} {t.year}</strong>
+                <span class="muted">{t.leagueName} · {t.categories.length} categorías</span>
+              </div>
+              <button class="button primary small" disabled={saving} onclick={() => handleJoin(t)}>
+                {saving ? '...' : 'Participar'}
+              </button>
+            </div>
+          {/each}
         </div>
       {/if}
     </div>
@@ -354,8 +307,11 @@
     font-size: .82rem; font-weight: 600; transition: background 150ms ease;
   }
   .social-link:hover { background: var(--color-surface-hover); color: var(--color-text); }
-  .map-container { padding: 0; overflow: hidden; height: 250px; border-radius: .7rem; }
-  .map-container :global(.leaflet-container) { width: 100%; height: 100%; border-radius: .7rem; }
+  .map-container { padding: 0; overflow: hidden; height: 250px; border-radius: .7rem; position: relative; z-index: 0; }
+  .map-container :global(.leaflet-container) { width: 100%; height: 100%; border-radius: .7rem; z-index: 0; }
+  .map-container :global(.leaflet-pane),
+  .map-container :global(.leaflet-top),
+  .map-container :global(.leaflet-bottom) { z-index: 1; }
   .tournament-list { margin-top: 1rem; display: grid; gap: .75rem; }
   .club-tournament { padding: 1.4rem; }
   .club-tournament h3 { font-family: 'Space Grotesk', sans-serif; font-size: 1.25rem; margin: .25rem 0 0; }
@@ -370,13 +326,14 @@
   .category-meta { display: flex; align-items: center; gap: .4rem; }
   .club-title-row { margin-top: .35rem; }
 
-  .cat-list { margin-top: .75rem; display: grid; gap: .3rem; max-height: 40vh; overflow-y: auto; }
-  .cat-item {
-    display: flex !important; align-items: flex-start; gap: .6rem;
-    padding: .5rem .6rem; border: 1px solid var(--color-border); border-radius: .5rem;
-    margin: 0; background: var(--color-input);
+  .tournament-join-list { display: grid; gap: .5rem; margin: .5rem 0; }
+  .join-row {
+    display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+    padding: .7rem .85rem; border: 1px solid var(--color-border); border-radius: .6rem;
+    background: var(--color-input);
   }
-  .cat-item strong { font-size: .84rem; }
+  .join-row strong { font-size: .88rem; display: block; }
+  .join-row span { font-size: .75rem; }
 
   .button.small { padding: .4rem .7rem; font-size: .8rem; }
 
