@@ -1,19 +1,29 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
-  import { generateFixture, getProfile, getZones, type AuthUser, type Zone } from '$lib/api';
+  import { generateFixture, generateTournamentFixture, getProfile, getTournaments, getZones, type AuthUser, type Tournament, type Zone } from '$lib/api';
+  import Modal from '$lib/Modal.svelte';
 
-  let user: AuthUser | null = null;
-  let zones: Zone[] = [];
-  let loading = true;
-  let error = '';
-  let notice = '';
-  let generatingZoneId: number | null = null;
-  let generating = false;
+  let user: AuthUser | null = $state(null);
+  let zones: Zone[] = $state([]);
+  let tournaments: Tournament[] = $state([]);
+  let loading = $state(true);
+  let error = $state('');
+  let notice = $state('');
+  let generatingZoneId: number | null = $state(null);
+  let generating = $state(false);
+
+  let showFixtureModal = $state(false);
+  let fixtureZone: Zone | null = $state(null);
+  let idaVuelta = $state(true);
+
+  let selectedTournament: number | null = $state(null);
+  let generatingTournament = $state(false);
 
   onMount(async () => {
     try {
-      [user, zones] = await Promise.all([getProfile(), getZones(true)]);
+      const [u, z, t] = await Promise.all([getProfile(), getZones(true), getTournaments(true)]);
+      user = u; zones = z; tournaments = t;
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudieron cargar las zonas.';
     } finally {
@@ -21,7 +31,7 @@
     }
   });
 
-  $: canManage = user?.roles.includes('ADMIN') ?? false;
+  let canManage = $derived(((user as AuthUser | null)?.roles ?? []).includes('ADMIN'));
 
   function statusLabel(status: string) {
     const map: Record<string, string> = {
@@ -43,20 +53,46 @@
     return map[status] ?? 'badge-default';
   }
 
-  async function handleGenerate(zone: Zone) {
+  function openFixtureModal(zone: Zone) {
+    fixtureZone = zone;
+    idaVuelta = true;
+    showFixtureModal = true;
     error = '';
-    notice = '';
-    generatingZoneId = zone.id;
+  }
+
+  function closeFixtureModal() {
+    showFixtureModal = false;
+    fixtureZone = null;
+  }
+
+  async function confirmGenerateFixture() {
+    if (!fixtureZone) return;
+    error = ''; notice = '';
     generating = true;
     try {
-      await generateFixture(zone.id, true);
-      notice = `Fixture generado para Zona ${zone.name}.`;
+      await generateFixture(fixtureZone.id, idaVuelta);
+      notice = `Fixture generado para Zona ${fixtureZone.name}.`;
+      closeFixtureModal();
       zones = await getZones(true);
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudo generar el fixture.';
     } finally {
-      generatingZoneId = null;
       generating = false;
+    }
+  }
+
+  async function handleGenerateTournament() {
+    if (!selectedTournament) return;
+    error = ''; notice = '';
+    generatingTournament = true;
+    try {
+      await generateTournamentFixture(selectedTournament, true);
+      notice = 'Fixture generado para el torneo.';
+      zones = await getZones(true);
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'No se pudo generar el fixture del torneo.';
+    } finally {
+      generatingTournament = false;
     }
   }
 </script>
@@ -77,6 +113,30 @@
   {:else}
     {#if error}<p class="error-banner">{error}</p>{/if}
     {#if notice}<p class="success-banner">{notice}</p>{/if}
+
+    {#if canManage}
+      <section class="card-surface tournament-fixture-card">
+        <div class="list-header">
+          <div><p class="eyebrow">Generación masiva</p><h2>Fixture del torneo</h2></div>
+        </div>
+        <p class="muted">Genera los partidos para todas las zonas de un torneo de una vez.</p>
+        <div class="tournament-fixture-controls">
+          <label>
+            Torneo
+            <select bind:value={selectedTournament}>
+              <option value={null}>Seleccionar torneo...</option>
+              {#each tournaments as t}
+                <option value={t.id}>{t.name} {t.year} · {t.league.name}</option>
+              {/each}
+            </select>
+          </label>
+          <button class="button primary" disabled={!selectedTournament || generatingTournament} onclick={handleGenerateTournament}>
+            {generatingTournament ? 'Generando...' : 'Generar fixture del torneo'}
+          </button>
+        </div>
+      </section>
+    {/if}
+
     <section class="zone-list card-surface">
       <div class="list-header">
         <div><p class="eyebrow">Catálogo</p><h2>Zonas registradas</h2></div>
@@ -99,8 +159,8 @@
               <div class="zone-actions">
                 <a class="button secondary" href={`/zones/${zone.id}/standings`}>Posiciones</a>
                 {#if canManage}
-                  <button class="button primary" disabled={generating && generatingZoneId === zone.id} onclick={() => handleGenerate(zone)}>
-                    {generating && generatingZoneId === zone.id ? 'Generando...' : 'Generar fixture'}
+                  <button class="button primary" disabled={generating && generatingZoneId === zone.id} onclick={() => openFixtureModal(zone)}>
+                    Generar fixture
                   </button>
                 {/if}
               </div>
@@ -111,3 +171,36 @@
     </section>
   {/if}
 </main>
+
+{#if showFixtureModal && fixtureZone}
+  <Modal onclose={closeFixtureModal}>
+    <div class="modal-form">
+      <p class="eyebrow">Generar fixture</p>
+      <h2>Zona {fixtureZone.name}</h2>
+      <p class="muted">{fixtureZone.tournament.name} {fixtureZone.tournament.year} · {fixtureZone.tournament.league.name}</p>
+      {#if error}<p class="form-error">{error}</p>{/if}
+      <form onsubmit={(event) => { event.preventDefault(); confirmGenerateFixture(); }}>
+        <label class="checkbox-label">
+          <input type="checkbox" bind:checked={idaVuelta} disabled={generating} />
+          Ida y vuelta
+        </label>
+        <div class="form-actions">
+          <button class="button secondary" type="button" disabled={generating} onclick={closeFixtureModal}>Cancelar</button>
+          <button class="button primary" type="submit" disabled={generating}>
+            {generating ? 'Generando...' : 'Generar fixture'}
+          </button>
+        </div>
+      </form>
+    </div>
+  </Modal>
+{/if}
+
+<style>
+  .tournament-fixture-card { margin-bottom: 1.5rem; padding: 1.5rem clamp(1.5rem, 4vw, 2.5rem); }
+  .tournament-fixture-card .muted { margin: .5rem 0 1rem; }
+  .tournament-fixture-controls { display: flex; gap: .6rem; align-items: end; flex-wrap: wrap; }
+  .tournament-fixture-controls label { max-width: 380px; }
+  .modal-form h2 { margin: .5rem 0 .5rem; font-family: 'Space Grotesk', sans-serif; font-size: 1.6rem; letter-spacing: -.04em; }
+  .modal-form .muted { margin: 0 0 1.5rem; }
+  .modal-form form { margin-top: 0; }
+</style>

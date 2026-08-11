@@ -75,6 +75,29 @@ export interface Club {
   league?: { name: string } | null;
 }
 
+export interface Player {
+  id: number;
+  firstName: string;
+  lastName: string;
+  dni: string;
+  birthDate: string;
+  gender: string;
+  active: boolean;
+  addressStreet?: string | null;
+  addressNumber?: string | null;
+  addressCity?: string | null;
+  emergencyName?: string | null;
+  emergencyRelationship?: string | null;
+  emergencyPhone?: string | null;
+}
+
+export interface PaginatedPlayers {
+  data: Player[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface Category {
   id: number;
   name: string;
@@ -131,6 +154,22 @@ export interface ZoneStanding {
   zoneName: string;
   tournamentName: string;
   categories: { categoryId: number; categoryName: string; standings: StandingRow[] }[];
+}
+
+export interface UserRow {
+  id: number;
+  email: string;
+  firstName: string;
+  lastName: string;
+  emailVerifiedAt?: string | null;
+  roles: { id: number; role: { key: string; name: string }; league?: { name: string } | null; club?: { name: string } | null }[];
+}
+
+export interface PaginatedUsers {
+  data: UserRow[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 export interface SiteIdentity {
@@ -267,6 +306,22 @@ export async function updateClub(id: number, input: Record<string, unknown>): Pr
   });
 }
 
+export async function getPlayers(search = '', page = 1): Promise<PaginatedPlayers> {
+  const params = new URLSearchParams();
+  if (search) params.set('search', search);
+  params.set('page', String(page));
+  params.set('pageSize', '25');
+  return request<PaginatedPlayers>(`/players?${params}`);
+}
+
+export async function createPlayer(input: Record<string, unknown>): Promise<Player> {
+  return request<Player>('/players', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export async function updatePlayer(id: number, input: Record<string, unknown>): Promise<Player> {
+  return request<Player>(`/players/${id}`, { method: 'PATCH', body: JSON.stringify(input) });
+}
+
 export async function getCategories(): Promise<Category[]> {
   return request<Category[]>('/categories');
 }
@@ -317,6 +372,21 @@ export async function getZoneStandings(zoneId: number): Promise<ZoneStanding> {
 
 export async function getTournamentStandings(tournamentId: number): Promise<unknown> {
   return request(`/tournaments/${tournamentId}/standings`);
+}
+
+export async function getUsers(search?: string, page?: number): Promise<PaginatedUsers> {
+  const params = new URLSearchParams();
+  if (search) params.set('search', search);
+  if (page) params.set('page', String(page));
+  return request<PaginatedUsers>(`/users${params.toString() ? `?${params}` : ''}`);
+}
+
+export async function getLeaderboards(tournamentId: number, zoneId?: number, categoryId?: number): Promise<unknown> {
+  const params = new URLSearchParams();
+  params.set('tournamentId', String(tournamentId));
+  if (zoneId) params.set('zoneId', String(zoneId));
+  if (categoryId) params.set('categoryId', String(categoryId));
+  return request(`/stats/leaderboards?${params}`);
 }
 
 export async function getSiteIdentity(): Promise<SiteIdentity> {

@@ -11,6 +11,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard', label: 'Panel', icon: 'home', path: '/' },
   { id: 'leagues', label: 'Ligas', icon: 'trophy', path: '/leagues' },
   { id: 'clubs', label: 'Clubes', icon: 'shield', path: '/clubs' },
+  { id: 'players', label: 'Jugadores', icon: 'users', path: '/players' },
   { id: 'categories', label: 'Categorías', icon: 'layers', path: '/categories' },
   { id: 'tournaments', label: 'Torneos', icon: 'tournament', path: '/tournaments' },
   { id: 'zones', label: 'Zonas', icon: 'grid', path: '/zones' },
