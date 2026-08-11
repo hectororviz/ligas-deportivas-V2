@@ -1,12 +1,12 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  let { onclose = () => {}, children }: { onclose?: () => void; children: Snippet } = $props();
+  let { onclose = () => {}, wide = false, children }: { onclose?: () => void; wide?: boolean; children: Snippet } = $props();
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="modal-backdrop" onclick={onclose}>
-  <div class="modal-panel" onclick={(e) => e.stopPropagation()}>
+  <div class="modal-panel" class:wide onclick={(e) => e.stopPropagation()}>
     <button class="modal-close" onclick={onclose} aria-label="Cerrar">&times;</button>
     <div class="modal-body">
       {@render children()}
@@ -26,6 +26,7 @@
     background: var(--color-surface); box-shadow: 0 30px 80px var(--color-shadow);
     display: flex; flex-direction: column;
   }
+  .modal-panel.wide { width: min(98vw, 1600px); }
   .modal-body {
     overflow-y: auto; padding: clamp(1.5rem, 4vw, 2.5rem);
     scrollbar-width: thin;

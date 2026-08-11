@@ -351,8 +351,8 @@
 {/if}
 
 {#if showBulk}
-  <Modal onclose={closeBulk}>
-    <div class="modal-form bulk-modal">
+  <Modal onclose={closeBulk} wide={true}>
+    <div class="modal-form bulk-modal-content">
       <p class="eyebrow">Carga masiva</p>
       <h2>Agregar jugadores</h2>
       <p class="muted" style="margin-bottom:1rem;">Completá los datos, cada fila es un jugador. Podés agregar o quitar filas.</p>
@@ -497,7 +497,7 @@
   }
   .dropdown-item:hover { background: var(--color-surface-hover); }
 
-  .bulk-modal { max-width: 100% !important; width: 98vw; max-width: 1400px; }
+  .bulk-modal-content { max-width: 100%; }
   .bulk-table-wrapper { overflow-x: auto; margin: .5rem 0 1rem; border: 1px solid var(--color-border); border-radius: .7rem; }
   .bulk-table { width: 100%; border-collapse: collapse; font-size: .82rem; min-width: 1000px; }
   .bulk-table thead { position: sticky; top: 0; z-index: 1; }
