@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Modal from '$lib/Modal.svelte';
-  import { getTournaments, getProfile, createTournament, updateTournament, updateTournamentStatus, getLeagues, type AuthUser, type Tournament, type League } from '$lib/api';
+  import { getTournaments, getProfile, createTournament, updateTournament, updateTournamentStatus, getLeagues, getCategories, type AuthUser, type Tournament, type League, type Category } from '$lib/api';
 
   const genders = [
     ['MASCULINO', 'Masculino'], ['FEMENINO', 'Femenino'], ['MIXTO', 'Mixto']
@@ -16,9 +16,18 @@
     DRAFT: 'badge-muted', ACTIVE: 'badge-active', FINISHED: 'badge-finished', CANCELLED: 'badge-cancelled'
   };
 
+  interface FormCategory {
+    categoryId: number;
+    name: string;
+    enabled: boolean;
+    countsForGeneral: boolean;
+    kickoffTime: string;
+  }
+
   let user: AuthUser | null = $state(null);
   let tournaments: Tournament[] = $state([]);
   let leagues: League[] = $state([]);
+  let allCategories: Category[] = $state([]);
   let loading = $state(true);
   let saving = $state(false);
   let error = $state('');
@@ -27,17 +36,22 @@
   let showInactive = $state(false);
   let showForm = $state(false);
   let showFilters = $state(false);
+  let showCatPicker = $state(false);
   let canManage = $state(false);
   let form = $state({
     leagueId: '', name: '', year: new Date().getFullYear(), gender: 'MASCULINO',
     championMode: 'ROUND_AND_ANNUAL', pointsWin: 3, pointsDraw: 1, pointsLoss: 0,
     startDate: '', endDate: '', controlsPlayers: true
   });
+  let formCategories = $state<FormCategory[]>([]);
+  let catPickerData = $state<FormCategory[]>([]);
+
+  let catCount = $derived(formCategories.filter(c => c.enabled).length);
 
   onMount(async () => {
     try {
-      const [u, l] = await Promise.all([getProfile(), getLeagues()]);
-      user = u; leagues = l;
+      const [u, l, cats] = await Promise.all([getProfile(), getLeagues(), getCategories()]);
+      user = u; leagues = l; allCategories = cats;
       canManage = (u?.roles ?? []).includes('ADMIN');
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudieron cargar los torneos.';
@@ -52,6 +66,9 @@
       championMode: 'ROUND_AND_ANNUAL', pointsWin: 3, pointsDraw: 1, pointsLoss: 0,
       startDate: '', endDate: '', controlsPlayers: true
     };
+    formCategories = allCategories.filter(c => c.active && c.gender === form.gender).map(c => ({
+      categoryId: c.id, name: c.name, enabled: false, countsForGeneral: false, kickoffTime: ''
+    }));
     error = '';
     showForm = true;
   }
@@ -71,8 +88,52 @@
       endDate: tournament.endDate ? tournament.endDate.split('T')[0] : '',
       controlsPlayers: tournament.controlsPlayers ?? true
     };
+    formCategories = allCategories.filter(c => c.active && c.gender === form.gender).map(c => ({
+      categoryId: c.id, name: c.name, enabled: false, countsForGeneral: false, kickoffTime: ''
+    }));
+    loadExistingCategories(tournament.id);
     error = '';
     showForm = true;
+  }
+
+  async function loadExistingCategories(tournamentId: number) {
+    try {
+      const data = await fetch(`${import.meta.env.PUBLIC_API_BASE_URL || '/api/v1'}/tournaments/${tournamentId}/categories`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('ligas.accessToken')}` }
+      });
+      const existing = await data.json() as any[];
+      formCategories = formCategories.map(c => {
+        const ex = existing.find((e: any) => e.categoryId === c.categoryId || e.category?.id === c.categoryId);
+        return ex
+          ? { ...c, enabled: ex.enabled ?? true, countsForGeneral: ex.countsForGeneral ?? false, kickoffTime: ex.kickoffTime || '' }
+          : c;
+      });
+    } catch {}
+  }
+
+  function openCatPicker() {
+    const genderCats = allCategories.filter(c => c.active && c.gender === form.gender).map(c => ({
+      categoryId: c.id, name: c.name, enabled: false, countsForGeneral: false, kickoffTime: ''
+    }));
+    const existingById = new Map(formCategories.map(c => [c.categoryId, c]));
+    catPickerData = genderCats.map(c => {
+      const ex = existingById.get(c.categoryId);
+      return ex || c;
+    });
+    showCatPicker = true;
+  }
+
+  function closeCatPicker() {
+    showCatPicker = false;
+  }
+
+  function applyCatPicker() {
+    formCategories = catPickerData.map(c => ({ ...c }));
+    showCatPicker = false;
+  }
+
+  function toggleCatEnabled(idx: number) {
+    catPickerData[idx].enabled = !catPickerData[idx].enabled;
   }
 
   function closeModal() {
@@ -91,6 +152,9 @@
     notice = '';
     if (!form.name.trim()) { error = 'Ingresa el nombre del torneo.'; return; }
     if (!form.leagueId) { error = 'Selecciona una liga.'; return; }
+    const enabledCats = formCategories.filter(c => c.enabled);
+    if (enabledCats.length === 0) { error = 'Selecciona al menos una categoría.'; return; }
+
     saving = true;
     const payload: Record<string, unknown> = {
       name: form.name.trim(),
@@ -103,16 +167,17 @@
       leagueId: Number(form.leagueId),
       startDate: form.startDate || undefined,
       endDate: form.endDate || undefined,
-      controlsPlayers: form.controlsPlayers
+      controlsPlayers: form.controlsPlayers,
+      categories: formCategories.map(c => ({
+        categoryId: c.categoryId,
+        enabled: c.enabled,
+        countsForGeneral: c.countsForGeneral,
+        kickoffTime: c.enabled ? (c.kickoffTime || undefined) : undefined
+      }))
     };
     try {
-      if (editing) {
-        const updated = await updateTournament(editing.id, payload);
-        tournaments = tournaments.map((t) => t.id === updated.id ? updated : t);
-      } else {
-        const created = await createTournament(payload);
-        tournaments = [...tournaments, created];
-      }
+      if (editing) await updateTournament(editing.id, payload);
+      else await createTournament(payload);
       notice = editing ? 'Torneo actualizado correctamente.' : 'Torneo creado correctamente.';
       editing = null;
       showForm = false;
@@ -155,14 +220,14 @@
     <div>
       <p class="eyebrow">Competencia</p>
       <h1>Torneos</h1>
-      <p class="muted">Crea y administra los torneos de cada liga.</p>
+      <p class="muted">Crea y administra los torneos de cada liga, asigna categorias participantes.</p>
     </div>
   </header>
 
   {#if loading}
     <section class="loading-card">Cargando torneos...</section>
   {:else}
-    {#if error && !showForm}<p class="error-banner">{error}</p>{/if}
+    {#if error && !showForm && !showCatPicker}<p class="error-banner">{error}</p>{/if}
     {#if notice}<p class="success-banner">{notice}</p>{/if}
 
     <section class="tournament-list card-surface">
@@ -181,10 +246,7 @@
       {/if}
 
       {#if tournaments.length === 0}
-        <div class="empty-state compact-empty">
-          <h2>Sin torneos todavía</h2>
-          <p>Crea el primer torneo para comenzar.</p>
-        </div>
+        <div class="empty-state compact-empty"><h2>Sin torneos todavia</h2><p>Crea el primer torneo para comenzar.</p></div>
       {:else}
         <div class="league-table">
           {#each tournaments as tournament}
@@ -202,52 +264,157 @@
       {/if}
     </section>
   {/if}
+</main>
 
-  {#if showForm && canManage}
-    <Modal onclose={closeModal}>
+{#if showForm && canManage}
+  <Modal onclose={closeModal}>
+    <div class="modal-form">
       <p class="eyebrow">{editing ? 'Editar torneo' : 'Nuevo torneo'}</p>
       <h2>{editing ? editing.name : 'Crear torneo'}</h2>
       {#if error}<p class="form-error">{error}</p>{/if}
       <form onsubmit={(event) => { event.preventDefault(); save(); }}>
-        <label>Liga
-          <select bind:value={form.leagueId} disabled={saving}>
-            <option value="">Seleccionar liga...</option>
-            {#each leagues as league}
-              <option value={league.id}>{league.name}</option>
-            {/each}
-          </select>
-        </label>
-        <label>Nombre<input bind:value={form.name} placeholder="Torneo Apertura 2026" disabled={saving} /></label>
-        <label>Año<input type="number" bind:value={form.year} disabled={saving} /></label>
-        <label>Género
-          <select bind:value={form.gender} disabled={saving}>
-            {#each genders as [value, label]}<option value={value}>{label}</option>{/each}
-          </select>
-        </label>
-        <label>Modo de campeón
-          <select bind:value={form.championMode} disabled={saving}>
-            {#each championModes as [value, label]}<option value={value}>{label}</option>{/each}
-          </select>
-        </label>
-        <div class="form-row">
-          <label>Pts Victoria<input type="number" bind:value={form.pointsWin} disabled={saving} /></label>
-          <label>Pts Empate<input type="number" bind:value={form.pointsDraw} disabled={saving} /></label>
-          <label>Pts Derrota<input type="number" bind:value={form.pointsLoss} disabled={saving} /></label>
+        <div class="form-grid">
+          <div class="form-col">
+            <label>Liga
+              <select bind:value={form.leagueId} disabled={saving}>
+                <option value="">Seleccionar liga...</option>
+                {#each leagues as league}<option value={league.id}>{league.name}</option>{/each}
+              </select>
+            </label>
+            <label>Nombre<input bind:value={form.name} placeholder="Torneo Apertura 2026" disabled={saving} /></label>
+            <label>Año<input type="number" bind:value={form.year} disabled={saving} /></label>
+            <label>Género
+              <select bind:value={form.gender} disabled={saving}>
+                {#each genders as [value, label]}<option value={value}>{label}</option>{/each}
+              </select>
+            </label>
+            <label>Modo de campeón
+              <select bind:value={form.championMode} disabled={saving}>
+                {#each championModes as [value, label]}<option value={value}>{label}</option>{/each}
+              </select>
+            </label>
+          </div>
+          <div class="form-col">
+            <div class="form-row">
+              <label>Pts Victoria<input type="number" bind:value={form.pointsWin} disabled={saving} /></label>
+              <label>Pts Empate<input type="number" bind:value={form.pointsDraw} disabled={saving} /></label>
+              <label>Pts Derrota<input type="number" bind:value={form.pointsLoss} disabled={saving} /></label>
+            </div>
+            <label>Fecha de inicio<input type="date" bind:value={form.startDate} disabled={saving} /></label>
+            <label>Fecha de fin<input type="date" bind:value={form.endDate} disabled={saving} /></label>
+            <label class="checkbox-label"><input type="checkbox" bind:checked={form.controlsPlayers} disabled={saving} /> Controlar jugadores</label>
+
+            <div class="categories-section">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;">
+                <label class="cat-label">Categorías ({catCount} seleccionadas)</label>
+                <button type="button" class="button secondary small" disabled={!form.gender || saving} onclick={openCatPicker}>
+                  Seleccionar
+                </button>
+              </div>
+              {#if catCount > 0}
+                <div class="cat-tags">
+                  {#each formCategories.filter(c => c.enabled) as c}
+                    <span class="cat-tag">{c.name}</span>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          </div>
         </div>
-        <label>Fecha de inicio<input type="date" bind:value={form.startDate} disabled={saving} /></label>
-        <label>Fecha de fin<input type="date" bind:value={form.endDate} disabled={saving} /></label>
-        <label class="checkbox-label"><input type="checkbox" bind:checked={form.controlsPlayers} disabled={saving} /> Controlar jugadores</label>
         <div class="form-actions">
           <button class="button primary" type="submit" disabled={saving}>{saving ? 'Guardando...' : editing ? 'Guardar cambios' : 'Crear torneo'}</button>
           {#if editing}<button class="button secondary" type="button" onclick={openCreate} disabled={saving}>Cancelar</button>{/if}
           {#if editing}<button class="button secondary" type="button" onclick={() => deleteTournament(editing!)} disabled={saving} style="color:var(--color-error);">Eliminar torneo</button>{/if}
         </div>
       </form>
-    </Modal>
-  {/if}
-</main>
+    </div>
+  </Modal>
+{/if}
+
+{#if showCatPicker}
+  <Modal onclose={closeCatPicker}>
+    <div class="modal-form cat-picker-modal">
+      <p class="eyebrow">Categorías</p>
+      <h2>Seleccionar categorías</h2>
+      <p class="muted">Categorías que coinciden con el género <strong>{genders.find(([v]) => v === form.gender)?.[1] ?? form.gender}</strong>.{form.gender === 'MIXTO' ? ' Se muestran todas las categorías.' : ''}</p>
+
+      <div class="cat-table-wrapper">
+        <table class="cat-table">
+          <thead>
+            <tr>
+              <th style="width:50px">Act.</th>
+              <th>Nombre</th>
+              <th style="width:90px">Promocional</th>
+              <th style="width:100px">Horario</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each catPickerData as cat, i}
+              <tr class:cat-enabled={cat.enabled}>
+                <td class="td-center">
+                  <input type="checkbox" checked={cat.enabled} onchange={() => toggleCatEnabled(i)} />
+                </td>
+                <td>{cat.name}</td>
+                <td class="td-center">
+                  <input type="checkbox" checked={cat.countsForGeneral} disabled={!cat.enabled}
+                    onchange={() => catPickerData[i].countsForGeneral = !catPickerData[i].countsForGeneral} />
+                </td>
+                <td>
+                  <input type="time" bind:value={catPickerData[i].kickoffTime} disabled={!cat.enabled} style="width:100%;font-size:.82rem;padding:.25rem .35rem;" />
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+      {#if catPickerData.length === 0}
+        <p class="muted" style="text-align:center;padding:2rem;">No hay categorías activas para este género. Crea categorías antes de continuar.</p>
+      {/if}
+
+      <div class="form-actions" style="margin-top:1rem;">
+        <button class="button secondary" type="button" onclick={closeCatPicker}>Cancelar</button>
+        <button class="button primary" type="button" onclick={applyCatPicker}>Aceptar</button>
+      </div>
+    </div>
+  </Modal>
+{/if}
 
 <style>
   .tournament-color { background: var(--league-color, var(--color-accent)); color: #fff; }
   .tournament-list { align-self: start; }
+
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1.5rem; align-items: start; }
+  .form-grid label { display: block; margin-bottom: .75rem; }
+  .form-grid label:last-child { margin-bottom: 0; }
+  .form-col { display: flex; flex-direction: column; }
+
+  .categories-section { margin-top: .5rem; padding-top: .75rem; border-top: 1px solid var(--color-border); }
+  .cat-label { font-size: .78rem; font-weight: 600; color: var(--color-text-muted); text-transform: uppercase; margin: 0; }
+  .cat-tags { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .4rem; }
+  .cat-tag {
+    padding: .2rem .55rem; border-radius: 999px; font-size: .72rem; font-weight: 600;
+    background: var(--color-accent-bg); color: var(--color-accent-text);
+  }
+
+  .cat-picker-modal { max-width: 620px !important; }
+
+  .cat-table-wrapper { max-height: 50vh; overflow-y: auto; border: 1px solid var(--color-border); border-radius: .6rem; margin: .5rem 0; }
+  .cat-table { width: 100%; border-collapse: collapse; font-size: .84rem; }
+  .cat-table th {
+    background: var(--color-surface-hover); color: var(--color-text-muted);
+    font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+    padding: .5rem .6rem; text-align: left; position: sticky; top: 0; z-index: 1;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .cat-table td { padding: .45rem .6rem; border-bottom: 1px solid var(--color-border); }
+  .cat-table tbody tr:hover { background: var(--color-surface-hover); }
+  .cat-table tbody tr.cat-enabled { background: var(--color-accent-bg); }
+  .td-center { text-align: center; }
+
+  .button.small { padding: .35rem .65rem; font-size: .78rem; }
+
+  @media (max-width: 600px) {
+    .form-grid { grid-template-columns: 1fr; }
+    .form-col { gap: 0; }
+  }
 </style>
