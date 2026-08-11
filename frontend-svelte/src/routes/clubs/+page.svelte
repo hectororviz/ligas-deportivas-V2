@@ -1,28 +1,29 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getClubs, getProfile, createClub, updateClub, type AuthUser, type Club, type PaginatedClubs } from '$lib/api';
+  import { getClubs, getProfile, createClub, updateClub, uploadClubLogo, type AuthUser, type Club, type PaginatedClubs } from '$lib/api';
   import Modal from '$lib/Modal.svelte';
 
-  let user: AuthUser | null = null;
-  let paginated: PaginatedClubs | null = null;
-  let loading = true;
-  let saving = false;
-  let error = '';
-  let notice = '';
-  let search = '';
+  let user: AuthUser | null = $state(null);
+  let paginated: PaginatedClubs | null = $state(null);
+  let loading = $state(true);
+  let saving = $state(false);
+  let error = $state('');
+  let notice = $state('');
+  let search = $state('');
   let debounce: ReturnType<typeof setTimeout> | null = null;
-  let statusFilter = '';
-  let page = 1;
-  let editing: Club | null = null;
-  let showForm = false;
-  let form = {
-    name: '', shortName: '', slug: '', leagueId: '', primaryColor: '', secondaryColor: '',
+  let statusFilter = $state('');
+  let page = $state(1);
+  let editing: Club | null = $state(null);
+  let showForm = $state(false);
+  let logoFile: File | null = $state(null);
+  let form = $state({
+    name: '', shortName: '', slug: '', primaryColor: '', secondaryColor: '',
     instagram: '', facebook: '', homeAddress: '', latitude: '', longitude: '', active: true
-  };
+  });
 
   onMount(async () => { await fetchClubs(); });
 
-  $: canManage = user?.roles.includes('ADMIN') ?? false;
+  let canManage = $derived(((user as AuthUser | null)?.roles ?? []).includes('ADMIN'));
 
   async function fetchClubs() {
     loading = true; error = '';
@@ -44,22 +45,22 @@
   }
 
   function openCreate() {
-    editing = null; showForm = true; error = '';
-    form = { name: '', shortName: '', slug: '', leagueId: '', primaryColor: '', secondaryColor: '', instagram: '', facebook: '', homeAddress: '', latitude: '', longitude: '', active: true };
+    editing = null; showForm = true; error = ''; logoFile = null;
+    form = { name: '', shortName: '', slug: '', primaryColor: '', secondaryColor: '', instagram: '', facebook: '', homeAddress: '', latitude: '', longitude: '', active: true };
   }
 
   function openEdit(club: Club) {
-    editing = club; showForm = true; error = '';
+    editing = club; showForm = true; error = ''; logoFile = null;
     form = {
       name: club.name, shortName: club.shortName ?? '', slug: club.slug ?? '',
-      leagueId: '', primaryColor: club.primaryColor ?? '', secondaryColor: club.secondaryColor ?? '',
+      primaryColor: club.primaryColor ?? '', secondaryColor: club.secondaryColor ?? '',
       instagram: club.instagramUrl ?? '', facebook: club.facebookUrl ?? '',
       homeAddress: club.homeAddress ?? '', latitude: club.latitude != null ? String(club.latitude) : '',
       longitude: club.longitude != null ? String(club.longitude) : '', active: club.active
     };
   }
 
-  function closeModal() { showForm = false; editing = null; error = ''; }
+  function closeModal() { showForm = false; editing = null; error = ''; logoFile = null; }
 
   async function save() {
     error = '';
@@ -78,10 +79,16 @@
     if (form.latitude.trim()) payload.latitude = Number(form.latitude);
     if (form.longitude.trim()) payload.longitude = Number(form.longitude);
     try {
-      if (editing) await updateClub(editing.id, payload);
-      else await createClub(payload);
+      let savedClub: Club;
+      if (editing) {
+        savedClub = await updateClub(editing.id, payload);
+        if (logoFile) await uploadClubLogo(editing.id, logoFile);
+      } else {
+        savedClub = await createClub(payload);
+        if (logoFile) await uploadClubLogo(savedClub.id, logoFile);
+      }
       notice = editing ? 'Club actualizado correctamente.' : 'Club creado correctamente.';
-      showForm = false; editing = null;
+      showForm = false; editing = null; logoFile = null;
       await fetchClubs();
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudo guardar el club.';
@@ -103,8 +110,8 @@
     {#if error && !showForm}<p class="error-banner">{error}</p>{/if}
     {#if notice}<p class="success-banner">{notice}</p>{/if}
 
-    <section class="card-surface">
-      <div class="search-bar">
+    <section class="card-surface" style="padding: 1.5rem;">
+      <div class="search-bar" style="margin-bottom: 0;">
         <input type="text" bind:value={search} oninput={onSearch} placeholder="Buscar por nombre..." />
         <select bind:value={statusFilter} onchange={() => { page = 1; fetchClubs(); }}>
           <option value="">Todos</option>
@@ -120,7 +127,11 @@
         <div class="club-table">
           {#each paginated.data as club}
             <article class="club-row">
-              <span class="club-color" style={club.primaryColor ? `--club-color: ${club.primaryColor}` : '--club-color: #0057b8'}>{club.name.slice(0, 2).toUpperCase()}</span>
+              {#if club.logoUrl}
+                <img class="club-logo" src={club.logoUrl} alt={club.name} />
+              {:else}
+                <span class="club-color" style={club.primaryColor ? `--club-color: ${club.primaryColor}` : '--club-color: #0057b8'}>{club.name.slice(0, 2).toUpperCase()}</span>
+              {/if}
               <div class="club-info">
                 <div class="club-name-row"><strong>{club.name}</strong>{#if !club.active}<span class="inactive-badge">Inactivo</span>{/if}</div>
                 {#if club.slug || club.league}<span>{[club.slug, club.league?.name].filter(Boolean).join(' · ')}</span>{/if}
@@ -145,7 +156,7 @@
 
 {#if showForm}
   <Modal onclose={closeModal}>
-    <div class="modal-form">
+    <div class="modal-form" style="padding-right: 0.5rem;">
       <p class="eyebrow">{editing ? 'Editar club' : 'Nuevo club'}</p>
       <h2>{editing ? editing.name : 'Crear club'}</h2>
       {#if error}<p class="form-error">{error}</p>{/if}
@@ -153,8 +164,13 @@
         <label>Nombre<input bind:value={form.name} placeholder="Club Atlético..." disabled={saving} /></label>
         <label>Nombre corto<input bind:value={form.shortName} placeholder="CA..." disabled={saving} /></label>
         <label>Identificador<input bind:value={form.slug} placeholder="club-atletico" disabled={saving} /></label>
-        <label>Color principal<div class="color-input"><input type="color" bind:value={form.primaryColor} disabled={saving} /><input bind:value={form.primaryColor} placeholder="#0057b8" disabled={saving} /></div></label>
-        <label>Color secundario<div class="color-input"><input type="color" bind:value={form.secondaryColor} disabled={saving} /><input bind:value={form.secondaryColor} placeholder="#ffffff" disabled={saving} /></div></label>
+        <div class="form-row">
+          <label>Color principal<div class="color-input"><input type="color" bind:value={form.primaryColor} disabled={saving} /><input bind:value={form.primaryColor} placeholder="#0057b8" disabled={saving} /></div></label>
+          <label>Color secundario<div class="color-input"><input type="color" bind:value={form.secondaryColor} disabled={saving} /><input bind:value={form.secondaryColor} placeholder="#ffffff" disabled={saving} /></div></label>
+        </div>
+        <label>Escudo
+          <input type="file" accept="image/*" onchange={(e) => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) logoFile = f; }} disabled={saving} />
+        </label>
         <label>Instagram<input bind:value={form.instagram} placeholder="@club" disabled={saving} /></label>
         <label>Facebook<input bind:value={form.facebook} placeholder="@club" disabled={saving} /></label>
         <label>Dirección<input bind:value={form.homeAddress} placeholder="Calle 123" disabled={saving} /></label>
@@ -170,6 +186,8 @@
 {/if}
 
 <style>
+  .club-logo { width: 2.5rem; height: 2.5rem; border-radius: .75rem; object-fit: cover; flex: 0 0 auto; }
   .modal-form h2 { margin: .5rem 0 1.5rem; font-family: 'Space Grotesk', sans-serif; font-size: 1.6rem; letter-spacing: -.04em; }
   .modal-form form { margin-top: 0; }
+  input[type="file"] { padding: .6rem .8rem; font-size: .85rem; }
 </style>

@@ -85,6 +85,8 @@ input:focus, select:focus { border-color: var(--color-input-focus); box-shadow: 
 .count-pill { padding: .4rem .7rem; border-radius: 999px; color: var(--color-accent-text); background: var(--color-accent-bg); font-size: .8rem; font-weight: 700; }
 .tournament-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; }
 .tournament-card, .card-surface, .empty-state, .loading-card { border: 1px solid var(--color-border); border-radius: 1.2rem; background: var(--color-surface); box-shadow: 0 16px 45px var(--color-shadow); }
+.card-surface { padding: 1.5rem; }
+.card-surface .search-bar:first-child { margin-top: 0; }
 .tournament-card { padding: 1.4rem; }
 .card-kicker { margin: 0; color: var(--color-accent-text); font-size: .75rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
 .tournament-card h3 { margin: .45rem 0 1.2rem; font-family: 'Space Grotesk', sans-serif; font-size: 1.4rem; }
@@ -131,7 +133,7 @@ input:focus, select:focus { border-color: var(--color-input-focus); box-shadow: 
 .club-name-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .inactive-badge { padding: .15rem .5rem; border-radius: 999px; color: var(--color-error); background: var(--color-error-bg); font-size: .68rem; font-weight: 700; }
 
-.search-bar { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; margin-bottom: .5rem; }
+.search-bar { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; margin-bottom: .5rem; padding: 0; }
 .search-bar input { flex: 1; min-width: 180px; }
 
 .pagination { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--color-border); color: var(--color-text-muted); font-size: .85rem; gap: .5rem; }
@@ -195,6 +197,7 @@ input:focus, select:focus { border-color: var(--color-input-focus); box-shadow: 
 /* Modals */
 .modal-form h2 { margin: .5rem 0 1.5rem; font-family: 'Space Grotesk', sans-serif; font-size: 1.6rem; letter-spacing: -.04em; }
 .modal-form form { margin-top: 0; }
+.modal-panel > :first-child { margin-top: 0; }
 
 @media (max-width: 760px) {
   .login-shell { grid-template-columns: 1fr; }

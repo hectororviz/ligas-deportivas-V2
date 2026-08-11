@@ -327,6 +327,20 @@ export async function updateClub(id: number, input: Record<string, unknown>): Pr
   });
 }
 
+export async function uploadClubLogo(clubId: number, file: File): Promise<void> {
+  const form = new FormData();
+  form.append('logo', file);
+  const headers = new Headers();
+  const accessToken = getStored(ACCESS_TOKEN_KEY);
+  if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
+  const response = await fetch(`${API_BASE_URL}/clubs/${clubId}/logo`, { method: 'PUT', headers, body: form });
+  if (!response.ok) throw new Error('No se pudo subir el escudo.');
+}
+
+export async function deleteClubLogo(clubId: number): Promise<void> {
+  await request(`/clubs/${clubId}/logo`, { method: 'DELETE' });
+}
+
 export async function getPlayers(search = '', page = 1): Promise<PaginatedPlayers> {
   const params = new URLSearchParams();
   if (search) params.set('search', search);
