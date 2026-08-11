@@ -2,15 +2,14 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { getClubAdmin, leaveTournament, type ClubAdminOverview } from '$lib/api';
+  import { browser } from '$app/environment';
 
   let data: ClubAdminOverview | null = $state(null);
   let loading = $state(true);
   let error = $state('');
   let leaving: number | null = $state(null);
 
-  onMount(() => {
-    fetchData();
-  });
+  onMount(() => { fetchData(); });
 
   async function fetchData() {
     loading = true;

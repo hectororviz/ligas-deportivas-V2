@@ -68,10 +68,12 @@ services:
       - caddy_net
     labels:
       caddy: ligas.csdsoler.com.ar
-      caddy.0_handle: /api/*
+      caddy.0_handle: /storage/*
       caddy.0_handle.0_reverse_proxy: backend:3000
-      caddy.1_handle: /*
-      caddy.1_handle.0_reverse_proxy: "{{upstreams 3000}}"
+      caddy.1_handle: /api/*
+      caddy.1_handle.0_reverse_proxy: backend:3000
+      caddy.2_handle: /*
+      caddy.2_handle.0_reverse_proxy: "{{upstreams 3000}}"
 
 volumes:
   postgres-data:
