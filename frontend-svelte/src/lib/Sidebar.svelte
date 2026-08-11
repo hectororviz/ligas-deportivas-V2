@@ -1,23 +1,15 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { NAV_ITEMS, useSidebar, type NavItem } from './navigation.svelte';
+  import { NAV_ITEMS, sidebarState, type NavItem } from './navigation.svelte';
   import { getProfile, hasSession, clearAuth, type AuthUser } from './api';
 
-  const sidebar = useSidebar();
   let user: AuthUser | null = $state(null);
 
   $effect(() => {
-    sidebar.initMobile();
+    sidebarState.initMobile();
+    sidebarState.ensureBodyClass();
     if (hasSession()) getProfile().then((u) => user = u).catch(() => {});
-  });
-
-  $effect(() => {
-    if (sidebar.isCollapsed && !sidebar.isMobile) {
-      document.body.classList.add('sidebar-collapsed');
-    } else {
-      document.body.classList.remove('sidebar-collapsed');
-    }
   });
 
   function isActive(item: NavItem): boolean {
@@ -27,7 +19,7 @@
   }
 
   async function navigate(path: string) {
-    sidebar.onNavigate();
+    sidebarState.onNavigate();
     await goto(path);
   }
 
@@ -55,17 +47,15 @@
   };
 </script>
 
-{#if sidebar.isMobile}
-  <!-- Mobile hamburger top bar -->
-  <button class="mobile-menu-btn" onclick={sidebar.toggleDrawer} aria-label={sidebar.isDrawerOpen ? 'Cerrar menú' : 'Abrir menú'}>
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{@html icons[sidebar.isDrawerOpen ? 'close' : 'menu']}</svg>
+{#if sidebarState.mobile}
+  <button class="mobile-menu-btn" onclick={() => sidebarState.toggleDrawer()} aria-label={sidebarState.drawerOpen ? 'Cerrar menú' : 'Abrir menú'}>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{@html icons[sidebarState.drawerOpen ? 'close' : 'menu']}</svg>
   </button>
 
-  <!-- Mobile drawer overlay -->
-  {#if sidebar.isDrawerOpen}
+  {#if sidebarState.drawerOpen}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="drawer-overlay" onclick={sidebar.toggleDrawer}></div>
+    <div class="drawer-overlay" onclick={() => sidebarState.toggleDrawer()}></div>
     <aside class="sidebar sidebar-mobile">
       {#if user}
         <div class="sidebar-user">
@@ -92,13 +82,12 @@
     </aside>
   {/if}
 {:else}
-  <!-- Desktop sidebar -->
-  <aside class="sidebar sidebar-desktop" class:collapsed={sidebar.isCollapsed}>
-    {#if !sidebar.isCollapsed || user}
+  <aside class="sidebar sidebar-desktop" class:collapsed={sidebarState.collapsed}>
+    {#if !sidebarState.collapsed || user}
       <div class="sidebar-user">
         {#if user}
           <div class="sidebar-avatar">{user.firstName[0]}{user.lastName[0]}</div>
-          {#if !sidebar.isCollapsed}
+          {#if !sidebarState.collapsed}
             <div><strong>{user.firstName}</strong></div>
           {/if}
         {/if}
@@ -111,25 +100,25 @@
           class="nav-item"
           class:active={isActive(item)}
           onclick={() => navigate(item.path)}
-          title={sidebar.isCollapsed ? item.label : undefined}
+          title={sidebarState.collapsed ? item.label : undefined}
           aria-current={isActive(item) ? 'page' : undefined}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">{@html icons[item.icon]}</svg>
-          {#if !sidebar.isCollapsed}<span>{item.label}</span>{/if}
+          {#if !sidebarState.collapsed}<span>{item.label}</span>{/if}
         </button>
       {/each}
     </nav>
 
     <div class="sidebar-footer">
-      {#if user && !sidebar.isCollapsed}
+      {#if user && !sidebarState.collapsed}
         <button class="nav-item logout-item" onclick={signOut}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">{@html icons.logout}</svg>
           <span>Cerrar sesión</span>
         </button>
       {/if}
-      <button class="nav-item collapse-btn" onclick={sidebar.toggleCollapsed} aria-label={sidebar.isCollapsed ? 'Expandir menú' : 'Colapsar menú'} title={sidebar.isCollapsed ? 'Expandir' : 'Colapsar'}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{@html icons[sidebar.isCollapsed ? 'expand' : 'collapse']}</svg>
-        {#if !sidebar.isCollapsed}<span>Colapsar</span>{/if}
+      <button class="nav-item collapse-btn" onclick={() => sidebarState.toggleCollapsed()} aria-label={sidebarState.collapsed ? 'Expandir menú' : 'Colapsar menú'} title={sidebarState.collapsed ? 'Expandir' : 'Colapsar'}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{@html icons[sidebarState.collapsed ? 'expand' : 'collapse']}</svg>
+        {#if !sidebarState.collapsed}<span>Colapsar</span>{/if}
       </button>
     </div>
   </aside>

@@ -28,30 +28,45 @@ function loadCollapsed(): boolean {
   return stored === 'true';
 }
 
-let collapsed = $state(loadCollapsed());
-let drawerOpen = $state(false);
-let isMobile = $state(false);
+class SidebarState {
+  collapsed = $state(loadCollapsed());
+  drawerOpen = $state(false);
+  mobile = $state(false);
+  private _initialized = false;
 
-export function useSidebar() {
-  function initMobile() {
-    if (!browser) return;
+  initMobile() {
+    if (this._initialized || !browser) return;
+    this._initialized = true;
     const mql = window.matchMedia('(min-width: 768px)');
-    isMobile = !mql.matches;
-    mql.addEventListener('change', (e) => { isMobile = !e.matches; if (e.matches) drawerOpen = false; });
+    this.mobile = !mql.matches;
+    mql.addEventListener('change', (e) => {
+      this.mobile = !e.matches;
+      if (e.matches) this.drawerOpen = false;
+    });
   }
 
-  return {
-    get isCollapsed() { return collapsed; },
-    set isCollapsed(v: boolean) {
-      collapsed = v;
-      if (browser) localStorage.setItem(COLLAPSED_KEY, String(v));
-    },
-    get isDrawerOpen() { return drawerOpen; },
-    set isDrawerOpen(v: boolean) { drawerOpen = v; },
-    get isMobile() { return isMobile; },
-    initMobile,
-    toggleCollapsed() { this.isCollapsed = !this.isCollapsed; },
-    toggleDrawer() { this.isDrawerOpen = !this.isDrawerOpen; },
-    onNavigate() { if (isMobile) drawerOpen = false; },
-  };
+  toggleCollapsed() {
+    this.collapsed = !this.collapsed;
+    if (browser) localStorage.setItem(COLLAPSED_KEY, String(this.collapsed));
+    if (!this.mobile) {
+      if (this.collapsed) document.body.classList.add('sidebar-collapsed');
+      else document.body.classList.remove('sidebar-collapsed');
+    }
+  }
+
+  toggleDrawer() {
+    this.drawerOpen = !this.drawerOpen;
+  }
+
+  onNavigate() {
+    if (this.mobile) this.drawerOpen = false;
+  }
+
+  ensureBodyClass() {
+    if (!browser || this.mobile) return;
+    if (this.collapsed) document.body.classList.add('sidebar-collapsed');
+    else document.body.classList.remove('sidebar-collapsed');
+  }
 }
+
+export const sidebarState = new SidebarState();
