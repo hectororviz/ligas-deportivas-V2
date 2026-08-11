@@ -1,5 +1,10 @@
 <script lang="ts">
+  import { page } from '$app/stores';
   import '../app.css';
+  import Sidebar from '$lib/Sidebar.svelte';
+
+  const publicRoutes = ['/login', '/register', '/verify-email', '/reset-password'];
+  $: isPublic = publicRoutes.some((route) => $page.url.pathname === route || $page.url.pathname.startsWith(route + '/'));
 </script>
 
 <svelte:head>
@@ -7,4 +12,18 @@
   <meta name="description" content="Gestión de ligas y torneos deportivos" />
 </svelte:head>
 
-<slot />
+{#if isPublic}
+  <slot />
+{:else}
+  <Sidebar />
+  <main class="app-main"><slot /></main>
+{/if}
+
+<style>
+  .app-main { margin-left: 240px; min-height: 100vh; transition: margin-left 200ms ease; }
+  :global(body.sidebar-collapsed) .app-main { margin-left: 64px; }
+
+  @media (max-width: 767px) {
+    .app-main { margin-left: 0 !important; }
+  }
+</style>

@@ -135,4 +135,5 @@ select { width: 100%; border: 1px solid #d7ddd3; border-radius: .7rem; padding: 
   .dashboard-actions { justify-content: start; }
   .page-header { align-items: start; }
   .clubs-layout { grid-template-columns: 1fr; }
+  .app-main { padding-top: 3.5rem; }
 }
