@@ -10,6 +10,22 @@
 
   onMount(() => { fetchData(); });
 
+  $effect(() => {
+    if (!data || data.club.latitude == null || data.club.longitude == null) return;
+    const L = (window as any).L;
+    if (!L) return;
+    const el = document.getElementById('club-map');
+    if (!el || (el as any)._leaflet_id) return;
+    const lat = data.club.latitude;
+    const lon = data.club.longitude;
+    const map = L.map(el).setView([lat, lon], 16);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '&copy; OpenStreetMap'
+    }).addTo(map);
+    L.marker([lat, lon]).addTo(map);
+    setTimeout(() => map.invalidateSize(), 100);
+  });
+
   async function fetchData() {
     loading = true;
     error = '';
@@ -40,14 +56,13 @@
     if (!d) return '??';
     return (d.club.shortName || d.club.name).slice(0, 2).toUpperCase();
   }
-
-  function mapUrl(d: ClubAdminOverview): string | null {
-    if (d.club.latitude == null || d.club.longitude == null) return null;
-    return `https://www.openstreetmap.org/export/embed.html?bbox=${d.club.longitude - 0.005},${d.club.latitude - 0.005},${d.club.longitude + 0.005},${d.club.latitude + 0.005}&layer=mapnik&marker=${d.club.latitude},${d.club.longitude}`;
-  }
 </script>
 
-<svelte:head><title>Club | Ligas Deportivas</title></svelte:head>
+<svelte:head>
+  <title>Club | Ligas Deportivas</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</svelte:head>
 
 <main class="page-shell">
   {#if loading && !data}
@@ -121,11 +136,8 @@
           {/if}
         </div>
 
-        {#if mapUrl(data)}
-          <div class="card-surface map-container">
-            <p class="eyebrow">Ubicación</p>
-            <iframe title="Mapa del club" src={mapUrl(data)!} width="100%" height="200" style="border:0;border-radius:.7rem" loading="lazy"></iframe>
-          </div>
+        {#if data.club.latitude != null && data.club.longitude != null}
+          <div class="card-surface map-container" id="club-map"></div>
         {/if}
       </section>
 
@@ -289,8 +301,15 @@
     color: var(--color-text);
   }
   .map-container {
-    padding: 1.4rem;
-    margin-top: 1rem;
+    padding: 0;
+    overflow: hidden;
+    height: 250px;
+    border-radius: .7rem;
+  }
+  .map-container :global(.leaflet-container) {
+    width: 100%;
+    height: 100%;
+    border-radius: .7rem;
   }
   .tournament-list {
     margin-top: 1rem;
