@@ -103,7 +103,6 @@
   <header class="page-header">
     <div><p class="eyebrow">Competencia</p><h1>Zonas</h1><p class="muted">Administra las zonas de cada torneo, sus posiciones y la generación de partidos.</p></div>
     <div class="header-actions">
-      <a class="button secondary" href="/">Volver al panel</a>
       <a class="button secondary" href="/fixtures">Ver partidos</a>
     </div>
   </header>

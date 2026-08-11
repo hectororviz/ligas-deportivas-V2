@@ -47,7 +47,6 @@
 <main class="page-shell">
   <header class="page-header">
     <div><p class="eyebrow">Competencia</p><h1>Estadísticas</h1><p class="muted">Tablas de líderes, goleadores y más datos de cada torneo.</p></div>
-    <a class="button secondary" href="/">Volver al panel</a>
   </header>
 
   {#if loading}

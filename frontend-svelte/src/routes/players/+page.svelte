@@ -121,7 +121,6 @@
       <h1>Jugadores</h1>
       <p class="muted">Administra los jugadores, sus datos personales y contactos de emergencia.</p>
     </div>
-    <a class="button secondary" href="/">Volver al panel</a>
   </header>
 
   {#if loading && !paginated}

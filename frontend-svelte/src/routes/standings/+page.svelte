@@ -92,7 +92,6 @@
       <h1>Tablas de posiciones</h1>
       <p class="muted">Consultá las posiciones por zona o por torneo.</p>
     </div>
-    <a class="button secondary" href="/">Volver al panel</a>
   </header>
 
   {#if loading}

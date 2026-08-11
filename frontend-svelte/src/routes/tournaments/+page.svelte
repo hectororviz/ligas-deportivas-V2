@@ -140,7 +140,6 @@
     </div>
     <div style="display:flex;align-items:center;gap:.6rem">
       {#if canManage}<button class="button primary" onclick={openCreate}>Agregar torneo</button>{/if}
-      <a class="button secondary" href="/">Volver al panel</a>
     </div>
   </header>
 

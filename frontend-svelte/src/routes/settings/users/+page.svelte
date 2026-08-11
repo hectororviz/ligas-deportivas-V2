@@ -53,7 +53,6 @@
 <main class="page-shell">
   <header class="page-header">
     <div><p class="eyebrow">Administración</p><h1>Usuarios</h1><p class="muted">Gestiona los usuarios registrados y sus roles asignados.</p></div>
-    <a class="button secondary" href="/">Volver al panel</a>
   </header>
 
   {#if loading && !paginated}

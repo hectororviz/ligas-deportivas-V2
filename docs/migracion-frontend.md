@@ -12,48 +12,35 @@ El backend NestJS, la API REST y el esquema Prisma se conservan durante la trans
 
 ## Inventario
 
-| Área | Pantalla o función | Ruta | Endpoint o dependencia | Estado | Observaciones |
-|---|---|---|---|---|---|
-| Base | Shell, navegación y layout responsive | `/` | SvelteKit | En progreso | Base creada junto con el login |
-| Auth | Inicio de sesión | `/login` | `POST /auth/login` | Migrado | Valida formulario y conserva tokens |
-| Auth | Refresh automático | Global | `POST /auth/refresh` | Migrado | Se ejecuta ante respuestas 401 |
-| Auth | Perfil de sesión | Global | `GET /auth/profile` | Migrado | Protege la pantalla inicial |
-| Auth | Cierre de sesión | Global | `POST /auth/logout` | Migrado | Limpia la sesión local |
-| Auth | Registro | `/register` | `POST /auth/register` | Pendiente | |
-| Auth | Verificación de correo | `/verify-email` | `POST /auth/verify-email` | Pendiente | |
-| Auth | Recuperación de contraseña | `/reset-password` | `POST /auth/password/*` | Pendiente | |
-| Inicio | Resumen del panel | `/` | `GET /home/summary` | Migrado | Torneos, zonas y top 3 por zona |
-| Ligas | Listado y edición de ligas | `/leagues` | `GET /leagues`, `POST/PATCH /leagues` | Migrado | Listado responsive y formulario admin |
-| Clubes | Listado y administración de clubes | `/clubs` | `GET /clubs`, `POST/PATCH /clubs` | Migrado | Búsqueda, paginación y formulario admin |
-| Categorías | Catálogo y edición | `/categories` | `GET /categories`, `POST/PATCH /categories` | Migrado | CRUD con filtros visuales |
-| Torneos | Listado y configuración | `/tournaments` | `GET /tournaments`, `POST/PUT /tournaments` | Migrado | CRUD con select de liga y fechas |
-| Zonas | Gestión de zonas | `/zones` | `GET /zones` | Migrado | Con enlaces a tablas y fixture |
-| Tablas | Tabla general | `/standings` | `/zones/:zoneId/standings`, `/tournaments/:tournamentId/standings` | Migrado | Selector de zona/torneo con tabla de posiciones |
-| Configuración | Menú de configuración | `/settings` | RBAC | Migrado | Hub con enlaces a subpáginas |
-| Configuración | Cuenta y avatar | `/settings/account` | `/me` | Migrado | Perfil y cambio de contraseña |
-| Configuración | Identidad del sitio | `/settings/site-identity` | `/site-identity` | Migrado | Título, icono, flyer y favicon |
-| Clubes | Administración pública/privada de club | `/club/:slug` | `/clubs/*` | Pendiente | |
-| Clubes | Plantel de club | `/clubs/:clubId/roster` | `/rosters/*`, `/players/*` | Pendiente | |
-| Categorías | Catálogo y edición | `/categories` | `/categories` | Pendiente | |
-| Jugadores | Alta, edición, búsqueda y baja | `/players` | `/players` | Pendiente | Incluye escaneo DNI PDF417 |
-| Torneos | Listado y configuración | `/tournaments` | `/tournaments` | Pendiente | |
-| Torneos | Jugadores del torneo | `/tournaments/:id/players` | `/players/*` | Pendiente | |
-| Torneos | Plantillas de posters | `/tournaments/:id/poster-template` | `/poster-templates/*` | Pendiente | |
-| Zonas | Gestión de zonas | `/zones` | `/zones` | Pendiente | |
-| Fixture | Generación automática | `/fixtures` | `POST /tournaments/:id/fixture` | Pendiente | |
-| Fixture | Fixture por zona | `/zones/:id/fixture` | `/zones/:id/fixture` | Pendiente | |
-| Fixture | Constructor manual | `/zones/:id/fixture/manual` | `/zones/:id/fixture/manual` | Pendiente | |
-| Partidos | Detalle y resultado | `/zones/:zoneId/fixture/matches/:matchId` | `/matches/*` | Pendiente | Incluye goles y adjuntos |
-| Partidos | Resumen de fecha | `/zones/:zoneId/fixture/matchdays/:matchday/summary` | `/matchdays/*` | Pendiente | |
-| Tablas | Tabla general | `/standings` | `/standings` | Pendiente | |
-| Tablas | Tabla por zona | `/zones/:id/standings` | `/standings/*` | Pendiente | |
-| Estadísticas | Rankings y estadísticas | `/stats` | `/leaderboards` | Pendiente | |
-| Configuración | Menú de configuración | `/settings` | RBAC | Pendiente | |
-| Configuración | Identidad del sitio | `/settings/identity` | `/site-identity` | Pendiente | Logo, favicon, flyer y fondo |
-| Configuración | Cuenta y avatar | `/settings/account` | `/me` | Pendiente | |
-| Configuración | Usuarios | `/settings/users` | `/users` | Pendiente | |
-| Configuración | Colores de ligas | `/settings/colors` | `/leagues` | Pendiente | |
-| Configuración | Roles y permisos | `/settings/permissions` | `/roles`, `/permissions` | Pendiente | |
+| Área | Pantalla o función | Ruta | Estado |
+|---|---|---|---|
+| Auth | Login, refresh, perfil, logout | `/login` | Migrado |
+| Auth | Registro | `/register` | Pendiente |
+| Auth | Verificación de correo | `/verify-email` | Pendiente |
+| Auth | Recuperación de contraseña | `/reset-password` | Pendiente |
+| Inicio | Panel con torneos activos | `/` | Migrado |
+| Ligas | CRUD de ligas | `/leagues` | Migrado |
+| Clubes | Listado, búsqueda y CRUD | `/clubs` | Migrado |
+| Clubes | Administración por slug | `/club/:slug` | Pendiente |
+| Clubes | Plantel del club | `/clubs/:clubId/roster` | Pendiente |
+| Categorías | CRUD de categorías | `/categories` | Migrado |
+| Jugadores | CRUD + escaneo DNI | `/players` | Pendiente |
+| Torneos | CRUD de torneos | `/tournaments` | Migrado |
+| Torneos | Jugadores del torneo | `/tournaments/:id/players` | Pendiente |
+| Torneos | Plantillas de posters | `/tournaments/:id/poster-template` | Pendiente |
+| Zonas | Listado y enlaces | `/zones` | Migrado |
+| Fixture | Generación automática | `/fixtures` | Pendiente |
+| Fixture | Fixture por zona | `/zones/:id/fixture` | Pendiente |
+| Fixture | Constructor manual | `/zones/:id/fixture/manual` | Pendiente |
+| Partidos | Detalle, resultado y goles | Partidos | Pendiente |
+| Partidos | Resumen de fecha | Matchdays | Pendiente |
+| Tablas | General y por zona | `/standings` | Migrado |
+| Estadísticas | Rankings | `/stats` | Pendiente |
+| Configuración | Cuenta y cambio de contraseña | `/settings/account` | Migrado |
+| Configuración | Identidad del sitio | `/settings/site-identity` | Migrado |
+| Configuración | Gestión de usuarios | `/settings/users` | Pendiente |
+| Configuración | Colores de ligas | `/settings/colors` | Pendiente |
+| Configuración | Roles y permisos | `/settings/permissions` | Pendiente |
 
 ## Criterio de validación
 
@@ -69,5 +56,7 @@ Una pantalla pasa a `Validado` cuando:
 
 | Fecha | Cambio |
 |---|---|
-| 2026-08-10 | Creado frontend SvelteKit, login, refresh, perfil, logout y pantalla protegida inicial. |
-| 2026-08-10 | Migrados panel de torneos activos, gestión de ligas, clubes, categorías, torneos, zonas, tablas y configuración. |
+| 2026-08-10 | Creado frontend SvelteKit, login, refresh, perfil, logout, panel inicial, navbar. |
+| 2026-08-10 | Migrados ligas, clubes, categorías, torneos, zonas, tablas, cuenta e identidad del sitio. |
+| 2026-08-10 | Formularios de creación/edición convertidos a modales. |
+| 2026-08-10 | Sidebar colapsable con navegación completa y drawer mobile. |

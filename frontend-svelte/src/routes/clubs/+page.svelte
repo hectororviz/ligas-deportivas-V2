@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
   import { getClubs, getProfile, createClub, updateClub, uploadClubLogo, type AuthUser, type Club, type PaginatedClubs } from '$lib/api';
   import Modal from '$lib/Modal.svelte';
 
@@ -15,6 +16,7 @@
   let page = $state(1);
   let editing: Club | null = $state(null);
   let showForm = $state(false);
+  let showFilters = $state(false);
   let logoFile: File | null = $state(null);
   let form = $state({
     name: '', shortName: '', slug: '', primaryColor: '', secondaryColor: '',
@@ -49,7 +51,8 @@
     form = { name: '', shortName: '', slug: '', primaryColor: '', secondaryColor: '', instagram: '', facebook: '', homeAddress: '', latitude: '', longitude: '', active: true };
   }
 
-  function openEdit(club: Club) {
+  function openEdit(club: Club, event: MouseEvent) {
+    event.stopPropagation();
     editing = club; showForm = true; error = ''; logoFile = null;
     form = {
       name: club.name, shortName: club.shortName ?? '', slug: club.slug ?? '',
@@ -61,6 +64,26 @@
   }
 
   function closeModal() { showForm = false; editing = null; error = ''; logoFile = null; }
+
+  function goToClub(slug: string) { goto(`/club/${slug}`); }
+
+  function handleLogoFile(f: File | undefined) {
+    if (!f) { logoFile = null; return; }
+    const img = new Image();
+    const url = URL.createObjectURL(f);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      if (img.width < 200 || img.height < 200 || img.width > 500 || img.height > 500) {
+        error = `Dimensiones inválidas (${img.width}x${img.height}). El escudo debe medir entre 200x200 y 500x500 píxeles.`;
+        logoFile = null;
+        return;
+      }
+      logoFile = f;
+      error = '';
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); error = 'No se pudo leer la imagen.'; logoFile = null; };
+    img.src = url;
+  }
 
   async function save() {
     error = '';
@@ -80,14 +103,13 @@
     if (form.longitude.trim()) payload.longitude = Number(form.longitude);
     try {
       let savedClub: Club;
-      if (editing) {
-        savedClub = await updateClub(editing.id, payload);
-        if (logoFile) await uploadClubLogo(editing.id, logoFile);
-      } else {
-        savedClub = await createClub(payload);
-        if (logoFile) await uploadClubLogo(savedClub.id, logoFile);
+      if (editing) { savedClub = await updateClub(editing.id, payload); }
+      else { savedClub = await createClub(payload); }
+      if (logoFile) {
+        try { await uploadClubLogo(savedClub.id, logoFile); }
+        catch (logoErr) { notice = (logoErr instanceof Error ? logoErr.message : 'No se pudo subir el escudo.') + ' Los demás datos se guardaron correctamente.'; }
       }
-      notice = editing ? 'Club actualizado correctamente.' : 'Club creado correctamente.';
+      if (!notice) notice = editing ? 'Club actualizado correctamente.' : 'Club creado correctamente.';
       showForm = false; editing = null; logoFile = null;
       await fetchClubs();
     } catch (cause) {
@@ -101,7 +123,6 @@
 <main class="page-shell">
   <header class="page-header">
     <div><p class="eyebrow">Entidades</p><h1>Clubes</h1><p class="muted">Administra los clubes afiliados, sus colores e información general.</p></div>
-    <a class="button secondary" href="/">Volver al panel</a>
   </header>
 
   {#if loading && !paginated}
@@ -110,53 +131,65 @@
     {#if error && !showForm}<p class="error-banner">{error}</p>{/if}
     {#if notice}<p class="success-banner">{notice}</p>{/if}
 
-    <section class="card-surface" style="padding: 1.5rem;">
-      <div class="search-bar" style="margin-bottom: 0;">
+    <div class="filter-bar">
+      <button class="button secondary" onclick={() => showFilters = !showFilters} aria-label="Filtros">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+        {showFilters ? 'Ocultar filtros' : 'Filtros'}
+      </button>
+      {#if canManage}<button class="button primary" onclick={openCreate}>Agregar club</button>{/if}
+      <span class="count-pill">{paginated?.total ?? 0}</span>
+    </div>
+
+    {#if showFilters}
+      <div class="filter-row">
         <input type="text" bind:value={search} oninput={onSearch} placeholder="Buscar por nombre..." />
         <select bind:value={statusFilter} onchange={() => { page = 1; fetchClubs(); }}>
           <option value="">Todos</option>
           <option value="active">Activos</option>
           <option value="inactive">Inactivos</option>
         </select>
-        {#if canManage}<button class="button primary" onclick={openCreate}>Agregar club</button>{/if}
       </div>
+    {/if}
 
-      {#if paginated && paginated.data.length === 0}
-        <div class="empty-state compact-empty"><h2>Sin clubes</h2><p>Crea el primer club para comenzar.</p></div>
-      {:else if paginated}
-        <div class="club-table">
-          {#each paginated.data as club}
-            <article class="club-row">
-              {#if club.logoUrl}
-                <img class="club-logo" src={club.logoUrl} alt={club.name} />
-              {:else}
-                <span class="club-color" style={club.primaryColor ? `--club-color: ${club.primaryColor}` : '--club-color: #0057b8'}>{club.name.slice(0, 2).toUpperCase()}</span>
-              {/if}
-              <div class="club-info">
-                <div class="club-name-row"><strong>{club.name}</strong>{#if !club.active}<span class="inactive-badge">Inactivo</span>{/if}</div>
-                {#if club.slug || club.league}<span>{[club.slug, club.league?.name].filter(Boolean).join(' · ')}</span>{/if}
-              </div>
-              {#if canManage}<button class="icon-button" onclick={() => openEdit(club)}>Editar</button>{/if}
-            </article>
-          {/each}
-        </div>
-        {#if paginated.total > 25}
-          <div class="pagination">
-            <span>{paginated.total} clubes</span>
-            <div>
-              <button class="button secondary" disabled={page <= 1} onclick={() => { page = Math.max(1, page - 1); fetchClubs(); }}>Anterior</button>
-              <button class="button secondary" disabled={page * 25 >= paginated.total} onclick={() => { page++; fetchClubs(); }}>Siguiente</button>
+    {#if paginated && paginated.data.length === 0}
+      <div class="empty-state compact-empty"><h2>Sin clubes</h2><p>Crea el primer club para comenzar.</p></div>
+    {:else if paginated}
+      <div class="club-grid">
+        {#each paginated.data as club}
+          <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
+          <article class="club-card" onclick={() => goToClub(club.slug ?? '')}>
+            {#if club.logoUrl}
+              <img class="club-card-logo" src={club.logoUrl} alt={club.name} />
+            {:else}
+              <span class="club-card-avatar" style={club.primaryColor ? `--club-color: ${club.primaryColor}` : '--club-color: #0057b8'}>{club.name.slice(0, 2).toUpperCase()}</span>
+            {/if}
+            <div class="club-card-info">
+              <strong>{club.name}</strong>
+              {#if club.shortName}<span class="muted">{club.shortName}</span>{/if}
+              {#if !club.active}<span class="inactive-badge">Inactivo</span>{/if}
             </div>
+            {#if canManage}
+              <button class="icon-button" onclick={(e) => openEdit(club, e)}>Editar</button>
+            {/if}
+          </article>
+        {/each}
+      </div>
+      {#if paginated.total > 25}
+        <div class="pagination">
+          <span>{paginated.total} clubes</span>
+          <div>
+            <button class="button secondary" disabled={page <= 1} onclick={() => { page = Math.max(1, page - 1); fetchClubs(); }}>Anterior</button>
+            <button class="button secondary" disabled={page * 25 >= paginated.total} onclick={() => { page++; fetchClubs(); }}>Siguiente</button>
           </div>
-        {/if}
+        </div>
       {/if}
-    </section>
+    {/if}
   {/if}
 </main>
 
 {#if showForm}
   <Modal onclose={closeModal}>
-    <div class="modal-form" style="padding-right: 0.5rem;">
+    <div class="modal-form">
       <p class="eyebrow">{editing ? 'Editar club' : 'Nuevo club'}</p>
       <h2>{editing ? editing.name : 'Crear club'}</h2>
       {#if error}<p class="form-error">{error}</p>{/if}
@@ -168,8 +201,8 @@
           <label>Color principal<div class="color-input"><input type="color" bind:value={form.primaryColor} disabled={saving} /><input bind:value={form.primaryColor} placeholder="#0057b8" disabled={saving} /></div></label>
           <label>Color secundario<div class="color-input"><input type="color" bind:value={form.secondaryColor} disabled={saving} /><input bind:value={form.secondaryColor} placeholder="#ffffff" disabled={saving} /></div></label>
         </div>
-        <label>Escudo
-          <input type="file" accept="image/*" onchange={(e) => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) logoFile = f; }} disabled={saving} />
+        <label>Escudo (200×200 – 500×500 px)
+          <input type="file" accept="image/*" onchange={(e) => { handleLogoFile((e.target as HTMLInputElement).files?.[0]); }} disabled={saving} />
         </label>
         <label>Instagram<input bind:value={form.instagram} placeholder="@club" disabled={saving} /></label>
         <label>Facebook<input bind:value={form.facebook} placeholder="@club" disabled={saving} /></label>
@@ -186,7 +219,20 @@
 {/if}
 
 <style>
-  .club-logo { width: 2.5rem; height: 2.5rem; border-radius: .75rem; object-fit: cover; flex: 0 0 auto; }
+  .filter-bar { display: flex; align-items: center; gap: .6rem; margin-bottom: 1rem; }
+  .filter-bar .count-pill { margin-left: auto; }
+  .filter-row { display: flex; gap: .6rem; margin-bottom: 1rem; }
+  .filter-row input { flex: 1; }
+  .filter-row select { width: auto; min-width: 140px; }
+  .club-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: .75rem; }
+  .club-card { display: flex; align-items: center; gap: .75rem; padding: 1rem; border: 1px solid var(--color-border); border-radius: 1rem; background: var(--color-surface); cursor: pointer; transition: border-color 150ms, box-shadow 150ms; }
+  .club-card:hover { border-color: var(--color-accent); box-shadow: 0 4px 20px var(--color-shadow); }
+  .club-card-logo, .club-card-avatar { width: 3rem; height: 3rem; border-radius: .75rem; flex-shrink: 0; }
+  .club-card-logo { object-fit: cover; }
+  .club-card-avatar { display: grid; place-items: center; color: #fff; background: var(--club-color); font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: .9rem; }
+  .club-card-info { flex: 1; min-width: 0; display: grid; gap: .15rem; }
+  .club-card-info strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .club-card-info .muted { font-size: .78rem; }
   .modal-form h2 { margin: .5rem 0 1.5rem; font-family: 'Space Grotesk', sans-serif; font-size: 1.6rem; letter-spacing: -.04em; }
   .modal-form form { margin-top: 0; }
   input[type="file"] { padding: .6rem .8rem; font-size: .85rem; }

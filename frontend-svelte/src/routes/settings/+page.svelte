@@ -17,7 +17,6 @@
 <main class="page-shell">
   <header class="page-header">
     <div><p class="eyebrow">Configuración</p><h1>Ajustes</h1><p class="muted">Administra tu cuenta, la identidad del sitio y la apariencia.</p></div>
-    <a class="button secondary" href="/">Volver al panel</a>
   </header>
 
   {#if loading}

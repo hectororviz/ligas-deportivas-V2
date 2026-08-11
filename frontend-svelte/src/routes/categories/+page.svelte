@@ -87,7 +87,6 @@
     <div><p class="eyebrow">Configuración deportiva</p><h1>Categorías</h1><p class="muted">Define las categorías por edad, género y cantidad de jugadores.</p></div>
     <div style="display:flex;align-items:center;gap:.6rem">
       {#if canManage}<button class="button primary" onclick={openCreate}>Agregar categoría</button>{/if}
-      <a class="button secondary" href="/">Volver al panel</a>
     </div>
   </header>
 

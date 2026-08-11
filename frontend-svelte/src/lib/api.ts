@@ -334,7 +334,15 @@ export async function uploadClubLogo(clubId: number, file: File): Promise<void> 
   const accessToken = getStored(ACCESS_TOKEN_KEY);
   if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
   const response = await fetch(`${API_BASE_URL}/clubs/${clubId}/logo`, { method: 'PUT', headers, body: form });
-  if (!response.ok) throw new Error('No se pudo subir el escudo.');
+  if (!response.ok) {
+    let message = 'No se pudo subir el escudo.';
+    try {
+      const body = await response.json();
+      const msg = body.message;
+      message = Array.isArray(msg) ? msg.join(', ') : (typeof msg === 'string' && msg ? msg : message);
+    } catch {}
+    throw new Error(message);
+  }
 }
 
 export async function deleteClubLogo(clubId: number): Promise<void> {

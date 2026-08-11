@@ -8,7 +8,9 @@
 <div class="modal-backdrop" onclick={onclose}>
   <div class="modal-panel" onclick={(e) => e.stopPropagation()}>
     <button class="modal-close" onclick={onclose} aria-label="Cerrar">&times;</button>
-    {@render children()}
+    <div class="modal-body">
+      {@render children()}
+    </div>
   </div>
 </div>
 
@@ -19,9 +21,14 @@
     background: var(--color-overlay); backdrop-filter: blur(4px);
   }
   .modal-panel {
-    position: relative; width: min(100%, 560px); max-height: 90vh; overflow-y: auto;
-    border: 1px solid var(--color-border); border-radius: 1.2rem; padding: clamp(1.5rem, 4vw, 2.5rem);
+    position: relative; width: min(100%, 560px); max-height: 90vh;
+    border: 1px solid var(--color-border); border-radius: 1.2rem;
     background: var(--color-surface); box-shadow: 0 30px 80px var(--color-shadow);
+    display: flex; flex-direction: column;
+  }
+  .modal-body {
+    overflow-y: auto; padding: clamp(1.5rem, 4vw, 2.5rem);
+    scrollbar-width: thin;
   }
   .modal-close {
     position: absolute; top: .8rem; right: 1rem;

@@ -70,7 +70,6 @@
 <main class="page-shell">
   <header class="page-header">
     <div><p class="eyebrow">Configuración deportiva</p><h1>Ligas</h1><p class="muted">Organiza competiciones y define su día de juego.</p></div>
-    <a class="button secondary" href="/">Volver al panel</a>
   </header>
 
   {#if loading}
