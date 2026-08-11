@@ -85,7 +85,7 @@
         <div><p class="eyebrow">Catálogo</p><h2>Ligas registradas</h2></div>
         <div class="list-header-right">
           <span class="count-pill">{leagues.length}</span>
-          {#if canManage}<button class="button primary" onclick={openCreate}>Agregar liga</button>{/if}
+          {#if canManage}<button class="button primary add-btn" onclick={openCreate} aria-label="Agregar liga">+</button>{/if}
         </div>
       </div>
       {#if leagues.length === 0}

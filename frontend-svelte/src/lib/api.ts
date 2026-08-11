@@ -181,6 +181,7 @@ export interface SiteIdentity {
   faviconHash?: string | null;
   iconUrl?: string;
   flyerUrl?: string;
+  paletteId?: string | null;
 }
 
 export interface PaginatedClubs {

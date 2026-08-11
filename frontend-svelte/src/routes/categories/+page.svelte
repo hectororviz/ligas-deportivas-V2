@@ -86,7 +86,7 @@
   <header class="page-header">
     <div><p class="eyebrow">Configuración deportiva</p><h1>Categorías</h1><p class="muted">Define las categorías por edad, género y cantidad de jugadores.</p></div>
     <div style="display:flex;align-items:center;gap:.6rem">
-      {#if canManage}<button class="button primary" onclick={openCreate}>Agregar categoría</button>{/if}
+      {#if canManage}<button class="button primary add-btn" onclick={openCreate} aria-label="Agregar categoría">+</button>{/if}
     </div>
   </header>
 

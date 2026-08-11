@@ -24,6 +24,7 @@ export interface SiteIdentityResponse {
     updatedAt: number;
   } | null;
   flyerUrl: string | null;
+  paletteId: string | null;
 }
 
 export interface SiteIdentityIcon {
@@ -88,12 +89,14 @@ export class SiteIdentityService {
         title: dto.title,
         iconKey: iconKey !== undefined ? iconKey : existing.iconKey,
         flyerKey: flyerKey !== undefined ? flyerKey : existing.flyerKey,
+        paletteId: dto.paletteId !== undefined ? dto.paletteId : existing.paletteId,
       },
       create: {
         id: existing.id,
         title: dto.title,
         iconKey: iconKey ?? null,
         flyerKey: flyerKey ?? null,
+        paletteId: dto.paletteId ?? null,
       },
     });
 
@@ -286,6 +289,7 @@ export class SiteIdentityService {
       iconUrl,
       favicon,
       flyerUrl,
+      paletteId: identity.paletteId ?? null,
     };
   }
 

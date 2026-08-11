@@ -31,4 +31,8 @@ export class UpdateSiteIdentityDto {
     return false;
   })
   removeFlyer?: boolean;
+
+  @IsOptional()
+  @IsString()
+  paletteId?: string;
 }

@@ -48,6 +48,7 @@
   function handlePaletteChange() {
     paletteState.setPalette(selectedPaletteId);
     notice = `Paleta "${paletteState.palette.name}" aplicada.`;
+    savePaletteToBackend();
     setTimeout(() => notice = '', 2500);
   }
 
@@ -59,6 +60,7 @@
     try {
       const formData = new FormData();
       formData.append('title', title.trim());
+      formData.append('paletteId', selectedPaletteId);
       if (iconFile) formData.append('icon', iconFile);
       if (flyerFile) formData.append('flyer', flyerFile);
       const updated = await updateSiteIdentity(formData);
@@ -71,6 +73,15 @@
     } finally {
       saving = false;
     }
+  }
+
+  async function savePaletteToBackend() {
+    try {
+      const formData = new FormData();
+      formData.append('title', title.trim() || 'Ligas Deportivas');
+      formData.append('paletteId', selectedPaletteId);
+      await updateSiteIdentity(formData);
+    } catch {}
   }
 
   async function saveFavicon() {

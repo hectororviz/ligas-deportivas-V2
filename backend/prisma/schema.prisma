@@ -201,6 +201,7 @@ model SiteIdentity {
   backgroundImage String?
   layoutSvg       String?
   tokenConfig     Json?
+  paletteId       String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

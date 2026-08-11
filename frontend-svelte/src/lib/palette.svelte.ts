@@ -1,5 +1,6 @@
 import { browser } from '$app/environment';
 import { PALETTES, type Palette } from './palettes';
+import { getSiteIdentity, updateSiteIdentity } from './api';
 
 const STORAGE_KEY = 'ligas:palette';
 const DEFAULT_PALETTE = 'forest';
@@ -11,12 +12,41 @@ function loadPaletteId(): string {
 
 let currentId = $state(loadPaletteId());
 let currentPalette = $state(PALETTES.find((p) => p.id === currentId) || PALETTES[0]);
+let backendLoaded = $state(false);
+
+async function loadFromBackend() {
+  if (!browser || backendLoaded) return;
+  try {
+    const identity = await getSiteIdentity();
+    if (identity.paletteId) {
+      const found = PALETTES.find((p) => p.id === identity.paletteId);
+      if (found) {
+        currentId = found.id;
+        currentPalette = found;
+        localStorage.setItem(STORAGE_KEY, found.id);
+        applyPalette(found);
+      }
+    }
+  } catch {} finally {
+    backendLoaded = true;
+  }
+}
+
+async function saveToBackend(id: string) {
+  if (!browser) return;
+  try {
+    const formData = new FormData();
+    formData.append('title', 'placeholder');
+    formData.append('paletteId', id);
+    await updateSiteIdentity(formData);
+  } catch {}
+}
 
 export function usePalette() {
   return {
     get id() { return currentId; },
     get palette() { return currentPalette; },
-    setPalette(id: string) {
+    setPalette(id: string, save = false) {
       const found = PALETTES.find((p) => p.id === id);
       if (!found) return;
       currentId = id;
@@ -28,6 +58,7 @@ export function usePalette() {
     },
     initPalette() {
       applyPalette(currentPalette);
+      loadFromBackend();
     },
     get palettes() { return PALETTES; },
   };

@@ -201,6 +201,8 @@ input:focus, select:focus { border-color: var(--color-input-focus); box-shadow: 
 /* Collapsible filters */
 .filter-bar { display: flex; align-items: center; gap: .6rem; margin-bottom: 1rem; }
 .filter-bar .count-pill { margin-left: auto; }
+
+.add-btn { padding: .55rem .8rem; font-size: 1.2rem; line-height: 1; font-weight: 700; border-radius: .6rem; min-width: 2.5rem; }
 .filter-row { display: flex; gap: .6rem; margin-bottom: 1rem; }
 .filter-row input { flex: 1; }
 .filter-row select { width: auto; min-width: 140px; }

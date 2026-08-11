@@ -22,6 +22,15 @@
   });
 
   let canManage = $derived(((user as AuthUser | null)?.roles ?? []).includes('ADMIN'));
+  let isMobile = $state(false);
+
+  $effect(() => {
+    const mql = window.matchMedia('(max-width: 767px)');
+    isMobile = mql.matches;
+    const handler = (e: MediaQueryListEvent) => isMobile = e.matches;
+    mql.addEventListener('change', handler);
+    return () => mql.removeEventListener('change', handler);
+  });
 
   $effect(() => { fetchPlayers(); });
 
@@ -240,6 +249,7 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
           {showFilters ? 'Ocultar filtros' : 'Filtros'}
         </button>
+        <span class="count-pill">{paginated?.total ?? 0}</span>
         {#if canManage}
           <div class="add-menu" style="position:relative;">
             <button class="button primary add-btn" onclick={() => showMenu = !showMenu} aria-label="Agregar jugador">+</button>
@@ -251,10 +261,12 @@
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></svg>
                   Manual
                 </button>
-                <button class="dropdown-item" onclick={openBulk}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
-                  Masivo
-                </button>
+                {#if !isMobile}
+                  <button class="dropdown-item" onclick={openBulk}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+                    Masivo
+                  </button>
+                {/if}
                 <button class="dropdown-item" onclick={openScan}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" x2="7" y1="12" y2="12"/></svg>
                   Escanear DNI
@@ -263,7 +275,6 @@
             {/if}
           </div>
         {/if}
-        <span class="count-pill">{paginated?.total ?? 0}</span>
       </div>
       {#if showFilters}
         <div class="filter-row">
@@ -486,7 +497,7 @@
   }
   .dropdown-item:hover { background: var(--color-surface-hover); }
 
-  .bulk-modal { max-width: 100% !important; width: 95vw; max-width: 1200px; }
+  .bulk-modal { max-width: 100% !important; width: 98vw; max-width: 1400px; }
   .bulk-table-wrapper { overflow-x: auto; margin: .5rem 0 1rem; border: 1px solid var(--color-border); border-radius: .7rem; }
   .bulk-table { width: 100%; border-collapse: collapse; font-size: .82rem; min-width: 1000px; }
   .bulk-table thead { position: sticky; top: 0; z-index: 1; }
