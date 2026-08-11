@@ -152,10 +152,10 @@
   .category-card-header { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
   .category-card-header h3 { margin: 0; font-family: 'Space Grotesk', sans-serif; font-size: 1.15rem; letter-spacing: -.03em; }
   .category-meta { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .8rem; }
-  .category-tag { padding: .2rem .55rem; border-radius: 999px; color: #527638; background: #e4edcf; font-size: .72rem; font-weight: 600; }
+  .category-tag { padding: .2rem .55rem; border-radius: 999px; color: var(--color-accent-text); background: var(--color-accent-bg); font-size: .72rem; font-weight: 600; }
   .category-flags { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .6rem; }
   .flag { padding: .15rem .5rem; border-radius: 999px; font-size: .68rem; font-weight: 700; }
-  .flag-mandatory { color: #527638; background: #e4edcf; }
+  .flag-mandatory { color: var(--color-accent-text); background: var(--color-accent-bg); }
   .flag-promotional { color: #6b4e16; background: #fbf0d9; }
-  .flag-inactive { color: #a43d36; background: #fff0ed; }
+  .flag-inactive { color: var(--color-error); background: var(--color-error-bg); }
 </style>

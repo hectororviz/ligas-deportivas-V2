@@ -224,52 +224,6 @@
 </main>
 
 <style>
-  .tournament-color {
-    background: var(--league-color, #527638);
-    color: #fff;
-  }
-
-  .badge-muted {
-    padding: .15rem .5rem;
-    border-radius: 999px;
-    color: #66736c;
-    background: #e8eee4;
-    font-size: .68rem;
-    font-weight: 700;
-    white-space: nowrap;
-  }
-
-  .badge-active {
-    padding: .15rem .5rem;
-    border-radius: 999px;
-    color: #38622e;
-    background: #e4edcf;
-    font-size: .68rem;
-    font-weight: 700;
-    white-space: nowrap;
-  }
-
-  .badge-finished {
-    padding: .15rem .5rem;
-    border-radius: 999px;
-    color: #527638;
-    background: #d0e87c55;
-    font-size: .68rem;
-    font-weight: 700;
-    white-space: nowrap;
-  }
-
-  .badge-cancelled {
-    padding: .15rem .5rem;
-    border-radius: 999px;
-    color: #a43d36;
-    background: #fff0ed;
-    font-size: .68rem;
-    font-weight: 700;
-    white-space: nowrap;
-  }
-
-  .tournament-list {
-    align-self: start;
-  }
+  .tournament-color { background: var(--league-color, var(--color-accent)); color: #fff; }
+  .tournament-list { align-self: start; }
 </style>

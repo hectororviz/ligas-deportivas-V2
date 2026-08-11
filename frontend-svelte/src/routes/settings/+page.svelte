@@ -7,17 +7,8 @@
   let loading = true;
 
   onMount(async () => {
-    if (!hasSession()) {
-      await goto('/login');
-      return;
-    }
-    try {
-      user = await getProfile();
-    } catch {
-      //
-    } finally {
-      loading = false;
-    }
+    if (!hasSession()) { await goto('/login'); return; }
+    try { user = await getProfile(); } catch {} finally { loading = false; }
   });
 </script>
 
@@ -25,11 +16,7 @@
 
 <main class="page-shell">
   <header class="page-header">
-    <div>
-      <p class="eyebrow">Configuración</p>
-      <h1>Ajustes</h1>
-      <p class="muted">Administra tu cuenta y la identidad del sitio.</p>
-    </div>
+    <div><p class="eyebrow">Configuración</p><h1>Ajustes</h1><p class="muted">Administra tu cuenta, la identidad del sitio y la apariencia.</p></div>
     <a class="button secondary" href="/">Volver al panel</a>
   </header>
 
@@ -37,20 +24,15 @@
     <section class="loading-card">Cargando...</section>
   {:else if user}
     <section class="card-surface" style="display:grid; gap:.8rem;">
-      <a class="league-row" href="/settings/account" style="text-decoration:none; padding: 1.2rem 1rem;">
-        <span class="league-color" style="--league-color: #173d35">{user.firstName.charAt(0)}{user.lastName.charAt(0)}</span>
-        <div class="league-info">
-          <strong>Cuenta y perfil</strong>
-          <span>Actualiza tu nombre, apellido y contraseña.</span>
-        </div>
-      </a>
-      <a class="league-row" href="/settings/site-identity" style="text-decoration:none; padding: 1.2rem 1rem;">
-        <span class="league-color" style="--league-color: #d0e87c; color: #173d35;">SI</span>
-        <div class="league-info">
-          <strong>Identidad del sitio</strong>
-          <span>Cambia el título, ícono y favicon de la plataforma.</span>
-        </div>
-      </a>
+      <a class="league-row settings-link" href="/settings/account"><span class="league-color settings-avatar">{user.firstName.charAt(0)}{user.lastName.charAt(0)}</span><div class="league-info"><strong>Cuenta y perfil</strong><span>Actualiza tu nombre, apellido y contraseña.</span></div></a>
+      <a class="league-row settings-link" href="/settings/site-identity"><span class="league-color settings-icon">SI</span><div class="league-info"><strong>Identidad del sitio</strong><span>Cambia el título, ícono y favicon de la plataforma.</span></div></a>
+      <a class="league-row settings-link" href="/settings/palette"><span class="league-color settings-icon">PC</span><div class="league-info"><strong>Paleta de colores</strong><span>Elige entre 8 combinaciones de colores para todo el sistema.</span></div></a>
     </section>
   {/if}
 </main>
+
+<style>
+  .settings-link { text-decoration: none; padding: 1.2rem 1rem; cursor: pointer; }
+  .settings-avatar { background: var(--color-hero); color: var(--color-hero-text); }
+  .settings-icon { background: var(--color-hero-accent); color: var(--color-hero); }
+</style>

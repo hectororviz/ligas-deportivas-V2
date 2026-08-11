@@ -16,6 +16,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'zones', label: 'Zonas', icon: 'grid', path: '/zones' },
   { id: 'standings', label: 'Tablas', icon: 'table', path: '/standings' },
   { id: 'settings', label: 'Configuración', icon: 'settings', path: '/settings' },
+  { id: 'palette', label: 'Paleta', icon: 'palette', path: '/settings/palette' },
 ];
 
 const COLLAPSED_KEY = 'sidebar:collapsed';
