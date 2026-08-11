@@ -361,6 +361,33 @@ export async function createPlayer(input: Record<string, unknown>): Promise<Play
   return request<Player>('/players', { method: 'POST', body: JSON.stringify(input) });
 }
 
+export interface ScanDniResult {
+  lastName: string;
+  firstName: string;
+  sex: 'M' | 'F' | 'X';
+  dni: string;
+  birthDate: string;
+}
+
+export async function scanDni(file: File): Promise<ScanDniResult> {
+  const form = new FormData();
+  form.append('file', file);
+  const headers = new Headers();
+  const accessToken = getStored(ACCESS_TOKEN_KEY);
+  if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
+  const response = await fetch(`${API_BASE_URL}/players/dni/scan`, { method: 'POST', headers, body: form });
+  if (!response.ok) {
+    let message = 'No se pudo escanear el DNI.';
+    try {
+      const body = await response.json();
+      const msg = body.message;
+      message = Array.isArray(msg) ? msg.join(', ') : (typeof msg === 'string' && msg ? msg : message);
+    } catch {}
+    throw new Error(message);
+  }
+  return response.json();
+}
+
 export async function updatePlayer(id: number, input: Record<string, unknown>): Promise<Player> {
   return request<Player>(`/players/${id}`, { method: 'PATCH', body: JSON.stringify(input) });
 }
