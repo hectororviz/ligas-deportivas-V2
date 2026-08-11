@@ -35,6 +35,7 @@ export class TournamentsService {
         championMode: dto.championMode,
         startDate: dto.startDate ? new Date(dto.startDate) : undefined,
         endDate: dto.endDate ? new Date(dto.endDate) : undefined,
+        controlsPlayers: dto.controlsPlayers ?? true,
       },
     });
   }
@@ -586,7 +587,8 @@ export class TournamentsService {
           (tournament.startDate?.toISOString() ?? null) !==
             new Date(dto.startDate).toISOString()) ||
         (dto.endDate != null &&
-          (tournament.endDate?.toISOString() ?? null) !== new Date(dto.endDate).toISOString());
+          (tournament.endDate?.toISOString() ?? null) !== new Date(dto.endDate).toISOString()) ||
+        (dto.controlsPlayers != null && tournament.controlsPlayers !== dto.controlsPlayers);
 
       if (immutableTournamentDataChanged) {
         throw new BadRequestException(
@@ -655,6 +657,7 @@ export class TournamentsService {
               championMode: dto.championMode,
               startDate: dto.startDate ? new Date(dto.startDate) : undefined,
               endDate: dto.endDate ? new Date(dto.endDate) : undefined,
+              controlsPlayers: dto.controlsPlayers ?? true,
             },
           });
 

@@ -1,4 +1,4 @@
-import { IsDateString, IsEnum, IsInt, IsNotEmpty, IsOptional } from 'class-validator';
+import { IsBoolean, IsDateString, IsEnum, IsInt, IsNotEmpty, IsOptional } from 'class-validator';
 import { Gender, TournamentChampionMode, TournamentStatus } from '@prisma/client';
 
 export class CreateTournamentDto {
@@ -37,4 +37,8 @@ export class CreateTournamentDto {
 
   @IsInt()
   pointsLoss!: number;
+
+  @IsOptional()
+  @IsBoolean()
+  controlsPlayers?: boolean;
 }

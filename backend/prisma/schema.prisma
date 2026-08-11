@@ -129,7 +129,8 @@ model Tournament {
   startDate       DateTime?
   endDate         DateTime?
   fixtureLockedAt DateTime?
-  createdAt       DateTime               @default(now())
+  controlsPlayers Boolean       @default(true)
+  createdAt       DateTime      @default(now())
   updatedAt       DateTime               @updatedAt
   league          League                 @relation(fields: [leagueId], references: [id])
   zones           Zone[]

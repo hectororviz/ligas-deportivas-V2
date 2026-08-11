@@ -31,7 +31,7 @@
   let form = $state({
     leagueId: '', name: '', year: new Date().getFullYear(), gender: 'MASCULINO',
     championMode: 'ROUND_AND_ANNUAL', pointsWin: 3, pointsDraw: 1, pointsLoss: 0,
-    startDate: '', endDate: ''
+    startDate: '', endDate: '', controlsPlayers: true
   });
 
   onMount(async () => {
@@ -50,7 +50,7 @@
     form = {
       leagueId: '', name: '', year: new Date().getFullYear(), gender: 'MASCULINO',
       championMode: 'ROUND_AND_ANNUAL', pointsWin: 3, pointsDraw: 1, pointsLoss: 0,
-      startDate: '', endDate: ''
+      startDate: '', endDate: '', controlsPlayers: true
     };
     error = '';
     showForm = true;
@@ -68,7 +68,8 @@
       pointsDraw: tournament.pointsDraw,
       pointsLoss: tournament.pointsLoss,
       startDate: tournament.startDate ? tournament.startDate.split('T')[0] : '',
-      endDate: tournament.endDate ? tournament.endDate.split('T')[0] : ''
+      endDate: tournament.endDate ? tournament.endDate.split('T')[0] : '',
+      controlsPlayers: tournament.controlsPlayers ?? true
     };
     error = '';
     showForm = true;
@@ -101,7 +102,8 @@
       pointsLoss: Number(form.pointsLoss),
       leagueId: Number(form.leagueId),
       startDate: form.startDate || undefined,
-      endDate: form.endDate || undefined
+      endDate: form.endDate || undefined,
+      controlsPlayers: form.controlsPlayers
     };
     try {
       if (editing) {
@@ -234,6 +236,7 @@
         </div>
         <label>Fecha de inicio<input type="date" bind:value={form.startDate} disabled={saving} /></label>
         <label>Fecha de fin<input type="date" bind:value={form.endDate} disabled={saving} /></label>
+        <label class="checkbox-label"><input type="checkbox" bind:checked={form.controlsPlayers} disabled={saving} /> Controlar jugadores</label>
         <div class="form-actions">
           <button class="button primary" type="submit" disabled={saving}>{saving ? 'Guardando...' : editing ? 'Guardar cambios' : 'Crear torneo'}</button>
           {#if editing}<button class="button secondary" type="button" onclick={openCreate} disabled={saving}>Cancelar</button>{/if}

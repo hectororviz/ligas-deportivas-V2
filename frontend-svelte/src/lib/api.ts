@@ -124,6 +124,7 @@ export interface Tournament {
   endDate?: string | null;
   leagueId: number;
   league: { name: string };
+  controlsPlayers?: boolean;
 }
 
 export interface Zone {
@@ -447,6 +448,100 @@ export async function getZoneStandings(zoneId: number): Promise<ZoneStanding> {
 
 export async function getTournamentStandings(tournamentId: number): Promise<unknown> {
   return request(`/tournaments/${tournamentId}/standings`);
+}
+
+export interface ZoneMatch {
+  matchId: number;
+  matchday: number;
+  date: string | null;
+  status: string;
+  homeClubId: number;
+  homeClubName: string;
+  awayClubId: number;
+  awayClubName: string;
+  categories: {
+    tournamentCategoryId: number;
+    categoryName: string;
+    homeGoals: number | null;
+    awayGoals: number | null;
+  }[];
+}
+
+export interface ZoneMatchesResponse {
+  zoneId: number;
+  zoneName: string;
+  tournamentName: string;
+  matchdays: { matchday: number; date: string | null; status: string; finalizable: boolean }[];
+  matches: ZoneMatch[];
+}
+
+export interface TournamentZoneClub {
+  id: number;
+  clubId: number;
+  clubName: string;
+  zoneId: number;
+  zoneName: string;
+  categoryCount: number;
+  playerCount: number;
+}
+
+export interface TournamentZone {
+  id: number;
+  name: string;
+  clubs: { id: number; clubId: number; clubName: string }[];
+}
+
+export async function getZoneMatches(zoneId: number): Promise<ZoneMatchesResponse> {
+  return request<ZoneMatchesResponse>(`/zones/${zoneId}/matches`);
+}
+
+export async function recordMatchResult(matchId: number, tournamentCategoryId: number, data: { homeGoals: number; awayGoals: number; homeGoalsPlayers?: { playerId: number; goals: number }[]; awayGoalsPlayers?: { playerId: number; goals: number }[] }): Promise<unknown> {
+  return request(`/matches/${matchId}/categories/${tournamentCategoryId}/result`, { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function finalizeMatchday(zoneId: number, matchday: number): Promise<unknown> {
+  return request(`/zones/${zoneId}/matchdays/${matchday}/finalize`, { method: 'POST' });
+}
+
+export async function getTournamentZones(tournamentId: number): Promise<TournamentZone[]> {
+  return request<TournamentZone[]>(`/tournaments/${tournamentId}/zones`);
+}
+
+export async function getZoneClubs(zoneId: number): Promise<TournamentZoneClub[]> {
+  return request<TournamentZoneClub[]>(`/zones/${zoneId}/clubs`);
+}
+
+export async function getTournamentZoneClubs(tournamentId: number): Promise<TournamentZoneClub[]> {
+  return request<TournamentZoneClub[]>(`/tournaments/${tournamentId}/zones/clubs`);
+}
+
+export interface AssignedPlayer {
+  id: number;
+  playerId: number;
+  playerName: string;
+  playerDni: string;
+  playerBirthDate: string;
+  clubId: number;
+  clubName: string;
+  tournamentCategoryId: number;
+  categoryName: string;
+  jersey?: number | null;
+}
+
+export async function getAssignedPlayers(tournamentId: number, clubId: number): Promise<AssignedPlayer[]> {
+  return request<AssignedPlayer[]>(`/tournaments/${tournamentId}/player-club?clubId=${clubId}`);
+}
+
+export async function assignPlayerToClub(tournamentId: number, data: { playerId: number; clubId: number; tournamentCategoryId: number; jersey?: number }): Promise<void> {
+  return request(`/tournaments/${tournamentId}/player-club`, { method: 'PUT', body: JSON.stringify(data) });
+}
+
+export async function removePlayerFromClub(tournamentId: number, clubId: number, playerId: number): Promise<void> {
+  return request(`/tournaments/${tournamentId}/player-club`, { method: 'DELETE', body: JSON.stringify({ playerId, clubId }) });
+}
+
+export async function searchPlayersByDni(dni: string): Promise<Player[]> {
+  return request<Player[]>(`/players/search?dni=${dni}`);
 }
 
 export async function getUsers(search?: string, page?: number): Promise<PaginatedUsers> {
