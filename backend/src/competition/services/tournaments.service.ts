@@ -544,7 +544,7 @@ export class TournamentsService {
   }
 
   async update(id: number, dto: UpdateTournamentDto) {
-    if (!dto.categories || dto.categories.length === 0) {
+    if (dto.categories && dto.categories.length === 0) {
       throw new BadRequestException('Selecciona al menos una categoría participante.');
     }
 
@@ -596,46 +596,50 @@ export class TournamentsService {
         );
       }
 
-      for (const assignment of dto.categories) {
-        const existingAssignment = existingAssignmentsByCategoryId.get(assignment.categoryId);
-        if (!existingAssignment) {
-          if (assignment.enabled) {
+      if (dto.categories) {
+        for (const assignment of dto.categories) {
+          const existingAssignment = existingAssignmentsByCategoryId.get(assignment.categoryId);
+          if (!existingAssignment) {
+            if (assignment.enabled) {
+              throw new BadRequestException(
+                'Con zonas cerradas solo se pueden modificar los horarios de categorías ya asociadas.',
+              );
+            }
+            continue;
+          }
+          if (
+            assignment.enabled !== existingAssignment.enabled ||
+            assignment.countsForGeneral !== existingAssignment.countsForGeneral
+          ) {
             throw new BadRequestException(
               'Con zonas cerradas solo se pueden modificar los horarios de categorías ya asociadas.',
             );
           }
-          continue;
-        }
-        if (
-          assignment.enabled !== existingAssignment.enabled ||
-          assignment.countsForGeneral !== existingAssignment.countsForGeneral
-        ) {
-          throw new BadRequestException(
-            'Con zonas cerradas solo se pueden modificar los horarios de categorías ya asociadas.',
-          );
         }
       }
     }
 
-    const categoryIds = dto.categories.map((category) => category.categoryId);
-    const categories = await this.prisma.category.findMany({
-      where: { id: { in: categoryIds } },
-    });
-    const categoriesById = new Map(categories.map((category) => [category.id, category]));
+    if (dto.categories) {
+      const categoryIds = dto.categories.map((category) => category.categoryId);
+      const categories = await this.prisma.category.findMany({
+        where: { id: { in: categoryIds } },
+      });
+      const categoriesById = new Map(categories.map((category) => [category.id, category]));
 
-    for (const assignment of dto.categories) {
-      const category = categoriesById.get(assignment.categoryId);
-      if (!category) {
-        throw new BadRequestException('Categoría inexistente');
-      }
-      if (assignment.enabled) {
-        if (!assignment.kickoffTime) {
-          throw new BadRequestException(
-            'La hora de juego es obligatoria cuando la categoría está habilitada',
-          );
+      for (const assignment of dto.categories) {
+        const category = categoriesById.get(assignment.categoryId);
+        if (!category) {
+          throw new BadRequestException('Categoría inexistente');
         }
-        if (!category.active) {
-          throw new BadRequestException('Solo se pueden habilitar categorías activas');
+        if (assignment.enabled) {
+          if (!assignment.kickoffTime) {
+            throw new BadRequestException(
+              'La hora de juego es obligatoria cuando la categoría está habilitada',
+            );
+          }
+          if (!category.active) {
+            throw new BadRequestException('Solo se pueden habilitar categorías activas');
+          }
         }
       }
     }
@@ -661,50 +665,52 @@ export class TournamentsService {
             },
           });
 
-      const existing = await tx.tournamentCategory.findMany({
-        where: { tournamentId: id },
-      });
-      const existingById = new Map(existing.map((item) => [item.categoryId, item]));
+      if (dto.categories) {
+        const existing = await tx.tournamentCategory.findMany({
+          where: { tournamentId: id },
+        });
+        const existingById = new Map(existing.map((item) => [item.categoryId, item]));
 
-      for (const assignment of dto.categories) {
-        const where = {
-          tournamentId_categoryId: {
-            tournamentId: id,
-            categoryId: assignment.categoryId,
-          },
-        };
-        const data = {
-          enabled: assignment.enabled,
-          kickoffTime: assignment.enabled ? assignment.kickoffTime : null,
-          countsForGeneral: assignment.countsForGeneral,
-        };
-
-        if (existingById.has(assignment.categoryId)) {
-          await tx.tournamentCategory.update({ where, data });
-          existingById.delete(assignment.categoryId);
-        } else if (!hasLockedZones && assignment.enabled) {
-          await tx.tournamentCategory.create({
-            data: {
+        for (const assignment of dto.categories) {
+          const where = {
+            tournamentId_categoryId: {
               tournamentId: id,
               categoryId: assignment.categoryId,
-              enabled: true,
-              kickoffTime: assignment.kickoffTime,
-              countsForGeneral: assignment.countsForGeneral,
             },
-          });
-        }
-      }
+          };
+          const data = {
+            enabled: assignment.enabled,
+            kickoffTime: assignment.enabled ? assignment.kickoffTime : null,
+            countsForGeneral: assignment.countsForGeneral,
+          };
 
-      if (!hasLockedZones) {
-        for (const remaining of existingById.values()) {
-          await tx.tournamentCategory.delete({
-            where: {
-              tournamentId_categoryId: {
+          if (existingById.has(assignment.categoryId)) {
+            await tx.tournamentCategory.update({ where, data });
+            existingById.delete(assignment.categoryId);
+          } else if (!hasLockedZones && assignment.enabled) {
+            await tx.tournamentCategory.create({
+              data: {
                 tournamentId: id,
-                categoryId: remaining.categoryId,
+                categoryId: assignment.categoryId,
+                enabled: true,
+                kickoffTime: assignment.kickoffTime,
+                countsForGeneral: assignment.countsForGeneral,
               },
-            },
-          });
+            });
+          }
+        }
+
+        if (!hasLockedZones) {
+          for (const remaining of existingById.values()) {
+            await tx.tournamentCategory.delete({
+              where: {
+                tournamentId_categoryId: {
+                  tournamentId: id,
+                  categoryId: remaining.categoryId,
+                },
+              },
+            });
+          }
         }
       }
 

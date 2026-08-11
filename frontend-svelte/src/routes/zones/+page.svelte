@@ -45,12 +45,9 @@
     expandedZone = zone.id;
     loadingClubs = true;
     try {
-      const [current, available] = await Promise.all([
-        getTournamentZoneClubs(zone.tournamentId),
-        getTournamentZoneClubs(zone.tournamentId)
-      ]);
-      zoneClubs = current.filter(c => zones.some(z => z.id === zone.id && z.clubZones?.some(cz => cz.club.id === c.clubId)));
-      availableClubs = available.filter(c => !zoneClubs.some(zc => zc.clubId === c.clubId));
+      const clubs = await getTournamentZoneClubs(zone.tournamentId);
+      zoneClubs = clubs.filter(c => c.zoneId === zone.id);
+      availableClubs = clubs.filter(c => !c.zoneId);
     } catch {
       zoneClubs = [];
       availableClubs = [];
