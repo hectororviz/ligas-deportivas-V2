@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Modal from '$lib/Modal.svelte';
-  import { getTournaments, getProfile, createTournament, updateTournament, updateTournamentStatus, getLeagues, getCategories, type AuthUser, type Tournament, type League, type Category } from '$lib/api';
+  import { getTournaments, getProfile, createTournament, updateTournament, updateTournamentStatus, deleteTournament, getLeagues, getCategories, type AuthUser, type Tournament, type League, type Category } from '$lib/api';
 
   const genders = [
     ['MASCULINO', 'Masculino'], ['FEMENINO', 'Femenino'], ['MIXTO', 'Mixto']
@@ -38,6 +38,13 @@
   let showFilters = $state(false);
   let showCatPicker = $state(false);
   let canManage = $state(false);
+
+  let showDeleteModal = $state(false);
+  let deleteTarget: Tournament | null = $state(null);
+  let deleteEmail = $state('');
+  let deletePassword = $state('');
+  let deleteError = $state('');
+  let deleting = $state(false);
   let form = $state({
     leagueId: '', name: '', year: new Date().getFullYear(), gender: 'MASCULINO',
     championMode: 'ROUND_AND_ANNUAL', pointsWin: 3, pointsDraw: 1, pointsLoss: 0,
@@ -189,17 +196,31 @@
     }
   }
 
-  async function deleteTournament(tournament: Tournament) {
-    if (!tournament || !confirm(`¿Eliminar el torneo "${tournament.name}"?`)) return;
-    saving = true;
+  function openDeleteModal(tournament: Tournament) {
+    deleteTarget = tournament;
+    deleteEmail = '';
+    deletePassword = '';
+    deleteError = '';
+    showDeleteModal = true;
+  }
+
+  async function confirmDeleteTournament() {
+    if (!deleteTarget) return;
+    if (!deleteEmail.trim() || !deletePassword) { deleteError = 'Ingresá tu usuario y contraseña.'; return; }
+    deleting = true;
+    deleteError = '';
     try {
-      await updateTournamentStatus(tournament.id, 'INACTIVE');
-      notice = 'Torneo eliminado correctamente.';
+      await deleteTournament(deleteTarget.id, deleteEmail.trim(), deletePassword);
+      notice = `Torneo "${deleteTarget.name}" eliminado correctamente.`;
+      showDeleteModal = false;
+      deleteTarget = null;
+      showForm = false;
+      editing = null;
       await fetchTournaments();
     } catch (cause) {
-      error = cause instanceof Error ? cause.message : 'No se pudo eliminar el torneo.';
+      deleteError = cause instanceof Error ? cause.message : 'No se pudo eliminar el torneo.';
     } finally {
-      saving = false;
+      deleting = false;
     }
   }
 
@@ -324,7 +345,7 @@
         <div class="form-actions">
           <button class="button primary" type="submit" disabled={saving}>{saving ? 'Guardando...' : editing ? 'Guardar cambios' : 'Crear torneo'}</button>
           {#if editing}<button class="button secondary" type="button" onclick={openCreate} disabled={saving}>Cancelar</button>{/if}
-          {#if editing}<button class="button secondary" type="button" onclick={() => deleteTournament(editing!)} disabled={saving} style="color:var(--color-error);">Eliminar torneo</button>{/if}
+          {#if editing}<button class="button secondary" type="button" onclick={() => openDeleteModal(editing!)} disabled={saving} style="color:var(--color-error);">Eliminar torneo</button>{/if}
         </div>
       </form>
     </div>
@@ -379,6 +400,25 @@
   </Modal>
 {/if}
 
+{#if showDeleteModal && deleteTarget}
+  <Modal onclose={() => { if (!deleting) showDeleteModal = false; }}>
+    <div class="modal-form delete-modal">
+      <p class="eyebrow">Eliminar torneo</p>
+      <h2>{deleteTarget.name}</h2>
+      <p class="muted">Esta acción eliminará el torneo y <strong>todos</strong> sus datos: zonas, clubes asignados, partidos, fixture, goles y resultados. No se puede deshacer.</p>
+      {#if deleteError}<p class="form-error">{deleteError}</p>{/if}
+      <form onsubmit={(event) => { event.preventDefault(); confirmDeleteTournament(); }}>
+        <label>Usuario (email)<input type="email" bind:value={deleteEmail} placeholder="admin@example.com" disabled={deleting} autocomplete="username" /></label>
+        <label>Contraseña<input type="password" bind:value={deletePassword} placeholder="••••••••" disabled={deleting} autocomplete="current-password" /></label>
+        <div class="form-actions">
+          <button class="button secondary" type="button" disabled={deleting} onclick={() => showDeleteModal = false}>Cancelar</button>
+          <button class="button primary" type="submit" disabled={deleting} style="background:var(--color-error);color:#fff;">{deleting ? 'Eliminando...' : 'Eliminar definitivamente'}</button>
+        </div>
+      </form>
+    </div>
+  </Modal>
+{/if}
+
 <style>
   .tournament-color { background: var(--league-color, var(--color-accent)); color: #fff; }
   .tournament-list { align-self: start; }
@@ -412,6 +452,11 @@
   .td-center { text-align: center; }
 
   .button.small { padding: .35rem .65rem; font-size: .78rem; }
+
+  .delete-modal { max-width: 460px; }
+  .delete-modal h2 { margin: .4rem 0 .5rem; font-family: 'Space Grotesk', sans-serif; font-size: 1.4rem; letter-spacing: -.03em; }
+  .delete-modal .muted { margin: 0 0 1rem; }
+  .delete-modal .muted strong { color: var(--color-error); }
 
   @media (max-width: 600px) {
     .form-grid { grid-template-columns: 1fr; }

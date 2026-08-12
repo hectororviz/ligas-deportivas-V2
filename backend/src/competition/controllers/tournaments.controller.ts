@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
@@ -20,6 +21,7 @@ import { AddTournamentCategoryDto } from '../dto/add-tournament-category.dto';
 import { UpdateTournamentDto } from '../dto/update-tournament.dto';
 import { AssignPlayerClubDto } from '../dto/assign-player-club.dto';
 import { UpdateTournamentStatusDto } from '../dto/update-tournament-status.dto';
+import { DeleteTournamentDto } from '../dto/delete-tournament.dto';
 
 const parseIncludeInactive = (value?: string) => value === 'true' || value === '1';
 
@@ -94,6 +96,13 @@ export class TournamentsController {
   @Permissions({ module: Module.TORNEOS, action: Action.UPDATE })
   updateStatus(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateTournamentStatusDto) {
     return this.tournamentsService.updateStatus(id, dto.status);
+  }
+
+  @Delete('tournaments/:id')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @Permissions({ module: Module.TORNEOS, action: Action.DELETE })
+  deleteTournament(@Param('id', ParseIntPipe) id: number, @Body() dto: DeleteTournamentDto) {
+    return this.tournamentsService.deleteTournament(id, dto);
   }
 
   @Put('tournaments/:id/player-club')

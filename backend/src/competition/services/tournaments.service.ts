@@ -1,15 +1,20 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Gender, TournamentStatus, ZoneStatus } from '@prisma/client';
+import { BadRequestException, Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Gender, RoleKey, TournamentStatus, ZoneStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AssignPlayerClubDto } from '../dto/assign-player-club.dto';
 import { CreateTournamentDto } from '../dto/create-tournament.dto';
 import { CreateZoneDto } from '../dto/create-zone.dto';
 import { AddTournamentCategoryDto } from '../dto/add-tournament-category.dto';
 import { UpdateTournamentDto } from '../dto/update-tournament.dto';
+import { DeleteTournamentDto } from '../dto/delete-tournament.dto';
+import { AuthService } from '../../auth/auth.service';
 
 @Injectable()
 export class TournamentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly authService: AuthService,
+  ) {}
 
   findAll(includeInactive = false) {
     return this.prisma.tournament.findMany({
@@ -719,6 +724,67 @@ export class TournamentsService {
     return this.prisma.tournament.update({
       where: { id },
       data: { status },
+    });
+  }
+
+  async deleteTournament(id: number, dto: DeleteTournamentDto) {
+    const admin = await this.authService.validateUser(dto.email, dto.password);
+    if (!admin.roles.includes(RoleKey.ADMIN)) {
+      throw new ForbiddenException('Solo un administrador puede eliminar un torneo.');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const tournament = await tx.tournament.findUnique({ where: { id } });
+      if (!tournament) {
+        throw new NotFoundException('Torneo inexistente');
+      }
+
+      const zones = await tx.zone.findMany({ where: { tournamentId: id }, select: { id: true } });
+      const zoneIds = zones.map((zone) => zone.id);
+
+      const matches = await tx.match.findMany({ where: { tournamentId: id }, select: { id: true } });
+      const matchIds = matches.map((match) => match.id);
+
+      const matchCategories = await tx.matchCategory.findMany({
+        where: { matchId: { in: matchIds } },
+        select: { id: true },
+      });
+      const matchCategoryIds = matchCategories.map((mc) => mc.id);
+
+      const tournamentCategories = await tx.tournamentCategory.findMany({
+        where: { tournamentId: id },
+        select: { id: true },
+      });
+      const tournamentCategoryIds = tournamentCategories.map((tc) => tc.id);
+
+      const rosters = await tx.roster.findMany({
+        where: { tournamentCategoryId: { in: tournamentCategoryIds } },
+        select: { id: true },
+      });
+      const rosterIds = rosters.map((roster) => roster.id);
+
+      await tx.goal.deleteMany({ where: { matchCategoryId: { in: matchCategoryIds } } });
+      await tx.otherGoal.deleteMany({ where: { matchCategoryId: { in: matchCategoryIds } } });
+      await tx.matchCategory.deleteMany({ where: { matchId: { in: matchIds } } });
+      await tx.matchAttachment.deleteMany({ where: { matchId: { in: matchIds } } });
+      await tx.matchLog.deleteMany({ where: { matchId: { in: matchIds } } });
+      await tx.match.deleteMany({ where: { tournamentId: id } });
+
+      await tx.rosterPlayer.deleteMany({ where: { rosterId: { in: rosterIds } } });
+      await tx.roster.deleteMany({ where: { tournamentCategoryId: { in: tournamentCategoryIds } } });
+      await tx.team.deleteMany({ where: { tournamentCategoryId: { in: tournamentCategoryIds } } });
+      await tx.categoryStanding.deleteMany({ where: { zoneId: { in: zoneIds } } });
+
+      await tx.clubZone.deleteMany({ where: { zoneId: { in: zoneIds } } });
+      await tx.zoneMatchday.deleteMany({ where: { zoneId: { in: zoneIds } } });
+      await tx.zone.deleteMany({ where: { tournamentId: id } });
+
+      await tx.playerTournamentClub.deleteMany({ where: { tournamentId: id } });
+      await tx.tournamentCategory.deleteMany({ where: { tournamentId: id } });
+
+      await tx.tournament.delete({ where: { id } });
+
+      return { success: true };
     });
   }
 }

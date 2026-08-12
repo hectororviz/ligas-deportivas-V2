@@ -423,6 +423,10 @@ export async function updateTournamentStatus(id: number, status: string): Promis
   return request<Tournament>(`/tournaments/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) });
 }
 
+export async function deleteTournament(id: number, email: string, password: string): Promise<void> {
+  return request(`/tournaments/${id}`, { method: 'DELETE', body: JSON.stringify({ email, password }) });
+}
+
 export async function getZones(includeInactive = false): Promise<Zone[]> {
   return request<Zone[]>(`/zones${includeInactive ? '?includeInactive=true' : ''}`);
 }

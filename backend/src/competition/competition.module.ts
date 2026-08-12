@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
+import { AuthModule } from '../auth/auth.module';
 import { LeaguesService } from './services/leagues.service';
 import { ClubsService } from './services/clubs.service';
 import { CategoriesService } from './services/categories.service';
@@ -34,7 +35,7 @@ import { LeaderboardsService } from './services/leaderboards.service';
 import { LeaderboardsController } from './controllers/leaderboards.controller';
 
 @Module({
-  imports: [PrismaModule, StorageModule, AccessControlModule],
+  imports: [PrismaModule, StorageModule, AccessControlModule, AuthModule],
   providers: [
     LeaguesService,
     ClubsService,
