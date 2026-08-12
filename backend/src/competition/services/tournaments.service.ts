@@ -26,22 +26,59 @@ export class TournamentsService {
     });
   }
 
-  create(dto: CreateTournamentDto) {
-    return this.prisma.tournament.create({
-      data: {
-        leagueId: dto.leagueId,
-        name: dto.name,
-        year: dto.year,
-        status: dto.status ?? TournamentStatus.ACTIVE,
-        gender: dto.gender,
-        pointsWin: dto.pointsWin,
-        pointsDraw: dto.pointsDraw,
-        pointsLoss: dto.pointsLoss,
-        championMode: dto.championMode,
-        startDate: dto.startDate ? new Date(dto.startDate) : undefined,
-        endDate: dto.endDate ? new Date(dto.endDate) : undefined,
-        controlsPlayers: dto.controlsPlayers ?? true,
-      },
+  async create(dto: CreateTournamentDto) {
+    return this.prisma.$transaction(async (tx) => {
+      const tournament = await tx.tournament.create({
+        data: {
+          leagueId: dto.leagueId,
+          name: dto.name,
+          year: dto.year,
+          status: dto.status ?? TournamentStatus.ACTIVE,
+          gender: dto.gender,
+          pointsWin: dto.pointsWin,
+          pointsDraw: dto.pointsDraw,
+          pointsLoss: dto.pointsLoss,
+          championMode: dto.championMode,
+          startDate: dto.startDate ? new Date(dto.startDate) : undefined,
+          endDate: dto.endDate ? new Date(dto.endDate) : undefined,
+          controlsPlayers: dto.controlsPlayers ?? true,
+        },
+      });
+
+      if (dto.categories?.length) {
+        const categoryIds = dto.categories.map((assignment) => assignment.categoryId);
+        const categories = await tx.category.findMany({
+          where: { id: { in: categoryIds } },
+        });
+        const categoriesById = new Map(categories.map((category) => [category.id, category]));
+
+        for (const assignment of dto.categories) {
+          if (!assignment.enabled) continue;
+
+          const category = categoriesById.get(assignment.categoryId);
+          if (!category) {
+            throw new BadRequestException('Categoría inexistente');
+          }
+          if (!category.active) {
+            throw new BadRequestException('Solo se pueden habilitar categorías activas');
+          }
+          if (!assignment.kickoffTime) {
+            throw new BadRequestException('La hora de juego es obligatoria cuando la categoría está habilitada');
+          }
+
+          await tx.tournamentCategory.create({
+            data: {
+              tournamentId: tournament.id,
+              categoryId: assignment.categoryId,
+              enabled: true,
+              kickoffTime: assignment.kickoffTime,
+              countsForGeneral: assignment.countsForGeneral,
+            },
+          });
+        }
+      }
+
+      return tournament;
     });
   }
 

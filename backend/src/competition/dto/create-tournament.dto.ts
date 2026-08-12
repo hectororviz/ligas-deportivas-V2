@@ -1,5 +1,7 @@
-import { IsBoolean, IsDateString, IsEnum, IsInt, IsNotEmpty, IsOptional } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsArray, IsBoolean, IsDateString, IsEnum, IsInt, IsNotEmpty, IsOptional, ValidateNested } from 'class-validator';
 import { Gender, TournamentChampionMode, TournamentStatus } from '@prisma/client';
+import { AddTournamentCategoryDto } from './add-tournament-category.dto';
 
 export class CreateTournamentDto {
   @IsInt()
@@ -41,4 +43,10 @@ export class CreateTournamentDto {
   @IsOptional()
   @IsBoolean()
   controlsPlayers?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => AddTournamentCategoryDto)
+  categories?: AddTournamentCategoryDto[];
 }
