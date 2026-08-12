@@ -46,6 +46,10 @@ export class ZonesService {
         tournament: {
           include: { league: true },
         },
+        clubZones: {
+          include: { club: true },
+          orderBy: { club: { name: 'asc' } },
+        },
         _count: {
           select: { clubZones: true, matches: true },
         },

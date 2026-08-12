@@ -45,7 +45,9 @@
     expandedZone = zone.id;
     loadingClubs = true;
     try {
-      availableClubs = await getTournamentZoneClubs(zone.tournamentId, zone.id);
+      const clubs = await getTournamentZoneClubs(zone.tournamentId, zone.id);
+      const currentIds = new Set((zone.clubZones || []).map(cz => cz.club.id));
+      availableClubs = clubs.filter(c => !currentIds.has(c.id));
     } catch {
       availableClubs = [];
     } finally {
