@@ -168,9 +168,13 @@
 
   async function confirmGenerateFixture() {
     if (!fixtureZone) return;
+    if (!confirm(`¿Confirmar y fijar el fixture de la Zona ${fixtureZone.name}? Esta acción finalizará la zona y no se podrá modificar.`)) return;
     error = ''; notice = '';
     saving = true;
     try {
+      if (fixtureZone.status === 'OPEN') {
+        await finalizeZone(fixtureZone.id);
+      }
       await generateFixture(fixtureZone.id, doubleRound);
       notice = `Fixture generado para Zona ${fixtureZone.name}.`;
       closeFixtureModal();
@@ -178,21 +182,6 @@
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudo generar el fixture.';
     } finally { saving = false; }
-  }
-
-  async function handleFinalizeZone(zone: Zone) {
-    if (!confirm(`¿Finalizar Zona ${zone.name}? No se podrá modificar después.`)) return;
-    saving = true; error = '';
-    try {
-      await finalizeZone(zone.id);
-      notice = `Zona ${zone.name} finalizada.`;
-      zones = await getZones(true);
-    } catch (cause) {
-      error = cause instanceof Error ? cause.message : 'No se pudo finalizar la zona.';
-    } finally {
-      saving = false;
-      setTimeout(() => notice = '', 2500);
-    }
   }
 
   function initManualBuilder(clubs: { clubId: number; clubName: string }[]) {
@@ -354,6 +343,8 @@
     if (!fixtureZone) return;
     validateAll();
 
+    if (!confirm(`¿Confirmar y fijar el fixture de la Zona ${fixtureZone.name}? Esta acción finalizará la zona y no se podrá modificar.`)) return;
+
     error = ''; saving = true;
     const round1 = manualDates.map((d, i) => ({
       matchday: i + 1,
@@ -375,6 +366,9 @@
     }));
 
     try {
+      if (fixtureZone.status === 'OPEN') {
+        await finalizeZone(fixtureZone.id);
+      }
       await generateManualFixture(fixtureZone.id, {
         matchdays: [...round1, ...r2],
         doubleRound: true
@@ -459,9 +453,6 @@
                   </div>
                   <div class="zone-actions" onclick={(e) => e.stopPropagation()}>
                     <a class="button secondary" href={`/zones/${zone.id}/standings`}>Posiciones</a>
-                    {#if canManage && zone.status === 'OPEN'}
-                      <button class="button secondary" disabled={saving} onclick={() => handleFinalizeZone(zone)}>Finalizar</button>
-                    {/if}
                     {#if canManage}
                       <button class="button primary" disabled={saving} onclick={() => openFixtureModal(zone)}>Generar fixture</button>
                     {/if}
