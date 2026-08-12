@@ -43,6 +43,11 @@ export class MatchesController {
     return this.matchesService.listByZone(zoneId);
   }
 
+  @Get('matches/:matchId')
+  getMatchDetail(@Param('matchId', ParseIntPipe) matchId: number) {
+    return this.matchesService.getMatchDetail(matchId);
+  }
+
   @Get('public/zones/:zoneId/matchdays/results')
   getPublicZoneMatchdays(@Param('zoneId', ParseIntPipe) zoneId: number) {
     return this.matchesService.listPublicMatchdaysByZone(zoneId);

@@ -63,6 +63,101 @@ export class MatchesService {
     return { matches, matchdays };
   }
 
+  async getMatchDetail(matchId: number) {
+    const match = await this.prisma.match.findUnique({
+      where: { id: matchId },
+      include: {
+        zone: true,
+        homeClub: true,
+        awayClub: true,
+        categories: {
+          include: {
+            tournamentCategory: {
+              include: { category: true }
+            }
+          }
+        }
+      }
+    });
+
+    if (!match) {
+      throw new NotFoundException('Partido no encontrado');
+    }
+
+    const tournament = await this.prisma.tournament.findUniqueOrThrow({
+      where: { id: match.tournamentId }
+    });
+
+    const homeClubId = match.homeClubId;
+    const awayClubId = match.awayClubId;
+
+    let pointsHome = 0;
+    let pointsAway = 0;
+
+    for (const category of match.categories) {
+      if (!category.tournamentCategory.countsForGeneral) continue;
+      if (!category.closedAt) continue;
+
+      const { home, away } = this.calculatePointsByScore(
+        category.homeScore,
+        category.awayScore,
+        tournament.pointsWin,
+        tournament.pointsDraw,
+        tournament.pointsLoss
+      );
+      pointsHome += home;
+      pointsAway += away;
+    }
+
+    return {
+      id: match.id,
+      matchday: match.matchday,
+      round: match.round,
+      status: match.status,
+      date: match.date,
+      zone: { id: match.zone.id, name: match.zone.name },
+      homeClub: match.homeClub
+        ? {
+            id: match.homeClub.id,
+            name: match.homeClub.name,
+            shortName: match.homeClub.shortName,
+            logoUrl: match.homeClub.logoUrl,
+            primaryColor: match.homeClub.primaryColor,
+            secondaryColor: match.homeClub.secondaryColor,
+          }
+        : null,
+      awayClub: match.awayClub
+        ? {
+            id: match.awayClub.id,
+            name: match.awayClub.name,
+            shortName: match.awayClub.shortName,
+            logoUrl: match.awayClub.logoUrl,
+            primaryColor: match.awayClub.primaryColor,
+            secondaryColor: match.awayClub.secondaryColor,
+          }
+        : null,
+      categories: match.categories.map((category) => ({
+        tournamentCategoryId: category.tournamentCategoryId,
+        categoryName: category.tournamentCategory.category.name,
+        isPromocional: category.isPromocional,
+        countsForGeneral: category.tournamentCategory.countsForGeneral,
+        kickoffTime: category.kickoffTime,
+        homeScore: category.homeScore,
+        awayScore: category.awayScore,
+        closedAt: category.closedAt,
+      })),
+      tournament: {
+        id: tournament.id,
+        pointsWin: tournament.pointsWin,
+        pointsDraw: tournament.pointsDraw,
+        pointsLoss: tournament.pointsLoss,
+        controlsPlayers: tournament.controlsPlayers,
+      },
+      pointsHome: homeClubId ? pointsHome : 0,
+      pointsAway: awayClubId ? pointsAway : 0,
+    };
+  }
+
   async finalizeMatchday(zoneId: number, matchday: number) {
     return this.prisma.$transaction(async (tx) => {
       const entry = await tx.zoneMatchday.findUnique({

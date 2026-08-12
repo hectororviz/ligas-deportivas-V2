@@ -526,7 +526,90 @@ export async function getZoneMatches(zoneId: number): Promise<ZoneMatchesRespons
   return request<ZoneMatchesResponse>(`/zones/${zoneId}/matches`);
 }
 
-export async function recordMatchResult(matchId: number, tournamentCategoryId: number, data: { homeGoals: number; awayGoals: number; homeGoalsPlayers?: { playerId: number; goals: number }[]; awayGoalsPlayers?: { playerId: number; goals: number }[] }): Promise<unknown> {
+export interface MatchClub {
+  id: number;
+  name: string;
+  shortName: string | null;
+  logoUrl: string | null;
+  primaryColor: string | null;
+  secondaryColor: string | null;
+}
+
+export interface MatchDetail {
+  id: number;
+  matchday: number;
+  round: string;
+  status: string;
+  date: string | null;
+  zone: { id: number; name: string };
+  homeClub: MatchClub | null;
+  awayClub: MatchClub | null;
+  categories: {
+    tournamentCategoryId: number;
+    categoryName: string;
+    isPromocional: boolean;
+    countsForGeneral: boolean;
+    kickoffTime: string | null;
+    homeScore: number;
+    awayScore: number;
+    closedAt: string | null;
+  }[];
+  tournament: {
+    id: number;
+    pointsWin: number;
+    pointsDraw: number;
+    pointsLoss: number;
+    controlsPlayers: boolean;
+  };
+  pointsHome: number;
+  pointsAway: number;
+}
+
+export async function getMatchDetail(matchId: number): Promise<MatchDetail> {
+  return request<MatchDetail>(`/matches/${matchId}`);
+}
+
+export interface MatchCategoryResult {
+  matchId: number;
+  tournamentCategoryId: number;
+  homeClubId: number | null;
+  awayClubId: number | null;
+  homeScore: number;
+  awayScore: number;
+  playerGoals: { playerId: number; clubId: number; goals: number; player: { id: number; firstName: string | null; lastName: string | null } }[];
+  otherGoals: { clubId: number; goals: number }[];
+}
+
+export async function getMatchCategoryResult(matchId: number, tournamentCategoryId: number): Promise<MatchCategoryResult> {
+  return request<MatchCategoryResult>(`/matches/${matchId}/categories/${tournamentCategoryId}/result`);
+}
+
+export interface AssignedPlayerRow {
+  id: number;
+  firstName: string;
+  lastName: string;
+  birthDate: string;
+  gender: string;
+}
+
+export async function listAssignedPlayers(clubId: number, tournamentCategoryId: number): Promise<AssignedPlayerRow[]> {
+  const data = await request<{ players: AssignedPlayerRow[] }>(
+    `/clubs/${clubId}/tournament-categories/${tournamentCategoryId}/assigned-players?page=1&pageSize=200`
+  );
+  return data.players;
+}
+
+export async function recordMatchResult(
+  matchId: number,
+  tournamentCategoryId: number,
+  data: {
+    homeScore: number;
+    awayScore: number;
+    confirm: boolean;
+    playerGoals: { playerId: number; clubId: number; goals: number }[];
+    otherGoals: { clubId: number; goals: number }[];
+  }
+): Promise<unknown> {
   return request(`/matches/${matchId}/categories/${tournamentCategoryId}/result`, { method: 'POST', body: JSON.stringify(data) });
 }
 

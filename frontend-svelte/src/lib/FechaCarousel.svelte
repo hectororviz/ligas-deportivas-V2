@@ -33,6 +33,16 @@
     };
     return map[status] ?? '';
   }
+
+  function statusLabel(status: string): string {
+    const map: Record<string, string> = {
+      PLAYED: 'Jugada',
+      INCOMPLETE: 'Incompleta',
+      IN_PROGRESS: 'En curso',
+      PENDING: 'Pendiente',
+    };
+    return map[status] ?? status;
+  }
 </script>
 
 {#if matchdays.length > 0}
@@ -49,7 +59,9 @@
           data-matchday={md.matchday}
           onclick={() => onSelect(md.matchday)}
           aria-pressed={selectedMatchday === md.matchday}
+          title={`Fecha ${md.matchday} · ${statusLabel(md.status)}`}
         >
+          <span class="dot {statusClass(md.status)}"></span>
           <span class="fecha-num">Fecha {md.matchday}</span>
         </button>
       {/each}
@@ -67,9 +79,11 @@
     align-items: center;
     gap: .5rem;
     margin: 1rem 0;
+    min-width: 0;
   }
   .carousel-track {
     flex: 1;
+    min-width: 0;
     display: flex;
     gap: .45rem;
     overflow-x: auto;
@@ -80,8 +94,8 @@
   .carousel-track::-webkit-scrollbar { display: none; }
   .carousel-arrow {
     flex: 0 0 auto;
-    width: 2.2rem;
-    height: 2.2rem;
+    width: 2rem;
+    height: 2rem;
     display: grid;
     place-items: center;
     border: 1px solid var(--color-border);
@@ -93,7 +107,10 @@
   .carousel-arrow:hover { background: var(--color-surface-hover); color: var(--color-text); }
   .fecha-chip {
     flex: 0 0 auto;
-    padding: .55rem 1.1rem;
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .5rem .9rem;
     border: 1px solid var(--color-border);
     border-radius: 999px;
     background: var(--color-surface);
@@ -111,11 +128,15 @@
     color: var(--color-accent-text);
     font-weight: 700;
   }
-  .fecha-chip.is-played .fecha-num::after {
-    content: ' · jugada';
-    font-size: .68rem;
-    opacity: .7;
+  .dot {
+    flex: 0 0 auto;
+    width: .5rem;
+    height: .5rem;
+    border-radius: 50%;
+    background: var(--color-text-light);
   }
+  .dot.is-played { background: var(--color-success); }
+  .dot.is-current { background: var(--color-accent); }
   .fecha-chip.is-current { border-color: var(--color-accent); border-style: dashed; }
   .fecha-num { pointer-events: none; }
 </style>

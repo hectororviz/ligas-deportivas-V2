@@ -21,18 +21,21 @@
   class="match-card"
   class:played
   onclick={() => onclick(match.id)}
-  aria-label={`${match.homeClub?.name ?? 'Local'} vs ${match.awayClub?.name ?? 'Visitante'}`}
+  aria-label={`${match.homeClub?.name ?? 'Local'} vs ${match.awayClub?.name ?? 'Visitante'}, ${played ? 'jugado' : 'pendiente'}`}
 >
   <div class="teams">
     <span class="team home">{match.homeClub?.name ?? '—'}</span>
     <span class="divider">vs</span>
     <span class="team away">{match.awayClub?.name ?? '—'}</span>
   </div>
-  {#if played}
-    <span class="score">{homeScore} - {awayScore}</span>
-  {:else}
-    <span class="badge-muted">Pendiente</span>
-  {/if}
+  <span class="status" class:played title={played ? 'Jugado' : 'Pendiente'}>
+    {#if played}
+      <span class="dot"></span>
+      <span class="score">{homeScore} - {awayScore}</span>
+    {:else}
+      <span class="dot"></span>
+    {/if}
+  </span>
 </button>
 
 <style>
@@ -40,9 +43,10 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 1rem;
+    gap: .75rem;
     width: 100%;
-    padding: 1rem 1.25rem;
+    min-width: 0;
+    padding: .8rem 1rem;
     border: 1px solid var(--color-border);
     border-radius: .8rem;
     background: var(--color-surface);
@@ -60,12 +64,12 @@
     min-width: 0;
     display: flex;
     align-items: center;
-    gap: .6rem;
+    gap: .5rem;
   }
   .team {
     flex: 1;
     min-width: 0;
-    font-size: .95rem;
+    font-size: .92rem;
     font-weight: 600;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -76,16 +80,29 @@
   .divider {
     flex: 0 0 auto;
     color: var(--color-text-light);
-    font-size: .72rem;
+    font-size: .7rem;
     font-weight: 700;
     text-transform: uppercase;
   }
-  .score {
+  .status {
     flex: 0 0 auto;
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: var(--color-heading);
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
   }
-  .match-card.played .score { color: var(--color-accent-text); }
+  .dot {
+    width: .6rem;
+    height: .6rem;
+    border-radius: 50%;
+    background: var(--color-error);
+    flex: 0 0 auto;
+  }
+  .status.played .dot { background: var(--color-success); }
+  .score {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--color-accent-text);
+    white-space: nowrap;
+  }
 </style>

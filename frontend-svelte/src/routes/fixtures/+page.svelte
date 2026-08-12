@@ -274,7 +274,7 @@
 </main>
 
 <style>
-  .zone-context { margin-top: 1.5rem; }
+  .zone-context { margin-top: 1.5rem; min-width: 0; }
   .zone-context .eyebrow { margin: 0; }
   .zone-title {
     margin: .3rem 0 0;
@@ -282,9 +282,11 @@
     font-size: 1.5rem;
     letter-spacing: -.03em;
     color: var(--color-heading);
+    overflow-wrap: break-word;
   }
   .matches-grid {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: .6rem;
     margin-top: .5rem;
   }
