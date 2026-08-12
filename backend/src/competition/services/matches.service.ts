@@ -21,6 +21,14 @@ export class MatchesService {
   ) {}
 
   async listByZone(zoneId: number) {
+    const zone = await this.prisma.zone.findUnique({
+      where: { id: zoneId },
+      select: { tournamentId: true },
+    });
+    const tournament = zone
+      ? await this.prisma.tournament.findUnique({ where: { id: zone.tournamentId } })
+      : null;
+
     const [matches, matchdays] = await this.prisma.$transaction([
       this.prisma.match.findMany({
         where: { zoneId },
@@ -43,6 +51,29 @@ export class MatchesService {
       })
     ]);
 
+    const pointsWin = tournament?.pointsWin ?? 3;
+    const pointsDraw = tournament?.pointsDraw ?? 1;
+    const pointsLoss = tournament?.pointsLoss ?? 0;
+
+    const enrichedMatches = matches.map((match) => {
+      let pointsHome = 0;
+      let pointsAway = 0;
+      for (const category of match.categories) {
+        if (!category.tournamentCategory.countsForGeneral) continue;
+        if (!category.closedAt) continue;
+        const { home, away } = this.calculatePointsByScore(
+          category.homeScore,
+          category.awayScore,
+          pointsWin,
+          pointsDraw,
+          pointsLoss,
+        );
+        pointsHome += home;
+        pointsAway += away;
+      }
+      return { ...match, pointsHome, pointsAway };
+    });
+
     if (matchdays.length === 0 && matches.length > 0) {
       const uniqueMatchdays = Array.from(new Set(matches.map((match) => match.matchday))).sort((a, b) => a - b);
       const fallback = uniqueMatchdays.map((matchday, index) => ({
@@ -57,10 +88,10 @@ export class MatchesService {
         updatedAt: new Date(),
         id: 0
       }));
-      return { matches, matchdays: fallback };
+      return { matches: enrichedMatches, matchdays: fallback };
     }
 
-    return { matches, matchdays };
+    return { matches: enrichedMatches, matchdays };
   }
 
   async getMatchDetail(matchId: number) {

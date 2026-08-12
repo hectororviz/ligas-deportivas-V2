@@ -14,6 +14,14 @@
   let showJoinModal = $state(false);
   let availableTournaments = $state<AvailableTournament[]>([]);
   let loadingAvailable = $state(false);
+  let expandedTournaments = $state<Set<number>>(new Set());
+
+  function toggleTournament(id: number) {
+    const next = new Set(expandedTournaments);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    expandedTournaments = next;
+  }
 
   onMount(() => { fetchData(); });
 
@@ -203,7 +211,7 @@
                   <div class="tournament-head">
                     <div>
                       <p class="card-kicker">{tournament.year}</p>
-                      <h3>{tournament.name}</h3>
+                      <h3>{tournament.leagueName} · {tournament.name}</h3>
                     </div>
                     <button
                       class="button secondary leave-btn"
@@ -218,20 +226,32 @@
                     <p class="muted" style="margin:.5rem 0 0">Zona: {tournament.zone.name}</p>
                   {/if}
 
-                  {#if tournament.categories.length > 0}
-                    <div class="category-list">
-                      {#each tournament.categories as cat}
-                        <div class="category-item">
-                          <span>{cat.category.name}</span>
-                          <div class="category-meta">
-                            {#if cat.kickoffTime}<span class="badge-muted">{cat.kickoffTime}</span>{/if}
-                            {#if cat.countsForGeneral}<span class="tag tag-green">General</span>{/if}
+                  <button
+                    class="accordion-toggle"
+                    class:open={expandedTournaments.has(tournament.id)}
+                    onclick={() => toggleTournament(tournament.id)}
+                    aria-expanded={expandedTournaments.has(tournament.id)}
+                  >
+                    <span>Categorías ({tournament.categories.length})</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                  </button>
+
+                  {#if expandedTournaments.has(tournament.id)}
+                    {#if tournament.categories.length > 0}
+                      <div class="category-list">
+                        {#each tournament.categories as cat}
+                          <div class="category-item">
+                            <span>{cat.category.name}</span>
+                            <div class="category-meta">
+                              {#if cat.kickoffTime}<span class="badge-muted">{cat.kickoffTime}</span>{/if}
+                              {#if cat.countsForGeneral}<span class="tag tag-green">General</span>{/if}
+                            </div>
                           </div>
-                        </div>
-                      {/each}
-                    </div>
-                  {:else}
-                    <p class="muted" style="margin-top:.5rem">Sin categorias asignadas.</p>
+                        {/each}
+                      </div>
+                    {:else}
+                      <p class="muted" style="margin-top:.5rem">Sin categorías asignadas.</p>
+                    {/if}
                   {/if}
                 </article>
               {/each}
@@ -317,6 +337,25 @@
   .club-tournament h3 { font-family: 'Space Grotesk', sans-serif; font-size: 1.25rem; margin: .25rem 0 0; }
   .tournament-head { display: flex; justify-content: space-between; align-items: start; gap: 1rem; }
   .leave-btn { white-space: nowrap; font-size: .82rem; padding: .55rem .85rem; }
+  .accordion-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    margin-top: .75rem;
+    padding: .5rem .75rem;
+    border: 1px solid var(--color-border);
+    border-radius: .5rem;
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+    font-size: .82rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: left;
+  }
+  .accordion-toggle:hover { background: var(--color-surface-hover); color: var(--color-text); }
+  .accordion-toggle svg { transition: transform 150ms ease; }
+  .accordion-toggle.open svg { transform: rotate(180deg); }
   .category-list { margin-top: .75rem; display: grid; gap: .35rem; }
   .category-item {
     display: flex; justify-content: space-between; align-items: center;

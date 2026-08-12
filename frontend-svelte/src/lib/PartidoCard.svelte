@@ -8,12 +8,6 @@
 
   let { match, onclick }: Props = $props();
 
-  let homeScore = $derived(
-    match.categories.reduce((sum, c) => sum + (c.closedAt ? c.homeScore : 0), 0)
-  );
-  let awayScore = $derived(
-    match.categories.reduce((sum, c) => sum + (c.closedAt ? c.awayScore : 0), 0)
-  );
   let played = $derived(match.status === 'FINISHED' || match.categories.some((c) => c.closedAt));
 </script>
 
@@ -31,7 +25,7 @@
   <span class="status" class:played title={played ? 'Jugado' : 'Pendiente'}>
     {#if played}
       <span class="dot"></span>
-      <span class="score">{homeScore} - {awayScore}</span>
+      <span class="score">{match.pointsHome} - {match.pointsAway}</span>
     {:else}
       <span class="dot"></span>
     {/if}

@@ -42,10 +42,17 @@
     return name.slice(0, 2).toUpperCase();
   }
 
-  function outcomeClass(cat: MatchDetail['categories'][number]): string {
+  function homeOutcome(cat: MatchDetail['categories'][number]): string {
     if (!cat.closedAt) return 'pending';
     if (cat.homeScore > cat.awayScore) return 'win';
     if (cat.homeScore < cat.awayScore) return 'loss';
+    return 'draw';
+  }
+
+  function awayOutcome(cat: MatchDetail['categories'][number]): string {
+    if (!cat.closedAt) return 'pending';
+    if (cat.awayScore > cat.homeScore) return 'win';
+    if (cat.awayScore < cat.homeScore) return 'loss';
     return 'draw';
   }
 
@@ -136,8 +143,8 @@
                   {#if cat.countsForGeneral}<span class="tag tag-green" title="Cuenta para la tabla general">General</span>{/if}
                   {#if cat.isPromocional}<span class="tag tag-amber">Promocional</span>{/if}
                 </td>
-                <td class="num"><span class="score-cell {outcomeClass(cat)}">{cat.closedAt ? cat.homeScore : '–'}</span></td>
-                <td class="num"><span class="score-cell {outcomeClass(cat)}">{cat.closedAt ? cat.awayScore : '–'}</span></td>
+                <td class="num"><span class="score-cell {homeOutcome(cat)}">{cat.closedAt ? cat.homeScore : '–'}</span></td>
+                <td class="num"><span class="score-cell {awayOutcome(cat)}">{cat.closedAt ? cat.awayScore : '–'}</span></td>
               </tr>
             {/each}
           </tbody>

@@ -497,6 +497,8 @@ export interface ZoneMatch {
   homeClub: { id: number; name: string } | null;
   awayClub: { id: number; name: string } | null;
   categories: ZoneMatchCategory[];
+  pointsHome: number;
+  pointsAway: number;
 }
 
 export interface ZoneMatchday {
@@ -757,7 +759,7 @@ export async function updateSiteIdentity(input: FormData): Promise<SiteIdentity>
 }
 
 export interface ClubAdminTournament {
-  id: number; name: string; year: number;
+  id: number; name: string; year: number; leagueName: string;
   categories: { id: number; category: { id: number; name: string }; kickoffTime?: string|null; countsForGeneral: boolean }[];
   zone?: { id: number; name: string }|null;
 }
