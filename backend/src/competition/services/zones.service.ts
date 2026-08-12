@@ -176,8 +176,10 @@ export class ZonesService {
         throw new BadRequestException('La zona debe tener al menos un club asignado antes de finalizar');
       }
 
-      for (const assignment of zone.clubZones) {
-        await this.ensureClubEligibility(tx, zone, assignment.clubId);
+      if (zone.tournament.controlsPlayers) {
+        for (const assignment of zone.clubZones) {
+          await this.ensureClubEligibility(tx, zone, assignment.clubId);
+        }
       }
 
       await tx.zone.update({

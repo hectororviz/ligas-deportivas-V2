@@ -455,15 +455,17 @@ export class TournamentsService {
         };
       });
 
-      const eligible = categories.every((category) => {
-        if (category.mandatory) {
-          return category.hasTeam && category.playersCount >= category.minPlayers;
-        }
-        if (!category.hasTeam) {
-          return true;
-        }
-        return category.playersCount >= category.minPlayers;
-      });
+      const eligible = tournament.controlsPlayers === false
+        ? true
+        : categories.every((category) => {
+            if (category.mandatory) {
+              return category.hasTeam && category.playersCount >= category.minPlayers;
+            }
+            if (!category.hasTeam) {
+              return true;
+            }
+            return category.playersCount >= category.minPlayers;
+          });
 
       return {
         id: club.id,
