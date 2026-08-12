@@ -122,6 +122,8 @@ export class TournamentsService {
       birthYearMin: assignment.category.birthYearMin,
       birthYearMax: assignment.category.birthYearMax,
       gender: assignment.category.gender,
+      kickoffTime: assignment.kickoffTime,
+      countsForGeneral: assignment.countsForGeneral,
     }));
   }
 
