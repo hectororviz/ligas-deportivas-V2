@@ -86,7 +86,7 @@
 
     <div class="versus">
       <div class="club-block">
-        <div class="crest" style={match.homeClub?.primaryColor ? `--club-color: ${match.homeClub.primaryColor}` : ''}>
+        <div class="crest" class:has-logo={!!match.homeClub?.logoUrl} style={match.homeClub?.primaryColor ? `--club-color: ${match.homeClub.primaryColor}` : ''}>
           {#if match.homeClub?.logoUrl}
             <img src={match.homeClub.logoUrl} alt={match.homeClub.name} />
           {:else}
@@ -100,7 +100,7 @@
       <span class="vs">VS</span>
 
       <div class="club-block">
-        <div class="crest" style={match.awayClub?.primaryColor ? `--club-color: ${match.awayClub.primaryColor}` : ''}>
+        <div class="crest" class:has-logo={!!match.awayClub?.logoUrl} style={match.awayClub?.primaryColor ? `--club-color: ${match.awayClub.primaryColor}` : ''}>
           {#if match.awayClub?.logoUrl}
             <img src={match.awayClub.logoUrl} alt={match.awayClub.name} />
           {:else}
@@ -198,7 +198,8 @@
     font-weight: 700;
     font-size: 1.1rem;
   }
-  .crest img { width: 100%; height: 100%; object-fit: cover; }
+  .crest.has-logo { background: transparent; border-radius: 0; }
+  .crest img { width: 100%; height: 100%; object-fit: contain; }
   .club-name {
     font-family: 'Space Grotesk', sans-serif;
     font-size: 1.05rem;
@@ -217,14 +218,14 @@
 
   .table-card { padding: 0; overflow: hidden; margin-top: 1.5rem; }
   .score-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
-  .score-table th, .score-table td { padding: .8rem 1rem; border-bottom: 1px solid var(--color-border); text-align: left; }
+  .score-table th, .score-table td { padding: .8rem 1rem; border-bottom: 1px solid var(--color-border); text-align: left; vertical-align: middle; }
   .score-table th { color: var(--color-text-muted); font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; }
   .score-table tbody tr:last-child td { border-bottom: 0; }
   .score-table tr.clickable { cursor: pointer; }
   .score-table tr.clickable:hover { background: var(--color-surface-hover); }
   .score-table .num { text-align: center; }
-  .cat-name { display: flex; align-items: center; gap: .5rem; font-weight: 600; }
-  .cat-name .tag { font-size: .66rem; }
+  .cat-name { font-weight: 600; }
+  .cat-name .tag { display: inline-block; margin-left: .4rem; vertical-align: middle; }
 
   .score-cell {
     display: inline-block;

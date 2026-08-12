@@ -136,16 +136,23 @@ export class MatchesService {
             secondaryColor: match.awayClub.secondaryColor,
           }
         : null,
-      categories: match.categories.map((category) => ({
-        tournamentCategoryId: category.tournamentCategoryId,
-        categoryName: category.tournamentCategory.category.name,
-        isPromocional: category.isPromocional,
-        countsForGeneral: category.tournamentCategory.countsForGeneral,
-        kickoffTime: category.kickoffTime,
-        homeScore: category.homeScore,
-        awayScore: category.awayScore,
-        closedAt: category.closedAt,
-      })),
+      categories: match.categories
+        .map((category) => ({
+          tournamentCategoryId: category.tournamentCategoryId,
+          categoryName: category.tournamentCategory.category.name,
+          isPromocional: category.isPromocional,
+          countsForGeneral: category.tournamentCategory.countsForGeneral,
+          kickoffTime: category.kickoffTime,
+          homeScore: category.homeScore,
+          awayScore: category.awayScore,
+          closedAt: category.closedAt,
+        }))
+        .sort((a, b) => {
+          if (!a.kickoffTime && !b.kickoffTime) return 0;
+          if (!a.kickoffTime) return 1;
+          if (!b.kickoffTime) return -1;
+          return a.kickoffTime.localeCompare(b.kickoffTime);
+        }),
       tournament: {
         id: tournament.id,
         pointsWin: tournament.pointsWin,

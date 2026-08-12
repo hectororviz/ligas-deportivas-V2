@@ -67,7 +67,7 @@
       startDate: '', endDate: '', controlsPlayers: true
     };
     formCategories = allCategories.filter(c => c.active && c.gender === form.gender).map(c => ({
-      categoryId: c.id, name: c.name, enabled: false, countsForGeneral: false, kickoffTime: ''
+      categoryId: c.id, name: c.name, enabled: false, countsForGeneral: true, kickoffTime: ''
     }));
     error = '';
     showForm = true;
@@ -89,7 +89,7 @@
       controlsPlayers: tournament.controlsPlayers ?? true
     };
     formCategories = allCategories.filter(c => c.active && c.gender === form.gender).map(c => ({
-      categoryId: c.id, name: c.name, enabled: false, countsForGeneral: false, kickoffTime: ''
+      categoryId: c.id, name: c.name, enabled: false, countsForGeneral: true, kickoffTime: ''
     }));
     loadExistingCategories(tournament.id);
     error = '';
@@ -105,7 +105,7 @@
       formCategories = formCategories.map(c => {
         const ex = existing.find((e: any) => e.categoryId === c.categoryId || e.category?.id === c.categoryId);
         return ex
-          ? { ...c, enabled: ex.enabled ?? true, countsForGeneral: ex.countsForGeneral ?? false, kickoffTime: ex.kickoffTime || '' }
+          ? { ...c, enabled: ex.enabled ?? true, countsForGeneral: ex.countsForGeneral ?? true, kickoffTime: ex.kickoffTime || '' }
           : c;
       });
     } catch {}
@@ -113,7 +113,7 @@
 
   function openCatPicker() {
     const genderCats = allCategories.filter(c => c.active && c.gender === form.gender).map(c => ({
-      categoryId: c.id, name: c.name, enabled: false, countsForGeneral: false, kickoffTime: ''
+      categoryId: c.id, name: c.name, enabled: false, countsForGeneral: true, kickoffTime: ''
     }));
     const existingById = new Map(formCategories.map(c => [c.categoryId, c]));
     catPickerData = genderCats.map(c => {
@@ -356,7 +356,7 @@
                 </td>
                 <td>{cat.name}</td>
                 <td class="td-center">
-                  <input type="checkbox" checked={cat.countsForGeneral} disabled={!cat.enabled}
+                  <input type="checkbox" checked={!cat.countsForGeneral} disabled={!cat.enabled} title="Promocional: no suma puntos para la tabla general"
                     onchange={() => catPickerData[i].countsForGeneral = !catPickerData[i].countsForGeneral} />
                 </td>
                 <td>
