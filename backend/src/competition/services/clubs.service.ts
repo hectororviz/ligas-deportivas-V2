@@ -209,7 +209,10 @@ export class ClubsService {
         categories: Array<{
           tournamentCategoryId: number;
           categoryId: number;
+          category: { id: number; name: string };
           categoryName: string;
+          kickoffTime: string | null;
+          countsForGeneral: boolean;
           birthYearMin: number;
           birthYearMax: number;
           gender: string;
@@ -259,7 +262,10 @@ export class ClubsService {
       tournamentEntry.categories.push({
         tournamentCategoryId: tournamentCategory.id,
         categoryId: category.id,
+        category: { id: category.id, name: category.name },
         categoryName: category.name,
+        kickoffTime: tournamentCategory.kickoffTime,
+        countsForGeneral: tournamentCategory.countsForGeneral,
         birthYearMin: category.birthYearMin,
         birthYearMax: category.birthYearMax,
         gender: category.gender,
@@ -312,6 +318,7 @@ export class ClubsService {
       club: {
         id: club.id,
         name: club.name,
+        shortName: club.shortName,
         slug: club.slug,
         active: club.active,
         primaryColor: club.primaryColor,
@@ -319,6 +326,7 @@ export class ClubsService {
         logoUrl: club.logoUrl,
         instagramUrl: club.instagramUrl,
         facebookUrl: club.facebookUrl,
+        homeAddress: club.homeAddress,
         latitude: club.latitude,
         longitude: club.longitude,
       },
