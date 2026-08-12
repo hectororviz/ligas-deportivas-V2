@@ -454,7 +454,7 @@
                   <div class="zone-actions" onclick={(e) => e.stopPropagation()}>
                     <a class="button secondary" href={`/zones/${zone.id}/standings`}>Posiciones</a>
                     {#if canManage}
-                      <button class="button primary" disabled={saving} onclick={() => openFixtureModal(zone)}>Generar fixture</button>
+                      <button class="button primary" disabled={saving || (zone._count?.matches ?? 0) > 0} onclick={() => openFixtureModal(zone)}>Generar fixture</button>
                     {/if}
                     {#if canManage && zone.status === 'OPEN'}
                       <button class="icon-button delete-zone" disabled={saving} onclick={() => handleDeleteZone(zone)} aria-label={`Eliminar zona ${zone.name}`}>

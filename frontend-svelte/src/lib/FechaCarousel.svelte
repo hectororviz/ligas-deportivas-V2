@@ -1,0 +1,121 @@
+<script lang="ts">
+  import type { ZoneMatchday } from './api';
+
+  interface Props {
+    matchdays: ZoneMatchday[];
+    selectedMatchday: number | null;
+    onSelect: (matchday: number) => void;
+  }
+
+  let { matchdays, selectedMatchday, onSelect }: Props = $props();
+
+  let scrollEl: HTMLDivElement;
+
+  $effect(() => {
+    if (!scrollEl || selectedMatchday == null) return;
+    const el = scrollEl.querySelector(`[data-matchday="${selectedMatchday}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }
+  });
+
+  function scrollBy(direction: -1 | 1) {
+    if (!scrollEl) return;
+    scrollEl.scrollBy({ left: direction * 220, behavior: 'smooth' });
+  }
+
+  function statusClass(status: string): string {
+    const map: Record<string, string> = {
+      PLAYED: 'is-played',
+      INCOMPLETE: 'is-played',
+      IN_PROGRESS: 'is-current',
+      PENDING: '',
+    };
+    return map[status] ?? '';
+  }
+</script>
+
+{#if matchdays.length > 0}
+  <div class="carousel">
+    <button class="carousel-arrow" onclick={() => scrollBy(-1)} aria-label="Fecha anterior">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+
+    <div class="carousel-track" bind:this={scrollEl}>
+      {#each matchdays as md}
+        <button
+          class="fecha-chip {statusClass(md.status)}"
+          class:selected={selectedMatchday === md.matchday}
+          data-matchday={md.matchday}
+          onclick={() => onSelect(md.matchday)}
+          aria-pressed={selectedMatchday === md.matchday}
+        >
+          <span class="fecha-num">Fecha {md.matchday}</span>
+        </button>
+      {/each}
+    </div>
+
+    <button class="carousel-arrow" onclick={() => scrollBy(1)} aria-label="Fecha siguiente">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+  </div>
+{/if}
+
+<style>
+  .carousel {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin: 1rem 0;
+  }
+  .carousel-track {
+    flex: 1;
+    display: flex;
+    gap: .45rem;
+    overflow-x: auto;
+    scroll-behavior: smooth;
+    scrollbar-width: none;
+    padding: .15rem .1rem;
+  }
+  .carousel-track::-webkit-scrollbar { display: none; }
+  .carousel-arrow {
+    flex: 0 0 auto;
+    width: 2.2rem;
+    height: 2.2rem;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--color-border);
+    border-radius: .6rem;
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+    cursor: pointer;
+  }
+  .carousel-arrow:hover { background: var(--color-surface-hover); color: var(--color-text); }
+  .fecha-chip {
+    flex: 0 0 auto;
+    padding: .55rem 1.1rem;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    font-size: .82rem;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+  }
+  .fecha-chip:hover { background: var(--color-surface-hover); color: var(--color-text); }
+  .fecha-chip.selected {
+    background: var(--color-accent-bg);
+    border-color: var(--color-accent);
+    color: var(--color-accent-text);
+    font-weight: 700;
+  }
+  .fecha-chip.is-played .fecha-num::after {
+    content: ' · jugada';
+    font-size: .68rem;
+    opacity: .7;
+  }
+  .fecha-chip.is-current { border-color: var(--color-accent); border-style: dashed; }
+  .fecha-num { pointer-events: none; }
+</style>

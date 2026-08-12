@@ -29,6 +29,7 @@ export const NAV_ITEMS: NavItem[] = [
   },
   { id: 'clubs', label: 'Clubes', icon: 'shield', path: '/clubs' },
   { id: 'players', label: 'Jugadores', icon: 'users', path: '/players' },
+  { id: 'fixtures', label: 'Fixture', icon: 'calendar', path: '/fixtures' },
   { id: 'standings', label: 'Tablas', icon: 'table', path: '/standings' },
   {
     id: 'settings',

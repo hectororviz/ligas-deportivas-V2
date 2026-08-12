@@ -135,6 +135,7 @@ export interface Zone {
   lockedAt?: string | null;
   tournament: { name: string; year: number; league: { name: string } };
   clubZones?: { club: Club }[];
+  _count?: { clubZones: number; matches: number };
 }
 
 export interface StandingRow {
@@ -470,29 +471,41 @@ export async function getTournamentStandings(tournamentId: number): Promise<unkn
   return request(`/tournaments/${tournamentId}/standings`);
 }
 
+export interface ZoneMatchCategory {
+  id: number;
+  tournamentCategoryId: number;
+  kickoffTime: string | null;
+  isPromocional: boolean;
+  homeScore: number;
+  awayScore: number;
+  closedAt: string | null;
+  tournamentCategory: { category: { id: number; name: string } };
+}
+
 export interface ZoneMatch {
-  matchId: number;
+  id: number;
   matchday: number;
+  round: string;
   date: string | null;
   status: string;
-  homeClubId: number;
-  homeClubName: string;
-  awayClubId: number;
-  awayClubName: string;
-  categories: {
-    tournamentCategoryId: number;
-    categoryName: string;
-    homeGoals: number | null;
-    awayGoals: number | null;
-  }[];
+  homeClubId: number | null;
+  awayClubId: number | null;
+  homeClub: { id: number; name: string } | null;
+  awayClub: { id: number; name: string } | null;
+  categories: ZoneMatchCategory[];
+}
+
+export interface ZoneMatchday {
+  id: number;
+  zoneId: number;
+  matchday: number;
+  status: string;
+  date: string | null;
 }
 
 export interface ZoneMatchesResponse {
-  zoneId: number;
-  zoneName: string;
-  tournamentName: string;
-  matchdays: { matchday: number; date: string | null; status: string; finalizable: boolean }[];
   matches: ZoneMatch[];
+  matchdays: ZoneMatchday[];
 }
 
 export interface TournamentZoneClub {
