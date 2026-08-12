@@ -438,6 +438,14 @@ export async function generateFixture(zoneId: number, doubleRound: boolean): Pro
   return request(`/zones/${zoneId}/fixture`, { method: 'POST', body: JSON.stringify({ doubleRound }) });
 }
 
+export async function previewFixture(zoneId: number, doubleRound: boolean): Promise<unknown> {
+  return request(`/zones/${zoneId}/fixture/preview`, { method: 'POST', body: JSON.stringify({ doubleRound }) });
+}
+
+export async function finalizeZone(zoneId: number): Promise<unknown> {
+  return request(`/zones/${zoneId}/finalize`, { method: 'POST' });
+}
+
 export async function createZone(tournamentId: number, name: string): Promise<Zone> {
   return request<Zone>(`/tournaments/${tournamentId}/zones`, { method: 'POST', body: JSON.stringify({ name }) });
 }

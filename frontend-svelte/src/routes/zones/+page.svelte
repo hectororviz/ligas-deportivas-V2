@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { assignClubToZone, createZone, deleteZone, generateFixture, generateManualFixture, getProfile, getTournamentZoneClubs, getTournaments, getZones, removeClubFromZone, type AuthUser, type Tournament, type TournamentZoneClub, type Zone } from '$lib/api';
+  import { assignClubToZone, createZone, deleteZone, finalizeZone, generateFixture, generateManualFixture, getProfile, getTournamentZoneClubs, getTournaments, getZones, previewFixture, removeClubFromZone, type AuthUser, type Tournament, type TournamentZoneClub, type Zone } from '$lib/api';
   import Modal from '$lib/Modal.svelte';
 
   let user: AuthUser | null = $state(null);
@@ -15,6 +15,8 @@
   let fixtureZone: Zone | null = $state(null);
   let fixtureMode = $state<'auto' | 'manual'>('auto');
   let doubleRound = $state(true);
+  let autoPreview = $state<any>(null);
+  let previewing = $state(false);
 
   let manualDates = $state<ManualDate[]>([]);
   let selectedDateIdx = $state(0);
@@ -24,7 +26,7 @@
   interface ManualDate {
     matches: { homeClubId: number | null; awayClubId: number | null }[];
     byeClubId: number | null;
-    errors: string[];
+    warnings: string[];
   }
 
   interface FixtureMeta { clubCount: number; hasBye: boolean; totalDates: number; matchesPerDate: number; clubs: { id: number; name: string }[] }
@@ -137,6 +139,8 @@
     fixtureZone = zone;
     fixtureMode = 'auto';
     doubleRound = true;
+    autoPreview = null;
+    previewing = false;
     error = '';
     showFixtureModal = true;
   }
@@ -144,11 +148,23 @@
   function switchToManual() {
     if (!fixtureZone) return;
     fixtureMode = 'manual';
+    autoPreview = null;
     const clubs = assignedClubs(fixtureZone);
     initManualBuilder(clubs);
   }
 
-  function closeFixtureModal() { showFixtureModal = false; fixtureZone = null; }
+  function closeFixtureModal() { showFixtureModal = false; fixtureZone = null; autoPreview = null; }
+
+  async function doPreview() {
+    if (!fixtureZone) return;
+    error = ''; autoPreview = null;
+    previewing = true;
+    try {
+      autoPreview = await previewFixture(fixtureZone.id, doubleRound);
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'No se pudo generar la vista previa.';
+    } finally { previewing = false; }
+  }
 
   async function confirmGenerateFixture() {
     if (!fixtureZone) return;
@@ -164,6 +180,21 @@
     } finally { saving = false; }
   }
 
+  async function handleFinalizeZone(zone: Zone) {
+    if (!confirm(`¿Finalizar Zona ${zone.name}? No se podrá modificar después.`)) return;
+    saving = true; error = '';
+    try {
+      await finalizeZone(zone.id);
+      notice = `Zona ${zone.name} finalizada.`;
+      zones = await getZones(true);
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'No se pudo finalizar la zona.';
+    } finally {
+      saving = false;
+      setTimeout(() => notice = '', 2500);
+    }
+  }
+
   function initManualBuilder(clubs: { clubId: number; clubName: string }[]) {
     if (clubs.length < 2) return;
     const clubList = clubs.map(c => ({ id: c.clubId, name: c.clubName }));
@@ -171,7 +202,7 @@
     const round1Dates: ManualDate[] = [];
     for (let d = 0; d < meta.totalDates; d++) {
       const matches = Array.from({ length: meta.matchesPerDate }, () => ({ homeClubId: null as number | null, awayClubId: null as number | null }));
-      round1Dates.push({ matches, byeClubId: null, errors: [] });
+      round1Dates.push({ matches, byeClubId: null, warnings: [] });
     }
     manualDates = round1Dates;
     selectedDateIdx = 0;
@@ -230,20 +261,6 @@
     if (slot === 'home' && matchSlot.awayClubId === clubId) return false;
     if (slot === 'away' && matchSlot.homeClubId === clubId) return false;
 
-    if (dateIdx > 0) {
-      const prev = manualDates[dateIdx - 1];
-      for (const m of prev.matches) {
-        if (slot === 'home' && m.homeClubId === clubId) return false;
-        if (slot === 'away' && m.awayClubId === clubId) return false;
-      }
-    }
-    if (dateIdx < manualDates.length - 1) {
-      const next = manualDates[dateIdx + 1];
-      for (const m of next.matches) {
-        if (slot === 'home' && m.homeClubId === clubId) return false;
-        if (slot === 'away' && m.awayClubId === clubId) return false;
-      }
-    }
     return true;
   }
 
@@ -270,50 +287,62 @@
   }
 
   function validateAll() {
-    const meta = getMeta();
-    if (!meta) return;
     for (let d = 0; d < manualDates.length; d++) {
-      manualDates[d].errors = validateDate(d, meta);
+      manualDates[d].warnings = validateDate(d);
     }
     manualDates = [...manualDates];
   }
 
-  function validateDate(dateIdx: number, meta: FixtureMeta): string[] {
-    const err: string[] = [];
+  function validateDate(dateIdx: number): string[] {
+    const warns: string[] = [];
     const d = manualDates[dateIdx];
-    if (!d) return err;
+    if (!d) return warns;
 
     for (const m of d.matches) {
       if (!m.homeClubId && !m.awayClubId) continue;
       if (!m.homeClubId || !m.awayClubId) {
-        err.push('Todos los cruces deben estar completos.');
-        break;
+        warns.push('Cruce incompleto.');
+        continue;
       }
       if (m.homeClubId === m.awayClubId) {
-        err.push('Un club no puede enfrentarse a si mismo.');
+        warns.push(`${clubName(m.homeClubId)} no puede enfrentarse a sí mismo.`);
       }
     }
 
+    const meta = getMeta();
+    if (!meta) return warns;
+
+    if (meta.hasBye && !d.byeClubId) warns.push('Falta asignar el libre.');
     const used = usedClubIds(dateIdx);
-    if (meta.hasBye && !d.byeClubId) err.push('Falta asignar el libre.');
-    if (meta.hasBye && used.size !== meta.clubCount) err.push('Falta un club por asignar.');
-    if (!meta.hasBye && used.size !== meta.clubCount) err.push('Falta un club por asignar.');
+    if (used.size !== meta.clubCount) warns.push('Faltan clubes por asignar en esta fecha.');
 
     const pairKeys = new Set<string>();
     for (const m of d.matches) {
       if (!m.homeClubId || !m.awayClubId) continue;
       const key = `${Math.min(m.homeClubId, m.awayClubId)}-${Math.max(m.homeClubId, m.awayClubId)}`;
-      if (pairKeys.has(key)) err.push('Hay cruces duplicados en esta fecha.');
+      if (pairKeys.has(key)) warns.push('Hay cruces duplicados en esta fecha.');
       pairKeys.add(key);
     }
 
-    return err;
+    if (dateIdx > 0) {
+      for (const m of d.matches) {
+        if (!m.homeClubId || !m.awayClubId) continue;
+        const prev = manualDates[dateIdx - 1];
+        for (const pm of prev.matches) {
+          if (!pm.homeClubId || !pm.awayClubId) continue;
+          if (m.homeClubId === pm.homeClubId) warns.push(`${clubName(m.homeClubId)} repite local en fechas consecutivas.`);
+          if (m.awayClubId === pm.awayClubId) warns.push(`${clubName(m.awayClubId)} repite visitante en fechas consecutivas.`);
+        }
+      }
+    }
+
+    return warns;
   }
 
   function buildRound2(): ManualDate[] {
     return manualDates.map(d => ({
       byeClubId: d.byeClubId,
-      errors: [],
+      warnings: [],
       matches: d.matches.map(m => ({
         homeClubId: m.awayClubId,
         awayClubId: m.homeClubId
@@ -324,12 +353,6 @@
   async function saveManualFixture() {
     if (!fixtureZone) return;
     validateAll();
-    const hasErrors = manualDates.some(d => d.errors.length > 0 || d.matches.some(m => !m.homeClubId || !m.awayClubId));
-    const meta = getMeta();
-    if (hasErrors || (meta?.hasBye && manualDates.some(d => !d.byeClubId))) {
-      error = 'Corregi los errores antes de guardar.';
-      return;
-    }
 
     error = ''; saving = true;
     const round1 = manualDates.map((d, i) => ({
@@ -338,6 +361,11 @@
       matches: d.matches.filter(m => m.homeClubId && m.awayClubId).map(m => ({ homeClubId: m.homeClubId!, awayClubId: m.awayClubId! })),
       ...(d.byeClubId ? { byeClubId: d.byeClubId } : {})
     }));
+    if (round1.every(d => d.matches.length === 0)) {
+      error = 'Completá al menos un cruce antes de guardar.';
+      saving = false;
+      return;
+    }
 
     const r2 = buildRound2().map((d, i) => ({
       matchday: manualDates.length + i + 1,
@@ -431,6 +459,9 @@
                   </div>
                   <div class="zone-actions" onclick={(e) => e.stopPropagation()}>
                     <a class="button secondary" href={`/zones/${zone.id}/standings`}>Posiciones</a>
+                    {#if canManage && zone.status === 'OPEN'}
+                      <button class="button secondary" disabled={saving} onclick={() => handleFinalizeZone(zone)}>Finalizar</button>
+                    {/if}
                     {#if canManage}
                       <button class="button primary" disabled={saving} onclick={() => openFixtureModal(zone)}>Generar fixture</button>
                     {/if}
@@ -507,13 +538,40 @@
           <button class="mode-tab active">Automático</button>
           <button class="mode-tab" onclick={switchToManual}>Manual</button>
         </div>
-        <form onsubmit={(event) => { event.preventDefault(); confirmGenerateFixture(); }}>
-          <label class="checkbox-label"><input type="checkbox" bind:checked={doubleRound} disabled={saving} /> Ida y vuelta</label>
-          <div class="form-actions">
-            <button class="button secondary" type="button" disabled={saving} onclick={closeFixtureModal}>Cancelar</button>
-            <button class="button primary" type="submit" disabled={saving}>{saving ? 'Generando...' : 'Generar fixture'}</button>
+
+        {#if autoPreview}
+          <div class="auto-preview">
+            <h4>Vista previa</h4>
+            {#each autoPreview.matchdays as md}
+              <div class="preview-matchday">
+                <div class="preview-md-header">
+                  <strong>Fecha {md.matchday}</strong>
+                  <span class="badge-muted">{md.round === 'FIRST' ? 'Ronda 1' : 'Ronda 2'}</span>
+                  {#if md.byeClubId && previewMeta}
+                    <span class="badge-muted">Libre: {clubName(md.byeClubId)}</span>
+                  {/if}
+                </div>
+                {#each md.matches as match}
+                  <div class="preview-match">
+                    <span>{match.homeClubId && previewMeta ? previewMeta.clubs.find(c => c.id === match.homeClubId)?.name || '?' : '?'}</span>
+                    <span class="vs">vs</span>
+                    <span>{match.awayClubId && previewMeta ? previewMeta.clubs.find(c => c.id === match.awayClubId)?.name || '?' : '?'}</span>
+                  </div>
+                {/each}
+              </div>
+            {/each}
           </div>
-        </form>
+          <div class="form-actions" style="margin-top:1rem;">
+            <button class="button secondary" type="button" onclick={() => autoPreview = null}>Volver</button>
+            <button class="button primary" type="button" disabled={saving} onclick={confirmGenerateFixture}>{saving ? 'Generando...' : 'Confirmar y generar'}</button>
+          </div>
+        {:else}
+          <label class="checkbox-label"><input type="checkbox" bind:checked={doubleRound} disabled={previewing} /> Ida y vuelta</label>
+          <div class="form-actions">
+            <button class="button secondary" type="button" disabled={previewing} onclick={closeFixtureModal}>Cancelar</button>
+            <button class="button primary" type="button" disabled={previewing} onclick={doPreview}>{previewing ? 'Generando vista previa...' : 'Generar vista previa'}</button>
+          </div>
+        {/if}
       </div>
     </Modal>
   {:else if previewMeta}
@@ -549,7 +607,7 @@
           <div class="matchdays-area">
             <div class="date-tabs">
               {#each manualDates as date, i}
-                <button class="date-tab" class:active={selectedDateIdx === i} class:has-errors={date.errors.length > 0} onclick={() => selectedDateIdx = i}>
+                <button class="date-tab" class:active={selectedDateIdx === i} class:has-warnings={date.warnings.length > 0} onclick={() => selectedDateIdx = i}>
                   Fecha {i + 1}
                 </button>
               {/each}
@@ -608,10 +666,10 @@
                   </div>
                 {/if}
 
-                {#if manualDates[selectedDateIdx].errors.length > 0}
-                  <div class="date-errors">
-                    {#each manualDates[selectedDateIdx].errors as e}
-                      <p class="form-error">{e}</p>
+                {#if manualDates[selectedDateIdx].warnings.length > 0}
+                  <div class="date-warnings">
+                    {#each manualDates[selectedDateIdx].warnings as e}
+                      <p class="form-warning">{e}</p>
                     {/each}
                   </div>
                 {/if}
@@ -720,8 +778,14 @@
     font-size: .78rem; font-weight: 500; font-family: inherit;
   }
   .date-tab.active { background: var(--color-accent-bg); color: var(--color-accent-text); border-color: var(--color-accent); }
-  .date-tab.has-errors { border-color: var(--color-error); }
-  .date-tab.has-errors::after { content: ' !'; color: var(--color-error); font-weight: 700; }
+  .date-tab.has-warnings { border-color: #d4a000; background: #fffae6; }
+  .date-tab.has-warnings::after { content: ' !'; color: #d4a000; font-weight: 700; }
+
+  .date-warnings { margin-top: .5rem; display: grid; gap: .2rem; }
+  .form-warning {
+    font-size: .78rem; color: #8a6d00; background: #fffae6; border: 1px solid #d4a000;
+    padding: .3rem .6rem; border-radius: .4rem; margin: 0;
+  }
 
   .matches-grid { display: grid; gap: .5rem; }
   .match-row { display: flex; align-items: center; gap: .5rem; }
@@ -747,4 +811,15 @@
     .manual-builder { grid-template-columns: 1fr; }
     .club-pool { display: flex; flex-wrap: wrap; gap: .3rem; }
   }
+
+  .auto-preview { margin: .75rem 0; }
+  .auto-preview h4 { margin: 0 0 .5rem; font-family: 'Space Grotesk', sans-serif; font-size: .95rem; }
+  .preview-matchday { margin-bottom: .75rem; border: 1px solid var(--color-border); border-radius: .6rem; padding: .6rem .8rem; }
+  .preview-md-header { display: flex; align-items: center; gap: .5rem; margin-bottom: .4rem; flex-wrap: wrap; }
+  .preview-md-header strong { font-size: .85rem; }
+  .preview-match {
+    display: flex; align-items: center; gap: .5rem; padding: .25rem 0;
+    font-size: .82rem; font-weight: 500;
+  }
+  .preview-match .vs { width: auto; padding: 0 .3rem; }
 </style>
