@@ -97,6 +97,8 @@ jobs:
           push: true
           tags: ${{ steps.backend-meta.outputs.tags }}
           labels: ${{ steps.backend-meta.outputs.labels }}
+          no-cache: true
+          provenance: false
       - name: Build and push frontend
         uses: docker/build-push-action@v6
         with:
@@ -105,3 +107,5 @@ jobs:
           push: true
           tags: ${{ steps.frontend-meta.outputs.tags }}
           labels: ${{ steps.frontend-meta.outputs.labels }}
+          no-cache: true
+          provenance: false
