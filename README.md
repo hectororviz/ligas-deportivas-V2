@@ -11,6 +11,9 @@ Monorepo para una plataforma web que administra ligas deportivas, torneos, fixtu
 - Administración de roles, permisos y usuarios con guardas basadas en RBAC y scopes personalizados. ([backend/src/rbac/roles.controller.ts](backend/src/rbac/roles.controller.ts)) ([backend/src/users/users.controller.ts](backend/src/users/users.controller.ts)) ([backend/src/prisma/base-seed.ts](backend/src/prisma/base-seed.ts))
 - Gestión completa del dominio competitivo: ligas, clubes, torneos, zonas, categorías, jugadores y planteles, expuesta mediante controladores específicos. ([backend/src/competition/controllers/leagues.controller.ts](backend/src/competition/controllers/leagues.controller.ts)) ([backend/src/competition/controllers/clubs.controller.ts](backend/src/competition/controllers/clubs.controller.ts)) ([backend/src/competition/controllers/tournaments.controller.ts](backend/src/competition/controllers/tournaments.controller.ts)) ([backend/src/competition/controllers/zones.controller.ts](backend/src/competition/controllers/zones.controller.ts)) ([backend/src/competition/controllers/players.controller.ts](backend/src/competition/controllers/players.controller.ts))
 - Generación automática de fixture ida y vuelta (método del círculo), bloqueo del torneo y creación masiva de partidos. ([backend/src/competition/services/fixture.service.ts](backend/src/competition/services/fixture.service.ts))
+- Generación de fixture **manual** por zona (drag & drop), con validación de cruces y segunda rueda automática.
+- Detalle de partido (`GET /matches/:id`) con clubes, categorías, puntos calculados y control de jugadores.
+- Eliminación de torneo en cascada con confirmación de administrador, y eliminación de zonas en estado abierto.
 - Registro de resultados por categoría, control de adjuntos, bitácora de cambios y disparo del recálculo de tablas tras cada cierre. ([backend/src/competition/services/matches.service.ts](backend/src/competition/services/matches.service.ts))
 - Servicio de standings que actualiza tablas zonales, por torneo y por liga aplicando la configuración de puntos definida en cada torneo. ([backend/src/standings/standings.service.ts](backend/src/standings/standings.service.ts))
 - Configuración centralizada, mailer SMTP y verificación de captchas integrados como módulos reutilizables. ([backend/src/app.module.ts](backend/src/app.module.ts)) ([backend/src/mail/mail.module.ts](backend/src/mail/mail.module.ts)) ([backend/src/captcha/captcha.service.ts](backend/src/captcha/captcha.service.ts))
@@ -21,8 +24,13 @@ Monorepo para una plataforma web que administra ligas deportivas, torneos, fixtu
 - Sidebar colapsable en desktop y drawer deslizante en mobile, con estado persistido en `localStorage`. ([frontend-svelte/src/lib/Sidebar.svelte](frontend-svelte/src/lib/Sidebar.svelte))
 - Modales reutilizables para creación y edición de entidades. ([frontend-svelte/src/lib/Modal.svelte](frontend-svelte/src/lib/Modal.svelte))
 - Gestión completa de ligas, clubes, categorías, torneos, zonas, jugadores, tablas y configuración, con formularios adaptables y validación client-side.
-- Sistema de paletas de colores con 8 temas (2 oscuros) aplicables a todo el sitio. ([frontend-svelte/src/lib/palettes.ts](frontend-svelte/src/lib/palettes.ts))
-- Perfil público de club con mapa Leaflet, colores y redes sociales. ([frontend-svelte/src/routes/club/[slug]/+page.svelte](frontend-svelte/src/routes/club/[slug]/+page.svelte))
+- Menú con subniveles (Gestión y Configuración agrupadas) y botones `+` con acciones contextuales.
+- Alta de jugadores por **masivo** (tabla de 10 filas agregables) y por **escaneo de DNI** (PDF417 con cámara).
+- Fixture con **selectores encadenados** (Liga → Torneo → Zona), carrusel de fechas, persistencia en `localStorage` y deep linking por query params.
+- Generación de fixture **manual** con drag & drop, advertencias de alternancia local/visitante y segunda rueda automática.
+- Página de **resultados** por partido con goles por jugador y colores por resultado (verde/rojo/amarillo).
+- Sistema de paletas de colores con 36 temas (claras, oscuras y temáticas MMA), globales para todos los usuarios. ([frontend-svelte/src/lib/palettes.ts](frontend-svelte/src/lib/palettes.ts))
+- Perfil público de club con mapa Leaflet, colores, redes sociales, inscripción a torneos y acordeón de categorías. ([frontend-svelte/src/routes/club/[slug]/+page.svelte](frontend-svelte/src/routes/club/[slug]/+page.svelte))
 
 ### Infraestructura
 
@@ -359,6 +367,7 @@ El script detecta automáticamente en qué esquema existe la tabla `Player`, aju
 ## Documentación adicional
 
 - [Arquitectura y componentes](docs/architecture.md)
+- [Casos de uso y flujo de trabajo](docs/casos-de-uso.md)
 - [Guía de desarrollo y entornos](docs/desarrollo-entornos.md)
 - [Respaldo y restauración de la base de datos](docs/postgres-backup-restore.md)
 

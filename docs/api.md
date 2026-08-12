@@ -97,10 +97,10 @@ Requiere JWT + permisos de roles/permisos.
 
 | Método | Ruta | Auth | Descripción | Body/Notas |
 | --- | --- | --- | --- | --- |
-| GET | `/site-identity` | Público | Datos de identidad (nombre, etc.). | - |
+| GET | `/site-identity` | Público | Datos de identidad (nombre, paleta, etc.). | Incluye `paletteId`. |
 | GET | `/site-identity/icon` | Público | Obtener ícono | Devuelve archivo con cache 5 min. |
 | GET | `/site-identity/flyer` | Público | Obtener flyer | Devuelve archivo con cache 5 min. |
-| PUT | `/site-identity` | JWT + permisos | Actualizar identidad | `multipart/form-data` con campos `icon`, `flyer` y `UpdateSiteIdentityDto`. |
+| PUT | `/site-identity` | JWT + permisos | Actualizar identidad | `multipart/form-data` con campos `icon`, `flyer`, `paletteId` y `UpdateSiteIdentityDto`. |
 
 ### 4.5. Competencias (flyer templates)
 
@@ -130,10 +130,12 @@ Requiere JWT + permisos de roles/permisos.
 | GET | `/tournaments/active` | Público | Listar solo torneos activos. | Atajo equivalente a `/tournaments` sin `includeInactive`. |
 | GET | `/leagues/:leagueId/tournaments` | Público | Torneos por liga. | - |
 | GET | `/tournaments/:id` | Público | Detalle del torneo. | - |
+| GET | `/tournaments/:id/categories` | Público | Categorías del torneo. | Devuelve `kickoffTime` y `countsForGeneral`. |
 | GET | `/tournaments/:tournamentId/zones` | Público | Zonas del torneo con equipos (clubes) por zona. | Ordenado por nombre de zona y de equipo. Retorna `404` si el torneo no existe. |
 | GET | `/tournaments/:id/zones/clubs` | Público | Clubes para asignación de zonas | Query opcional `zoneId` para filtrar. |
-| POST | `/tournaments` | JWT + permisos | Crear torneo. | `CreateTournamentDto`. |
-| PUT | `/tournaments/:id` | JWT + permisos | Actualizar torneo. | `UpdateTournamentDto`. |
+| POST | `/tournaments` | JWT + permisos | Crear torneo. | `CreateTournamentDto` (acepta `categories` opcional con `categoryId`, `enabled`, `countsForGeneral`, `kickoffTime`). |
+| PUT | `/tournaments/:id` | JWT + permisos | Actualizar torneo. | `UpdateTournamentDto` (requiere `categories`). |
+| DELETE | `/tournaments/:id` | JWT + permisos | Eliminar torneo en cascada. | Body `{ email, password }` de administrador. Borra zonas, partidos, goles, planteles, etc. |
 | POST | `/tournaments/:id/zones` | JWT + permisos | Crear zona en torneo. | `CreateZoneDto`. |
 | POST | `/tournaments/:id/categories` | JWT + permisos | Agregar categoría al torneo. | `AddTournamentCategoryDto`. |
 
@@ -209,9 +211,11 @@ Requiere JWT + permisos de roles/permisos.
 | GET | `/zones/:id` | Público | Detalle de zona. | - |
 | POST | `/zones/:zoneId/clubs` | JWT + permisos | Asignar club a zona. | `AssignClubZoneDto` (clubId). |
 | DELETE | `/zones/:zoneId/clubs/:clubId` | JWT + permisos | Quitar club de zona. | - |
+| DELETE | `/zones/:id` | JWT + permisos | Eliminar zona. | Solo si está en estado abierto y sin partidos. |
 | POST | `/zones/:zoneId/finalize` | JWT + permisos | Finalizar zona. | - |
 | POST | `/zones/:zoneId/fixture/preview` | JWT + permisos | Vista previa del fixture. | `ZoneFixtureOptionsDto`. |
-| POST | `/zones/:zoneId/fixture` | JWT + permisos | Generar fixture. | `ZoneFixtureOptionsDto`. |
+| POST | `/zones/:zoneId/fixture` | JWT + permisos | Generar fixture. | `ZoneFixtureOptionsDto` (usa `doubleRound`). |
+| POST | `/zones/:zoneId/fixture/manual` | JWT + permisos | Guardar fixture manual. | `ManualZoneFixtureDto` (array `matchdays`). |
 
 #### Fixture automático de torneo
 
@@ -258,12 +262,13 @@ Requiere JWT + permisos de roles/permisos.
 
 | Método | Ruta | Auth | Descripción | Body/Notas |
 | --- | --- | --- | --- | --- |
-| GET | `/zones/:zoneId/matches` | Público | Partidos de una zona. | - |
+| GET | `/matches/:matchId` | Público | Detalle del partido (clubes con escudo, categorías, puntos calculados, config de puntos y `controlsPlayers`). | - |
+| GET | `/zones/:zoneId/matches` | Público | Partidos de una zona. | Cada partido incluye `pointsHome`/`pointsAway` (puntos de categorías no promocionales). |
 | POST | `/zones/:zoneId/matchdays/:matchday/finalize` | JWT + permisos | Finalizar jornada. | - |
 | GET | `/zones/:zoneId/matchdays/:matchday/summary` | Público | Resumen de jornada. | - |
 | PATCH | `/zones/:zoneId/matchdays/:matchday` | JWT + permisos | Actualizar fecha de jornada. | `UpdateMatchdayDto`. |
 | GET | `/matches/:matchId/categories/:categoryId/result` | Público | Resultado de un partido por categoría. | - |
-| POST | `/matches/:matchId/categories/:categoryId/result` | JWT + permisos | Registrar resultado. | `RecordMatchResultDto` + `multipart/form-data` con `attachment` opcional. |
+| POST | `/matches/:matchId/categories/:categoryId/result` | JWT + permisos | Registrar resultado. | `RecordMatchResultDto` (`homeScore`, `awayScore`, `playerGoals`, `otherGoals`, `confirm`) + `multipart/form-data` con `attachment` opcional. |
 | PATCH | `/matches/:matchId` | JWT + permisos | Actualizar partido. | `UpdateMatchDto`. |
 | GET | `/matches/flyer/tokens` | Público | Tokens disponibles para flyers. | - |
 | GET | `/matches/:matchId/flyer` | Público | Descargar flyer del partido. | Respuesta binaria con `Content-Disposition`. |

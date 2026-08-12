@@ -18,11 +18,15 @@ frontend-svelte/
   src/
     lib/
       api.ts              → cliente HTTP, tipos y funciones
-      Modal.svelte         → modal reutilizable
+      Modal.svelte         → modal reutilizable (prop `wide`)
       Sidebar.svelte       → sidebar colapsable + drawer mobile
-      navigation.svelte.ts → estado del sidebar
-      palette.svelte.ts    → gestión de paletas
-      palettes.ts          → 8 paletas de colores
+      navigation.svelte.ts → estado del sidebar (con subniveles)
+      palette.svelte.ts    → gestión de paletas (persistida en backend)
+      palettes.ts          → 36 paletas de colores
+      FixtureFilters.svelte → selectores encadenados Liga → Torneo → Zona
+      FechaCarousel.svelte  → carrusel horizontal de fechas
+      PartidoCard.svelte    → card de partido con puntos
+      PlayerGoalsModal.svelte → modal de goles por jugador (2 columnas)
     routes/
       +layout.svelte       → shell con sidebar (páginas autenticadas)
       +page.svelte         → panel inicial
@@ -32,24 +36,26 @@ frontend-svelte/
       reset-password/      → recuperación de contraseña
       leagues/             → CRUD de ligas
       clubs/               → CRUD de clubes (grilla + modal)
-      club/[slug]/         → perfil público con mapa
-      clubs/[clubId]/roster/ → plantel del club
-      players/             → CRUD de jugadores
+      club/[slug]/         → detalle del club (inscripción a torneos, acordeón)
+      clubs/[clubId]/roster/ → plantel del club (asignación de jugadores)
+      players/             → CRUD de jugadores (manual, masivo, escaneo DNI)
       categories/          → CRUD de categorías
-      tournaments/         → CRUD de torneos
-      zones/               → zonas y generación de fixture
+      tournaments/         → CRUD de torneos (selector de categorías, borrado)
+      zones/               → zonas, clubes y fixture auto/manual (drag & drop)
+      fixtures/            → consulta de fixture (filtros, carrusel de fechas)
+      fixtures/partido/[matchId]/ → resultado y goles por jugador
       standings/           → tablas de posiciones
       stats/               → estadísticas
       settings/            → hub de configuración
       settings/account/    → perfil y contraseña
-      settings/site-identity/ → identidad del sitio
+      settings/site-identity/ → identidad del sitio (con paleta)
       settings/palette/    → selector de paleta
-      settings/users/      → gestión de usuarios
+      settings/users/      → gestión de usuarios y permisos
 ```
 
 ## Funcionalidades
 
-Todas las pantallas del frontend Flutter fueron migradas a SvelteKit. La API REST se consume sin modificaciones. El nuevo frontend es más ligero (~130 KB comprimido) y funciona en escritorio y mobile con sidebar adaptativo.
+Todas las pantallas del frontend Flutter fueron migradas a SvelteKit, y se sumaron mejoras: menú con subniveles, alta masiva de jugadores y escaneo de DNI, fixture manual con drag & drop, página de resultados con goles por jugador y paletas de colores globales (36 temas). La API REST se consume sin modificaciones. El nuevo frontend es más ligero (~130 KB comprimido) y funciona en escritorio y mobile con sidebar adaptativo.
 
 ## Desarrollo
 

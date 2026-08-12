@@ -26,8 +26,9 @@ Este documento describe la arquitectura del proyecto **Ligas Deportivas**, los m
 ### 2.4 Dominio competitivo
 - El módulo `competition` expone endpoints CRUD para ligas, clubes, torneos, zonas, categorías, planteles, jugadores y equipos.
 - `FixtureService` genera rondas ida y vuelta con el algoritmo del círculo, y soporta fixture manual por zona.
-- `MatchesService` administra partidos, resultados, goles y adjuntos.
+- `MatchesService` administra partidos, resultados, goles y adjuntos; expone `GET /matches/:id` (detalle con puntos calculados) y `GET /zones/:zoneId/matches` (partidos con puntos por categorías no promocionales).
 - `StandingsService` recalcula tablas zonales, por torneo y por liga.
+- Eliminación en cascada de torneos (con confirmación de administrador) y de zonas en estado abierto.
 
 ### 2.5 Modelo de datos
 - El esquema Prisma define entidades para organización (ligas, torneos, zonas, clubes), competitividad (partidos, resultados), personas (jugadores, planteles) y seguridad (usuarios, roles, permisos, tokens).
@@ -41,22 +42,29 @@ frontend-svelte/
   src/
     lib/
       api.ts           → cliente HTTP, tipos y funciones de API
-      Modal.svelte      → componente modal reutilizable
+      Modal.svelte      → componente modal reutilizable (prop `wide`)
       Sidebar.svelte    → navegación lateral colapsable + drawer mobile
       navigation.svelte.ts → estado de navegación (clase con $state)
-      palette.svelte.ts → gestión de paletas de colores
-      palettes.ts       → 8 paletas predefinidas
+      palette.svelte.ts → gestión de paletas de colores (persistida en backend)
+      palettes.ts       → 36 paletas predefinidas (claras, oscuras, MMA)
+      FixtureFilters.svelte → selectores encadenados Liga → Torneo → Zona
+      FechaCarousel.svelte  → carrusel horizontal de fechas
+      PartidoCard.svelte    → card de partido con puntos
+      PlayerGoalsModal.svelte → modal de goles por jugador (2 columnas)
     routes/
       +layout.svelte    → layout principal con sidebar
       +page.svelte       → panel inicial (home summary)
       login/             → autenticación
       leagues/           → CRUD de ligas
       clubs/             → CRUD de clubes con grilla y modal
-      club/[slug]/       → perfil público del club con mapa Leaflet
-      players/           → CRUD de jugadores
+      club/[slug]/       → detalle del club (inscripción a torneos, acordeón)
+      clubs/[clubId]/roster/ → plantel por categoría (asignación de jugadores)
+      players/           → CRUD de jugadores (manual, masivo, escaneo DNI)
       categories/        → CRUD de categorías
-      tournaments/       → CRUD de torneos
-      zones/             → listado de zonas y generación de fixture
+      tournaments/       → CRUD de torneos (selector de categorías, borrado)
+      zones/             → zonas, asignación de clubes y fixture auto/manual
+      fixtures/          → consulta de fixture (filtros, carrusel de fechas)
+      fixtures/partido/[matchId]/ → resultado del partido y goles por jugador
       standings/         → tablas de posiciones
       stats/             → estadísticas y leaderboards
       settings/          → cuenta, identidad, paleta, usuarios
@@ -68,17 +76,21 @@ frontend-svelte/
 ### 3.2 Estado y servicios
 - `api.ts`: cliente HTTP basado en `fetch` con interceptores para JWT y renovación automática ante 401. Persistencia de tokens en `localStorage`.
 - `navigation.svelte.ts`: estado del sidebar con clase y runes de Svelte 5 (`$state`). Colapso persistido en `localStorage`. MatchMedia para detectar mobile.
-- `palette.svelte.ts`: 8 paletas de colores aplicables a todo el sitio mediante CSS custom properties en `:root`.
+- `palette.svelte.ts`: 36 paletas de colores aplicables a todo el sitio mediante CSS custom properties en `:root`. La paleta seleccionada se guarda en el backend (campo `paletteId` de `SiteIdentity`) y es global para todos los usuarios.
 
 ### 3.3 Funcionalidades destacadas
 - Login con validación client-side y refresh automático.
 - Panel inicial con resumen de torneos activos, zonas y posiciones.
 - CRUD completo para ligas, clubes, categorías, torneos y jugadores con modales.
-- Perfil público de club con mapa Leaflet, colores y redes sociales.
-- Generación de fixture ida/vuelta desde el panel de zonas.
+- Menú con subniveles (grupos Gestión y Configuración).
+- Alta de jugadores masiva (tabla de 10 filas) y por escaneo de DNI (PDF417).
+- Detalle de club con inscripción a torneos, acordeón de categorías y mapa Leaflet.
+- Generación de fixture automática (con vista previa) y manual (drag & drop).
+- Página de fixture con selectores encadenados, carrusel de fechas, persistencia y deep linking.
+- Página de resultados con goles por jugador y colores por resultado.
 - Tablas de posiciones por zona y torneo.
 - Estadísticas con leaderboards (goleadores, defensas, etc.).
-- Selector de paleta de colores con 8 temas (2 oscuros).
+- Selector de paleta de colores con 36 temas, global para todos los usuarios.
 - Registro, verificación de correo y recuperación de contraseña públicos.
 
 ## 4. Infraestructura y operaciones
