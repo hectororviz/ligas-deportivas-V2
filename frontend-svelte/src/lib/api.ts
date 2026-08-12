@@ -434,8 +434,8 @@ export async function removeClubFromZone(zoneId: number, clubId: number): Promis
   return request(`/zones/${zoneId}/clubs/${clubId}`, { method: 'DELETE' });
 }
 
-export async function generateFixture(zoneId: number, idaVuelta: boolean): Promise<unknown> {
-  return request(`/zones/${zoneId}/fixture`, { method: 'POST', body: JSON.stringify({ idaVuelta }) });
+export async function generateFixture(zoneId: number, doubleRound: boolean): Promise<unknown> {
+  return request(`/zones/${zoneId}/fixture`, { method: 'POST', body: JSON.stringify({ doubleRound }) });
 }
 
 export async function createZone(tournamentId: number, name: string): Promise<Zone> {
@@ -444,6 +444,10 @@ export async function createZone(tournamentId: number, name: string): Promise<Zo
 
 export async function deleteZone(zoneId: number): Promise<void> {
   return request(`/zones/${zoneId}`, { method: 'DELETE' });
+}
+
+export async function generateManualFixture(zoneId: number, data: { matchdays: { matchday: number; round: string; matches: { homeClubId: number; awayClubId: number }[]; byeClubId?: number }[]; doubleRound?: boolean }): Promise<unknown> {
+  return request(`/zones/${zoneId}/fixture/manual`, { method: 'POST', body: JSON.stringify(data) });
 }
 
 export async function generateTournamentFixture(tournamentId: number, idaVuelta: boolean): Promise<unknown> {

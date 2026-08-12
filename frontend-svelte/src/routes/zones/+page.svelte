@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { assignClubToZone, createZone, deleteZone, generateFixture, getProfile, getTournamentZoneClubs, getTournaments, getZones, removeClubFromZone, type AuthUser, type Tournament, type TournamentZoneClub, type Zone } from '$lib/api';
+  import { assignClubToZone, createZone, deleteZone, generateFixture, generateManualFixture, getProfile, getTournamentZoneClubs, getTournaments, getZones, removeClubFromZone, type AuthUser, type Tournament, type TournamentZoneClub, type Zone } from '$lib/api';
   import Modal from '$lib/Modal.svelte';
 
   let user: AuthUser | null = $state(null);
@@ -13,7 +13,21 @@
 
   let showFixtureModal = $state(false);
   let fixtureZone: Zone | null = $state(null);
-  let idaVuelta = $state(true);
+  let fixtureMode = $state<'auto' | 'manual'>('auto');
+  let doubleRound = $state(true);
+
+  let manualDates = $state<ManualDate[]>([]);
+  let selectedDateIdx = $state(0);
+  let autoSecondRound = $state(true);
+  let draggedClub = $state<number | null>(null);
+
+  interface ManualDate {
+    matches: { homeClubId: number | null; awayClubId: number | null }[];
+    byeClubId: number | null;
+    errors: string[];
+  }
+
+  interface FixtureMeta { clubCount: number; hasBye: boolean; totalDates: number; matchesPerDate: number; clubs: { id: number; name: string }[] }
 
   let expandedZone = $state<number | null>(null);
   let availableClubs = $state<TournamentZoneClub[]>([]);
@@ -119,7 +133,21 @@
     return map[status] ?? 'badge-default';
   }
 
-  function openFixtureModal(zone: Zone) { fixtureZone = zone; idaVuelta = true; showFixtureModal = true; error = ''; }
+  function openFixtureModal(zone: Zone) {
+    fixtureZone = zone;
+    fixtureMode = 'auto';
+    doubleRound = true;
+    error = '';
+    showFixtureModal = true;
+  }
+
+  function switchToManual() {
+    if (!fixtureZone) return;
+    fixtureMode = 'manual';
+    const clubs = assignedClubs(fixtureZone);
+    initManualBuilder(clubs);
+  }
+
   function closeFixtureModal() { showFixtureModal = false; fixtureZone = null; }
 
   async function confirmGenerateFixture() {
@@ -127,13 +155,215 @@
     error = ''; notice = '';
     saving = true;
     try {
-      await generateFixture(fixtureZone.id, idaVuelta);
+      await generateFixture(fixtureZone.id, doubleRound);
       notice = `Fixture generado para Zona ${fixtureZone.name}.`;
       closeFixtureModal();
       zones = await getZones(true);
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudo generar el fixture.';
     } finally { saving = false; }
+  }
+
+  function initManualBuilder(clubs: { clubId: number; clubName: string }[]) {
+    if (clubs.length < 2) return;
+    const clubList = clubs.map(c => ({ id: c.clubId, name: c.clubName }));
+    const meta = computeMeta(clubList);
+    const round1Dates: ManualDate[] = [];
+    for (let d = 0; d < meta.totalDates; d++) {
+      const matches = Array.from({ length: meta.matchesPerDate }, () => ({ homeClubId: null as number | null, awayClubId: null as number | null }));
+      round1Dates.push({ matches, byeClubId: null, errors: [] });
+    }
+    manualDates = round1Dates;
+    selectedDateIdx = 0;
+    autoSecondRound = true;
+  }
+
+  function computeMeta(clubs: { id: number; name: string }[]): FixtureMeta {
+    const clubCount = clubs.length;
+    const hasBye = clubCount % 2 !== 0;
+    const totalDates = hasBye ? clubCount : clubCount - 1;
+    const matchesPerDate = Math.floor(clubCount / 2);
+    return { clubCount, hasBye, totalDates, matchesPerDate, clubs };
+  }
+
+  function getMeta(): FixtureMeta | null {
+    if (!fixtureZone) return null;
+    const clubs = assignedClubs(fixtureZone).map(c => ({ id: c.clubId, name: c.clubName }));
+    if (clubs.length < 2) return null;
+    return computeMeta(clubs);
+  }
+
+  function allRounds(): { round: string; dates: ManualDate[] }[] {
+    const r1 = { round: 'FIRST', dates: manualDates };
+    if (!autoSecondRound) {
+      return [r1, { round: 'SECOND', dates: manualDates.slice(manualDates.length / 2) }];
+    }
+    return [r1];
+  }
+
+  function usedClubIds(dateIdx: number): Set<number> {
+    if (!manualDates[dateIdx]) return new Set();
+    const ids = new Set<number>();
+    const d = manualDates[dateIdx];
+    for (const m of d.matches) {
+      if (m.homeClubId) ids.add(m.homeClubId);
+      if (m.awayClubId) ids.add(m.awayClubId);
+    }
+    if (d.byeClubId) ids.add(d.byeClubId);
+    return ids;
+  }
+
+  function canDropClub(clubId: number, dateIdx: number, slot: 'home' | 'away' | 'bye', matchIdx?: number): boolean {
+    const d = manualDates[dateIdx];
+    if (!d) return false;
+    const used = usedClubIds(dateIdx);
+    if (used.has(clubId)) return false;
+    if (slot === 'bye') return !d.byeClubId;
+
+    const meta = getMeta();
+    if (!meta || matchIdx === undefined) return false;
+    const matchSlot = d.matches[matchIdx];
+    if (!matchSlot) return false;
+
+    if (slot === 'home' && matchSlot.homeClubId) return false;
+    if (slot === 'away' && matchSlot.awayClubId) return false;
+    if (slot === 'home' && matchSlot.awayClubId === clubId) return false;
+    if (slot === 'away' && matchSlot.homeClubId === clubId) return false;
+
+    if (dateIdx > 0) {
+      const prev = manualDates[dateIdx - 1];
+      for (const m of prev.matches) {
+        if (slot === 'home' && m.homeClubId === clubId) return false;
+        if (slot === 'away' && m.awayClubId === clubId) return false;
+      }
+    }
+    if (dateIdx < manualDates.length - 1) {
+      const next = manualDates[dateIdx + 1];
+      for (const m of next.matches) {
+        if (slot === 'home' && m.homeClubId === clubId) return false;
+        if (slot === 'away' && m.awayClubId === clubId) return false;
+      }
+    }
+    return true;
+  }
+
+  function dropClub(clubId: number, dateIdx: number, slot: 'home' | 'away' | 'bye', matchIdx?: number) {
+    if (!canDropClub(clubId, dateIdx, slot, matchIdx)) return;
+    const d = manualDates[dateIdx];
+    if (slot === 'bye') {
+      d.byeClubId = clubId;
+    } else if (matchIdx !== undefined) {
+      if (slot === 'home') d.matches[matchIdx].homeClubId = clubId;
+      else d.matches[matchIdx].awayClubId = clubId;
+    }
+    validateAll();
+  }
+
+  function clearSlot(dateIdx: number, slot: 'home' | 'away' | 'bye', matchIdx?: number) {
+    const d = manualDates[dateIdx];
+    if (slot === 'bye') { d.byeClubId = null; }
+    else if (matchIdx !== undefined) {
+      if (slot === 'home') d.matches[matchIdx].homeClubId = null;
+      else d.matches[matchIdx].awayClubId = null;
+    }
+    validateAll();
+  }
+
+  function validateAll() {
+    const meta = getMeta();
+    if (!meta) return;
+    for (let d = 0; d < manualDates.length; d++) {
+      manualDates[d].errors = validateDate(d, meta);
+    }
+    manualDates = [...manualDates];
+  }
+
+  function validateDate(dateIdx: number, meta: FixtureMeta): string[] {
+    const err: string[] = [];
+    const d = manualDates[dateIdx];
+    if (!d) return err;
+
+    for (const m of d.matches) {
+      if (!m.homeClubId && !m.awayClubId) continue;
+      if (!m.homeClubId || !m.awayClubId) {
+        err.push('Todos los cruces deben estar completos.');
+        break;
+      }
+      if (m.homeClubId === m.awayClubId) {
+        err.push('Un club no puede enfrentarse a si mismo.');
+      }
+    }
+
+    const used = usedClubIds(dateIdx);
+    if (meta.hasBye && !d.byeClubId) err.push('Falta asignar el libre.');
+    if (meta.hasBye && used.size !== meta.clubCount) err.push('Falta un club por asignar.');
+    if (!meta.hasBye && used.size !== meta.clubCount) err.push('Falta un club por asignar.');
+
+    const pairKeys = new Set<string>();
+    for (const m of d.matches) {
+      if (!m.homeClubId || !m.awayClubId) continue;
+      const key = `${Math.min(m.homeClubId, m.awayClubId)}-${Math.max(m.homeClubId, m.awayClubId)}`;
+      if (pairKeys.has(key)) err.push('Hay cruces duplicados en esta fecha.');
+      pairKeys.add(key);
+    }
+
+    return err;
+  }
+
+  function buildRound2(): ManualDate[] {
+    return manualDates.map(d => ({
+      byeClubId: d.byeClubId,
+      errors: [],
+      matches: d.matches.map(m => ({
+        homeClubId: m.awayClubId,
+        awayClubId: m.homeClubId
+      }))
+    }));
+  }
+
+  async function saveManualFixture() {
+    if (!fixtureZone) return;
+    validateAll();
+    const hasErrors = manualDates.some(d => d.errors.length > 0 || d.matches.some(m => !m.homeClubId || !m.awayClubId));
+    const meta = getMeta();
+    if (hasErrors || (meta?.hasBye && manualDates.some(d => !d.byeClubId))) {
+      error = 'Corregi los errores antes de guardar.';
+      return;
+    }
+
+    error = ''; saving = true;
+    const round1 = manualDates.map((d, i) => ({
+      matchday: i + 1,
+      round: 'FIRST',
+      matches: d.matches.filter(m => m.homeClubId && m.awayClubId).map(m => ({ homeClubId: m.homeClubId!, awayClubId: m.awayClubId! })),
+      ...(d.byeClubId ? { byeClubId: d.byeClubId } : {})
+    }));
+
+    const r2 = buildRound2().map((d, i) => ({
+      matchday: manualDates.length + i + 1,
+      round: 'SECOND',
+      matches: d.matches.filter(m => m.homeClubId && m.awayClubId).map(m => ({ homeClubId: m.homeClubId!, awayClubId: m.awayClubId! })),
+      ...(d.byeClubId ? { byeClubId: d.byeClubId } : {})
+    }));
+
+    try {
+      await generateManualFixture(fixtureZone.id, {
+        matchdays: [...round1, ...r2],
+        doubleRound: true
+      });
+      notice = `Fixture manual generado para Zona ${fixtureZone.name}.`;
+      closeFixtureModal();
+      zones = await getZones(true);
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'No se pudo guardar el fixture.';
+    } finally { saving = false; }
+  }
+
+  let previewMeta = $derived(getMeta());
+
+  function clubName(id: number | null): string {
+    if (!id || !previewMeta) return '';
+    return previewMeta.clubs.find(c => c.id === id)?.name || '';
   }
 
   function openCreateZone() { newZoneName = ''; newZoneTournamentId = null; error = ''; showCreateZone = true; }
@@ -266,21 +496,137 @@
 </main>
 
 {#if showFixtureModal && fixtureZone}
-  <Modal onclose={closeFixtureModal}>
-    <div class="modal-form">
-      <p class="eyebrow">Generar fixture</p>
-      <h2>Zona {fixtureZone.name}</h2>
-      <p class="muted">{fixtureZone.tournament.name} {fixtureZone.tournament.year} · {fixtureZone.tournament.league.name}</p>
-      {#if error}<p class="form-error">{error}</p>{/if}
-      <form onsubmit={(event) => { event.preventDefault(); confirmGenerateFixture(); }}>
-        <label class="checkbox-label"><input type="checkbox" bind:checked={idaVuelta} disabled={saving} /> Ida y vuelta</label>
-        <div class="form-actions">
-          <button class="button secondary" type="button" disabled={saving} onclick={closeFixtureModal}>Cancelar</button>
-          <button class="button primary" type="submit" disabled={saving}>{saving ? 'Generando...' : 'Generar fixture'}</button>
+  {#if fixtureMode === 'auto'}
+    <Modal onclose={closeFixtureModal}>
+      <div class="modal-form">
+        <p class="eyebrow">Generar fixture</p>
+        <h2>Zona {fixtureZone.name}</h2>
+        <p class="muted">{fixtureZone.tournament.name} {fixtureZone.tournament.year} · {fixtureZone.tournament.league.name}</p>
+        {#if error}<p class="form-error">{error}</p>{/if}
+        <div class="fixture-mode-tabs">
+          <button class="mode-tab active">Automático</button>
+          <button class="mode-tab" onclick={switchToManual}>Manual</button>
         </div>
-      </form>
-    </div>
-  </Modal>
+        <form onsubmit={(event) => { event.preventDefault(); confirmGenerateFixture(); }}>
+          <label class="checkbox-label"><input type="checkbox" bind:checked={doubleRound} disabled={saving} /> Ida y vuelta</label>
+          <div class="form-actions">
+            <button class="button secondary" type="button" disabled={saving} onclick={closeFixtureModal}>Cancelar</button>
+            <button class="button primary" type="submit" disabled={saving}>{saving ? 'Generando...' : 'Generar fixture'}</button>
+          </div>
+        </form>
+      </div>
+    </Modal>
+  {:else if previewMeta}
+    <Modal onclose={closeFixtureModal} wide={true}>
+      <div class="modal-form manual-fixture-modal">
+        <p class="eyebrow">Generar fixture</p>
+        <h2>Zona {fixtureZone.name} · Manual</h2>
+        <p class="muted">{fixtureZone.tournament.name} {fixtureZone.tournament.year} · {previewMeta.clubCount} clubes · {previewMeta.totalDates} fechas · {previewMeta.hasBye ? 'Con libre' : 'Sin libre'}</p>
+        {#if error}<p class="form-error">{error}</p>{/if}
+        <div class="fixture-mode-tabs">
+          <button class="mode-tab" onclick={() => fixtureMode = 'auto'}>Automático</button>
+          <button class="mode-tab active">Manual</button>
+        </div>
+
+        <div class="manual-builder">
+          <div class="club-pool">
+            <h4>Clubes</h4>
+            {#each previewMeta.clubs as club}
+              {@const used = manualDates[selectedDateIdx] ? usedClubIds(selectedDateIdx).has(club.id) : false}
+              <div
+                class="club-drag {used ? 'used' : ''}"
+                draggable={!used}
+                ondragstart={(e) => { if (!used) { e.dataTransfer!.effectAllowed = 'move'; draggedClub = club.id; }}}
+                ondragend={() => draggedClub = null}
+                role="listitem"
+              >
+                <span>{club.name}</span>
+                {#if used}<span class="used-badge">asignado</span>{/if}
+              </div>
+            {/each}
+          </div>
+
+          <div class="matchdays-area">
+            <div class="date-tabs">
+              {#each manualDates as date, i}
+                <button class="date-tab" class:active={selectedDateIdx === i} class:has-errors={date.errors.length > 0} onclick={() => selectedDateIdx = i}>
+                  Fecha {i + 1}
+                </button>
+              {/each}
+            </div>
+
+            {#if manualDates[selectedDateIdx]}
+              <div class="matches-grid">
+                {#each manualDates[selectedDateIdx].matches as match, mi}
+                  <div class="match-row">
+                    <div
+                      class="drop-slot home-slot {match.homeClubId ? 'filled' : ''} {draggedClub && canDropClub(draggedClub, selectedDateIdx, 'home', mi) ? 'valid-target' : ''}"
+                      ondragover={(e) => { e.preventDefault(); }}
+                      ondrop={() => { if (draggedClub) dropClub(draggedClub, selectedDateIdx, 'home', mi); }}
+                      role="region"
+                    >
+                      {#if match.homeClubId}
+                        <span class="slot-club">{clubName(match.homeClubId)}</span>
+                        <button class="icon-button slot-remove" onclick={() => clearSlot(selectedDateIdx, 'home', mi)} aria-label="Remover">×</button>
+                      {:else}
+                        <span class="slot-hint">Local</span>
+                      {/if}
+                    </div>
+                    <span class="vs">vs</span>
+                    <div
+                      class="drop-slot away-slot {match.awayClubId ? 'filled' : ''} {draggedClub && canDropClub(draggedClub, selectedDateIdx, 'away', mi) ? 'valid-target' : ''}"
+                      ondragover={(e) => { e.preventDefault(); }}
+                      ondrop={() => { if (draggedClub) dropClub(draggedClub, selectedDateIdx, 'away', mi); }}
+                      role="region"
+                    >
+                      {#if match.awayClubId}
+                        <span class="slot-club">{clubName(match.awayClubId)}</span>
+                        <button class="icon-button slot-remove" onclick={() => clearSlot(selectedDateIdx, 'away', mi)} aria-label="Remover">×</button>
+                      {:else}
+                        <span class="slot-hint">Visitante</span>
+                      {/if}
+                    </div>
+                  </div>
+                {/each}
+
+                {#if previewMeta.hasBye}
+                  <div class="bye-row">
+                    <span class="bye-label">Libre:</span>
+                    <div
+                      class="drop-slot bye-slot {manualDates[selectedDateIdx].byeClubId ? 'filled' : ''} {draggedClub && canDropClub(draggedClub, selectedDateIdx, 'bye') ? 'valid-target' : ''}"
+                      ondragover={(e) => { e.preventDefault(); }}
+                      ondrop={() => { if (draggedClub) dropClub(draggedClub, selectedDateIdx, 'bye'); }}
+                      role="region"
+                    >
+                      {#if manualDates[selectedDateIdx].byeClubId}
+                        <span class="slot-club">{clubName(manualDates[selectedDateIdx].byeClubId)}</span>
+                        <button class="icon-button slot-remove" onclick={() => clearSlot(selectedDateIdx, 'bye')} aria-label="Remover">×</button>
+                      {:else}
+                        <span class="slot-hint">Arrastra un club</span>
+                      {/if}
+                    </div>
+                  </div>
+                {/if}
+
+                {#if manualDates[selectedDateIdx].errors.length > 0}
+                  <div class="date-errors">
+                    {#each manualDates[selectedDateIdx].errors as e}
+                      <p class="form-error">{e}</p>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+
+              <div class="manual-actions">
+                <button class="button secondary" type="button" disabled={saving} onclick={closeFixtureModal}>Cancelar</button>
+                <button class="button primary" type="button" disabled={saving} onclick={saveManualFixture}>{saving ? 'Guardando...' : 'Guardar fixture'}</button>
+              </div>
+            {/if}
+          </div>
+        </div>
+      </div>
+    </Modal>
+  {/if}
 {/if}
 
 {#if showCreateZone && canManage}
@@ -342,5 +688,63 @@
   @media (max-width: 767px) {
     .zone-clubs-grid { grid-template-columns: 1fr; }
     .zone-actions { flex-direction: row; flex-wrap: wrap; }
+  }
+
+  .fixture-mode-tabs { display: flex; gap: .5rem; margin: .75rem 0 1rem; }
+  .mode-tab {
+    padding: .45rem 1rem; border: 1px solid var(--color-border); border-radius: .5rem;
+    background: var(--color-input); color: var(--color-text-muted); cursor: pointer;
+    font-size: .82rem; font-weight: 500; font-family: inherit;
+  }
+  .mode-tab.active { background: var(--color-accent-bg); color: var(--color-accent-text); border-color: var(--color-accent); font-weight: 600; }
+  .mode-tab:hover:not(.active) { background: var(--color-surface-hover); }
+
+  .manual-fixture-modal { max-width: 1100px !important; }
+  .manual-builder { display: grid; grid-template-columns: 200px 1fr; gap: 1.5rem; margin-top: .5rem; }
+  .club-pool { display: grid; gap: .3rem; align-content: start; }
+  .club-pool h4 { margin: 0 0 .25rem; font-family: 'Space Grotesk', sans-serif; font-size: .82rem; color: var(--color-text-muted); }
+  .club-drag {
+    padding: .4rem .6rem; border: 1px solid var(--color-border); border-radius: .4rem;
+    background: var(--color-accent-bg); color: var(--color-accent-text); cursor: grab;
+    font-size: .8rem; font-weight: 600; display: flex; align-items: center; justify-content: space-between;
+  }
+  .club-drag:active { cursor: grabbing; opacity: .7; }
+  .club-drag.used { opacity: .35; cursor: default; background: var(--color-surface-hover); color: var(--color-text-muted); }
+  .used-badge { font-size: .62rem; color: var(--color-text-muted); }
+
+  .matchdays-area { min-width: 0; }
+  .date-tabs { display: flex; gap: .25rem; flex-wrap: wrap; margin-bottom: 1rem; }
+  .date-tab {
+    padding: .3rem .7rem; border: 1px solid var(--color-border); border-radius: .4rem;
+    background: var(--color-input); color: var(--color-text-muted); cursor: pointer;
+    font-size: .78rem; font-weight: 500; font-family: inherit;
+  }
+  .date-tab.active { background: var(--color-accent-bg); color: var(--color-accent-text); border-color: var(--color-accent); }
+  .date-tab.has-errors { border-color: var(--color-error); }
+  .date-tab.has-errors::after { content: ' !'; color: var(--color-error); font-weight: 700; }
+
+  .matches-grid { display: grid; gap: .5rem; }
+  .match-row { display: flex; align-items: center; gap: .5rem; }
+  .drop-slot {
+    flex: 1; min-height: 2.4rem; padding: .35rem .5rem; border: 2px dashed var(--color-border);
+    border-radius: .5rem; display: flex; align-items: center; justify-content: space-between;
+    transition: border-color 150ms ease, background 150ms ease;
+  }
+  .drop-slot.filled { border-style: solid; background: var(--color-accent-bg); border-color: var(--color-accent); }
+  .drop-slot.valid-target { border-color: var(--color-success); background: var(--color-success-bg); }
+  .slot-hint { color: var(--color-text-light); font-size: .82rem; font-style: italic; }
+  .slot-club { font-size: .85rem; font-weight: 600; }
+  .slot-remove { color: var(--color-error); padding: 0 .2rem; font-size: 1rem; }
+  .vs { font-size: .75rem; color: var(--color-text-muted); font-weight: 700; flex-shrink: 0; width: 2rem; text-align: center; }
+
+  .bye-row { display: flex; align-items: center; gap: .5rem; margin-top: .25rem; }
+  .bye-label { font-size: .8rem; color: var(--color-text-muted); font-weight: 600; width: 4rem; flex-shrink: 0; }
+
+  .date-errors { margin-top: .5rem; display: grid; gap: .2rem; }
+  .manual-actions { display: flex; gap: .5rem; justify-content: flex-end; margin-top: 1.25rem; }
+
+  @media (max-width: 767px) {
+    .manual-builder { grid-template-columns: 1fr; }
+    .club-pool { display: flex; flex-wrap: wrap; gap: .3rem; }
   }
 </style>
