@@ -483,6 +483,7 @@ export interface ZoneMatchCategory {
   homeScore: number;
   awayScore: number;
   closedAt: string | null;
+  isPending: boolean;
   tournamentCategory: { category: { id: number; name: string } };
 }
 
@@ -559,6 +560,7 @@ export interface MatchDetail {
     homeScore: number;
     awayScore: number;
     closedAt: string | null;
+    isPending: boolean;
   }[];
   tournament: {
     id: number;
@@ -582,6 +584,8 @@ export interface MatchCategoryResult {
   awayClubId: number | null;
   homeScore: number;
   awayScore: number;
+  isPending: boolean;
+  closedAt: string | null;
   playerGoals: { playerId: number; clubId: number; goals: number; player: { id: number; firstName: string | null; lastName: string | null } }[];
   otherGoals: { clubId: number; goals: number }[];
 }
@@ -612,6 +616,7 @@ export async function recordMatchResult(
     homeScore: number;
     awayScore: number;
     confirm: boolean;
+    pending?: boolean;
     playerGoals: { playerId: number; clubId: number; goals: number }[];
     otherGoals: { clubId: number; goals: number }[];
   }
@@ -621,6 +626,10 @@ export async function recordMatchResult(
 
 export async function finalizeMatchday(zoneId: number, matchday: number): Promise<unknown> {
   return request(`/zones/${zoneId}/matchdays/${matchday}/finalize`, { method: 'POST' });
+}
+
+export async function updateMatchday(zoneId: number, matchday: number, date: string | null): Promise<unknown> {
+  return request(`/zones/${zoneId}/matchdays/${matchday}`, { method: 'PATCH', body: JSON.stringify({ date }) });
 }
 
 export async function getTournamentZones(tournamentId: number): Promise<TournamentZone[]> {

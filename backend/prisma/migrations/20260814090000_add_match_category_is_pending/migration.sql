@@ -1,0 +1,1 @@
+ALTER TABLE "MatchCategory" ADD COLUMN "isPending" BOOLEAN NOT NULL DEFAULT false;

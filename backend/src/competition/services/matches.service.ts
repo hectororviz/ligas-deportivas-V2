@@ -177,6 +177,7 @@ export class MatchesService {
           homeScore: category.homeScore,
           awayScore: category.awayScore,
           closedAt: category.closedAt,
+          isPending: category.isPending,
         }))
         .sort((a, b) => {
           if (!a.kickoffTime && !b.kickoffTime) return 0;
@@ -197,7 +198,9 @@ export class MatchesService {
   }
 
   async finalizeMatchday(zoneId: number, matchday: number) {
-    return this.prisma.$transaction(async (tx) => {
+    const affectedMatchIds: number[] = [];
+
+    const matchdays = await this.prisma.$transaction(async (tx) => {
       const entry = await tx.zoneMatchday.findUnique({
         where: { zoneId_matchday: { zoneId, matchday } }
       });
@@ -208,17 +211,55 @@ export class MatchesService {
 
       const matches = await tx.match.findMany({
         where: { zoneId, matchday },
-        select: { status: true }
+        include: { categories: true }
       });
 
       if (!matches.length) {
         throw new BadRequestException('No hay partidos asignados a esta fecha');
       }
 
-      const allFinished = matches.every((match) => match.status === MatchStatus.FINISHED);
+      const updates: Promise<unknown>[] = [];
+
+      for (const match of matches) {
+        affectedMatchIds.push(match.id);
+
+        for (const category of match.categories) {
+          if (!category.closedAt && !category.isPending) {
+            updates.push(
+              tx.matchCategory.update({
+                where: { id: category.id },
+                data: {
+                  homeScore: 0,
+                  awayScore: 0,
+                  closedAt: new Date(),
+                  isPending: false
+                }
+              })
+            );
+          }
+        }
+
+        const hasOpenPending = match.categories.some(
+          (category) => category.isPending && !category.closedAt
+        );
+        updates.push(
+          tx.match.update({
+            where: { id: match.id },
+            data: {
+              status: hasOpenPending ? MatchStatus.PENDING : MatchStatus.FINISHED
+            }
+          })
+        );
+      }
+
+      const allFinished = matches.every(
+        (match) =>
+          !match.categories.some(
+            (category) => category.isPending && !category.closedAt
+          )
+      );
       const newStatus = allFinished ? MatchdayStatus.PLAYED : MatchdayStatus.INCOMPLETE;
 
-      const updates: Promise<unknown>[] = [];
       updates.push(
         tx.zoneMatchday.update({
           where: { zoneId_matchday: { zoneId, matchday } },
@@ -247,6 +288,12 @@ export class MatchesService {
         orderBy: { matchday: 'asc' }
       });
     });
+
+    for (const matchId of affectedMatchIds) {
+      await this.standingsService.recalculateForMatch(matchId);
+    }
+
+    return matchdays;
   }
 
   async updateMatchdayDate(zoneId: number, matchday: number, dto: UpdateMatchdayDto) {
@@ -663,6 +710,8 @@ export class MatchesService {
       awayClubId: matchCategory.match.awayClubId,
       homeScore: matchCategory.homeScore,
       awayScore: matchCategory.awayScore,
+      isPending: matchCategory.isPending,
+      closedAt: matchCategory.closedAt,
       playerGoals: Array.from(groupedGoals.values()),
       otherGoals: matchCategory.otherGoals.map((goal) => ({
         clubId: goal.clubId,
@@ -847,45 +896,61 @@ export class MatchesService {
         }
       }
 
-      const totals = this.calculateTotals(dto);
+      const pending = dto.pending === true;
+      const confirm = dto.confirm === true && !pending;
 
-      const homeTotal = totals[homeClubId] ?? 0;
-      const awayTotal = totals[awayClubId] ?? 0;
-      if (homeTotal !== dto.homeScore || awayTotal !== dto.awayScore) {
-        throw new BadRequestException('La suma de goles no coincide con el marcador informado');
+      if (!pending) {
+        const totals = this.calculateTotals(dto);
+
+        const homeTotal = totals[homeClubId] ?? 0;
+        const awayTotal = totals[awayClubId] ?? 0;
+        if (homeTotal !== dto.homeScore || awayTotal !== dto.awayScore) {
+          throw new BadRequestException('La suma de goles no coincide con el marcador informado');
+        }
       }
 
       await tx.goal.deleteMany({ where: { matchCategoryId: matchCategory.id } });
       await tx.otherGoal.deleteMany({ where: { matchCategoryId: matchCategory.id } });
 
-      const goalEntries = this.expandGoals(matchCategory.id, dto);
-      if (goalEntries.length) {
-        await tx.goal.createMany({ data: goalEntries });
+      if (!pending) {
+        const goalEntries = this.expandGoals(matchCategory.id, dto);
+        if (goalEntries.length) {
+          await tx.goal.createMany({ data: goalEntries });
+        }
+
+        if (dto.otherGoals.length) {
+          await tx.otherGoal.createMany({
+            data: dto.otherGoals.map((goal) => ({
+              matchCategoryId: matchCategory.id,
+              clubId: goal.clubId,
+              goals: goal.goals
+            }))
+          });
+        }
       }
 
-      if (dto.otherGoals.length) {
-        await tx.otherGoal.createMany({
-          data: dto.otherGoals.map((goal) => ({
-            matchCategoryId: matchCategory.id,
-            clubId: goal.clubId,
-            goals: goal.goals
-          }))
-        });
-      }
-
-      const closedAt = dto.confirm ? new Date() : null;
+      const closedAt = confirm ? new Date() : null;
 
       await tx.matchCategory.update({
         where: { id: matchCategory.id },
-        data: {
-          homeScore: dto.homeScore,
-          awayScore: dto.awayScore,
-          closedAt: closedAt ?? undefined,
-          closedById: closedAt ? userId : null
-        }
+        data: pending
+          ? {
+              homeScore: 0,
+              awayScore: 0,
+              closedAt: null,
+              closedById: null,
+              isPending: true
+            }
+          : {
+              homeScore: dto.homeScore,
+              awayScore: dto.awayScore,
+              closedAt: closedAt ?? undefined,
+              closedById: closedAt ? userId : null,
+              isPending: false
+            }
       });
 
-      if (dto.confirm) {
+      if (confirm) {
         const categories = await tx.matchCategory.findMany({
           where: { matchId },
           select: { id: true, closedAt: true }

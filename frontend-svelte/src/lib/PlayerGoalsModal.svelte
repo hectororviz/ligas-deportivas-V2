@@ -37,6 +37,7 @@
   let saving = $state(false);
   let error = $state('');
   let notice = $state('');
+  let pending = $state(false);
 
   interface GoalRow {
     player: AssignedPlayerRow;
@@ -76,6 +77,7 @@
 
       homeOther = result.otherGoals.find((g) => g.clubId === homeClub?.id)?.goals ?? 0;
       awayOther = result.otherGoals.find((g) => g.clubId === awayClub?.id)?.goals ?? 0;
+      pending = result.isPending ?? false;
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudieron cargar los datos.';
     } finally {
@@ -88,22 +90,34 @@
     saving = true;
     error = '';
     try {
-      const playerGoals = [
-        ...homeRows.filter((r) => (r.goals || 0) > 0).map((r) => ({ playerId: r.player.id, clubId: homeClub.id, goals: r.goals })),
-        ...awayRows.filter((r) => (r.goals || 0) > 0).map((r) => ({ playerId: r.player.id, clubId: awayClub.id, goals: r.goals })),
-      ];
-      const otherGoals = [
-        { clubId: homeClub.id, goals: homeOther || 0 },
-        { clubId: awayClub.id, goals: awayOther || 0 },
-      ];
+      if (pending) {
+        await recordMatchResult(matchId, tournamentCategoryId, {
+          homeScore: 0,
+          awayScore: 0,
+          confirm: false,
+          pending: true,
+          playerGoals: [],
+          otherGoals: [],
+        });
+      } else {
+        const playerGoals = [
+          ...homeRows.filter((r) => (r.goals || 0) > 0).map((r) => ({ playerId: r.player.id, clubId: homeClub.id, goals: r.goals })),
+          ...awayRows.filter((r) => (r.goals || 0) > 0).map((r) => ({ playerId: r.player.id, clubId: awayClub.id, goals: r.goals })),
+        ];
+        const otherGoals = [
+          { clubId: homeClub.id, goals: homeOther || 0 },
+          { clubId: awayClub.id, goals: awayOther || 0 },
+        ];
 
-      await recordMatchResult(matchId, tournamentCategoryId, {
-        homeScore: totalHome,
-        awayScore: totalAway,
-        confirm: true,
-        playerGoals,
-        otherGoals,
-      });
+        await recordMatchResult(matchId, tournamentCategoryId, {
+          homeScore: totalHome,
+          awayScore: totalAway,
+          confirm: true,
+          pending: false,
+          playerGoals,
+          otherGoals,
+        });
+      }
       notice = 'Resultado guardado.';
       onsaved();
       onclose();
@@ -124,7 +138,12 @@
     {#if loading}
       <p class="muted">Cargando jugadores...</p>
     {:else}
-      <div class="columns">
+      <label class="pending-toggle">
+        <input type="checkbox" bind:checked={pending} disabled={!canEdit || saving} />
+        <span>Pendiente (sin resultado, no suma puntos)</span>
+      </label>
+
+      <div class="columns" class:dimmed={pending}>
         <div class="column">
           <h3>{homeClub?.name ?? 'Local'}</h3>
           {#if controlsPlayers && homeRows.length > 0}
@@ -137,7 +156,7 @@
                     min="0"
                     class="goal-input"
                     bind:value={row.goals}
-                    disabled={!canEdit || saving}
+                    disabled={!canEdit || saving || pending}
                     aria-label={`Goles de ${row.player.lastName}, ${row.player.firstName}`}
                   />
                 </div>
@@ -149,7 +168,7 @@
 
           <div class="player-row other-row">
             <span class="player-name">Otros</span>
-            <input type="number" min="0" class="goal-input" bind:value={homeOther} disabled={!canEdit || saving} aria-label="Otros goles local" />
+            <input type="number" min="0" class="goal-input" bind:value={homeOther} disabled={!canEdit || saving || pending} aria-label="Otros goles local" />
           </div>
           <div class="total-row">
             <span>Total</span>
@@ -169,7 +188,7 @@
                     min="0"
                     class="goal-input"
                     bind:value={row.goals}
-                    disabled={!canEdit || saving}
+                    disabled={!canEdit || saving || pending}
                     aria-label={`Goles de ${row.player.lastName}, ${row.player.firstName}`}
                   />
                 </div>
@@ -181,7 +200,7 @@
 
           <div class="player-row other-row">
             <span class="player-name">Otros</span>
-            <input type="number" min="0" class="goal-input" bind:value={awayOther} disabled={!canEdit || saving} aria-label="Otros goles visitante" />
+            <input type="number" min="0" class="goal-input" bind:value={awayOther} disabled={!canEdit || saving || pending} aria-label="Otros goles visitante" />
           </div>
           <div class="total-row">
             <span>Total</span>
@@ -205,6 +224,13 @@
 <style>
   .goals-modal { max-width: 560px; }
   .goals-modal h2 { margin: .4rem 0 1.2rem; font-family: 'Space Grotesk', sans-serif; font-size: 1.4rem; letter-spacing: -.03em; }
+  .pending-toggle {
+    display: flex; align-items: center; gap: .5rem;
+    margin-bottom: 1rem; padding: .6rem .8rem;
+    border: 1px solid var(--color-border); border-radius: .5rem;
+    background: var(--color-input); font-size: .86rem; font-weight: 600; cursor: pointer;
+  }
+  .columns.dimmed { opacity: .45; pointer-events: none; }
   .columns {
     display: grid;
     grid-template-columns: 1fr 1fr;

@@ -43,6 +43,7 @@
   }
 
   function homeOutcome(cat: MatchDetail['categories'][number]): string {
+    if (cat.isPending) return 'pendiente';
     if (!cat.closedAt) return 'pending';
     if (cat.homeScore > cat.awayScore) return 'win';
     if (cat.homeScore < cat.awayScore) return 'loss';
@@ -50,10 +51,17 @@
   }
 
   function awayOutcome(cat: MatchDetail['categories'][number]): string {
+    if (cat.isPending) return 'pendiente';
     if (!cat.closedAt) return 'pending';
     if (cat.awayScore > cat.homeScore) return 'win';
     if (cat.awayScore < cat.homeScore) return 'loss';
     return 'draw';
+  }
+
+  function scoreLabel(cat: MatchDetail['categories'][number], side: 'home' | 'away'): string {
+    if (cat.isPending) return 'Pendiente';
+    if (!cat.closedAt) return '–';
+    return String(side === 'home' ? cat.homeScore : cat.awayScore);
   }
 
   function pointsLabel(points: number): string {
@@ -143,8 +151,8 @@
                   {#if cat.countsForGeneral}<span class="tag tag-green" title="Cuenta para la tabla general">General</span>{/if}
                   {#if cat.isPromocional}<span class="tag tag-amber">Promocional</span>{/if}
                 </td>
-                <td class="num"><span class="score-cell {homeOutcome(cat)}">{cat.closedAt ? cat.homeScore : '–'}</span></td>
-                <td class="num"><span class="score-cell {awayOutcome(cat)}">{cat.closedAt ? cat.awayScore : '–'}</span></td>
+                <td class="num"><span class="score-cell {homeOutcome(cat)}">{scoreLabel(cat, 'home')}</span></td>
+                <td class="num"><span class="score-cell {awayOutcome(cat)}">{scoreLabel(cat, 'away')}</span></td>
               </tr>
             {/each}
           </tbody>
@@ -247,6 +255,7 @@
   .score-cell.draw { color: #f9a825; background: #fff8e1; }
   .score-cell.loss { color: #c62828; background: #ffebee; }
   .score-cell.pending { color: var(--color-text-light); background: var(--color-surface-hover); }
+  .score-cell.pendiente { color: #6d4c41; background: #f1e0d6; font-size: .72rem; font-weight: 600; }
 
   @media (max-width: 560px) {
     .versus { flex-direction: row; gap: .75rem; padding: 1rem; }

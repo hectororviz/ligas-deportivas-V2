@@ -453,6 +453,9 @@
                   </div>
                   <div class="zone-actions" onclick={(e) => e.stopPropagation()}>
                     <a class="button secondary" href={`/zones/${zone.id}/standings`}>Posiciones</a>
+                    {#if (zone._count?.matches ?? 0) > 0}
+                      <a class="button secondary" href={`/zones/${zone.id}/fixture`}>Fechas</a>
+                    {/if}
                     {#if canManage}
                       <button class="button primary" disabled={saving || (zone._count?.matches ?? 0) > 0} onclick={() => openFixtureModal(zone)}>Generar fixture</button>
                     {/if}
