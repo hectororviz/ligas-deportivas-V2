@@ -298,7 +298,7 @@
 
 <svelte:head><title>Fixture | Ligas Deportivas</title></svelte:head>
 
-<main class="page-shell">
+<main class="page-shell" class:with-footer={canManage && selectedMatchday != null}>
   <header class="page-header">
     <div>
       <p class="eyebrow">Competencia</p>
@@ -363,37 +363,35 @@
           {/each}
         </div>
       {/if}
-
-      {#if canManage && selectedMatchday != null}
-        <section class="matchday-admin">
-          <div class="matchday-admin-head">
-            <h2>Fecha {selectedMatchday}</h2>
-            <span class="status-badge {statusClass(currentMatchday?.status ?? '')}">{statusLabel(currentMatchday?.status ?? '')}</span>
-          </div>
-          <div class="matchday-admin-body">
-            <label class="date-field">
-              Día de juego
-              <input
-                type="date"
-                value={dateValue(currentMatchday)}
-                disabled={updatingDate}
-                onchange={(e) => onDateChange((e.currentTarget as HTMLInputElement).value)}
-              />
-            </label>
-            {#if currentMatchday?.date}
-              <button class="button secondary small" disabled={updatingDate} onclick={() => onDateChange('')}>Quitar fecha</button>
-            {/if}
-            {#if currentMatchday?.status === 'IN_PROGRESS' || currentMatchday?.status === 'INCOMPLETE'}
-              <button class="button primary small" disabled={finalizing} onclick={onFinalize}>
-                {finalizing ? 'Finalizando...' : 'Finalizar fecha'}
-              </button>
-            {/if}
-          </div>
-        </section>
-      {/if}
     {/if}
   {/if}
 </main>
+
+{#if canManage && selectedMatchday != null}
+  <footer class="admin-footer">
+    <span class="footer-label">Fecha {selectedMatchday}</span>
+    <span class="status-badge {statusClass(currentMatchday?.status ?? '')}">{statusLabel(currentMatchday?.status ?? '')}</span>
+    <span class="footer-sep"></span>
+    <label class="date-field">
+      Día de juego
+      <input
+        type="date"
+        value={dateValue(currentMatchday)}
+        disabled={updatingDate}
+        onchange={(e) => onDateChange((e.currentTarget as HTMLInputElement).value)}
+      />
+    </label>
+    {#if currentMatchday?.date}
+      <button class="button secondary small" disabled={updatingDate} onclick={() => onDateChange('')}>Quitar fecha</button>
+    {/if}
+    <span class="footer-spacer"></span>
+    {#if currentMatchday?.status === 'IN_PROGRESS' || currentMatchday?.status === 'INCOMPLETE'}
+      <button class="button primary small" disabled={finalizing} onclick={onFinalize}>
+        {finalizing ? 'Finalizando...' : 'Finalizar fecha'}
+      </button>
+    {/if}
+  </footer>
+{/if}
 
 <style>
   .zone-context { margin-top: 1.5rem; min-width: 0; }
@@ -416,20 +414,29 @@
     .matches-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
 
-  .matchday-admin {
-    margin-top: 1.5rem;
-    padding: 1.25rem 1.5rem;
-    border: 1px solid var(--color-border);
-    border-radius: 1.2rem;
+  .page-shell.with-footer { padding-bottom: 4.5rem; }
+
+  .admin-footer {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: .55rem clamp(1rem, 5vw, 5rem);
+    border-top: 1px solid var(--color-border);
     background: var(--color-surface);
-    box-shadow: 0 16px 45px var(--color-shadow);
+    box-shadow: 0 -8px 24px var(--color-shadow);
+    font-size: .85rem;
   }
-  .matchday-admin-head { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
-  .matchday-admin-head h2 { margin: 0; font-family: 'Space Grotesk', sans-serif; letter-spacing: -.03em; }
-  .matchday-admin-body { display: flex; align-items: flex-end; gap: .6rem; flex-wrap: wrap; margin-top: .75rem; }
+  .footer-label { font-weight: 700; font-family: 'Space Grotesk', sans-serif; white-space: nowrap; }
+  .footer-sep { width: 1px; align-self: stretch; background: var(--color-border); }
+  .footer-spacer { flex: 1; }
 
   .button.small { padding: .5rem .8rem; font-size: .82rem; }
-  .date-field { display: inline-grid; gap: .35rem; }
+  .date-field { display: inline-flex; align-items: center; gap: .4rem; color: var(--color-text-muted); font-weight: 600; white-space: nowrap; }
   .date-field input {
     padding: .4rem .6rem; border: 1px solid var(--color-border); border-radius: .5rem;
     background: var(--color-input); color: var(--color-text); font-family: inherit; font-size: .85rem;
@@ -440,4 +447,8 @@
   .md-in-progress { color: #b57800; background: #fff4cf; }
   .md-incomplete { color: #6d4c41; background: #f1e0d6; }
   .md-played { color: #00897b; background: #dbedf1; }
+
+  @media (max-width: 640px) {
+    .admin-footer { flex-wrap: wrap; }
+  }
 </style>
