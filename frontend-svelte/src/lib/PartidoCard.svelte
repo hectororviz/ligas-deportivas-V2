@@ -15,28 +15,24 @@
   class="match-card"
   class:played
   onclick={() => onclick(match.id)}
+  title={played ? 'Jugado' : 'Pendiente'}
   aria-label={`${match.homeClub?.name ?? 'Local'} vs ${match.awayClub?.name ?? 'Visitante'}, ${played ? 'jugado' : 'pendiente'}`}
 >
-  <div class="teams">
-    <span class="team home">{match.homeClub?.name ?? '—'}</span>
-    <span class="divider">vs</span>
-    <span class="team away">{match.awayClub?.name ?? '—'}</span>
-  </div>
-  <span class="status" class:played title={played ? 'Jugado' : 'Pendiente'}>
+  <span class="team home">{match.homeClub?.name ?? '—'}</span>
+  <span class="center">
     {#if played}
-      <span class="dot"></span>
       <span class="score">{match.pointsHome} - {match.pointsAway}</span>
     {:else}
-      <span class="dot"></span>
+      <span class="divider">vs</span>
     {/if}
   </span>
+  <span class="team away">{match.awayClub?.name ?? '—'}</span>
 </button>
 
 <style>
   .match-card {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: .75rem;
     width: 100%;
     min-width: 0;
@@ -53,13 +49,7 @@
     background: var(--color-surface-hover);
   }
   .match-card:active { transform: scale(.995); }
-  .teams {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: .5rem;
-  }
+
   .team {
     flex: 1;
     min-width: 0;
@@ -71,32 +61,23 @@
   }
   .team.home { text-align: right; }
   .team.away { text-align: left; }
-  .divider {
+
+  .center {
     flex: 0 0 auto;
-    color: var(--color-text-light);
-    font-size: .7rem;
-    font-weight: 700;
-    text-transform: uppercase;
-  }
-  .status {
-    flex: 0 0 auto;
-    display: inline-flex;
-    align-items: center;
-    gap: .4rem;
-  }
-  .dot {
-    width: .6rem;
-    height: .6rem;
-    border-radius: 50%;
-    background: var(--color-error);
-    flex: 0 0 auto;
-  }
-  .status.played .dot { background: var(--color-success); }
-  .score {
+    min-width: 4.5rem;
+    text-align: center;
     font-family: 'Space Grotesk', sans-serif;
+  }
+  .score {
     font-size: 1rem;
     font-weight: 700;
     color: var(--color-accent-text);
     white-space: nowrap;
+  }
+  .divider {
+    color: var(--color-text-light);
+    font-size: .7rem;
+    font-weight: 700;
+    text-transform: uppercase;
   }
 </style>

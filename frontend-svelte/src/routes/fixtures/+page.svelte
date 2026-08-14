@@ -8,11 +8,16 @@
     getTournaments,
     getZones,
     getZoneMatches,
+    getProfile,
+    updateMatchday,
+    finalizeMatchday,
     type League,
     type Tournament,
     type Zone,
     type ZoneMatchesResponse,
     type ZoneMatchday,
+    type ZoneMatch,
+    type AuthUser,
   } from '$lib/api';
   import FixtureFilters from '$lib/FixtureFilters.svelte';
   import FechaCarousel from '$lib/FechaCarousel.svelte';
@@ -34,6 +39,18 @@
   let matchesLoading = $state(false);
   let error = $state('');
 
+  let user: AuthUser | null = $state(null);
+  let finalizing = $state(false);
+  let updatingDate = $state(false);
+  let notice = $state('');
+
+  let canManage = $derived(((user as AuthUser | null)?.roles ?? []).includes('ADMIN'));
+
+  let currentMatchday = $derived.by(() => {
+    if (!matchesData || selectedMatchday == null) return null;
+    return matchesData.matchdays.find((m) => m.matchday === selectedMatchday) ?? null;
+  });
+
   let currentMatches = $derived.by(() => {
     if (!matchesData || selectedMatchday == null) return [];
     return matchesData.matches.filter((m) => m.matchday === selectedMatchday);
@@ -43,10 +60,11 @@
 
   onMount(async () => {
     try {
-      [leagues, tournaments, zones] = await Promise.all([
+      [leagues, tournaments, zones, user] = await Promise.all([
         getLeagues(),
         getTournaments(),
         getZones(),
+        getProfile(),
       ]);
       const initial = readInitialSelection();
       applySelection(initial);
@@ -201,6 +219,81 @@
     const n = Number(value);
     return Number.isFinite(n) && n > 0 ? n : null;
   }
+
+  function dateValue(md: ZoneMatchday | null): string {
+    return md?.date ? md.date.slice(0, 10) : '';
+  }
+
+  function statusLabel(status: string): string {
+    const map: Record<string, string> = {
+      PENDING: 'Pendiente',
+      IN_PROGRESS: 'En juego',
+      INCOMPLETE: 'Incompleta',
+      PLAYED: 'Jugada',
+    };
+    return map[status] ?? status;
+  }
+
+  function statusClass(status: string): string {
+    const map: Record<string, string> = {
+      PENDING: 'md-pending',
+      IN_PROGRESS: 'md-in-progress',
+      INCOMPLETE: 'md-incomplete',
+      PLAYED: 'md-played',
+    };
+    return map[status] ?? 'md-pending';
+  }
+
+  function categorySummary(matches: ZoneMatch[]): { closed: number; toZero: number; pending: number } {
+    let closed = 0;
+    let toZero = 0;
+    let pending = 0;
+    for (const match of matches) {
+      for (const category of match.categories) {
+        if (category.closedAt) closed++;
+        else if (category.isPending) pending++;
+        else toZero++;
+      }
+    }
+    return { closed, toZero, pending };
+  }
+
+  async function onDateChange(value: string) {
+    if (!canManage || selectedZoneId == null || selectedMatchday == null || updatingDate) return;
+    updatingDate = true;
+    error = '';
+    try {
+      await updateMatchday(selectedZoneId, selectedMatchday, value || null);
+      notice = `Fecha actualizada.`;
+      await loadMatches(selectedZoneId, selectedMatchday);
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'No se pudo actualizar la fecha.';
+    } finally {
+      updatingDate = false;
+    }
+  }
+
+  async function onFinalize() {
+    if (!canManage || selectedZoneId == null || selectedMatchday == null || finalizing) return;
+    const summary = categorySummary(currentMatches);
+    const message =
+      `¿Finalizar la Fecha ${selectedMatchday}?\n\n` +
+      `• ${summary.closed} resultado(s) cargado(s)\n` +
+      `• ${summary.toZero} se fijarán como 0-0\n` +
+      `• ${summary.pending} pendiente(s) (no suman puntos)`;
+    if (!confirm(message)) return;
+    finalizing = true;
+    error = '';
+    try {
+      await finalizeMatchday(selectedZoneId, selectedMatchday);
+      notice = `Fecha ${selectedMatchday} finalizada.`;
+      await loadMatches(selectedZoneId, selectedMatchday);
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'No se pudo finalizar la fecha.';
+    } finally {
+      finalizing = false;
+    }
+  }
 </script>
 
 <svelte:head><title>Fixture | Ligas Deportivas</title></svelte:head>
@@ -230,6 +323,7 @@
     />
 
     {#if error}<p class="error-banner">{error}</p>{/if}
+    {#if notice}<p class="success-banner">{notice}</p>{/if}
 
     {#if !selectedZoneId}
       <div class="empty-state">
@@ -269,6 +363,34 @@
           {/each}
         </div>
       {/if}
+
+      {#if canManage && selectedMatchday != null}
+        <section class="matchday-admin">
+          <div class="matchday-admin-head">
+            <h2>Fecha {selectedMatchday}</h2>
+            <span class="status-badge {statusClass(currentMatchday?.status ?? '')}">{statusLabel(currentMatchday?.status ?? '')}</span>
+          </div>
+          <div class="matchday-admin-body">
+            <label class="date-field">
+              Día de juego
+              <input
+                type="date"
+                value={dateValue(currentMatchday)}
+                disabled={updatingDate}
+                onchange={(e) => onDateChange((e.currentTarget as HTMLInputElement).value)}
+              />
+            </label>
+            {#if currentMatchday?.date}
+              <button class="button secondary small" disabled={updatingDate} onclick={() => onDateChange('')}>Quitar fecha</button>
+            {/if}
+            {#if currentMatchday?.status === 'IN_PROGRESS' || currentMatchday?.status === 'INCOMPLETE'}
+              <button class="button primary small" disabled={finalizing} onclick={onFinalize}>
+                {finalizing ? 'Finalizando...' : 'Finalizar fecha'}
+              </button>
+            {/if}
+          </div>
+        </section>
+      {/if}
     {/if}
   {/if}
 </main>
@@ -293,4 +415,29 @@
   @media (min-width: 720px) {
     .matches-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
+
+  .matchday-admin {
+    margin-top: 1.5rem;
+    padding: 1.25rem 1.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: 1.2rem;
+    background: var(--color-surface);
+    box-shadow: 0 16px 45px var(--color-shadow);
+  }
+  .matchday-admin-head { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+  .matchday-admin-head h2 { margin: 0; font-family: 'Space Grotesk', sans-serif; letter-spacing: -.03em; }
+  .matchday-admin-body { display: flex; align-items: flex-end; gap: .6rem; flex-wrap: wrap; margin-top: .75rem; }
+
+  .button.small { padding: .5rem .8rem; font-size: .82rem; }
+  .date-field { display: inline-grid; gap: .35rem; }
+  .date-field input {
+    padding: .4rem .6rem; border: 1px solid var(--color-border); border-radius: .5rem;
+    background: var(--color-input); color: var(--color-text); font-family: inherit; font-size: .85rem;
+  }
+
+  .status-badge { padding: .25rem .65rem; border-radius: 999px; font-size: .72rem; font-weight: 700; white-space: nowrap; }
+  .md-pending { color: #c62828; background: #fdeded; }
+  .md-in-progress { color: #b57800; background: #fff4cf; }
+  .md-incomplete { color: #6d4c41; background: #f1e0d6; }
+  .md-played { color: #00897b; background: #dbedf1; }
 </style>
