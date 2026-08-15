@@ -18,7 +18,9 @@
     type ZoneMatchday,
     type ZoneMatch,
     type AuthUser,
+    type Club,
   } from '$lib/api';
+  import ClubCarousel from '$lib/ClubCarousel.svelte';
   import FixtureFilters from '$lib/FixtureFilters.svelte';
   import FechaCarousel from '$lib/FechaCarousel.svelte';
   import PartidoCard from '$lib/PartidoCard.svelte';
@@ -28,6 +30,9 @@
   let leagues: League[] = $state([]);
   let tournaments: Tournament[] = $state([]);
   let zones: Zone[] = $state([]);
+  let selectedClubId: number | null = $state(null);
+  let clubMatches: Record<number, ZoneMatchesResponse> = $state({});
+  let clubMatchdays: Record<number, number | null> = $state({});
 
   let selectedLeagueId: number | null = $state(null);
   let selectedTournamentId: number | null = $state(null);
@@ -57,6 +62,20 @@
   });
 
   let selectedZone = $derived(zones.find((z) => z.id === selectedZoneId) ?? null);
+  let clubs = $derived.by(() => {
+    const unique = new Map<number, Club>();
+    for (const zone of zones) {
+      for (const assignment of zone.clubZones ?? []) unique.set(assignment.club.id, assignment.club);
+    }
+    return [...unique.values()].sort((a, b) => (a.shortName?.trim() || a.name).localeCompare(b.shortName?.trim() || b.name, 'es'));
+  });
+  let selectedClub = $derived(clubs.find((club) => club.id === selectedClubId) ?? null);
+  let clubZones = $derived.by(() => zones.filter((zone) => {
+    if (selectedClubId == null || !(zone.clubZones ?? []).some((assignment) => assignment.club.id === selectedClubId)) return false;
+    if (selectedLeagueId != null && tournaments.find((tournament) => tournament.id === zone.tournamentId)?.leagueId !== selectedLeagueId) return false;
+    if (selectedTournamentId != null && zone.tournamentId !== selectedTournamentId) return false;
+    return selectedZoneId == null || zone.id === selectedZoneId;
+  }));
 
   onMount(async () => {
     try {
@@ -75,10 +94,11 @@
     }
   });
 
-  function readInitialSelection(): { leagueId: number | null; tournamentId: number | null; zoneId: number | null; matchday: number | null } {
+  function readInitialSelection(): { clubId: number | null; leagueId: number | null; tournamentId: number | null; zoneId: number | null; matchday: number | null } {
     const qp = $page.url.searchParams;
     if (qp.has('league') || qp.has('torneo') || qp.has('zona')) {
       return {
+        clubId: toId(qp.get('club')),
         leagueId: toId(qp.get('league')),
         tournamentId: toId(qp.get('torneo')),
         zoneId: toId(qp.get('zona')),
@@ -91,6 +111,7 @@
         if (raw) {
           const parsed = JSON.parse(raw);
           return {
+            clubId: toId(parsed.clubId),
             leagueId: toId(parsed.leagueId),
             tournamentId: toId(parsed.tournamentId),
             zoneId: toId(parsed.zoneId),
@@ -99,22 +120,26 @@
         }
       } catch {}
     }
-    return { leagueId: null, tournamentId: null, zoneId: null, matchday: null };
+    return { clubId: null, leagueId: null, tournamentId: null, zoneId: null, matchday: null };
   }
 
-  async function applySelection(sel: { leagueId: number | null; tournamentId: number | null; zoneId: number | null; matchday: number | null }) {
-    let { leagueId, tournamentId, zoneId } = sel;
+  async function applySelection(sel: { clubId: number | null; leagueId: number | null; tournamentId: number | null; zoneId: number | null; matchday: number | null }) {
+    let { clubId, leagueId, tournamentId, zoneId } = sel;
+    if (clubId != null && !clubs.some((club) => club.id === clubId)) clubId = null;
     if (leagueId != null && !leagues.some((l) => l.id === leagueId)) leagueId = null;
     if (tournamentId != null && !tournaments.some((t) => t.id === tournamentId)) tournamentId = null;
     if (tournamentId != null && leagueId != null && !tournaments.some((t) => t.id === tournamentId && t.leagueId === leagueId)) tournamentId = null;
     if (zoneId != null && !zones.some((z) => z.id === zoneId)) zoneId = null;
     if (zoneId != null && tournamentId != null && !zones.some((z) => z.id === zoneId && z.tournamentId === tournamentId)) zoneId = null;
 
+    selectedClubId = clubId;
     selectedLeagueId = leagueId;
     selectedTournamentId = tournamentId;
     selectedZoneId = zoneId;
 
-    if (zoneId != null) {
+    if (clubId != null) {
+      await loadClubMatches(sel.matchday);
+    } else if (zoneId != null) {
       await loadMatches(zoneId, sel.matchday);
     } else {
       matchesData = null;
@@ -138,6 +163,22 @@
     }
   }
 
+  async function loadClubMatches(preferredMatchday: number | null = null) {
+    matchesLoading = true;
+    error = '';
+    try {
+      const responses = await Promise.all(clubZones.map(async (zone) => [zone.id, await getZoneMatches(zone.id)] as const));
+      clubMatches = Object.fromEntries(responses);
+      clubMatchdays = Object.fromEntries(responses.map(([zoneId, data]) => [zoneId, pickCurrentMatchday(data.matchdays, preferredMatchday)]));
+    } catch (cause) {
+      clubMatches = {};
+      clubMatchdays = {};
+      error = cause instanceof Error ? cause.message : 'No se pudieron cargar los partidos.';
+    } finally {
+      matchesLoading = false;
+    }
+  }
+
   function pickCurrentMatchday(matchdays: ZoneMatchday[], preferred: number | null): number | null {
     if (matchdays.length === 0) return null;
     if (preferred != null && matchdays.some((m) => m.matchday === preferred)) return preferred;
@@ -154,6 +195,7 @@
     selectedZoneId = null;
     selectedMatchday = null;
     matchesData = null;
+    if (selectedClubId != null) void loadClubMatches();
     persist();
     syncUrl();
   }
@@ -163,6 +205,7 @@
     selectedZoneId = null;
     selectedMatchday = null;
     matchesData = null;
+    if (selectedClubId != null) void loadClubMatches();
     persist();
     syncUrl();
   }
@@ -171,7 +214,9 @@
     selectedZoneId = id;
     selectedMatchday = null;
     matchesData = null;
-    if (id != null) {
+    if (selectedClubId != null) {
+      await loadClubMatches();
+    } else if (id != null) {
       await loadMatches(id);
     }
     persist();
@@ -184,10 +229,28 @@
     syncUrl();
   }
 
-  function onMatchClick(matchId: number) {
+  async function onClubChange(id: number | null) {
+    selectedClubId = id;
+    selectedMatchday = null;
+    matchesData = null;
+    clubMatches = {};
+    clubMatchdays = {};
+    if (id != null) await loadClubMatches();
+    persist();
+    syncUrl();
+  }
+
+  function onClubMatchdaySelect(zoneId: number, matchday: number) {
+    clubMatchdays = { ...clubMatchdays, [zoneId]: matchday };
+    persist();
+    syncUrl();
+  }
+
+  function onMatchClick(matchId: number, zoneId = selectedZoneId, matchday = selectedMatchday) {
     const params = new URLSearchParams();
-    if (selectedZoneId != null) params.set('zona', String(selectedZoneId));
-    if (selectedMatchday != null) params.set('fecha', String(selectedMatchday));
+    if (zoneId != null) params.set('zona', String(zoneId));
+    if (matchday != null) params.set('fecha', String(matchday));
+    if (selectedClubId != null) params.set('club', String(selectedClubId));
     goto(`/fixtures/partido/${matchId}${params.toString() ? `?${params}` : ''}`);
   }
 
@@ -197,6 +260,7 @@
       STORAGE_KEY,
       JSON.stringify({
         leagueId: selectedLeagueId,
+        clubId: selectedClubId,
         tournamentId: selectedTournamentId,
         zoneId: selectedZoneId,
         matchday: selectedMatchday,
@@ -206,6 +270,7 @@
 
   function syncUrl() {
     const params = new URLSearchParams();
+    if (selectedClubId != null) params.set('club', String(selectedClubId));
     if (selectedLeagueId != null) params.set('league', String(selectedLeagueId));
     if (selectedTournamentId != null) params.set('torneo', String(selectedTournamentId));
     if (selectedZoneId != null) params.set('zona', String(selectedZoneId));
@@ -310,6 +375,8 @@
   {#if loading}
     <section class="loading-card">Cargando fixture...</section>
   {:else}
+    <ClubCarousel clubs={clubs} selectedClubId={selectedClubId} onSelect={onClubChange} />
+
     <FixtureFilters
       {leagues}
       {tournaments}
@@ -325,7 +392,52 @@
     {#if error}<p class="error-banner">{error}</p>{/if}
     {#if notice}<p class="success-banner">{notice}</p>{/if}
 
-    {#if !selectedZoneId}
+    {#if selectedClubId != null}
+      {#if matchesLoading}
+        <section class="loading-card">Cargando partidos...</section>
+      {:else if clubZones.length === 0}
+        <div class="empty-state">
+          <div class="empty-icon">🏟</div>
+          <h2>Sin participaciones</h2>
+          <p class="muted">{selectedClub?.name ?? 'Este club'} no participa en los filtros seleccionados.</p>
+        </div>
+      {:else}
+        <div class="club-results">
+          {#each clubZones as zone (zone.id)}
+            {@const zoneData = clubMatches[zone.id]}
+            {@const matchday = clubMatchdays[zone.id] ?? null}
+            {@const zoneMatches = zoneData && matchday != null ? zoneData.matches.filter((match) => match.matchday === matchday && (match.homeClubId === selectedClubId || match.awayClubId === selectedClubId)) : []}
+            <section class="club-result-block">
+              <div class="zone-context">
+                <p class="eyebrow">{zone.tournament.league.name} · {zone.tournament.name}</p>
+                <h2 class="zone-title">Zona {zone.name}</h2>
+              </div>
+              {#if zoneData}
+                <FechaCarousel
+                  matchdays={zoneData.matchdays}
+                  selectedMatchday={matchday}
+                  onSelect={(value) => onClubMatchdaySelect(zone.id, value)}
+                />
+                {#if zoneMatches.length === 0}
+                  <div class="empty-state compact-empty">
+                    <h2>Sin cruce en esta fecha</h2>
+                    <p class="muted">{selectedClub?.name ?? 'El club'} no juega en la Fecha {matchday}.</p>
+                  </div>
+                {:else}
+                  <div class="matches-grid">
+                    {#each zoneMatches as match}
+                      <PartidoCard match={match} onclick={(matchId) => onMatchClick(matchId, zone.id, matchday)} />
+                    {/each}
+                  </div>
+                {/if}
+              {:else}
+                <section class="loading-card">Cargando partidos...</section>
+              {/if}
+            </section>
+          {/each}
+        </div>
+      {/if}
+    {:else if !selectedZoneId}
       <div class="empty-state">
         <div class="empty-icon">🗓</div>
         <h2>Seleccioná una zona</h2>
@@ -367,7 +479,7 @@
   {/if}
 </main>
 
-{#if canManage && selectedMatchday != null}
+{#if canManage && selectedClubId == null && selectedMatchday != null}
   <footer class="admin-footer">
     <span class="footer-label">Fecha {selectedMatchday}</span>
     <span class="status-badge {statusClass(currentMatchday?.status ?? '')}">{statusLabel(currentMatchday?.status ?? '')}</span>
@@ -394,6 +506,8 @@
 {/if}
 
 <style>
+  .club-results { display: grid; gap: 1.5rem; }
+  .club-result-block { min-width: 0; padding-bottom: 1.25rem; border-bottom: 1px solid var(--color-border); }
   .zone-context { margin-top: 1.5rem; min-width: 0; }
   .zone-context .eyebrow { margin: 0; }
   .zone-title {
