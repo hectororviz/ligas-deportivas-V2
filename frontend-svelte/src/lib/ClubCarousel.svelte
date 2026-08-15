@@ -1,6 +1,5 @@
 <script lang="ts">
   import type { Club } from './api';
-  import { ChevronLeft, ChevronRight } from '@lucide/svelte';
 
   interface Props {
     clubs: Club[];
@@ -10,9 +9,48 @@
 
   let { clubs, selectedClubId, onSelect }: Props = $props();
   let scrollEl: HTMLDivElement;
+  let isDragging = $state(false);
+  let dragStartX = 0;
+  let dragStartScroll = 0;
+  let dragMoved = false;
 
-  function scrollBy(direction: -1 | 1) {
-    scrollEl?.scrollBy({ left: direction * 280, behavior: 'smooth' });
+  $effect(() => {
+    const timer = window.setInterval(() => {
+      if (!scrollEl || isDragging || scrollEl.scrollWidth <= scrollEl.clientWidth) return;
+      scrollEl.scrollLeft += 0.35;
+      if (scrollEl.scrollLeft + scrollEl.clientWidth >= scrollEl.scrollWidth - 1) scrollEl.scrollLeft = 0;
+    }, 16);
+    return () => window.clearInterval(timer);
+  });
+
+  function startDrag(event: PointerEvent) {
+    if (!scrollEl) return;
+    isDragging = true;
+    dragMoved = false;
+    dragStartX = event.clientX;
+    dragStartScroll = scrollEl.scrollLeft;
+    scrollEl.setPointerCapture(event.pointerId);
+  }
+
+  function moveDrag(event: PointerEvent) {
+    if (!isDragging || !scrollEl) return;
+    const distance = event.clientX - dragStartX;
+    if (Math.abs(distance) > 4) dragMoved = true;
+    scrollEl.scrollLeft = dragStartScroll - distance;
+  }
+
+  function endDrag(event: PointerEvent) {
+    if (!isDragging) return;
+    isDragging = false;
+    if (scrollEl?.hasPointerCapture(event.pointerId)) scrollEl.releasePointerCapture(event.pointerId);
+  }
+
+  function selectClub(event: MouseEvent, clubId: number) {
+    if (dragMoved) {
+      event.preventDefault();
+      return;
+    }
+    onSelect(clubId);
   }
 
   function label(club: Club): string {
@@ -25,27 +63,23 @@
 </script>
 
 <section class="club-filter" aria-label="Filtrar por club">
-  <div class="club-heading">
-    <div>
-      <p class="filter-label">Club</p>
-      <p class="club-help">Elegí un club para ver todos sus torneos</p>
-    </div>
-    {#if selectedClubId != null}
-      <button class="clear-button" type="button" onclick={() => onSelect(null)}>Ver todos</button>
-    {/if}
-  </div>
-
-  <div class="club-carousel">
-    <button class="carousel-arrow" type="button" onclick={() => scrollBy(-1)} aria-label="Club anterior">
-      <ChevronLeft size={18} />
-    </button>
-    <div class="club-track" bind:this={scrollEl}>
+  <div
+    class="club-track"
+    class:dragging={isDragging}
+    role="region"
+    aria-label="Clubes participantes"
+    bind:this={scrollEl}
+    onpointerdown={startDrag}
+    onpointermove={moveDrag}
+    onpointerup={endDrag}
+    onpointercancel={endDrag}
+  >
       {#each clubs as club (club.id)}
         <button
           class="club-chip"
           class:selected={selectedClubId === club.id}
           type="button"
-          onclick={() => onSelect(club.id)}
+          onclick={(event) => selectClub(event, club.id)}
           aria-pressed={selectedClubId === club.id}
           title={club.name}
         >
@@ -59,28 +93,23 @@
           <span>{label(club)}</span>
         </button>
       {/each}
-    </div>
-    <button class="carousel-arrow" type="button" onclick={() => scrollBy(1)} aria-label="Club siguiente">
-      <ChevronRight size={18} />
-    </button>
   </div>
+  {#if selectedClubId != null}
+    <button class="clear-button" type="button" onclick={() => onSelect(null)}>Ver todos</button>
+  {/if}
 </section>
 
 <style>
-  .club-filter { margin-bottom: 1rem; padding: 1rem 1.25rem; border: 1px solid var(--color-border); border-radius: 1rem; background: var(--color-surface); }
-  .club-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .65rem; }
-  .filter-label { margin: 0; color: var(--color-text-muted); font-size: .74rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
-  .club-help { margin: .2rem 0 0; color: var(--color-text-light); font-size: .78rem; }
-  .clear-button { border: 0; background: transparent; color: var(--color-accent-text); cursor: pointer; font-size: .78rem; font-weight: 700; white-space: nowrap; }
-  .club-carousel { display: flex; align-items: center; gap: .5rem; min-width: 0; }
-  .club-track { display: flex; flex: 1; min-width: 0; gap: .55rem; overflow-x: auto; padding: .15rem .1rem; scrollbar-width: none; scroll-behavior: smooth; }
+  .club-filter { display: flex; align-items: center; gap: .75rem; min-width: 0; margin-bottom: 1rem; }
+  .clear-button { flex: 0 0 auto; border: 0; background: transparent; color: var(--color-accent-text); cursor: pointer; font-size: .78rem; font-weight: 700; white-space: nowrap; }
+  .club-track { display: flex; flex: 1; min-width: 0; gap: .9rem; overflow-x: auto; padding: .25rem .1rem .5rem; scrollbar-width: none; cursor: grab; touch-action: pan-y; user-select: none; }
   .club-track::-webkit-scrollbar { display: none; }
-  .carousel-arrow { display: grid; flex: 0 0 auto; width: 2rem; height: 2rem; place-items: center; border: 1px solid var(--color-border); border-radius: .6rem; background: var(--color-surface); color: var(--color-text-muted); cursor: pointer; }
-  .carousel-arrow:hover { background: var(--color-surface-hover); color: var(--color-text); }
-  .club-chip { display: inline-flex; flex: 0 0 auto; align-items: center; gap: .5rem; max-width: 12rem; padding: .4rem .75rem .4rem .4rem; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-text-muted); cursor: pointer; font-size: .8rem; font-weight: 650; white-space: nowrap; }
-  .club-chip:hover { border-color: var(--color-accent); color: var(--color-text); }
-  .club-chip.selected { border-color: var(--color-accent); background: var(--color-accent-bg); color: var(--color-accent-text); }
-  .club-logo { display: grid; flex: 0 0 auto; width: 2rem; height: 2rem; place-items: center; overflow: hidden; border-radius: 50%; background: var(--color-input); color: var(--color-accent-text); font-size: .65rem; font-weight: 800; }
+  .club-track.dragging { cursor: grabbing; }
+  .club-chip { display: inline-flex; flex: 0 0 auto; align-items: center; flex-direction: column; gap: .35rem; max-width: 6rem; padding: .2rem .35rem; border: 0; background: transparent; color: var(--color-text-muted); cursor: pointer; font-size: .68rem; font-weight: 650; line-height: 1.1; text-align: center; white-space: normal; }
+  .club-chip:hover { color: var(--color-text); }
+  .club-chip.selected { color: var(--color-accent-text); }
+  .club-logo { display: grid; flex: 0 0 auto; width: 3rem; height: 3rem; place-items: center; overflow: hidden; border-radius: 50%; background: var(--color-input); color: var(--color-accent-text); font-size: .8rem; font-weight: 800; transition: box-shadow 150ms ease, transform 150ms ease; }
+  .club-chip.selected .club-logo { box-shadow: 0 0 0 3px var(--color-accent); transform: scale(1.04); }
   .club-logo img { width: 100%; height: 100%; object-fit: contain; }
-  @media (max-width: 560px) { .club-filter { padding: .9rem; } .club-help { font-size: .72rem; } }
+  @media (max-width: 560px) { .club-filter { gap: .4rem; } .club-track { gap: .65rem; } .club-chip { font-size: .64rem; } }
 </style>
