@@ -205,6 +205,7 @@
   .sidebar {
     display: flex; flex-direction: column;
     border-right: 1px solid var(--color-sidebar-border); background: var(--color-sidebar);
+    box-shadow: 4px 0 18px rgba(15, 26, 23, 0.12);
     transition: width 200ms ease;
   }
 

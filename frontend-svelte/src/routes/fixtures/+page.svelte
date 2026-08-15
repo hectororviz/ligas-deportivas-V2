@@ -418,10 +418,10 @@
 
   .admin-footer {
     position: fixed;
-    left: 0;
+    left: 240px;
     right: 0;
     bottom: 0;
-    z-index: 50;
+    z-index: 20;
     display: flex;
     align-items: center;
     gap: .6rem;
@@ -430,7 +430,9 @@
     background: var(--color-surface);
     box-shadow: 0 -8px 24px var(--color-shadow);
     font-size: .85rem;
+    transition: left 200ms ease;
   }
+  :global(body.sidebar-collapsed) .admin-footer { left: 64px; }
   .footer-label { font-weight: 700; font-family: 'Space Grotesk', sans-serif; white-space: nowrap; }
   .footer-sep { width: 1px; align-self: stretch; background: var(--color-border); }
   .footer-spacer { flex: 1; }
@@ -448,7 +450,17 @@
   .md-incomplete { color: #6d4c41; background: #f1e0d6; }
   .md-played { color: #00897b; background: #dbedf1; }
 
-  @media (max-width: 640px) {
-    .admin-footer { flex-wrap: wrap; }
+  @media (max-width: 767px) {
+    .page-shell.with-footer { padding-bottom: 7rem; }
+    .admin-footer {
+      left: 0;
+      gap: .45rem;
+      padding: .45rem .75rem;
+      font-size: .78rem;
+      flex-wrap: wrap;
+    }
+    .button.small { padding: .4rem .6rem; font-size: .76rem; }
+    .date-field input { padding: .3rem .45rem; font-size: .78rem; max-width: 8.5rem; }
+    .footer-spacer { flex: 0; }
   }
 </style>
