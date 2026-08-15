@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { assignClubToZone, createZone, deleteZone, finalizeZone, generateFixture, generateManualFixture, getProfile, getTournamentZoneClubs, getTournaments, getZones, previewFixture, removeClubFromZone, type AuthUser, type Tournament, type TournamentZoneClub, type Zone } from '$lib/api';
   import Modal from '$lib/Modal.svelte';
+  import { X, Plus, ChevronDown } from '@lucide/svelte';
 
   let user: AuthUser | null = $state(null);
   let zones: Zone[] = $state([]);
@@ -458,11 +459,11 @@
                     {/if}
                     {#if canManage && zone.status === 'OPEN'}
                       <button class="icon-button delete-zone" disabled={saving} onclick={() => handleDeleteZone(zone)} aria-label={`Eliminar zona ${zone.name}`}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+                        <X size={14} strokeWidth={2} />
                       </button>
                     {/if}
                   </div>
-                  <svg class="chevron" class:rotated={expandedZone === zone.id} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                  <span class={expandedZone === zone.id ? 'chevron rotated' : 'chevron'}><ChevronDown size={16} strokeWidth={2} /></span>
                 </div>
 
                 {#if expandedZone === zone.id && canManage}
@@ -480,7 +481,7 @@
                               <div class="club-chip">
                                 <span>{c.clubName}</span>
                                 <button class="icon-button remove-club" disabled={saving} onclick={() => removeClub(zone.id, c.clubId)} aria-label="Remover club">
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+                                  <X size={12} strokeWidth={2} />
                                 </button>
                               </div>
                             {/each}
@@ -498,7 +499,7 @@
                                   {#if !c.eligible}<span class="ineligible-badge">Sin requisitos</span>{/if}
                                 </div>
                                 <button class="icon-button add-club" disabled={saving} onclick={() => addClub(zone.id, c.id)} aria-label="Agregar club">
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>
+                                  <Plus size={12} strokeWidth={2} />
                                 </button>
                               </div>
                             {/each}

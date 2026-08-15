@@ -1,4 +1,6 @@
 import { browser } from '$app/environment';
+import type { Component } from 'svelte';
+import { House, Trophy, Shield, Users, Calendar, Table, Settings } from '@lucide/svelte';
 
 export interface NavChild {
   id: string;
@@ -9,17 +11,17 @@ export interface NavChild {
 export interface NavItem {
   id: string;
   label: string;
-  icon: string;
+  icon: Component;
   path?: string;
   children?: NavChild[];
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { id: 'dashboard', label: 'Home', icon: 'home', path: '/' },
+  { id: 'dashboard', label: 'Home', icon: House, path: '/' },
   {
     id: 'gestion',
     label: 'Gestión',
-    icon: 'trophy',
+    icon: Trophy,
     children: [
       { id: 'leagues', label: 'Ligas', path: '/leagues' },
       { id: 'tournaments', label: 'Torneos', path: '/tournaments' },
@@ -27,14 +29,14 @@ export const NAV_ITEMS: NavItem[] = [
       { id: 'categories', label: 'Categorías', path: '/categories' },
     ]
   },
-  { id: 'clubs', label: 'Clubes', icon: 'shield', path: '/clubs' },
-  { id: 'players', label: 'Jugadores', icon: 'users', path: '/players' },
-  { id: 'fixtures', label: 'Fixture', icon: 'calendar', path: '/fixtures' },
-  { id: 'standings', label: 'Tablas', icon: 'table', path: '/standings' },
+  { id: 'clubs', label: 'Clubes', icon: Shield, path: '/clubs' },
+  { id: 'players', label: 'Jugadores', icon: Users, path: '/players' },
+  { id: 'fixtures', label: 'Fixture', icon: Calendar, path: '/fixtures' },
+  { id: 'standings', label: 'Tablas', icon: Table, path: '/standings' },
   {
     id: 'settings',
     label: 'Configuración',
-    icon: 'settings',
+    icon: Settings,
     path: '/settings',
     children: [
       { id: 'account', label: 'Cuenta y perfil', path: '/settings/account' },

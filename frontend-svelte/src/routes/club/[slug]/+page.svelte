@@ -3,6 +3,7 @@
   import { page } from '$app/stores';
   import { getClubAdmin, getAvailableTournaments, joinTournament, leaveTournament, type ClubAdminOverview, type AvailableTournament } from '$lib/api';
   import Modal from '$lib/Modal.svelte';
+  import { Plus, ChevronDown } from '@lucide/svelte';
 
   let data: ClubAdminOverview | null = $state(null);
   let loading = $state(true);
@@ -192,7 +193,7 @@
             </div>
             <div style="display:flex;align-items:center;gap:.5rem">
               <button class="button primary small" disabled={saving} onclick={openJoinModal}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>
+                <Plus size={14} strokeWidth={2} />
                 Participar
               </button>
               <span class="count-pill">{data.tournaments.length}</span>
@@ -233,7 +234,7 @@
                     aria-expanded={expandedTournaments.has(tournament.id)}
                   >
                     <span>Categorías ({tournament.categories.length})</span>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    <span class="chevron"><ChevronDown size={14} strokeWidth={2} /></span>
                   </button>
 
                   {#if expandedTournaments.has(tournament.id)}
@@ -354,8 +355,8 @@
     text-align: left;
   }
   .accordion-toggle:hover { background: var(--color-surface-hover); color: var(--color-text); }
-  .accordion-toggle svg { transition: transform 150ms ease; }
-  .accordion-toggle.open svg { transform: rotate(180deg); }
+  .accordion-toggle .chevron { display: inline-flex; align-items: center; transition: transform 150ms ease; }
+  .accordion-toggle.open .chevron { transform: rotate(180deg); }
   .category-list { margin-top: .75rem; display: grid; gap: .35rem; }
   .category-item {
     display: flex; justify-content: space-between; align-items: center;

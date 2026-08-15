@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ZoneMatchday } from './api';
+  import { ChevronLeft, ChevronRight } from '@lucide/svelte';
 
   interface Props {
     matchdays: ZoneMatchday[];
@@ -48,7 +49,7 @@
 {#if matchdays.length > 0}
   <div class="carousel">
     <button class="carousel-arrow" onclick={() => scrollBy(-1)} aria-label="Fecha anterior">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      <ChevronLeft size={18} strokeWidth={2} />
     </button>
 
     <div class="carousel-track" bind:this={scrollEl}>
@@ -68,7 +69,7 @@
     </div>
 
     <button class="carousel-arrow" onclick={() => scrollBy(1)} aria-label="Fecha siguiente">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      <ChevronRight size={18} strokeWidth={2} />
     </button>
   </div>
 {/if}

@@ -3,6 +3,7 @@
   import { page } from '$app/stores';
   import { getClubRoster, searchPlayersByDni, assignPlayerToClub, removePlayerFromClub, type RosterCategory, type Player } from '$lib/api';
   import Modal from '$lib/Modal.svelte';
+  import { Plus, X } from '@lucide/svelte';
 
   let clubId: number = $derived(Number($page.params.clubId));
   let categories: RosterCategory[] = $state([]);
@@ -120,7 +121,7 @@
               <span class="tag tag-red">Cerrado</span>
             {:else}
               <button class="button primary small" disabled={saving} onclick={() => openPlayerPicker(rosterCat.tournamentCategory.tournament.id, rosterCat.tournamentCategoryId)}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>
+                <Plus size={14} strokeWidth={2} />
                 Agregar
               </button>
             {/if}
@@ -151,7 +152,7 @@
                   <td>
                     {#if !rosterCat.lockedAt}
                       <button class="icon-button remove-row" onclick={() => removePlayer(rosterCat.tournamentCategory.tournament.id, entry.player.id)} aria-label="Remover jugador">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+                        <X size={14} strokeWidth={2} />
                       </button>
                     {/if}
                   </td>

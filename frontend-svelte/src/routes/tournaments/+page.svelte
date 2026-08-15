@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Modal from '$lib/Modal.svelte';
+  import { SlidersHorizontal } from '@lucide/svelte';
   import { getTournaments, getProfile, createTournament, updateTournament, updateTournamentStatus, deleteTournament, getLeagues, getCategories, type AuthUser, type Tournament, type League, type Category } from '$lib/api';
 
   const genders = [
@@ -254,7 +255,7 @@
     <section class="tournament-list card-surface">
       <div class="filter-bar">
         <button class="button secondary" onclick={() => showFilters = !showFilters} aria-label="Filtros">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+          <SlidersHorizontal size={16} strokeWidth={2} />
           {showFilters ? 'Ocultar filtros' : 'Filtros'}
         </button>
         <span class="count-pill">{tournaments.length}</span>

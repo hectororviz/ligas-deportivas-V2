@@ -1,6 +1,7 @@
 <script lang="ts">
   import { getPlayers, getProfile, createPlayer, updatePlayer, scanDni, type AuthUser, type Player, type PaginatedPlayers, type ScanDniResult } from '$lib/api';
   import Modal from '$lib/Modal.svelte';
+  import { SlidersHorizontal, UserPlus, Table, ScanLine, X, Plus, Image } from '@lucide/svelte';
 
   let user: AuthUser | null = $state(null);
   let paginated: PaginatedPlayers | null = $state(null);
@@ -246,7 +247,7 @@
     <section class="card-surface">
       <div class="filter-bar">
         <button class="button secondary" onclick={() => showFilters = !showFilters} aria-label="Filtros">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+          <SlidersHorizontal size={16} strokeWidth={2} />
           {showFilters ? 'Ocultar filtros' : 'Filtros'}
         </button>
         <span class="count-pill">{paginated?.total ?? 0}</span>
@@ -258,17 +259,17 @@
               <!-- svelte-ignore a11y_no_static_element_interactions -->
               <div class="add-dropdown" onclick={(e) => e.stopPropagation()}>
                 <button class="dropdown-item" onclick={openCreate}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></svg>
+                  <UserPlus size={16} strokeWidth={2} />
                   Manual
                 </button>
                 {#if !isMobile}
                   <button class="dropdown-item" onclick={openBulk}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+                    <Table size={16} strokeWidth={2} />
                     Masivo
                   </button>
                 {/if}
                 <button class="dropdown-item" onclick={openScan}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" x2="7" y1="12" y2="12"/></svg>
+                  <ScanLine size={16} strokeWidth={2} />
                   Escanear DNI
                 </button>
               </div>
@@ -404,7 +405,7 @@
                 <td><input bind:value={row.emergencyPhone} placeholder="Tel" style="max-width:100px" /></td>
                 <td class="td-center"><input type="checkbox" bind:checked={row.active} /></td>
                 <td><button type="button" class="icon-button remove-row" onclick={() => removeBulkRow(i)} aria-label="Eliminar fila">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+                  <X size={14} strokeWidth={2} />
                 </button></td>
               </tr>
             {/each}
@@ -414,7 +415,7 @@
 
       <div class="bulk-actions">
         <button class="button secondary" onclick={addBulkRow} disabled={bulkSaving}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>
+          <Plus size={16} strokeWidth={2} />
           Agregar fila
         </button>
         <span class="muted" style="font-size:.8rem">{bulkRows.length} filas</span>
@@ -443,7 +444,7 @@
               <img src={scanImgPreview} alt="Vista previa del DNI" class="scan-preview" />
             {:else}
               <div class="scan-placeholder">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+                <Image size={48} strokeWidth={1.5} />
                 <span>Tocá para capturar o seleccionar una foto del DNI</span>
               </div>
             {/if}
