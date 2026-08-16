@@ -129,7 +129,12 @@
 
   async function applySelection(sel: { clubId: number | null; leagueId: number | null; tournamentId: number | null; zoneId: number | null; matchday: number | null }) {
     let { clubId, leagueId, tournamentId, zoneId } = sel;
-    if (clubId != null && !clubs.some((club) => club.id === clubId)) clubId = null;
+    if (clubId != null && !zones.some((zone) => (zone.clubZones ?? []).some((assignment) => assignment.club.id === clubId))) clubId = null;
+    if (clubId != null) {
+      leagueId = null;
+      tournamentId = null;
+      zoneId = null;
+    }
     if (leagueId != null && !leagues.some((l) => l.id === leagueId)) leagueId = null;
     if (tournamentId != null && !tournaments.some((t) => t.id === tournamentId)) tournamentId = null;
     if (tournamentId != null && leagueId != null && !tournaments.some((t) => t.id === tournamentId && t.leagueId === leagueId)) tournamentId = null;
@@ -194,33 +199,38 @@
   }
 
   function onLeagueChange(id: number | null) {
+    selectedClubId = null;
     selectedLeagueId = id;
     selectedTournamentId = null;
     selectedZoneId = null;
     selectedMatchday = null;
     matchesData = null;
-    if (selectedClubId != null) void loadClubMatches();
+    clubMatches = {};
+    clubMatchdays = {};
     persist();
     syncUrl();
   }
 
   function onTournamentChange(id: number | null) {
+    selectedClubId = null;
     selectedTournamentId = id;
     selectedZoneId = null;
     selectedMatchday = null;
     matchesData = null;
-    if (selectedClubId != null) void loadClubMatches();
+    clubMatches = {};
+    clubMatchdays = {};
     persist();
     syncUrl();
   }
 
   async function onZoneChange(id: number | null) {
+    selectedClubId = null;
     selectedZoneId = id;
     selectedMatchday = null;
     matchesData = null;
-    if (selectedClubId != null) {
-      await loadClubMatches();
-    } else if (id != null) {
+    clubMatches = {};
+    clubMatchdays = {};
+    if (id != null) {
       await loadMatches(id);
     }
     persist();
@@ -235,6 +245,11 @@
 
   async function onClubChange(id: number | null) {
     selectedClubId = id;
+    if (id != null) {
+      selectedLeagueId = null;
+      selectedTournamentId = null;
+      selectedZoneId = null;
+    }
     selectedMatchday = null;
     matchesData = null;
     clubMatches = {};
