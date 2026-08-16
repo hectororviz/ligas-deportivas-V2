@@ -70,12 +70,16 @@
     return [...unique.values()].sort((a, b) => (a.shortName?.trim() || a.name).localeCompare(b.shortName?.trim() || b.name, 'es'));
   });
   let selectedClub = $derived(clubs.find((club) => club.id === selectedClubId) ?? null);
-  let clubZones = $derived.by(() => zones.filter((zone) => {
-    if (selectedClubId == null || !(zone.clubZones ?? []).some((assignment) => assignment.club.id === selectedClubId)) return false;
-    if (selectedLeagueId != null && tournaments.find((tournament) => tournament.id === zone.tournamentId)?.leagueId !== selectedLeagueId) return false;
-    if (selectedTournamentId != null && zone.tournamentId !== selectedTournamentId) return false;
-    return selectedZoneId == null || zone.id === selectedZoneId;
-  }));
+  function clubZonesFor(clubId: number | null): Zone[] {
+    if (clubId == null) return [];
+    return zones.filter((zone) => {
+      if (!(zone.clubZones ?? []).some((assignment) => assignment.club.id === clubId)) return false;
+      if (selectedLeagueId != null && tournaments.find((tournament) => tournament.id === zone.tournamentId)?.leagueId !== selectedLeagueId) return false;
+      if (selectedTournamentId != null && zone.tournamentId !== selectedTournamentId) return false;
+      return selectedZoneId == null || zone.id === selectedZoneId;
+    });
+  }
+  let clubZones = $derived(clubZonesFor(selectedClubId));
 
   onMount(async () => {
     try {
@@ -96,7 +100,7 @@
 
   function readInitialSelection(): { clubId: number | null; leagueId: number | null; tournamentId: number | null; zoneId: number | null; matchday: number | null } {
     const qp = $page.url.searchParams;
-    if (qp.has('league') || qp.has('torneo') || qp.has('zona')) {
+    if (qp.has('club') || qp.has('league') || qp.has('torneo') || qp.has('zona')) {
       return {
         clubId: toId(qp.get('club')),
         leagueId: toId(qp.get('league')),
@@ -138,7 +142,7 @@
     selectedZoneId = zoneId;
 
     if (clubId != null) {
-      await loadClubMatches(sel.matchday);
+      await loadClubMatches(sel.matchday, clubId);
     } else if (zoneId != null) {
       await loadMatches(zoneId, sel.matchday);
     } else {
@@ -163,11 +167,11 @@
     }
   }
 
-  async function loadClubMatches(preferredMatchday: number | null = null) {
+  async function loadClubMatches(preferredMatchday: number | null = null, clubId = selectedClubId) {
     matchesLoading = true;
     error = '';
     try {
-      const responses = await Promise.all(clubZones.map(async (zone) => [zone.id, await getZoneMatches(zone.id)] as const));
+      const responses = await Promise.all(clubZonesFor(clubId).map(async (zone) => [zone.id, await getZoneMatches(zone.id)] as const));
       clubMatches = Object.fromEntries(responses);
       clubMatchdays = Object.fromEntries(responses.map(([zoneId, data]) => [zoneId, pickCurrentMatchday(data.matchdays, preferredMatchday)]));
     } catch (cause) {
@@ -235,7 +239,7 @@
     matchesData = null;
     clubMatches = {};
     clubMatchdays = {};
-    if (id != null) await loadClubMatches();
+    if (id != null) await loadClubMatches(null, id);
     persist();
     syncUrl();
   }
