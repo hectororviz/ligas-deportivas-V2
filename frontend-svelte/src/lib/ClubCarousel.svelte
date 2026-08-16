@@ -29,13 +29,15 @@
     dragMoved = false;
     dragStartX = event.clientX;
     dragStartScroll = scrollEl.scrollLeft;
-    scrollEl.setPointerCapture(event.pointerId);
   }
 
   function moveDrag(event: PointerEvent) {
     if (!isDragging || !scrollEl) return;
     const distance = event.clientX - dragStartX;
-    if (Math.abs(distance) > 4) dragMoved = true;
+    if (Math.abs(distance) > 4) {
+      dragMoved = true;
+      if (!scrollEl.hasPointerCapture(event.pointerId)) scrollEl.setPointerCapture(event.pointerId);
+    }
     scrollEl.scrollLeft = dragStartScroll - distance;
   }
 
