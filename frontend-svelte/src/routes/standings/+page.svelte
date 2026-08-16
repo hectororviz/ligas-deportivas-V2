@@ -1,39 +1,59 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { browser } from '$app/environment';
+  import { page } from '$app/stores';
   import {
+    getLeagues,
     getTournaments,
-    getTournamentStandings,
     getZones,
     getZoneStandings,
+    type Club,
+    type League,
     type Tournament,
     type Zone,
-    type StandingRow,
-    type ZoneStanding
+    type ZoneStanding,
   } from '$lib/api';
+  import ClubCarousel from '$lib/ClubCarousel.svelte';
+  import FixtureFilters from '$lib/FixtureFilters.svelte';
+  import StandingsBlock from '$lib/StandingsBlock.svelte';
 
-  interface TournamentStanding {
-    zoneId: number;
-    zoneName: string;
-    categories: { categoryId: number; categoryName: string; standings: StandingRow[] }[];
+  const STORAGE_KEY = 'ligas:standings-selection';
+
+  let leagues: League[] = $state([]);
+  let tournaments: Tournament[] = $state([]);
+  let zones: Zone[] = $state([]);
+  let selectedClubId: number | null = $state(null);
+  let selectedLeagueId: number | null = $state(null);
+  let selectedTournamentId: number | null = $state(null);
+  let selectedZoneId: number | null = $state(null);
+
+  let zoneStanding: ZoneStanding | null = $state(null);
+  let clubStandings: Record<number, ZoneStanding> = $state({});
+  let loading = $state(true);
+  let standingsLoading = $state(false);
+  let error = $state('');
+
+  let clubs = $derived.by(() => {
+    const unique = new Map<number, Club>();
+    for (const zone of zones) {
+      for (const assignment of zone.clubZones ?? []) unique.set(assignment.club.id, assignment.club);
+    }
+    return [...unique.values()].sort((a, b) => (a.shortName?.trim() || a.name).localeCompare(b.shortName?.trim() || b.name, 'es'));
+  });
+  let selectedClub = $derived(clubs.find((club) => club.id === selectedClubId) ?? null);
+
+  function clubZonesFor(clubId: number | null): Zone[] {
+    if (clubId == null) return [];
+    return zones.filter((zone) => (zone.clubZones ?? []).some((assignment) => assignment.club.id === clubId));
   }
 
-  let tournaments: Tournament[] = [];
-  let zones: Zone[] = [];
-  let loading = true;
-  let error = '';
-
-  let activeTab: 'zona' | 'torneo' = 'zona';
-
-  let selectedZoneId: number | null = null;
-  let selectedTournamentId: number | null = null;
-
-  let zoneStandings: ZoneStanding | null = null;
-  let tournamentStandings: TournamentStanding[] = [];
-  let standingsLoading = false;
+  let clubZones = $derived(clubZonesFor(selectedClubId));
+  let selectedZone = $derived(zones.find((zone) => zone.id === selectedZoneId) ?? null);
 
   onMount(async () => {
     try {
-      [tournaments, zones] = await Promise.all([getTournaments(), getZones()]);
+      [leagues, tournaments, zones] = await Promise.all([getLeagues(), getTournaments(), getZones()]);
+      await applySelection(readInitialSelection());
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudieron cargar los datos.';
     } finally {
@@ -41,13 +61,56 @@
     }
   });
 
-  async function loadZoneStandings() {
-    if (!selectedZoneId) return;
+  function toId(value: string | null | undefined): number | null {
+    if (value == null || value === '') return null;
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+
+  function readInitialSelection(): { clubId: number | null; leagueId: number | null; tournamentId: number | null; zoneId: number | null } {
+    const qp = $page.url.searchParams;
+    if (qp.has('club') || qp.has('league') || qp.has('torneo') || qp.has('zona')) {
+      return { clubId: toId(qp.get('club')), leagueId: toId(qp.get('league')), tournamentId: toId(qp.get('torneo')), zoneId: toId(qp.get('zona')) };
+    }
+    if (browser) {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          return { clubId: toId(parsed.clubId), leagueId: toId(parsed.leagueId), tournamentId: toId(parsed.tournamentId), zoneId: toId(parsed.zoneId) };
+        }
+      } catch {}
+    }
+    return { clubId: null, leagueId: null, tournamentId: null, zoneId: null };
+  }
+
+  async function applySelection(selection: { clubId: number | null; leagueId: number | null; tournamentId: number | null; zoneId: number | null }) {
+    let { clubId, leagueId, tournamentId, zoneId } = selection;
+    if (clubId != null && !zones.some((zone) => (zone.clubZones ?? []).some((assignment) => assignment.club.id === clubId))) clubId = null;
+    if (clubId != null) {
+      leagueId = null;
+      tournamentId = null;
+      zoneId = null;
+    }
+    if (leagueId != null && !leagues.some((league) => league.id === leagueId)) leagueId = null;
+    if (tournamentId != null && !tournaments.some((tournament) => tournament.id === tournamentId && (!leagueId || tournament.leagueId === leagueId))) tournamentId = null;
+    if (zoneId != null && !zones.some((zone) => zone.id === zoneId && (!tournamentId || zone.tournamentId === tournamentId))) zoneId = null;
+
+    selectedClubId = clubId;
+    selectedLeagueId = leagueId;
+    selectedTournamentId = tournamentId;
+    selectedZoneId = zoneId;
+    if (clubId != null) await loadClubStandings(clubId);
+    else if (zoneId != null) await loadZoneStanding(zoneId);
+    syncUrl();
+  }
+
+  async function loadZoneStanding(zoneId: number) {
     standingsLoading = true;
     error = '';
-    zoneStandings = null;
+    zoneStanding = null;
     try {
-      zoneStandings = await getZoneStandings(selectedZoneId);
+      zoneStanding = await getZoneStandings(zoneId);
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudieron cargar las posiciones.';
     } finally {
@@ -55,14 +118,14 @@
     }
   }
 
-  async function loadTournamentStandings() {
-    if (!selectedTournamentId) return;
+  async function loadClubStandings(clubId: number) {
     standingsLoading = true;
     error = '';
-    tournamentStandings = [];
+    zoneStanding = null;
+    clubStandings = {};
     try {
-      const data = await getTournamentStandings(selectedTournamentId);
-      tournamentStandings = data as TournamentStanding[];
+      const responses = await Promise.all(clubZonesFor(clubId).map(async (zone) => [zone.id, await getZoneStandings(zone.id)] as const));
+      clubStandings = Object.fromEntries(responses);
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudieron cargar las posiciones.';
     } finally {
@@ -70,16 +133,65 @@
     }
   }
 
-  $: {
-    if (selectedZoneId && activeTab === 'zona') loadZoneStandings();
+  function onClubChange(id: number | null) {
+    selectedClubId = id;
+    if (id != null) {
+      selectedLeagueId = null;
+      selectedTournamentId = null;
+      selectedZoneId = null;
+      void loadClubStandings(id);
+    } else {
+      clubStandings = {};
+    }
+    zoneStanding = null;
+    persist();
+    syncUrl();
   }
 
-  $: {
-    if (selectedTournamentId && activeTab === 'torneo') loadTournamentStandings();
+  function onLeagueChange(id: number | null) {
+    selectedClubId = null;
+    selectedLeagueId = id;
+    selectedTournamentId = null;
+    selectedZoneId = null;
+    zoneStanding = null;
+    clubStandings = {};
+    persist();
+    syncUrl();
   }
 
-  function formatStandingHeaders(): string[] {
-    return ['Pos', 'Club', 'J', 'G', 'E', 'P', 'GF', 'GC', 'DG', 'Pts'];
+  function onTournamentChange(id: number | null) {
+    selectedClubId = null;
+    selectedTournamentId = id;
+    selectedZoneId = null;
+    zoneStanding = null;
+    clubStandings = {};
+    persist();
+    syncUrl();
+  }
+
+  async function onZoneChange(id: number | null) {
+    selectedClubId = null;
+    selectedZoneId = id;
+    clubStandings = {};
+    if (id != null) await loadZoneStanding(id);
+    else zoneStanding = null;
+    persist();
+    syncUrl();
+  }
+
+  function persist() {
+    if (!browser) return;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ clubId: selectedClubId, leagueId: selectedLeagueId, tournamentId: selectedTournamentId, zoneId: selectedZoneId }));
+  }
+
+  function syncUrl() {
+    const params = new URLSearchParams();
+    if (selectedClubId != null) params.set('club', String(selectedClubId));
+    if (selectedLeagueId != null) params.set('league', String(selectedLeagueId));
+    if (selectedTournamentId != null) params.set('torneo', String(selectedTournamentId));
+    if (selectedZoneId != null) params.set('zona', String(selectedZoneId));
+    const query = params.toString();
+    history.replaceState({}, '', `/standings${query ? `?${query}` : ''}`);
   }
 </script>
 
@@ -90,187 +202,48 @@
     <div>
       <p class="eyebrow">Competencia</p>
       <h1>Tablas de posiciones</h1>
-      <p class="muted">Consultá las posiciones por zona o por torneo.</p>
+      <p class="muted">Consultá las posiciones por liga, torneo, zona o club.</p>
     </div>
   </header>
 
   {#if loading}
-    <section class="loading-card">Cargando torneos...</section>
+    <section class="loading-card">Cargando tablas...</section>
   {:else}
-    {#if error}
-      <p class="error-banner">{error}</p>
-    {/if}
+    <ClubCarousel clubs={clubs} selectedClubId={selectedClubId} onSelect={onClubChange} />
+    <FixtureFilters
+      {leagues}
+      {tournaments}
+      {zones}
+      leagueId={selectedLeagueId}
+      tournamentId={selectedTournamentId}
+      zoneId={selectedZoneId}
+      onLeagueChange={onLeagueChange}
+      onTournamentChange={onTournamentChange}
+      onZoneChange={onZoneChange}
+    />
 
-    <div class="tabs">
-      <button
-        class="tab"
-        class:active={activeTab === 'zona'}
-        onclick={() => { activeTab = 'zona'; zoneStandings = null; }}>
-        Por zona
-      </button>
-      <button
-        class="tab"
-        class:active={activeTab === 'torneo'}
-        onclick={() => { activeTab = 'torneo'; tournamentStandings = []; }}>
-        Por torneo
-      </button>
-    </div>
+    {#if error}<p class="error-banner">{error}</p>{/if}
 
-    <div class="standings-content card-surface">
-      {#if activeTab === 'zona'}
-        <p class="eyebrow">Seleccionar zona</p>
-        <div class="select-row">
-          <select
-            bind:value={selectedZoneId}
-            disabled={zones.length === 0}>
-            <option value={null}>-- Elegir zona --</option>
-            {#each zones as zone}
-              <option value={zone.id}>
-                {zone.name} — {zone.tournament.name} {zone.tournament.year} ({zone.tournament.league.name})
-              </option>
-            {/each}
-          </select>
-        </div>
-
-        {#if standingsLoading}
-          <section class="loading-card">Cargando posiciones...</section>
-        {:else if zoneStandings}
-          <div class="standings-section">
-            <h2>{zoneStandings.zoneName}</h2>
-            <p class="muted">{zoneStandings.tournamentName}</p>
-            {#each zoneStandings.categories as category}
-              <div class="category-block">
-                <h3 class="category-title">{category.categoryName}</h3>
-                {#if category.standings.length === 0}
-                  <p class="muted compact">Sin posiciones en esta categoría.</p>
-                {:else}
-                  <table class="standings-table">
-                    <thead>
-                      <tr>
-                        {#each formatStandingHeaders() as header}
-                          <th>{header}</th>
-                        {/each}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {#each category.standings as row, index}
-                        <tr>
-                          <td><span class="position">{index + 1}</span></td>
-                          <td>{row.clubName}</td>
-                          <td>{row.played}</td>
-                          <td>{row.wins}</td>
-                          <td>{row.draws}</td>
-                          <td>{row.losses}</td>
-                          <td>{row.goalsFor}</td>
-                          <td>{row.goalsAgainst}</td>
-                          <td>{row.goalDifference}</td>
-                          <td class="pts">{row.points}</td>
-                        </tr>
-                      {/each}
-                    </tbody>
-                  </table>
-                {/if}
-              </div>
-            {/each}
-          </div>
-        {:else}
-          <div class="empty-state compact-empty">
-            <span class="empty-icon">&#8693;</span>
-            <h2>Seleccioná una zona</h2>
-            <p>Elegí una zona para ver sus posiciones.</p>
-          </div>
-        {/if}
+    {#if standingsLoading}
+      <section class="loading-card">Cargando posiciones...</section>
+    {:else if selectedClubId != null}
+      {#if clubZones.length === 0}
+        <div class="empty-state"><span class="empty-icon">&#8693;</span><h2>Sin participaciones</h2><p>{selectedClub?.name ?? 'Este club'} no tiene zonas asignadas.</p></div>
       {:else}
-        <p class="eyebrow">Seleccionar torneo</p>
-        <div class="select-row">
-          <select
-            bind:value={selectedTournamentId}
-            disabled={tournaments.length === 0}>
-            <option value={null}>-- Elegir torneo --</option>
-            {#each tournaments as tournament}
-              <option value={tournament.id}>
-                {tournament.name} {tournament.year} ({tournament.league.name})
-              </option>
-            {/each}
-          </select>
+        <div class="standings-results">
+          {#each clubZones as zone (zone.id)}
+            {#if clubStandings[zone.id]}<StandingsBlock {zone} standing={clubStandings[zone.id]} />{/if}
+          {/each}
         </div>
-
-        {#if standingsLoading}
-          <section class="loading-card">Cargando posiciones...</section>
-        {:else if tournamentStandings.length > 0}
-          <div class="standings-section">
-            {#each tournamentStandings as zoneData}
-              <h2>{zoneData.zoneName}</h2>
-              {#each zoneData.categories as category}
-                <div class="category-block">
-                  <h3 class="category-title">{category.categoryName}</h3>
-                  {#if category.standings.length === 0}
-                    <p class="muted compact">Sin posiciones en esta categoría.</p>
-                  {:else}
-                    <table class="standings-table">
-                      <thead>
-                        <tr>
-                          {#each formatStandingHeaders() as header}
-                            <th>{header}</th>
-                          {/each}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {#each category.standings as row, index}
-                          <tr>
-                            <td><span class="position">{index + 1}</span></td>
-                            <td>{row.clubName}</td>
-                            <td>{row.played}</td>
-                            <td>{row.wins}</td>
-                            <td>{row.draws}</td>
-                            <td>{row.losses}</td>
-                            <td>{row.goalsFor}</td>
-                            <td>{row.goalsAgainst}</td>
-                            <td>{row.goalDifference}</td>
-                            <td class="pts">{row.points}</td>
-                          </tr>
-                        {/each}
-                      </tbody>
-                    </table>
-                  {/if}
-                </div>
-              {/each}
-            {/each}
-          </div>
-        {:else}
-          <div class="empty-state compact-empty">
-            <span class="empty-icon">&#8693;</span>
-            <h2>Seleccioná un torneo</h2>
-            <p>Elegí un torneo para ver sus posiciones.</p>
-          </div>
-        {/if}
       {/if}
-    </div>
+    {:else if selectedZoneId != null && zoneStanding && selectedZone}
+      <StandingsBlock zone={selectedZone} standing={zoneStanding} />
+    {:else}
+      <div class="empty-state"><span class="empty-icon">&#8693;</span><h2>Seleccioná una zona</h2><p>Elegí liga, torneo y zona para ver sus posiciones.</p></div>
+    {/if}
   {/if}
 </main>
 
 <style>
-  .tabs {
-    display: flex;
-    gap: 0.4rem;
-    margin-bottom: 1rem;
-  }
-  .tab {
-    border: 1px solid var(--color-border); border-radius: 0.7rem; padding: 0.7rem 1.4rem;
-    background: var(--color-surface); color: var(--color-text-muted);
-    cursor: pointer; font-weight: 600; font-size: 0.9rem;
-  }
-  .tab.active { color: var(--color-hero); background: var(--color-hero-accent); border-color: var(--color-hero-accent); }
-  .select-row { margin: 0.8rem 0 1.5rem; }
-  .select-row select { width: 100%; max-width: 480px; border: 1px solid var(--color-input-border); border-radius: 0.7rem; padding: 0.85rem 1rem; color: var(--color-text); background: var(--color-input); }
-  .standings-section h2 { margin: 1.5rem 0 0.2rem; font-family: 'Space Grotesk', sans-serif; font-size: 1.5rem; letter-spacing: -0.04em; }
-  .category-block { margin-top: 1.5rem; }
-  .category-title { margin: 0 0 0.8rem; font-family: 'Space Grotesk', sans-serif; font-size: 1.15rem; color: var(--color-text); }
-  .standings-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-  .standings-table th { padding: 0.6rem 0.4rem; border-bottom: 2px solid var(--color-border); color: var(--color-accent-text); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; text-align: center; }
-  .standings-table th:nth-child(2) { text-align: left; }
-  .standings-table td { padding: 0.55rem 0.4rem; border-top: 1px solid var(--color-border); text-align: center; }
-  .standings-table td:nth-child(2) { text-align: left; font-weight: 600; }
-  .standings-table .position { display: inline-grid; }
-  .standings-table .pts { font-weight: 700; color: var(--color-heading); }
+  .standings-results { display: grid; gap: 1.25rem; }
 </style>
