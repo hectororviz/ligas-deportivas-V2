@@ -4,9 +4,24 @@
   interface Props {
     zone: Zone;
     standing: ZoneStanding;
+    selectedClubId?: number | null;
   }
 
-  let { zone, standing }: Props = $props();
+  let { zone, standing, selectedClubId = null }: Props = $props();
+
+  let orderedCategories = $derived.by(() => {
+    const categories = [
+      { categoryName: 'General', standings: standing.general, isGeneral: true },
+      ...standing.categories.map((category) => ({ ...category, isGeneral: false })),
+    ];
+    return categories.sort((a, b) => {
+      if (a.isGeneral) return -1;
+      if (b.isGeneral) return 1;
+      const aAge = Number(a.categoryName.match(/\d+/)?.[0] ?? Number.POSITIVE_INFINITY);
+      const bAge = Number(b.categoryName.match(/\d+/)?.[0] ?? Number.POSITIVE_INFINITY);
+      return aAge - bAge || a.categoryName.localeCompare(b.categoryName, 'es');
+    });
+  });
 
   function formatStandingHeaders(): string[] {
     return ['Pos', 'Club', 'J', 'G', 'E', 'P', 'GF', 'GC', 'DG', 'Pts'];
@@ -21,7 +36,7 @@
     </div>
   </div>
 
-  {#each standing.categories as category}
+  {#each orderedCategories as category}
     <div class="category-block">
       <h3 class="category-title">{category.categoryName}</h3>
       {#if category.standings.length === 0}
@@ -38,7 +53,7 @@
             </thead>
             <tbody>
               {#each category.standings as row, index}
-                <tr>
+                <tr class:club-highlight={selectedClubId != null && row.clubId === selectedClubId}>
                   <td><span class="position">{index + 1}</span></td>
                   <td>{row.clubName}</td>
                   <td>{row.played}</td>
@@ -73,4 +88,5 @@
   .standings-table td:nth-child(2) { text-align: left; font-weight: 600; }
   .standings-table .position { display: inline-grid; }
   .standings-table .pts { font-weight: 700; color: var(--color-heading); }
+  .standings-table tr.club-highlight td { font-weight: 800; }
 </style>

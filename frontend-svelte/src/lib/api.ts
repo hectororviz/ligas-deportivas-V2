@@ -152,10 +152,23 @@ export interface StandingRow {
 }
 
 export interface ZoneStanding {
-  zoneId: number;
-  zoneName: string;
-  tournamentName: string;
-  categories: { categoryId: number; categoryName: string; standings: StandingRow[] }[];
+  zone: {
+    id: number;
+    name: string;
+    tournamentId: number;
+    tournamentName: string;
+    tournamentYear: number;
+    leagueId: number;
+    leagueName: string;
+  };
+  general: StandingRow[];
+  categories: {
+    tournamentCategoryId: number;
+    categoryId: number;
+    categoryName: string;
+    countsForGeneral: boolean;
+    standings: StandingRow[];
+  }[];
 }
 
 export interface UserRow {

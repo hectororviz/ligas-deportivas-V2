@@ -232,7 +232,7 @@
       {:else}
         <div class="standings-results">
           {#each clubZones as zone (zone.id)}
-            {#if clubStandings[zone.id]}<StandingsBlock {zone} standing={clubStandings[zone.id]} />{/if}
+            {#if clubStandings[zone.id]}<StandingsBlock {zone} standing={clubStandings[zone.id]} selectedClubId={selectedClubId} />{/if}
           {/each}
         </div>
       {/if}
