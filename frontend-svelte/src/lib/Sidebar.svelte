@@ -255,24 +255,29 @@
   .sidebar-user strong { font-size: .88rem; font-family: 'Space Grotesk', sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   .sidebar-avatar {
-    width: 2.2rem;
-    height: 2.2rem;
+    width: 4.4rem;
+    height: 4.4rem;
     display: grid;
     place-items: center;
     flex-shrink: 0;
-    border-radius: .7rem;
+    border-radius: 1rem;
     color: var(--color-hero-text);
     background: var(--color-hero);
-    font-size: .78rem;
+    font-size: 1.4rem;
     font-weight: 700;
     font-family: 'Space Grotesk', sans-serif;
   }
   .sidebar-logo {
-    width: 2.2rem;
-    height: 2.2rem;
+    width: 4.4rem;
+    height: 4.4rem;
     object-fit: contain;
     flex-shrink: 0;
-    border-radius: .7rem;
+    border-radius: 1rem;
+  }
+  .sidebar-desktop.collapsed .sidebar-logo,
+  .sidebar-desktop.collapsed .sidebar-avatar {
+    width: 3rem;
+    height: 3rem;
   }
 
   .sidebar-nav { flex: 1; display: flex; flex-direction: column; gap: .15rem; padding: .5rem; overflow-y: auto; }

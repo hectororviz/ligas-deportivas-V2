@@ -275,7 +275,7 @@ export class SiteIdentityService {
     let favicon: SiteIdentityResponse['favicon'] = null;
     if (identity.faviconHash) {
       favicon = {
-        basePath: `/site-identity/icons/${identity.faviconHash}`,
+        basePath: `/api/v1/site-identity/icons/${identity.faviconHash}`,
         updatedAt: identity.updatedAt.getTime(),
       };
     }
