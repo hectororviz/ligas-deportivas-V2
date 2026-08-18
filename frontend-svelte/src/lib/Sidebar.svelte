@@ -2,6 +2,7 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { NAV_ITEMS, sidebarState, type NavItem, type NavChild } from './navigation.svelte';
+  import { loginModalState } from './login-modal.svelte';
   import { getProfile, hasSession, logout, canViewModule, canManageModule, type AuthUser } from './api';
   import { MorphIcon } from 'morphicons/svelte';
   import { Menu, X, ChevronDown, ChevronRight, ChevronLeft } from 'lucide';
@@ -126,7 +127,7 @@
             <span>Cerrar sesión</span>
           </button>
         {:else}
-          <button class="nav-item login-item" onclick={() => navigate('/login')}>
+          <button class="nav-item login-item" onclick={() => loginModalState.openModal()}>
             <LogIn size={20} strokeWidth={1.8} />
             <span>Ingresar</span>
           </button>
@@ -199,7 +200,7 @@
         </button>
       {/if}
       {#if !user}
-        <button class="nav-item login-item" onclick={() => navigate('/login')} title={sidebarState.collapsed ? 'Ingresar' : undefined}>
+        <button class="nav-item login-item" onclick={() => loginModalState.openModal()} title={sidebarState.collapsed ? 'Ingresar' : undefined}>
           <LogIn size={20} strokeWidth={1.8} />
           {#if !sidebarState.collapsed}<span>Ingresar</span>{/if}
         </button>

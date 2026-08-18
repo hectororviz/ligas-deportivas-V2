@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { getHomeSummary, getProfile, hasSession, logout, type AuthUser, type HomeSummary, type HomeMatchday } from '$lib/api';
+  import { loginModalState } from '$lib/login-modal.svelte';
 
   let user: AuthUser | null = null;
   let summary: HomeSummary | null = null;
@@ -55,7 +56,7 @@
           </div>
         {:else}
           <div class="dashboard-actions">
-            <a class="button primary" href="/login">Ingresar</a>
+            <button class="button primary" onclick={() => loginModalState.openModal()}>Ingresar</button>
           </div>
         {/if}
       </div>

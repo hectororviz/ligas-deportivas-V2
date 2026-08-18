@@ -44,17 +44,6 @@ button, input, select { font: inherit; }
 .eyebrow { margin: 0; color: var(--color-accent-text); font-size: .74rem; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; }
 .muted { color: var(--color-text-muted); line-height: 1.5; }
 
-/* Login page */
-.login-shell { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(360px, .95fr); }
-.login-aside { padding: clamp(2rem, 7vw, 7rem); display: flex; flex-direction: column; justify-content: center; color: var(--color-hero-text); background: var(--color-hero); background-image: radial-gradient(circle at 80% 20%, color-mix(in srgb, var(--color-hero-accent) 20%, transparent) 0 15%, transparent 16%), linear-gradient(145deg, var(--color-hero), color-mix(in srgb, var(--color-hero) 70%, black)); }
-.brand-mark { width: 4rem; height: 4rem; display: grid; place-items: center; border-radius: 1.2rem; margin-bottom: 4rem; color: var(--color-hero); background: var(--color-hero-accent); font-family: 'Space Grotesk', sans-serif; font-size: 1.2rem; font-weight: 700; }
-.login-aside h1 { max-width: 620px; margin: .5rem 0 1.5rem; font-family: 'Space Grotesk', sans-serif; font-size: clamp(2.8rem, 6vw, 5.7rem); line-height: .98; letter-spacing: -.06em; }
-.login-aside p:not(.eyebrow) { max-width: 480px; color: var(--color-hero-muted); font-size: 1.1rem; line-height: 1.6; }
-.login-aside .eyebrow { color: var(--color-hero-accent); }
-.login-panel { display: grid; place-items: center; padding: 2rem; }
-.login-card { width: min(100%, 430px); padding: clamp(1.5rem, 4vw, 3rem); border: 1px solid var(--color-border); border-radius: 1.5rem; background: var(--color-surface); box-shadow: 0 24px 70px var(--color-shadow); }
-.login-card h2 { margin: .5rem 0 .3rem; font-family: 'Space Grotesk', sans-serif; font-size: 2.2rem; letter-spacing: -.04em; }
-
 form { display: grid; gap: 1rem; margin-top: 2rem; }
 label { display: grid; gap: .45rem; color: var(--color-text-muted); font-size: .88rem; font-weight: 600; }
 input, select { width: 100%; border: 1px solid var(--color-input-border); border-radius: .7rem; padding: .85rem 1rem; color: var(--color-text); background: var(--color-input); outline: none; }
@@ -209,10 +198,6 @@ input:focus, select:focus { border-color: var(--color-input-focus); box-shadow: 
 .modal-panel > :first-child { margin-top: 0; }
 
 @media (max-width: 760px) {
-  .login-shell { grid-template-columns: 1fr; }
-  .login-aside { min-height: 280px; padding: 2rem; }
-  .brand-mark { margin-bottom: 2rem; }
-  .login-aside h1 { font-size: 3rem; }
   .dashboard-card, .dashboard-hero, .migration-note { display: grid; }
   .user-summary { justify-items: start; }
   .dashboard-actions { justify-content: start; }

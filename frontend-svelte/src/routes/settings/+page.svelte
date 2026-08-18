@@ -2,12 +2,13 @@
   import { onMount } from 'svelte';
   import { getProfile, hasSession, canManageModule, type AuthUser } from '$lib/api';
   import { goto } from '$app/navigation';
+  import { loginModalState } from '$lib/login-modal.svelte';
 
   let user: AuthUser | null = null;
   let loading = true;
 
   onMount(async () => {
-    if (!hasSession()) { await goto('/login'); return; }
+    if (!hasSession()) { loginModalState.openModal(); await goto('/'); return; }
     try { user = await getProfile(); } catch {} finally { loading = false; }
   });
 </script>

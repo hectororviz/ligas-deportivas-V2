@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { page } from '$app/stores';
   import '../app.css';
   import Sidebar from '$lib/Sidebar.svelte';
+  import LoginModal from '$lib/LoginModal.svelte';
   import { usePalette } from '$lib/palette.svelte';
   import { getSiteIdentity } from '$lib/api';
 
@@ -24,9 +24,6 @@
       })
       .catch(() => {});
   });
-
-const publicRoutes = ['/login'];
-let isPublic = $derived(publicRoutes.some((route) => $page.url.pathname === route || $page.url.pathname.startsWith(route + '/')));
 </script>
 
 <svelte:head>
@@ -34,12 +31,9 @@ let isPublic = $derived(publicRoutes.some((route) => $page.url.pathname === rout
   <meta name="description" content="Gestión de ligas y torneos deportivos" />
 </svelte:head>
 
-{#if isPublic}
-  <slot />
-{:else}
-  <Sidebar />
-  <main class="app-main"><slot /></main>
-{/if}
+<Sidebar />
+<main class="app-main"><slot /></main>
+<LoginModal />
 
 <style>
   .app-main { margin-left: 240px; min-height: 100vh; transition: margin-left 200ms ease; }
