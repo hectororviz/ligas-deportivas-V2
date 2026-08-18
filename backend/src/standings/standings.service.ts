@@ -328,7 +328,7 @@ export class StandingsService {
 
     for (const entry of entries) {
       const category = entry.tournamentCategory;
-      const clubName = entry.club.name;
+      const clubName = entry.club.shortName ?? entry.club.name;
 
       if (!categories.has(entry.tournamentCategoryId)) {
         categories.set(entry.tournamentCategoryId, {

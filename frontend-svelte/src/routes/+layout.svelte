@@ -11,8 +11,8 @@
   $effect(() => {
     getSiteIdentity()
       .then((identity) => {
-        if (identity.favicon?.basePath) {
-          const href = `${identity.favicon.basePath}/favicon.ico?v=${identity.favicon.updatedAt}`;
+        if (identity.favicon?.url) {
+          const href = identity.favicon.url;
           let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
           if (!link) {
             link = document.createElement('link');

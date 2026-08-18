@@ -9,6 +9,8 @@
   let { match, onclick }: Props = $props();
 
   let played = $derived(match.status === 'FINISHED' || match.categories.some((c) => c.closedAt));
+  let homeName = $derived(match.homeClub?.shortName ?? match.homeClub?.name ?? '—');
+  let awayName = $derived(match.awayClub?.shortName ?? match.awayClub?.name ?? '—');
 </script>
 
 <button
@@ -16,9 +18,9 @@
   class:played
   onclick={() => onclick(match.id)}
   title={played ? 'Jugado' : 'Pendiente'}
-  aria-label={`${match.homeClub?.name ?? 'Local'} vs ${match.awayClub?.name ?? 'Visitante'}, ${played ? 'jugado' : 'pendiente'}`}
+  aria-label={`${homeName} vs ${awayName}, ${played ? 'jugado' : 'pendiente'}`}
 >
-  <span class="team home">{match.homeClub?.name ?? '—'}</span>
+  <span class="team home">{homeName}</span>
   <span class="center">
     {#if played}
       <span class="score">{match.pointsHome} - {match.pointsAway}</span>
@@ -26,7 +28,7 @@
       <span class="divider">vs</span>
     {/if}
   </span>
-  <span class="team away">{match.awayClub?.name ?? '—'}</span>
+  <span class="team away">{awayName}</span>
 </button>
 
 <style>

@@ -75,4 +75,27 @@ export class StorageService {
     }
     return filePath;
   }
+
+  async saveFaviconFile(hash: string, filename: string, buffer: Buffer): Promise<void> {
+    const dir = path.join(this.storageRoot, 'favicons', hash);
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, filename), buffer);
+  }
+
+  resolveFaviconPath(hash: string, filename: string): string {
+    if (!/^[a-zA-Z0-9._-]+$/.test(filename)) {
+      throw new Error('Invalid favicon file name');
+    }
+    const root = path.join(this.storageRoot, 'favicons');
+    const filePath = path.join(root, hash, filename);
+    const relative = path.relative(root, filePath);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+      throw new Error('Invalid favicon path');
+    }
+    return filePath;
+  }
+
+  async deleteFavicon(hash: string): Promise<void> {
+    await fs.rm(path.join(this.storageRoot, 'favicons', hash), { recursive: true, force: true });
+  }
 }

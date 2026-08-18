@@ -20,7 +20,8 @@ export interface SiteIdentityResponse {
   title: string;
   iconUrl: string | null;
   favicon: {
-    basePath: string;
+    url: string;
+    previewUrl: string;
     updatedAt: number;
   } | null;
   flyerUrl: string | null;
@@ -109,6 +110,9 @@ export class SiteIdentityService {
       throw new BadRequestException('No puedes enviar archivo y eliminación al mismo tiempo.');
     }
     if (remove) {
+      if (identity.faviconHash) {
+        await this.storageService.deleteFavicon(identity.faviconHash);
+      }
       const updated = await this.prisma.siteIdentity.update({
         where: { id: identity.id },
         data: {
@@ -124,8 +128,9 @@ export class SiteIdentityService {
 
     await this.validateFaviconFile(file);
     const hash = createHash('sha256').update(file.buffer).digest('hex');
-    const outputDir = path.join(process.cwd(), 'public', 'site-identity', 'icons', hash);
-    await fs.mkdir(outputDir, { recursive: true });
+    if (identity.faviconHash) {
+      await this.storageService.deleteFavicon(identity.faviconHash);
+    }
 
     const input = this.createFaviconSharpInput(file);
     const outputPngs: Record<number, string> = {
@@ -148,13 +153,13 @@ export class SiteIdentityService {
           })
           .png()
           .toBuffer();
-        await fs.writeFile(path.join(outputDir, filename), buffer);
+        await this.storageService.saveFaviconFile(hash, filename, buffer);
         return buffer;
       }),
     );
 
     const icoBuffer = this.createIco(pngBuffers.slice(0, 3), sizes.slice(0, 3));
-    await fs.writeFile(path.join(outputDir, 'favicon.ico'), icoBuffer);
+    await this.storageService.saveFaviconFile(hash, 'favicon.ico', icoBuffer);
 
     const manifest = {
       name: identity.title,
@@ -175,9 +180,10 @@ export class SiteIdentityService {
       scope: '/',
       display: 'standalone',
     };
-    await fs.writeFile(
-      path.join(outputDir, 'site.webmanifest'),
-      JSON.stringify(manifest, null, 2),
+    await this.storageService.saveFaviconFile(
+      hash,
+      'site.webmanifest',
+      Buffer.from(JSON.stringify(manifest, null, 2), 'utf8'),
     );
 
     const updated = await this.prisma.siteIdentity.update({
@@ -188,6 +194,31 @@ export class SiteIdentityService {
     });
 
     return this.toResponse(updated);
+  }
+
+  async getFaviconFile(filename: string): Promise<SiteIdentityIcon> {
+    const identity = await this.ensureIdentity();
+    if (!identity.faviconHash) {
+      throw new NotFoundException('El sitio no tiene un favicon configurado.');
+    }
+
+    let filePath: string;
+    try {
+      filePath = this.storageService.resolveFaviconPath(identity.faviconHash, filename);
+    } catch {
+      throw new NotFoundException('El archivo del favicon no existe.');
+    }
+
+    try {
+      await fs.access(filePath);
+    } catch {
+      throw new NotFoundException('El archivo del favicon no existe.');
+    }
+
+    return {
+      path: filePath,
+      mimeType: this.getMimeType(path.extname(filePath)),
+    };
   }
 
   async getIconFile(): Promise<SiteIdentityIcon> {
@@ -274,9 +305,11 @@ export class SiteIdentityService {
     }
     let favicon: SiteIdentityResponse['favicon'] = null;
     if (identity.faviconHash) {
+      const version = identity.updatedAt.getTime();
       favicon = {
-        basePath: `/api/v1/site-identity/icons/${identity.faviconHash}`,
-        updatedAt: identity.updatedAt.getTime(),
+        url: `/api/v1/site-identity/favicon?v=${version}`,
+        previewUrl: `/api/v1/site-identity/favicon/preview?v=${version}`,
+        updatedAt: version,
       };
     }
     let flyerUrl: string | null = null;

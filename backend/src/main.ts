@@ -70,17 +70,6 @@ async function bootstrap() {
       }
     },
   });
-  app.useStaticAssets(publicDir, {
-    prefix: '/api/v1/',
-    setHeaders: (res, filePath) => {
-      if (filePath.includes(`${sep}site-identity${sep}icons${sep}`)) {
-        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-      }
-      if (extname(filePath) === '.webmanifest') {
-        res.setHeader('Content-Type', 'application/manifest+json');
-      }
-    },
-  });
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

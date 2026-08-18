@@ -230,7 +230,7 @@ export interface SiteIdentity {
   title: string;
   iconUrl?: string | null;
   paletteId?: string | null;
-  favicon?: { basePath: string; updatedAt: number } | null;
+  favicon?: { url: string; previewUrl: string; updatedAt: number } | null;
 }
 
 export interface PosterToken {
@@ -569,8 +569,8 @@ export interface ZoneMatch {
   status: string;
   homeClubId: number | null;
   awayClubId: number | null;
-  homeClub: { id: number; name: string } | null;
-  awayClub: { id: number; name: string } | null;
+  homeClub: { id: number; name: string; shortName: string | null } | null;
+  awayClub: { id: number; name: string; shortName: string | null } | null;
   categories: ZoneMatchCategory[];
   pointsHome: number;
   pointsAway: number;

@@ -45,6 +45,22 @@ export class SiteIdentityController {
     return res.sendFile(file.path);
   }
 
+  @Get('favicon')
+  async getFavicon(@Res() res: Response) {
+    const file = await this.siteIdentityService.getFaviconFile('favicon.ico');
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.type(file.mimeType);
+    return res.sendFile(file.path);
+  }
+
+  @Get('favicon/preview')
+  async getFaviconPreview(@Res() res: Response) {
+    const file = await this.siteIdentityService.getFaviconFile('favicon-32x32.png');
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.type(file.mimeType);
+    return res.sendFile(file.path);
+  }
+
   @Put()
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @Permissions({ module: Module.CONFIGURACION, action: Action.UPDATE })
