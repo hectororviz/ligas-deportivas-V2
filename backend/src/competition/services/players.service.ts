@@ -1169,7 +1169,7 @@ export class PlayersService {
     );
 
     if (relevantGrants.length === 0) {
-      return this.getFallbackClubRestriction(user);
+      return [];
     }
 
     if (relevantGrants.some((grant) => grant.scope === Scope.GLOBAL)) {
@@ -1185,26 +1185,7 @@ export class PlayersService {
       }
     }
 
-    if (clubIds.size > 0) {
-      return Array.from(clubIds);
-    }
-
-    return this.getFallbackClubRestriction(user);
-  }
-
-  private getFallbackClubRestriction(user: RequestUser): number[] | null {
-    if (!user.club) {
-      return null;
-    }
-
-    const limitedRoles = new Set(['DELEGATE', 'COACH']);
-    const hasLimitedRole = user.roles.some((role) => limitedRoles.has(role));
-
-    if (!hasLimitedRole) {
-      return null;
-    }
-
-    return [user.club.id];
+    return clubIds.size > 0 ? Array.from(clubIds) : [];
   }
 
   async findById(id: number) {

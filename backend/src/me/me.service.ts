@@ -1,11 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
-import { RequestEmailChangeDto } from './dto/request-email-change.dto';
-import { ConfirmEmailChangeDto } from './dto/confirm-email-change.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { RateLimiterService } from '../common/services/rate-limiter.service';
-import { MailService } from '../mail/mail.service';
 import { randomBytes } from 'crypto';
 import * as argon2 from 'argon2';
 import { StorageService } from '../storage/storage.service';
@@ -25,7 +22,6 @@ export class MeService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly rateLimiter: RateLimiterService,
-    private readonly mailService: MailService,
     private readonly storageService: StorageService
   ) {}
 
@@ -34,7 +30,7 @@ export class MeService {
       where: { id: userId },
       select: {
         id: true,
-        email: true,
+        username: true,
         firstName: true,
         lastName: true,
         language: true,
@@ -49,7 +45,7 @@ export class MeService {
 
     return {
       id: user.id,
-      email: user.email,
+      username: user.username,
       name: this.combineName(user.firstName, user.lastName),
       language: user.language,
       avatar: this.buildAvatarUrls(user.id, user.avatarHash, user.avatarUpdatedAt)
@@ -69,81 +65,11 @@ export class MeService {
 
     return {
       id: updated.id,
-      email: updated.email,
+      username: updated.username,
       name: this.combineName(updated.firstName, updated.lastName),
       language: updated.language,
       avatar: this.buildAvatarUrls(updated.id, updated.avatarHash, updated.avatarUpdatedAt)
     };
-  }
-
-  async requestEmailChange(userId: number, dto: RequestEmailChangeDto) {
-    const newEmail = dto.newEmail.toLowerCase();
-    this.rateLimiter.consume(`email-change:${userId}`, 5, 15 * 60 * 1000);
-
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, email: true, firstName: true }
-    });
-
-    if (!user) {
-      throw new NotFoundException('Usuario no encontrado');
-    }
-
-    if (user.email === newEmail) {
-      throw new BadRequestException('El correo nuevo debe ser diferente.');
-    }
-
-    const existing = await this.prisma.user.findUnique({ where: { email: newEmail } });
-    if (existing) {
-      throw new BadRequestException('El correo ya está en uso.');
-    }
-
-    const token = randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24);
-
-    await this.prisma.$transaction([
-      this.prisma.emailChangeRequest.deleteMany({ where: { userId } }),
-      this.prisma.emailChangeRequest.create({
-        data: {
-          userId,
-          newEmail,
-          token,
-          expiresAt
-        }
-      })
-    ]);
-
-    await this.mailService.sendEmailChangeConfirmation(user.email, newEmail, token, user.firstName);
-
-    return { success: true };
-  }
-
-  async confirmEmailChange(userId: number, dto: ConfirmEmailChangeDto) {
-    const record = await this.prisma.emailChangeRequest.findFirst({
-      where: {
-        token: dto.token,
-        userId,
-        confirmedAt: null
-      }
-    });
-
-    if (!record || record.expiresAt < new Date()) {
-      throw new BadRequestException('Token inválido o expirado.');
-    }
-
-    await this.prisma.$transaction([
-      this.prisma.emailChangeRequest.update({
-        where: { id: record.id },
-        data: { confirmedAt: new Date() }
-      }),
-      this.prisma.user.update({
-        where: { id: userId },
-        data: { email: record.newEmail }
-      }),
-      this.prisma.userToken.deleteMany({ where: { userId } })
-    ]);
-
-    return { success: true };
   }
 
   async changePassword(userId: number, dto: ChangePasswordDto) {
@@ -170,8 +96,6 @@ export class MeService {
       }),
       this.prisma.userToken.deleteMany({ where: { userId } })
     ]);
-
-    await this.mailService.sendPasswordChangeConfirmation(user.email, user.firstName);
 
     return { success: true };
   }

@@ -7,6 +7,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -16,8 +17,10 @@ import { PermissionsGuard } from '../rbac/permissions.guard';
 import { Permissions } from '../common/decorators/permissions.decorator';
 import { Action, Module } from '@prisma/client';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { AssignRoleDto } from './dto/assign-role.dto';
 import { ListUsersQueryDto } from './dto/list-users-query.dto';
+import { CreateUserDto } from './dto/create-user.dto';
+import { SetUserPermissionsDto } from './dto/set-user-permissions.dto';
+import { SetUserPasswordDto } from './dto/set-user-password.dto';
 
 @Controller('users')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -30,28 +33,28 @@ export class UsersController {
     return this.usersService.findAll(query);
   }
 
+  @Post()
+  @Permissions({ module: Module.USUARIOS, action: Action.CREATE })
+  create(@Body() dto: CreateUserDto) {
+    return this.usersService.createUser(dto);
+  }
+
   @Patch(':id')
   @Permissions({ module: Module.USUARIOS, action: Action.UPDATE })
   update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateUserDto) {
     return this.usersService.updateUser(id, dto);
   }
 
-  @Post(':id/password-reset')
+  @Put(':id/permissions')
+  @Permissions({ module: Module.PERMISOS, action: Action.MANAGE })
+  setPermissions(@Param('id', ParseIntPipe) id: number, @Body() dto: SetUserPermissionsDto) {
+    return this.usersService.setUserPermissions(id, dto.permissions);
+  }
+
+  @Post(':id/password')
   @Permissions({ module: Module.USUARIOS, action: Action.UPDATE })
-  sendPasswordReset(@Param('id', ParseIntPipe) id: number) {
-    return this.usersService.sendPasswordReset(id);
-  }
-
-  @Post(':id/roles')
-  @Permissions({ module: Module.ROLES, action: Action.MANAGE })
-  assignRole(@Param('id', ParseIntPipe) id: number, @Body() dto: AssignRoleDto) {
-    return this.usersService.assignRole(id, dto);
-  }
-
-  @Delete('roles/:assignmentId')
-  @Permissions({ module: Module.ROLES, action: Action.MANAGE })
-  removeRole(@Param('assignmentId', ParseIntPipe) assignmentId: number) {
-    return this.usersService.removeRole(assignmentId);
+  setPassword(@Param('id', ParseIntPipe) id: number, @Body() dto: SetUserPasswordDto) {
+    return this.usersService.setUserPassword(id, dto.password);
   }
 
   @Delete(':id')

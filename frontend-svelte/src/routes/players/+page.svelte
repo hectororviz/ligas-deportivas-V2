@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { getPlayers, getProfile, createPlayer, updatePlayer, scanDni, type AuthUser, type Player, type PaginatedPlayers, type ScanDniResult } from '$lib/api';
+  import { getPlayers, getProfile, createPlayer, updatePlayer, scanDni, canManageModule, type AuthUser, type Player, type PaginatedPlayers, type ScanDniResult } from '$lib/api';
   import Modal from '$lib/Modal.svelte';
   import { SlidersHorizontal, UserPlus, Table, ScanLine, X, Plus, Image } from '@lucide/svelte';
 
@@ -22,7 +22,7 @@
     emergencyName: '', emergencyRelationship: '', emergencyPhone: ''
   });
 
-  let canManage = $derived(((user as AuthUser | null)?.roles ?? []).includes('ADMIN'));
+  let canManage = $derived(canManageModule(user, 'JUGADORES'));
   let isMobile = $state(false);
 
   $effect(() => {
@@ -40,7 +40,7 @@
   async function fetchPlayers() {
     loading = true; error = '';
     try {
-      if (!user) user = await getProfile();
+      if (!user) user = await getProfile().catch(() => null);
       paginated = await getPlayers(search, page);
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudieron cargar los jugadores.';

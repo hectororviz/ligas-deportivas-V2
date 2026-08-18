@@ -32,8 +32,7 @@
     if (!lastName.trim()) { error = 'Ingresa tu apellido.'; return; }
     saving = true;
     try {
-      const updated = await updateProfile({ firstName: firstName.trim(), lastName: lastName.trim() });
-      user = updated;
+      await updateProfile({ name: `${firstName.trim()} ${lastName.trim()}`.trim() });
       notice = 'Perfil actualizado correctamente.';
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudo actualizar el perfil.';
@@ -88,7 +87,7 @@
             <label>Nombre<input bind:value={firstName} placeholder="Tu nombre" disabled={saving} /></label>
             <label>Apellido<input bind:value={lastName} placeholder="Tu apellido" disabled={saving} /></label>
           </div>
-          <label>Correo electrónico<input value={user?.email ?? ''} disabled style="opacity:.65;" /></label>
+          <label>Usuario<input value={user?.username ?? ''} disabled style="opacity:.65;" /></label>
           <div class="form-actions">
             <button class="button primary" type="submit" disabled={saving}>{saving ? 'Guardando...' : 'Guardar cambios'}</button>
           </div>

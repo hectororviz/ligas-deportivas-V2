@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Modal from '$lib/Modal.svelte';
-  import { getCategories, getProfile, createCategory, updateCategory, type AuthUser, type Category } from '$lib/api';
+  import { getCategories, getProfile, createCategory, updateCategory, canManageModule, type AuthUser, type Category } from '$lib/api';
 
   const genders = [['MASCULINO', 'Masculino'], ['FEMENINO', 'Femenino'], ['MIXTO', 'Mixto']];
 
@@ -28,7 +28,7 @@
     }
   });
 
-  $: canManage = user?.roles.includes('ADMIN') ?? false;
+  $: canManage = canManageModule(user, 'CATEGORIAS');
 
   function openCreate() {
     editing = null;

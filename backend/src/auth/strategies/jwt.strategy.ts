@@ -8,13 +8,11 @@ import { RequestUser } from '../../common/interfaces/request-user.interface';
 
 interface JwtPayload {
   sub: number;
-  email: string;
+  username: string;
 }
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  private readonly disabledEmails: Set<string>;
-
   constructor(
     configService: ConfigService,
     private readonly prisma: PrismaService,
@@ -25,9 +23,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       ignoreExpiration: false,
       secretOrKey: configService.get<string>('auth.accessSecret')
     });
-
-    const disabled = configService.get<string[]>('auth.disabledEmails') ?? [];
-    this.disabledEmails = new Set(disabled.map((email) => email.toLowerCase()));
   }
 
   async validate(payload: JwtPayload): Promise<RequestUser> {
@@ -42,18 +37,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         },
         roles: {
           include: {
-            league: true,
-            club: true,
-            category: true,
-            role: {
-              include: {
-                permissions: {
-                  include: { permission: true }
-                }
-              }
-            }
+            role: { select: { key: true } }
           }
-        }
+        },
+        permissions: true
       }
     });
 
@@ -61,24 +48,26 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException();
     }
 
-    if (this.disabledEmails.has(user.email.toLowerCase())) {
-      throw new UnauthorizedException();
-    }
-
-    const permissions = this.accessControlService.buildGrants(user.roles);
+    const permissions = this.accessControlService.buildGrantsFromLevels(
+      user.permissions,
+      user.club?.id ?? null
+    );
+    const moduleLevels = this.accessControlService.buildModuleLevels(user.permissions);
     const roles = user.roles.map((assignment) => assignment.role.key);
 
     return {
       id: user.id,
-      email: user.email,
+      username: user.username,
       firstName: user.firstName,
       lastName: user.lastName,
+      isAdmin: user.isAdmin,
       language: user.language,
       avatarHash: user.avatarHash,
       avatarUpdatedAt: user.avatarUpdatedAt,
       avatarMime: user.avatarMime,
       roles,
       permissions,
+      moduleLevels,
       club: user.club
         ? {
             id: user.club.id,

@@ -4,14 +4,50 @@ const API_BASE_URL = import.meta.env.PUBLIC_API_BASE_URL || '/api/v1';
 const ACCESS_TOKEN_KEY = 'ligas.accessToken';
 const REFRESH_TOKEN_KEY = 'ligas.refreshToken';
 
+export type PermissionLevel =
+  | 'TOTAL'
+  | 'LECTURA'
+  | 'MODIFICACION'
+  | 'LECTURA_CLUB'
+  | 'MODIFICACION_CLUB'
+  | 'NO';
+
+export const MATRIX_MODULES = [
+  'LIGAS',
+  'TORNEOS',
+  'ZONAS',
+  'CATEGORIAS',
+  'JUGADORES',
+  'CLUBES',
+  'CONFIGURACION'
+] as const;
+
+export type MatrixModule = (typeof MATRIX_MODULES)[number];
+
 export interface AuthUser {
   id: number;
-  email: string;
+  username: string;
   firstName: string;
   lastName: string;
+  isAdmin: boolean;
   roles: string[];
   permissions: unknown[];
+  moduleLevels: Record<string, PermissionLevel>;
   club: { id: number; name: string } | null;
+}
+
+export function canViewModule(user: AuthUser | null | undefined, module: string): boolean {
+  if (!user) return false;
+  if (user.isAdmin) return true;
+  const level = user.moduleLevels?.[module] ?? 'NO';
+  return level !== 'NO';
+}
+
+export function canManageModule(user: AuthUser | null | undefined, module: string): boolean {
+  if (!user) return false;
+  if (user.isAdmin) return true;
+  const level = user.moduleLevels?.[module] ?? 'NO';
+  return level === 'TOTAL' || level === 'MODIFICACION';
 }
 
 export interface HomeStanding {
@@ -175,11 +211,12 @@ export interface ZoneStanding {
 
 export interface UserRow {
   id: number;
-  email: string;
+  username: string;
   firstName: string;
   lastName: string;
-  emailVerifiedAt?: string | null;
-  roles: { id: number; role: { key: string; name: string }; league?: { name: string } | null; club?: { name: string } | null }[];
+  isAdmin: boolean;
+  club: { id: number; name: string } | null;
+  moduleLevels: Record<string, PermissionLevel>;
 }
 
 export interface PaginatedUsers {
@@ -266,34 +303,13 @@ async function request<T>(path: string, init: RequestInit = {}, retry = true): P
   return response.json() as Promise<T>;
 }
 
-export async function login(email: string, password: string): Promise<AuthUser> {
+export async function login(username: string, password: string): Promise<AuthUser> {
   const response = await request<AuthResponse>('/auth/login', {
     method: 'POST',
-    body: JSON.stringify({ email, password })
+    body: JSON.stringify({ username, password })
   }, false);
   storeAuth(response);
   return response.user;
-}
-
-export async function register(input: { firstName: string; lastName: string; email: string; password: string }): Promise<AuthUser> {
-  const response = await request<AuthResponse>('/auth/register', {
-    method: 'POST',
-    body: JSON.stringify({ ...input, captchaToken: 'bypass-captcha' })
-  }, false);
-  storeAuth(response);
-  return response.user;
-}
-
-export async function verifyEmail(token: string): Promise<void> {
-  await request('/auth/verify-email', { method: 'POST', body: JSON.stringify({ token }) });
-}
-
-export async function requestPasswordReset(email: string): Promise<void> {
-  await request('/auth/password/request-reset', { method: 'POST', body: JSON.stringify({ email }) });
-}
-
-export async function resetPassword(token: string, password: string): Promise<void> {
-  await request('/auth/password/reset', { method: 'POST', body: JSON.stringify({ token, password }) });
 }
 
 export async function getProfile(): Promise<AuthUser> {
@@ -438,8 +454,8 @@ export async function updateTournamentStatus(id: number, status: string): Promis
   return request<Tournament>(`/tournaments/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) });
 }
 
-export async function deleteTournament(id: number, email: string, password: string): Promise<void> {
-  return request(`/tournaments/${id}`, { method: 'DELETE', body: JSON.stringify({ email, password }) });
+export async function deleteTournament(id: number, username: string, password: string): Promise<void> {
+  return request(`/tournaments/${id}`, { method: 'DELETE', body: JSON.stringify({ username, password }) });
 }
 
 export async function getZones(includeInactive = false): Promise<Zone[]> {
@@ -722,35 +738,41 @@ export async function getUsers(search?: string, page?: number): Promise<Paginate
   return request<PaginatedUsers>(`/users${params.toString() ? `?${params}` : ''}`);
 }
 
-export interface RoleData {
-  id: number;
-  key: string;
-  name: string;
-  description?: string | null;
+export interface CreateUserInput {
+  username: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  clubId?: number | null;
+  permissions: { module: MatrixModule; level: PermissionLevel }[];
 }
 
-export interface PermissionData {
-  id: number;
-  module: string;
-  action: string;
-  scope: string;
-  description?: string | null;
+export async function createUser(input: CreateUserInput): Promise<UserRow> {
+  return request<UserRow>('/users', { method: 'POST', body: JSON.stringify(input) });
 }
 
-export async function getRoles(): Promise<RoleData[]> {
-  return request<RoleData[]>('/roles');
+export async function updateUser(id: number, input: { firstName?: string; lastName?: string; clubId?: number | null }): Promise<UserRow> {
+  return request<UserRow>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(input) });
 }
 
-export async function getPermissions(): Promise<PermissionData[]> {
-  return request<PermissionData[]>('/roles/permissions');
+export async function setUserPermissions(id: number, permissions: { module: MatrixModule; level: PermissionLevel }[]): Promise<UserRow> {
+  return request<UserRow>(`/users/${id}/permissions`, { method: 'PUT', body: JSON.stringify({ permissions }) });
 }
 
-export async function assignRole(userId: number, input: { roleKey: string; leagueId?: number; clubId?: number; categoryId?: number }): Promise<void> {
-  return request(`/users/${userId}/roles`, { method: 'POST', body: JSON.stringify(input) });
+export async function setUserPassword(id: number, password: string): Promise<void> {
+  return request(`/users/${id}/password`, { method: 'POST', body: JSON.stringify({ password }) });
 }
 
-export async function removeRole(assignmentId: number): Promise<void> {
-  return request(`/users/roles/${assignmentId}`, { method: 'DELETE' });
+export async function deleteUser(id: number): Promise<void> {
+  return request(`/users/${id}`, { method: 'DELETE' });
+}
+
+export async function listAllClubs(): Promise<Club[]> {
+  const params = new URLSearchParams();
+  params.set('page', '1');
+  params.set('pageSize', '200');
+  const data = await request<PaginatedClubs>(`/clubs?${params}`);
+  return data.data;
 }
 
 export async function getLeaderboards(tournamentId: number, zoneId?: number, categoryId?: number): Promise<unknown> {

@@ -2,13 +2,43 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { NAV_ITEMS, sidebarState, type NavItem, type NavChild } from './navigation.svelte';
-  import { getProfile, hasSession, clearAuth, type AuthUser } from './api';
+  import { getProfile, hasSession, clearAuth, canViewModule, canManageModule, type AuthUser } from './api';
   import { MorphIcon } from 'morphicons/svelte';
   import { Menu, X, ChevronDown, ChevronRight, ChevronLeft } from 'lucide';
-  import { LogOut } from '@lucide/svelte';
+  import { LogOut, LogIn } from '@lucide/svelte';
 
   let user: AuthUser | null = $state(null);
   let expandedGroups = $state<Record<string, boolean>>({});
+
+  const CHILD_MODULES: Record<string, string> = {
+    leagues: 'LIGAS',
+    tournaments: 'TORNEOS',
+    zones: 'ZONAS',
+    categories: 'CATEGORIAS'
+  };
+
+  let visibleItems = $derived.by((): NavItem[] => {
+    const items = NAV_ITEMS.map((item) => {
+      if (item.id === 'gestion') {
+        const children = (item.children ?? []).filter((child) =>
+          canViewModule(user, CHILD_MODULES[child.id] ?? '')
+        );
+        return children.length ? { ...item, children } : null;
+      }
+      if (item.id === 'players') {
+        return canViewModule(user, 'JUGADORES') ? item : null;
+      }
+      if (item.id === 'settings') {
+        if (!user) return null;
+        const children = (item.children ?? []).filter((child) =>
+          child.id === 'account' ? true : canManageModule(user, 'CONFIGURACION')
+        );
+        return children.length ? { ...item, children } : null;
+      }
+      return item;
+    });
+    return items.filter((item): item is NavItem => item !== null);
+  });
 
   $effect(() => {
     sidebarState.initMobile();
@@ -62,11 +92,11 @@
       {#if user}
         <div class="sidebar-user">
           <div class="sidebar-avatar">{user.firstName[0]}{user.lastName[0]}</div>
-          <div><strong>{user.firstName} {user.lastName}</strong><span>{user.email}</span></div>
+          <div><strong>{user.firstName} {user.lastName}</strong><span>@{user.username}</span></div>
         </div>
       {/if}
       <nav class="sidebar-nav">
-        {#each NAV_ITEMS as item}
+        {#each visibleItems as item}
           {@const Icon = item.icon}
           {#if item.children}
             <button class="nav-item nav-group" class:active={isActive(item)} onclick={() => { expandedGroups[item.id] = !expandedGroups[item.id]; }} aria-expanded={expandedGroups[item.id] || isActive(item)}>
@@ -95,6 +125,11 @@
             <LogOut size={20} strokeWidth={1.8} />
             <span>Cerrar sesión</span>
           </button>
+        {:else}
+          <button class="nav-item login-item" onclick={() => navigate('/login')}>
+            <LogIn size={20} strokeWidth={1.8} />
+            <span>Ingresar</span>
+          </button>
         {/if}
       </div>
     </aside>
@@ -113,7 +148,7 @@
     {/if}
 
     <nav class="sidebar-nav">
-      {#each NAV_ITEMS as item}
+      {#each visibleItems as item}
         {@const Icon = item.icon}
         {#if item.children}
           <button
@@ -161,6 +196,12 @@
         <button class="nav-item logout-item" onclick={signOut}>
           <LogOut size={20} strokeWidth={1.8} />
           <span>Cerrar sesión</span>
+        </button>
+      {/if}
+      {#if !user}
+        <button class="nav-item login-item" onclick={() => navigate('/login')} title={sidebarState.collapsed ? 'Ingresar' : undefined}>
+          <LogIn size={20} strokeWidth={1.8} />
+          {#if !sidebarState.collapsed}<span>Ingresar</span>{/if}
         </button>
       {/if}
       <button class="nav-item collapse-btn" onclick={() => sidebarState.toggleCollapsed()} aria-label={sidebarState.collapsed ? 'Expandir menú' : 'Colapsar menú'} title={sidebarState.collapsed ? 'Expandir' : 'Colapsar'}>
@@ -246,6 +287,8 @@
   .sidebar-footer { padding: .5rem; border-top: 1px solid var(--color-sidebar-border); display: flex; flex-direction: column; gap: .15rem; }
   .logout-item { color: var(--color-error); }
   .logout-item:hover { background: var(--color-error-bg); color: var(--color-error); }
+  .login-item { color: var(--color-accent-text); }
+  .login-item:hover { background: var(--color-accent-bg); color: var(--color-accent-text); }
   .collapse-btn { color: var(--color-text-light); }
   .collapse-btn:hover { color: var(--color-text-muted); }
 </style>

@@ -7,8 +7,6 @@ import { AuthController } from './auth.controller';
 import { LocalStrategy } from './strategies/local.strategy';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { AccessControlModule } from '../rbac/access-control.module';
-import { CaptchaModule } from '../captcha/captcha.module';
-import { MailModule } from '../mail/mail.module';
 
 @Module({
   imports: [
@@ -24,9 +22,7 @@ import { MailModule } from '../mail/mail.module';
         }
       })
     }),
-    AccessControlModule,
-    CaptchaModule,
-    MailModule
+    AccessControlModule
   ],
   controllers: [AuthController],
   providers: [AuthService, LocalStrategy, JwtStrategy],

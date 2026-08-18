@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
-  import { getMatchDetail, getProfile, type MatchDetail, type MatchClub, type AuthUser } from '$lib/api';
+  import { getMatchDetail, getProfile, canManageModule, type MatchDetail, type MatchClub, type AuthUser } from '$lib/api';
   import PlayerGoalsModal from '$lib/PlayerGoalsModal.svelte';
 
   let match: MatchDetail | null = $state(null);
@@ -11,7 +11,7 @@
 
   let openCategory: { tournamentCategoryId: number; categoryName: string } | null = $state(null);
 
-  let canManage = $derived(((user as AuthUser | null)?.roles ?? []).includes('ADMIN'));
+  let canManage = $derived(canManageModule(user, 'TORNEOS') || canManageModule(user, 'ZONAS'));
   let hasScores = $derived.by(() => match?.categories.some((c) => c.closedAt) ?? false);
 
   let backHref = $derived.by(() => {
@@ -26,7 +26,7 @@
   onMount(async () => {
     try {
       const id = Number($page.params.matchId);
-      const [m, u] = await Promise.all([getMatchDetail(id), getProfile()]);
+      const [m, u] = await Promise.all([getMatchDetail(id), getProfile().catch(() => null)]);
       match = m;
       user = u;
     } catch (cause) {

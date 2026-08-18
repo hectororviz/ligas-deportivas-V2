@@ -5,8 +5,6 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequestUser } from '../common/interfaces/request-user.interface';
 import { MeService } from './me.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
-import { RequestEmailChangeDto } from './dto/request-email-change.dto';
-import { ConfirmEmailChangeDto } from './dto/confirm-email-change.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Controller('me')
@@ -22,16 +20,6 @@ export class MeController {
   @Put()
   updateProfile(@CurrentUser() user: RequestUser, @Body() dto: UpdateProfileDto) {
     return this.meService.updateProfile(user.id, dto);
-  }
-
-  @Post('email/request-change')
-  requestEmailChange(@CurrentUser() user: RequestUser, @Body() dto: RequestEmailChangeDto) {
-    return this.meService.requestEmailChange(user.id, dto);
-  }
-
-  @Post('email/confirm')
-  confirmEmailChange(@CurrentUser() user: RequestUser, @Body() dto: ConfirmEmailChangeDto) {
-    return this.meService.confirmEmailChange(user.id, dto);
   }
 
   @Post('password')

@@ -11,8 +11,6 @@ import { UsersModule } from './users/users.module';
 import { AccessControlModule } from './rbac/access-control.module';
 import { CompetitionModule } from './competition/competition.module';
 import { StorageModule } from './storage/storage.module';
-import { MailModule } from './mail/mail.module';
-import { CaptchaModule } from './captcha/captcha.module';
 import { MeModule } from './me/me.module';
 import { SiteIdentityModule } from './site-identity/site-identity.module';
 import { DatabaseReadyGuard } from './prisma/database-ready.guard';
@@ -42,9 +40,7 @@ const envFilePath = envFileCandidates
       validationSchema,
     }),
     PrismaModule,
-    MailModule,
     StorageModule,
-    CaptchaModule,
     AccessControlModule,
     AuthModule,
     UsersModule,

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { assignClubToZone, createZone, deleteZone, finalizeZone, generateFixture, generateManualFixture, getProfile, getTournamentZoneClubs, getTournaments, getZones, previewFixture, removeClubFromZone, type AuthUser, type Tournament, type TournamentZoneClub, type Zone } from '$lib/api';
+  import { assignClubToZone, createZone, deleteZone, finalizeZone, generateFixture, generateManualFixture, getProfile, getTournamentZoneClubs, getTournaments, getZones, previewFixture, removeClubFromZone, canManageModule, type AuthUser, type Tournament, type TournamentZoneClub, type Zone } from '$lib/api';
   import Modal from '$lib/Modal.svelte';
   import { X, Plus, ChevronDown } from '@lucide/svelte';
 
@@ -50,7 +50,7 @@
     } finally { loading = false; }
   });
 
-  let canManage = $derived(((user as AuthUser | null)?.roles ?? []).includes('ADMIN'));
+  let canManage = $derived(canManageModule(user, 'ZONAS'));
   let activeTournaments = $derived(tournaments.filter(t => t.status === 'ACTIVE'));
 
   function assignedClubs(zone: Zone): { clubId: number; clubName: string }[] {

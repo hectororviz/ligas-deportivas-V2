@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { getClubs, getProfile, createClub, updateClub, uploadClubLogo, type AuthUser, type Club, type PaginatedClubs } from '$lib/api';
+  import { getClubs, getProfile, createClub, updateClub, uploadClubLogo, canManageModule, type AuthUser, type Club, type PaginatedClubs } from '$lib/api';
   import Modal from '$lib/Modal.svelte';
   import { SlidersHorizontal } from '@lucide/svelte';
 
@@ -26,12 +26,12 @@
 
   onMount(async () => { await fetchClubs(); });
 
-  let canManage = $derived(((user as AuthUser | null)?.roles ?? []).includes('ADMIN'));
+  let canManage = $derived(canManageModule(user, 'CLUBES'));
 
   async function fetchClubs() {
     loading = true; error = '';
     try {
-      if (!user) user = await getProfile();
+      if (!user) user = await getProfile().catch(() => null);
       paginated = await getClubs(search, statusFilter, page);
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudieron cargar los clubes.';

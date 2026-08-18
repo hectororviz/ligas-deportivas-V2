@@ -2,15 +2,15 @@
   import { goto } from '$app/navigation';
   import { login } from '$lib/api';
 
-  let email = '';
+  let username = '';
   let password = '';
   let loading = false;
   let error = '';
 
   async function submit() {
     error = '';
-    if (!email.trim() || !email.includes('@')) {
-      error = 'Ingresa un correo válido.';
+    if (!username.trim()) {
+      error = 'Ingresa tu nombre de usuario.';
       return;
     }
     if (password.length < 8) {
@@ -20,7 +20,7 @@
 
     loading = true;
     try {
-      await login(email.trim(), password);
+      await login(username.trim(), password);
       await goto('/');
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'Credenciales inválidas.';
@@ -46,8 +46,8 @@
 
       <form onsubmit={(event) => { event.preventDefault(); submit(); }}>
         <label>
-          Correo electrónico
-          <input type="email" bind:value={email} autocomplete="email" placeholder="admin@ligas.local" disabled={loading} />
+          Usuario
+          <input type="text" bind:value={username} autocomplete="username" placeholder="admin" disabled={loading} />
         </label>
         <label>
           Contraseña

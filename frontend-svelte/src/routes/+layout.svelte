@@ -7,7 +7,7 @@
   const palette = usePalette();
   palette.initPalette();
 
-const publicRoutes = ['/login', '/register', '/verify-email', '/reset-password'];
+const publicRoutes = ['/login'];
 $: isPublic = publicRoutes.some((route) => $page.url.pathname === route || $page.url.pathname.startsWith(route + '/'));
 </script>
 

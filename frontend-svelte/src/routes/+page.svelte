@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import { getHomeSummary, getProfile, hasSession, logout, type AuthUser, type HomeSummary } from '$lib/api';
 
@@ -9,12 +8,9 @@
   let error = '';
 
   onMount(async () => {
-    if (!hasSession()) {
-      await goto('/login');
-      return;
-    }
     try {
-      [user, summary] = await Promise.all([getProfile(), getHomeSummary()]);
+      const profilePromise = hasSession() ? getProfile().catch(() => null) : Promise.resolve(null);
+      [user, summary] = await Promise.all([profilePromise, getHomeSummary()]);
     } catch {
       error = 'No pudimos cargar el resumen de torneos.';
     } finally {
@@ -24,26 +20,32 @@
 
   async function signOut() {
     await logout();
-    await goto('/login');
+    user = null;
   }
 </script>
 
 {#if loading}
   <main class="loading-screen">Cargando sesión...</main>
-{:else if user}
+{:else}
   <main class="dashboard-shell">
     <section class="dashboard-card dashboard-hero">
       <div>
-        <p class="eyebrow">Panel de administración</p>
-        <h1>Hola, {user.firstName}</h1>
+        <p class="eyebrow">Ligas Deportivas</p>
+        <h1>{user ? `Hola, ${user.firstName}` : 'Torneos vigentes'}</h1>
         <p class="muted">Resumen de torneos activos y posiciones por zona.</p>
       </div>
       <div class="user-summary">
-        <span>{user.email}</span>
-        <div class="dashboard-actions">
-          <a class="button secondary" href="/leagues">Ver ligas</a>
-          <button class="button secondary" onclick={signOut}>Cerrar sesión</button>
-        </div>
+        {#if user}
+          <span>@{user.username}</span>
+          <div class="dashboard-actions">
+            <a class="button secondary" href="/leagues">Ver ligas</a>
+            <button class="button secondary" onclick={signOut}>Cerrar sesión</button>
+          </div>
+        {:else}
+          <div class="dashboard-actions">
+            <a class="button primary" href="/login">Ingresar</a>
+          </div>
+        {/if}
       </div>
     </section>
     {#if error}

@@ -1,203 +1,74 @@
-import { PrismaClient, Action, Module, RoleKey, Scope } from '@prisma/client';
+import { Module, PermissionLevel, PrismaClient } from '@prisma/client';
 import * as argon2 from 'argon2';
 
-const baseModules: Module[] = [
+const MATRIX_MODULES: Module[] = [
   Module.LIGAS,
   Module.TORNEOS,
   Module.ZONAS,
-  Module.FIXTURE,
-  Module.PARTIDOS,
-  Module.RESULTADOS,
-  Module.TABLAS,
-  Module.CLUBES,
   Module.CATEGORIAS,
   Module.JUGADORES,
-  Module.PLANTELES,
+  Module.CLUBES,
   Module.CONFIGURACION,
-  Module.USUARIOS,
-  Module.ROLES,
-  Module.PERMISOS,
-  Module.REPORTES,
 ];
 
 export async function seedBaseData(prisma: PrismaClient) {
-  const permissionsData = new Map<string, { module: Module; action: Action; scope: Scope }>();
+  const adminUsernameRaw = process.env.ADMIN_USERNAME?.trim();
+  const adminUsername =
+    adminUsernameRaw && adminUsernameRaw.length > 0 ? adminUsernameRaw.toLowerCase() : 'admin';
+  const adminPasswordRaw = process.env.ADMIN_PASSWORD?.trim();
+  const adminPassword =
+    adminPasswordRaw && adminPasswordRaw.length > 0 ? adminPasswordRaw : 'Admin123';
 
-  const ensurePermission = (module: Module, action: Action, scope: Scope) => {
-    const key = `${module}-${action}-${scope}`;
-    if (!permissionsData.has(key)) {
-      permissionsData.set(key, { module, action, scope });
-    }
-  };
+  const existingAdmin = await prisma.user.findUnique({ where: { username: adminUsername } });
 
-  baseModules.forEach((module) => ensurePermission(module, Action.VIEW, Scope.GLOBAL));
-  baseModules.forEach((module) => ensurePermission(module, Action.MANAGE, Scope.GLOBAL));
-
-  [Module.FIXTURE, Module.RESULTADOS, Module.PARTIDOS, Module.TABLAS].forEach((module) => {
-    ensurePermission(module, Action.VIEW, Scope.LIGA);
-    ensurePermission(module, Action.VIEW, Scope.CLUB);
-    ensurePermission(module, Action.VIEW, Scope.CATEGORIA);
-  });
-
-  [Module.JUGADORES, Module.PLANTELES].forEach((module) => {
-    ensurePermission(module, Action.VIEW, Scope.CATEGORIA);
-  });
-
-  // Needed for Delegate/Coach role assignments using viewClub(JUGADORES/PLANTELES)
-  [Module.JUGADORES, Module.PLANTELES].forEach((module) => {
-    ensurePermission(module, Action.VIEW, Scope.CLUB);
-  });
-
-  const permissions = await Promise.all(
-    Array.from(permissionsData.values()).map((permission) =>
-      prisma.permission.upsert({
-        where: {
-          module_action_scope: {
-            module: permission.module,
-            action: permission.action,
-            scope: permission.scope,
-          },
-        },
-        update: {},
-        create: {
-          module: permission.module,
-          action: permission.action,
-          scope: permission.scope,
-        },
-      }),
-    ),
-  );
-
-  const roleEntries = await Promise.all([
-    prisma.role.upsert({
-      where: { key: RoleKey.ADMIN },
-      update: {},
-      create: { key: RoleKey.ADMIN, name: 'Administrador' },
-    }),
-    prisma.role.upsert({
-      where: { key: RoleKey.COLLABORATOR },
-      update: {},
-      create: { key: RoleKey.COLLABORATOR, name: 'Colaborador' },
-    }),
-    prisma.role.upsert({
-      where: { key: RoleKey.DELEGATE },
-      update: {},
-      create: { key: RoleKey.DELEGATE, name: 'Delegado' },
-    }),
-    prisma.role.upsert({
-      where: { key: RoleKey.COACH },
-      update: {},
-      create: { key: RoleKey.COACH, name: 'DT' },
-    }),
-    prisma.role.upsert({
-      where: { key: RoleKey.USER },
-      update: {},
-      create: { key: RoleKey.USER, name: 'Usuario' },
-    }),
-  ]);
-
-  const roleMap = new Map<RoleKey, number>();
-  roleEntries.forEach((role) => roleMap.set(role.key, role.id));
-
-  const permissionMap = new Map<string, number>();
-  permissions.forEach((permission) => {
-    permissionMap.set(
-      `${permission.module}-${permission.action}-${permission.scope}`,
-      permission.id,
-    );
-  });
-
-  const assignPermissions = async (
-    roleKey: RoleKey,
-    keys: Array<{ module: Module; action: Action; scope: Scope }>,
-  ) => {
-    const roleId = roleMap.get(roleKey);
-    if (!roleId) {
-      return;
-    }
-    await prisma.rolePermission.deleteMany({ where: { roleId } });
-    if (!keys.length) {
-      return;
-    }
-    await prisma.rolePermission.createMany({
-      data: keys.map((key) => ({
-        roleId,
-        permissionId: permissionMap.get(`${key.module}-${key.action}-${key.scope}`)!,
-      })),
+  let admin = existingAdmin;
+  if (!existingAdmin) {
+    admin = await prisma.user.create({
+      data: {
+        username: adminUsername,
+        passwordHash: await argon2.hash(adminPassword, {
+          type: argon2.argon2id,
+        }),
+        firstName: 'Admin',
+        lastName: 'General',
+        isAdmin: true,
+      },
     });
-  };
+  } else {
+    const updateData: { isAdmin?: boolean } = {};
+    if (!existingAdmin.isAdmin) {
+      updateData.isAdmin = true;
+    }
+    if (Object.keys(updateData).length > 0) {
+      admin = await prisma.user.update({
+        where: { id: existingAdmin.id },
+        data: updateData,
+      });
+    }
+  }
 
-  await assignPermissions(
-    RoleKey.ADMIN,
-    Array.from(permissionsData.values()).map((permission) => ({
-      module: permission.module,
-      action: permission.action,
-      scope: permission.scope,
-    })),
-  );
+  if (!admin) {
+    throw new Error('No se pudo asegurar la creación del usuario administrador');
+  }
 
-  const viewGlobal = (module: Module) => ({
-    module,
-    action: Action.VIEW,
-    scope: Scope.GLOBAL,
-  });
-
-  const viewClub = (module: Module) => ({
-    module,
-    action: Action.VIEW,
-    scope: Scope.CLUB,
-  });
-
-  await assignPermissions(RoleKey.COLLABORATOR, [
-    { module: Module.RESULTADOS, action: Action.MANAGE, scope: Scope.GLOBAL },
-    { module: Module.PARTIDOS, action: Action.MANAGE, scope: Scope.GLOBAL },
-    { module: Module.FIXTURE, action: Action.MANAGE, scope: Scope.GLOBAL },
-    { module: Module.PLANTELES, action: Action.MANAGE, scope: Scope.GLOBAL },
-    viewGlobal(Module.LIGAS),
-    viewGlobal(Module.TORNEOS),
-    viewGlobal(Module.ZONAS),
-    viewGlobal(Module.CLUBES),
-    viewGlobal(Module.CATEGORIAS),
-    viewGlobal(Module.JUGADORES),
-    viewGlobal(Module.FIXTURE),
-    viewGlobal(Module.PARTIDOS),
-    viewGlobal(Module.RESULTADOS),
-    viewGlobal(Module.TABLAS),
-  ]);
-
-  await assignPermissions(RoleKey.DELEGATE, [
-    viewGlobal(Module.CLUBES),
-    viewGlobal(Module.CATEGORIAS),
-    viewGlobal(Module.TORNEOS),
-    viewGlobal(Module.ZONAS),
-    viewGlobal(Module.FIXTURE),
-    viewGlobal(Module.PARTIDOS),
-    viewGlobal(Module.RESULTADOS),
-    viewGlobal(Module.TABLAS),
-    viewClub(Module.JUGADORES),
-    viewClub(Module.PLANTELES),
-  ]);
-
-  await assignPermissions(RoleKey.COACH, [
-    viewGlobal(Module.CLUBES),
-    viewGlobal(Module.CATEGORIAS),
-    viewGlobal(Module.TORNEOS),
-    viewGlobal(Module.ZONAS),
-    viewGlobal(Module.FIXTURE),
-    viewGlobal(Module.PARTIDOS),
-    viewGlobal(Module.RESULTADOS),
-    viewGlobal(Module.TABLAS),
-    viewClub(Module.JUGADORES),
-    viewClub(Module.PLANTELES),
-  ]);
-
-  await assignPermissions(RoleKey.USER, [
-    viewGlobal(Module.CLUBES),
-    viewGlobal(Module.FIXTURE),
-    viewGlobal(Module.PARTIDOS),
-    viewGlobal(Module.RESULTADOS),
-    viewGlobal(Module.TABLAS),
-  ]);
+  for (const module of MATRIX_MODULES) {
+    await prisma.userPermission.upsert({
+      where: {
+        userId_module: {
+          userId: admin.id,
+          module,
+        },
+      },
+      update: {
+        level: PermissionLevel.TOTAL,
+      },
+      create: {
+        userId: admin.id,
+        module,
+        level: PermissionLevel.TOTAL,
+      },
+    });
+  }
 
   try {
     await prisma.siteIdentity.upsert({
@@ -217,86 +88,5 @@ export async function seedBaseData(prisma: PrismaClient) {
     } else {
       throw error;
     }
-  }
-
-  const adminEmailRaw = process.env.ADMIN_EMAIL?.trim();
-  const adminEmailEnv = adminEmailRaw ? adminEmailRaw.toLowerCase() : undefined;
-  const adminEmail =
-    adminEmailEnv && adminEmailEnv.length > 0 ? adminEmailEnv : 'admin@ligas.local';
-  const adminPasswordEnv = process.env.ADMIN_PASSWORD?.trim();
-  const adminPassword =
-    adminPasswordEnv && adminPasswordEnv.length > 0 ? adminPasswordEnv : 'Admin123';
-  const resetAdminPasswordRaw = process.env.SEED_RESET_ADMIN_PASSWORD?.trim();
-  const resetAdminPasswordFlag = resetAdminPasswordRaw
-    ? resetAdminPasswordRaw.toLowerCase()
-    : undefined;
-  const shouldResetAdminPassword = resetAdminPasswordFlag !== 'false';
-
-  const existingAdmin = await prisma.user.findUnique({ where: { email: adminEmail } });
-
-  let admin = existingAdmin;
-  if (!existingAdmin) {
-    admin = await prisma.user.create({
-      data: {
-        email: adminEmail,
-        passwordHash: await argon2.hash(adminPassword, {
-          type: argon2.argon2id,
-        }),
-        firstName: 'Admin',
-        lastName: 'General',
-        emailVerifiedAt: new Date(),
-      },
-    });
-  } else {
-    const updateData: { emailVerifiedAt?: Date; passwordHash?: string } = {};
-
-    if (!existingAdmin.emailVerifiedAt) {
-      updateData.emailVerifiedAt = new Date();
-    }
-
-    if (shouldResetAdminPassword) {
-      let isSamePassword = false;
-      try {
-        isSamePassword = await argon2.verify(existingAdmin.passwordHash, adminPassword);
-      } catch {
-        isSamePassword = false;
-      }
-
-      if (!isSamePassword) {
-        updateData.passwordHash = await argon2.hash(adminPassword, {
-          type: argon2.argon2id,
-        });
-      }
-    }
-
-    if (Object.keys(updateData).length > 0) {
-      admin = await prisma.user.update({
-        where: { id: existingAdmin.id },
-        data: updateData,
-      });
-    }
-  }
-
-  if (!admin) {
-    throw new Error('No se pudo asegurar la creación del usuario administrador');
-  }
-
-  const existingAdminRole = await prisma.userRole.findFirst({
-    where: {
-      userId: admin.id,
-      roleId: roleMap.get(RoleKey.ADMIN)!,
-      leagueId: null,
-      clubId: null,
-      categoryId: null,
-    },
-  });
-
-  if (!existingAdminRole) {
-    await prisma.userRole.create({
-      data: {
-        userId: admin.id,
-        roleId: roleMap.get(RoleKey.ADMIN)!,
-      },
-    });
   }
 }

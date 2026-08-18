@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
-import { Gender, RoleKey, TournamentStatus, ZoneStatus } from '@prisma/client';
+import { Gender, TournamentStatus, ZoneStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AssignPlayerClubDto } from '../dto/assign-player-club.dto';
 import { CreateTournamentDto } from '../dto/create-tournament.dto';
@@ -767,8 +767,8 @@ export class TournamentsService {
   }
 
   async deleteTournament(id: number, dto: DeleteTournamentDto) {
-    const admin = await this.authService.validateUser(dto.email, dto.password);
-    if (!admin.roles.includes(RoleKey.ADMIN)) {
+    const admin = await this.authService.validateUser(dto.username, dto.password);
+    if (!admin.isAdmin) {
       throw new ForbiddenException('Solo un administrador puede eliminar un torneo.');
     }
 

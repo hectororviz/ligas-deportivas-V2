@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getProfile, hasSession, type AuthUser } from '$lib/api';
+  import { getProfile, hasSession, canManageModule, type AuthUser } from '$lib/api';
   import { goto } from '$app/navigation';
 
   let user: AuthUser | null = null;
@@ -24,8 +24,10 @@
   {:else if user}
     <section class="card-surface" style="display:grid; gap:.8rem;">
       <a class="league-row settings-link" href="/settings/account"><span class="league-color settings-avatar">{user.firstName.charAt(0)}{user.lastName.charAt(0)}</span><div class="league-info"><strong>Cuenta y perfil</strong><span>Actualiza tu nombre, apellido y contraseña.</span></div></a>
-      <a class="league-row settings-link" href="/settings/users"><span class="league-color settings-icon">UP</span><div class="league-info"><strong>Usuarios y permisos</strong><span>Gestiona los usuarios registrados y sus roles asignados.</span></div></a>
-      <a class="league-row settings-link" href="/settings/site-identity"><span class="league-color settings-icon">SI</span><div class="league-info"><strong>Identidad del sitio</strong><span>Cambia el título, ícono, favicon y paleta de colores.</span></div></a>
+      {#if canManageModule(user, 'CONFIGURACION')}
+        <a class="league-row settings-link" href="/settings/users"><span class="league-color settings-icon">UP</span><div class="league-info"><strong>Usuarios y permisos</strong><span>Gestiona los usuarios registrados y sus permisos asignados.</span></div></a>
+        <a class="league-row settings-link" href="/settings/site-identity"><span class="league-color settings-icon">SI</span><div class="league-info"><strong>Identidad del sitio</strong><span>Cambia el título, ícono, favicon y paleta de colores.</span></div></a>
+      {/if}
     </section>
   {/if}
 </main>

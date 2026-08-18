@@ -1,5 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Permission, RoleKey, Scope } from '@prisma/client';
+import {
+  Action,
+  Module,
+  Permission,
+  PermissionLevel,
+  RoleKey,
+  Scope
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PermissionGrant } from '../common/interfaces/request-user.interface';
 
@@ -8,6 +15,36 @@ interface AssignRoleInput {
   clubId?: number;
   categoryId?: number;
 }
+
+export const MATRIX_MODULES: Module[] = [
+  Module.LIGAS,
+  Module.TORNEOS,
+  Module.ZONAS,
+  Module.CATEGORIAS,
+  Module.JUGADORES,
+  Module.CLUBES,
+  Module.CONFIGURACION
+];
+
+const MODULE_EXPANSION: Partial<Record<Module, Module[]>> = {
+  [Module.LIGAS]: [Module.LIGAS],
+  [Module.TORNEOS]: [
+    Module.TORNEOS,
+    Module.FIXTURE,
+    Module.PARTIDOS,
+    Module.RESULTADOS
+  ],
+  [Module.ZONAS]: [Module.ZONAS, Module.FIXTURE],
+  [Module.CATEGORIAS]: [Module.CATEGORIAS],
+  [Module.JUGADORES]: [Module.JUGADORES, Module.PLANTELES],
+  [Module.CLUBES]: [Module.CLUBES],
+  [Module.CONFIGURACION]: [
+    Module.CONFIGURACION,
+    Module.USUARIOS,
+    Module.ROLES,
+    Module.PERMISOS
+  ]
+};
 
 @Injectable()
 export class AccessControlService {
@@ -91,20 +128,8 @@ export class AccessControlService {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: {
-        roles: {
-          include: {
-            league: true,
-            club: true,
-            category: true,
-            role: {
-              include: {
-                permissions: {
-                  include: { permission: true }
-                }
-              }
-            }
-          }
-        }
+        club: { select: { id: true } },
+        permissions: true
       }
     });
 
@@ -112,36 +137,29 @@ export class AccessControlService {
       throw new NotFoundException('Usuario no encontrado');
     }
 
-    return this.buildGrants(user.roles);
+    return this.buildGrantsFromLevels(user.permissions, user.club?.id ?? null);
   }
 
-  buildGrants(
-    roles: Array<
-      {
-        leagueId: number | null;
-        clubId: number | null;
-        categoryId: number | null;
-      } & {
-        role: {
-          permissions: Array<{ permission: Permission }>;
-        };
-      }
-    >
+  buildGrantsFromLevels(
+    levels: Array<{ module: Module; level: PermissionLevel }>,
+    clubId: number | null
   ): PermissionGrant[] {
     const grantsMap = new Map<string, PermissionGrant>();
 
-    for (const assignment of roles) {
-      for (const rolePermission of assignment.role.permissions) {
-        const permission = rolePermission.permission;
-        const key = `${permission.module}:${permission.action}:${permission.scope}`;
-        const existing = grantsMap.get(key);
-        const scopedGrant = this.createScopedGrant(permission, assignment);
-        if (existing) {
-          existing.leagues = this.mergeScopes(existing.leagues, scopedGrant.leagues);
-          existing.clubs = this.mergeScopes(existing.clubs, scopedGrant.clubs);
-          existing.categories = this.mergeScopes(existing.categories, scopedGrant.categories);
-        } else {
-          grantsMap.set(key, scopedGrant);
+    for (const entry of levels) {
+      const internalModules = MODULE_EXPANSION[entry.module] ?? [entry.module];
+      for (const module of internalModules) {
+        const grants = this.levelToGrants(module, entry.level, clubId);
+        for (const grant of grants) {
+          const key = `${grant.module}:${grant.action}:${grant.scope}`;
+          const existing = grantsMap.get(key);
+          if (existing) {
+            existing.leagues = this.mergeScopes(existing.leagues, grant.leagues);
+            existing.clubs = this.mergeScopes(existing.clubs, grant.clubs);
+            existing.categories = this.mergeScopes(existing.categories, grant.categories);
+          } else {
+            grantsMap.set(key, grant);
+          }
         }
       }
     }
@@ -149,27 +167,42 @@ export class AccessControlService {
     return Array.from(grantsMap.values());
   }
 
-  private createScopedGrant(
-    permission: Permission,
-    assignment: { leagueId: number | null; clubId: number | null; categoryId: number | null }
-  ): PermissionGrant {
-    const grant: PermissionGrant = {
-      module: permission.module,
-      action: permission.action,
-      scope: permission.scope
-    };
+  buildModuleLevels(
+    permissions: Array<{ module: Module; level: PermissionLevel }>
+  ): Record<string, PermissionLevel> {
+    const levels: Record<string, PermissionLevel> = {};
+    for (const module of MATRIX_MODULES) {
+      levels[module] = PermissionLevel.NO;
+    }
+    for (const permission of permissions) {
+      if (MATRIX_MODULES.includes(permission.module)) {
+        levels[permission.module] = permission.level;
+      }
+    }
+    return levels;
+  }
 
-    if (permission.scope === Scope.LIGA && assignment.leagueId) {
-      grant.leagues = [assignment.leagueId];
+  private levelToGrants(
+    module: Module,
+    level: PermissionLevel,
+    clubId: number | null
+  ): PermissionGrant[] {
+    switch (level) {
+      case PermissionLevel.TOTAL:
+      case PermissionLevel.MODIFICACION:
+        return [{ module, action: Action.MANAGE, scope: Scope.GLOBAL }];
+      case PermissionLevel.LECTURA:
+        return [{ module, action: Action.VIEW, scope: Scope.GLOBAL }];
+      case PermissionLevel.LECTURA_CLUB:
+        return clubId ? [{ module, action: Action.VIEW, scope: Scope.CLUB, clubs: [clubId] }] : [];
+      case PermissionLevel.MODIFICACION_CLUB:
+        return clubId
+          ? [{ module, action: Action.MANAGE, scope: Scope.CLUB, clubs: [clubId] }]
+          : [];
+      case PermissionLevel.NO:
+      default:
+        return [];
     }
-    if (permission.scope === Scope.CLUB && assignment.clubId) {
-      grant.clubs = [assignment.clubId];
-    }
-    if (permission.scope === Scope.CATEGORIA && assignment.categoryId) {
-      grant.categories = [assignment.categoryId];
-    }
-
-    return grant;
   }
 
   private mergeScopes(target: number[] | undefined, source: number[] | undefined) {

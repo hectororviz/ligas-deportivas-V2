@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { createLeague, getLeagues, getProfile, updateLeague, type AuthUser, type League } from '$lib/api';
+  import { createLeague, getLeagues, getProfile, updateLeague, canManageModule, type AuthUser, type League } from '$lib/api';
   import Modal from '$lib/Modal.svelte';
 
   const days = [
@@ -29,7 +29,7 @@
     }
   });
 
-  let canManage = $derived(((user as AuthUser | null)?.roles ?? []).includes('ADMIN'));
+  let canManage = $derived(canManageModule(user, 'LIGAS'));
 
   function openCreate() {
     editing = null; showForm = true;

@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import Modal from '$lib/Modal.svelte';
   import { SlidersHorizontal } from '@lucide/svelte';
-  import { getTournaments, getProfile, createTournament, updateTournament, updateTournamentStatus, deleteTournament, getLeagues, getCategories, type AuthUser, type Tournament, type League, type Category } from '$lib/api';
+  import { getTournaments, getProfile, createTournament, updateTournament, updateTournamentStatus, deleteTournament, getLeagues, getCategories, canManageModule, type AuthUser, type Tournament, type League, type Category } from '$lib/api';
 
   const genders = [
     ['MASCULINO', 'Masculino'], ['FEMENINO', 'Femenino'], ['MIXTO', 'Mixto']
@@ -42,7 +42,7 @@
 
   let showDeleteModal = $state(false);
   let deleteTarget: Tournament | null = $state(null);
-  let deleteEmail = $state('');
+  let deleteUsername = $state('');
   let deletePassword = $state('');
   let deleteError = $state('');
   let deleting = $state(false);
@@ -60,7 +60,7 @@
     try {
       const [u, l, cats] = await Promise.all([getProfile(), getLeagues(), getCategories()]);
       user = u; leagues = l; allCategories = cats;
-      canManage = (u?.roles ?? []).includes('ADMIN');
+      canManage = canManageModule(u, 'TORNEOS');
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudieron cargar los torneos.';
     }
@@ -199,7 +199,7 @@
 
   function openDeleteModal(tournament: Tournament) {
     deleteTarget = tournament;
-    deleteEmail = '';
+    deleteUsername = '';
     deletePassword = '';
     deleteError = '';
     showDeleteModal = true;
@@ -207,11 +207,11 @@
 
   async function confirmDeleteTournament() {
     if (!deleteTarget) return;
-    if (!deleteEmail.trim() || !deletePassword) { deleteError = 'Ingresá tu usuario y contraseña.'; return; }
+    if (!deleteUsername.trim() || !deletePassword) { deleteError = 'Ingresá tu usuario y contraseña.'; return; }
     deleting = true;
     deleteError = '';
     try {
-      await deleteTournament(deleteTarget.id, deleteEmail.trim(), deletePassword);
+      await deleteTournament(deleteTarget.id, deleteUsername.trim(), deletePassword);
       notice = `Torneo "${deleteTarget.name}" eliminado correctamente.`;
       showDeleteModal = false;
       deleteTarget = null;
@@ -409,7 +409,7 @@
       <p class="muted">Esta acción eliminará el torneo y <strong>todos</strong> sus datos: zonas, clubes asignados, partidos, fixture, goles y resultados. No se puede deshacer.</p>
       {#if deleteError}<p class="form-error">{deleteError}</p>{/if}
       <form onsubmit={(event) => { event.preventDefault(); confirmDeleteTournament(); }}>
-        <label>Usuario (email)<input type="email" bind:value={deleteEmail} placeholder="admin@example.com" disabled={deleting} autocomplete="username" /></label>
+        <label>Usuario<input type="text" bind:value={deleteUsername} placeholder="admin" disabled={deleting} autocomplete="username" /></label>
         <label>Contraseña<input type="password" bind:value={deletePassword} placeholder="••••••••" disabled={deleting} autocomplete="current-password" /></label>
         <div class="form-actions">
           <button class="button secondary" type="button" disabled={deleting} onclick={() => showDeleteModal = false}>Cancelar</button>

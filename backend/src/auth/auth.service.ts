@@ -1,24 +1,17 @@
 import {
-  BadRequestException,
   Injectable,
   UnauthorizedException
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { RegisterDto } from './dto/register.dto';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { AccessControlService } from '../rbac/access-control.service';
-import { CaptchaService } from '../captcha/captcha.service';
-import { MailService } from '../mail/mail.service';
-import { RoleKey } from '@prisma/client';
 import * as argon2 from 'argon2';
+import { Module, PermissionLevel } from '@prisma/client';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RequestUser } from '../common/interfaces/request-user.interface';
 import { randomBytes } from 'crypto';
-import { VerifyEmailDto } from './dto/verify-email.dto';
-import { RequestPasswordResetDto } from './dto/request-password-reset.dto';
-import { ResetPasswordDto } from './dto/reset-password.dto';
 
 export interface AuthTokens {
   accessToken: string;
@@ -28,75 +21,32 @@ export interface AuthTokens {
 @Injectable()
 export class AuthService {
   private readonly refreshTtlSeconds: number;
-  private readonly disabledEmails: Set<string>;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     configService: ConfigService,
-    private readonly accessControlService: AccessControlService,
-    private readonly captchaService: CaptchaService,
-    private readonly mailService: MailService
+    private readonly accessControlService: AccessControlService
   ) {
     this.refreshTtlSeconds = configService.get<number>('auth.refreshTtl') ?? 604800;
-    const disabled = configService.get<string[]>('auth.disabledEmails') ?? [];
-    this.disabledEmails = new Set(disabled.map((email) => email.toLowerCase()));
   }
 
-  async register(dto: RegisterDto) {
-    await this.captchaService.verify(dto.captchaToken);
-
-    const email = dto.email.toLowerCase();
-    const existing = await this.prisma.user.findUnique({ where: { email } });
-    if (existing) {
-      throw new BadRequestException('El correo ya está registrado.');
-    }
-
-    const passwordHash = await argon2.hash(dto.password, {
-      type: argon2.argon2id
-    });
-
-    const user = await this.prisma.user.create({
-      data: {
-        email,
-        passwordHash,
-        firstName: dto.firstName,
-        lastName: dto.lastName
-      }
-    });
-
-    await this.accessControlService.assignRoleToUser(user.id, RoleKey.USER);
-
-    const verificationToken = await this.createEmailVerificationToken(user.id);
-    await this.mailService.sendEmailVerification(user.email, verificationToken, user.firstName);
-
-    const requestUser = await this.loadRequestUser(user.id);
-    const tokens = await this.generateTokens(requestUser);
-
-    return {
-      user: requestUser,
-      ...tokens
-    };
-  }
-
-  async validateUser(email: string, password: string): Promise<RequestUser> {
+  async validateUser(username: string, password: string): Promise<RequestUser> {
     const user = await this.prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
+      where: { username },
       include: {
+        club: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
         roles: {
           include: {
-            league: true,
-            club: true,
-            category: true,
-            role: {
-              include: {
-                permissions: {
-                  include: { permission: true }
-                }
-              }
-            }
+            role: { select: { key: true } }
           }
-        }
+        },
+        permissions: true
       }
     });
 
@@ -104,23 +54,15 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
-    if (this.isDisabledEmail(user.email)) {
-      throw new UnauthorizedException('Usuario deshabilitado.');
-    }
-
     if (!(await argon2.verify(user.passwordHash, password))) {
       throw new UnauthorizedException('Credenciales inválidas');
-    }
-
-    if (!user.emailVerifiedAt) {
-      throw new UnauthorizedException('Debe verificar su correo electrónico.');
     }
 
     return this.mapToRequestUser(user);
   }
 
   async login(user: RequestUser | null, dto: LoginDto): Promise<{ user: RequestUser } & AuthTokens> {
-    const validated = user ?? (await this.validateUser(dto.email, dto.password));
+    const validated = user ?? (await this.validateUser(dto.username, dto.password));
     const tokens = await this.generateTokens(validated);
     return { user: validated, ...tokens };
   }
@@ -170,82 +112,12 @@ export class AuthService {
     }
   }
 
-  async verifyEmail(dto: VerifyEmailDto) {
-    const record = await this.prisma.emailVerificationToken.findFirst({
-      where: {
-        token: dto.token,
-        usedAt: null,
-        expiresAt: { gt: new Date() }
-      }
-    });
-
-    if (!record) {
-      throw new BadRequestException('Token inválido o expirado');
-    }
-
-    await this.prisma.$transaction([
-      this.prisma.emailVerificationToken.update({
-        where: { id: record.id },
-        data: { usedAt: new Date() }
-      }),
-      this.prisma.user.update({
-        where: { id: record.userId },
-        data: { emailVerifiedAt: new Date() }
-      })
-    ]);
-
-    return { success: true };
-  }
-
-  async requestPasswordReset(dto: RequestPasswordResetDto) {
-    const user = await this.prisma.user.findUnique({ where: { email: dto.email.toLowerCase() } });
-    if (!user) {
-      return { success: true };
-    }
-
-    const token = await this.createPasswordResetToken(user.id);
-    await this.mailService.sendPasswordReset(user.email, token, user.firstName);
-    return { success: true };
-  }
-
-  async resetPassword(dto: ResetPasswordDto) {
-    const record = await this.prisma.passwordResetToken.findFirst({
-      where: {
-        token: dto.token,
-        usedAt: null,
-        expiresAt: { gt: new Date() }
-      }
-    });
-
-    if (!record) {
-      throw new BadRequestException('Token inválido o expirado');
-    }
-
-    const passwordHash = await argon2.hash(dto.password, {
-      type: argon2.argon2id
-    });
-
-    await this.prisma.$transaction([
-      this.prisma.passwordResetToken.update({
-        where: { id: record.id },
-        data: { usedAt: new Date() }
-      }),
-      this.prisma.user.update({
-        where: { id: record.userId },
-        data: { passwordHash }
-      }),
-      this.prisma.userToken.deleteMany({ where: { userId: record.userId } })
-    ]);
-
-    return { success: true };
-  }
-
   async getProfile(userId: number): Promise<RequestUser> {
     return this.loadRequestUser(userId);
   }
 
   private async generateTokens(user: RequestUser): Promise<AuthTokens> {
-    const payload = { sub: user.id, email: user.email };
+    const payload = { sub: user.id, username: user.username };
     const accessToken = await this.jwtService.signAsync(payload);
     const refreshToken = await this.issueRefreshToken(user.id);
     return { accessToken, refreshToken };
@@ -279,18 +151,10 @@ export class AuthService {
         },
         roles: {
           include: {
-            league: true,
-            club: true,
-            category: true,
-            role: {
-              include: {
-                permissions: {
-                  include: { permission: true }
-                }
-              }
-            }
+            role: { select: { key: true } }
           }
-        }
+        },
+        permissions: true
       }
     });
 
@@ -298,27 +162,43 @@ export class AuthService {
       throw new UnauthorizedException();
     }
 
-    if (this.isDisabledEmail(user.email)) {
-      throw new UnauthorizedException();
-    }
-
     return this.mapToRequestUser(user);
   }
 
-  private mapToRequestUser(user: any): RequestUser {
-    const permissions = this.accessControlService.buildGrants(user.roles);
-    const roles = user.roles.map((assignment: any) => assignment.role.key);
+  private mapToRequestUser(user: {
+    id: number;
+    username: string;
+    firstName: string;
+    lastName: string;
+    isAdmin: boolean;
+    language: string | null;
+    avatarHash: string | null;
+    avatarUpdatedAt: Date | null;
+    avatarMime: string | null;
+    club: { id: number; name: string } | null;
+    roles: Array<{ role: { key: string } }>;
+    permissions: Array<{ module: Module; level: PermissionLevel }>;
+  }): RequestUser {
+    const permissions = this.accessControlService.buildGrantsFromLevels(
+      user.permissions,
+      user.club?.id ?? null
+    );
+    const moduleLevels = this.accessControlService.buildModuleLevels(user.permissions);
+    const roles = user.roles.map((assignment) => assignment.role.key);
+
     return {
       id: user.id,
-      email: user.email,
+      username: user.username,
       firstName: user.firstName,
       lastName: user.lastName,
+      isAdmin: user.isAdmin,
       language: user.language,
       avatarHash: user.avatarHash,
       avatarUpdatedAt: user.avatarUpdatedAt,
       avatarMime: user.avatarMime,
       roles,
       permissions,
+      moduleLevels,
       club: user.club
         ? {
             id: user.club.id,
@@ -326,39 +206,5 @@ export class AuthService {
           }
         : null
     };
-  }
-
-  private isDisabledEmail(email?: string | null): boolean {
-    if (!email) {
-      return false;
-    }
-
-    return this.disabledEmails.has(email.toLowerCase());
-  }
-
-  private async createEmailVerificationToken(userId: number) {
-    const token = randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24);
-    await this.prisma.emailVerificationToken.create({
-      data: {
-        userId,
-        token,
-        expiresAt
-      }
-    });
-    return token;
-  }
-
-  private async createPasswordResetToken(userId: number) {
-    const token = randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60);
-    await this.prisma.passwordResetToken.create({
-      data: {
-        userId,
-        token,
-        expiresAt
-      }
-    });
-    return token;
   }
 }

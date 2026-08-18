@@ -1,4 +1,4 @@
-import { Action, Module, Scope } from '@prisma/client';
+import { Action, Module, PermissionLevel, Scope } from '@prisma/client';
 
 export interface PermissionGrant {
   module: Module;
@@ -16,14 +16,16 @@ export interface RequestUserClub {
 
 export interface RequestUser {
   id: number;
-  email: string;
+  username: string;
   firstName: string;
   lastName: string;
+  isAdmin: boolean;
   language?: string | null;
   avatarHash?: string | null;
   avatarUpdatedAt?: Date | null;
   avatarMime?: string | null;
   roles: string[];
   permissions: PermissionGrant[];
+  moduleLevels: Record<string, PermissionLevel>;
   club?: RequestUserClub | null;
 }

@@ -11,6 +11,7 @@
     getProfile,
     updateMatchday,
     finalizeMatchday,
+    canManageModule,
     type League,
     type Tournament,
     type Zone,
@@ -49,7 +50,7 @@
   let updatingDate = $state(false);
   let notice = $state('');
 
-  let canManage = $derived(((user as AuthUser | null)?.roles ?? []).includes('ADMIN'));
+  let canManage = $derived(canManageModule(user, 'TORNEOS') || canManageModule(user, 'ZONAS'));
 
   let currentMatchday = $derived.by(() => {
     if (!matchesData || selectedMatchday == null) return null;
@@ -87,7 +88,7 @@
         getLeagues(),
         getTournaments(),
         getZones(),
-        getProfile(),
+        getProfile().catch(() => null),
       ]);
       const initial = readInitialSelection();
       applySelection(initial);
