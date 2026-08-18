@@ -2,7 +2,7 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { NAV_ITEMS, sidebarState, type NavItem, type NavChild } from './navigation.svelte';
-  import { getProfile, hasSession, clearAuth, canViewModule, canManageModule, type AuthUser } from './api';
+  import { getProfile, hasSession, logout, canViewModule, canManageModule, type AuthUser } from './api';
   import { MorphIcon } from 'morphicons/svelte';
   import { Menu, X, ChevronDown, ChevronRight, ChevronLeft } from 'lucide';
   import { LogOut, LogIn } from '@lucide/svelte';
@@ -74,8 +74,8 @@
   }
 
   async function signOut() {
-    await clearAuth();
-    await goto('/login');
+    await logout();
+    await goto('/');
   }
 </script>
 

@@ -1,11 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
-  import { getClubAdmin, getAvailableTournaments, joinTournament, leaveTournament, type ClubAdminOverview, type AvailableTournament } from '$lib/api';
+  import { getClubAdmin, getAvailableTournaments, joinTournament, leaveTournament, getProfile, canManageModule, type ClubAdminOverview, type AvailableTournament, type AuthUser } from '$lib/api';
   import Modal from '$lib/Modal.svelte';
   import { Plus, ChevronDown } from '@lucide/svelte';
 
   let data: ClubAdminOverview | null = $state(null);
+  let user = $state<AuthUser | null>(null);
   let loading = $state(true);
   let error = $state('');
   let notice = $state('');
@@ -17,6 +18,13 @@
   let loadingAvailable = $state(false);
   let expandedTournaments = $state<Set<number>>(new Set());
 
+  let canManageClubes = $derived.by(() => {
+    if (canManageModule(user, 'CLUBES')) return true;
+    if (!user || !data) return false;
+    const clubId = user.club?.id ?? null;
+    return user.moduleLevels?.CLUBES === 'MODIFICACION_CLUB' && clubId != null && clubId === data.club.id;
+  });
+
   function toggleTournament(id: number) {
     const next = new Set(expandedTournaments);
     if (next.has(id)) next.delete(id);
@@ -24,7 +32,10 @@
     expandedTournaments = next;
   }
 
-  onMount(() => { fetchData(); });
+  onMount(() => {
+    fetchData();
+    getProfile().then((u) => user = u).catch(() => {});
+  });
 
   $effect(() => {
     if (!data || data.club.latitude == null || data.club.longitude == null) return;
@@ -192,7 +203,7 @@
               <h2>Torneos</h2>
             </div>
             <div style="display:flex;align-items:center;gap:.5rem">
-              <button class="button primary small" disabled={saving} onclick={openJoinModal}>
+              <button class="button primary small" disabled={saving || !canManageClubes} onclick={openJoinModal}>
                 <Plus size={14} strokeWidth={2} />
                 Participar
               </button>
@@ -216,7 +227,7 @@
                     </div>
                     <button
                       class="button secondary leave-btn"
-                      disabled={leaving === tournament.id}
+                      disabled={leaving === tournament.id || !canManageClubes}
                       onclick={() => handleLeaveTournament(tournament.id)}
                     >
                       {leaving === tournament.id ? 'Saliendo...' : 'Salir del torneo'}
@@ -283,7 +294,7 @@
                 <strong>{t.name} {t.year}</strong>
                 <span class="muted">{t.leagueName} · {t.categories.length} categorías</span>
               </div>
-              <button class="button primary small" disabled={saving} onclick={() => handleJoin(t)}>
+              <button class="button primary small" disabled={saving || !canManageClubes} onclick={() => handleJoin(t)}>
                 {saving ? '...' : 'Participar'}
               </button>
             </div>

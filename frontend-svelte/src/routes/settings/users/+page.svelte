@@ -37,13 +37,13 @@
     ['NO', 'No'],
   ];
 
-  let paginated: PaginatedUsers | null = null;
-  let clubs: Club[] = [];
-  let loading = true;
-  let error = '';
-  let search = '';
+  let paginated = $state<PaginatedUsers | null>(null);
+  let clubs = $state<Club[]>([]);
+  let loading = $state(true);
+  let error = $state('');
+  let search = $state('');
   let debounce: ReturnType<typeof setTimeout> | null = null;
-  let page = 1;
+  let page = $state(1);
   let showFilters = $state(false);
   let notice = $state('');
 
