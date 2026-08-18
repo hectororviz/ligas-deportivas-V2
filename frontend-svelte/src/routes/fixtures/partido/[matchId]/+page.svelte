@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
-  import { getMatchDetail, getProfile, canManageModule, type MatchDetail, type MatchClub, type AuthUser } from '$lib/api';
+  import { getMatchDetail, getProfile, canManageModule, matchFlyerUrl, type MatchDetail, type MatchClub, type AuthUser } from '$lib/api';
   import PlayerGoalsModal from '$lib/PlayerGoalsModal.svelte';
 
   let match: MatchDetail | null = $state(null);
@@ -96,7 +96,10 @@
         <p class="eyebrow">Partido · Fecha {match.matchday}{match.round === 'SECOND' ? ' · Rueda 2' : ''}</p>
         <h1 class="page-title">Resultado</h1>
       </div>
-      <a class="button secondary" href={backHref}>Volver al fixture</a>
+      <div class="header-actions">
+        <a class="button secondary" href={matchFlyerUrl(match.id)} target="_blank" rel="noopener">Descargar flyer</a>
+        <a class="button secondary" href={backHref}>Volver al fixture</a>
+      </div>
     </header>
 
     <div class="versus">
@@ -178,6 +181,8 @@
 
 <style>
   .page-title { font-size: clamp(2rem, 5vw, 3.5rem); }
+
+  .header-actions { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
 
   .versus {
     display: flex;

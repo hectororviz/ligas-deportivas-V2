@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
   import Modal from '$lib/Modal.svelte';
   import { SlidersHorizontal } from '@lucide/svelte';
   import { getTournaments, getProfile, createTournament, updateTournament, updateTournamentStatus, deleteTournament, getLeagues, getCategories, canManageModule, type AuthUser, type Tournament, type League, type Category } from '$lib/api';
@@ -39,6 +40,7 @@
   let showFilters = $state(false);
   let showCatPicker = $state(false);
   let canManage = $state(false);
+  let canManageConfig = $state(false);
 
   let showDeleteModal = $state(false);
   let deleteTarget: Tournament | null = $state(null);
@@ -61,6 +63,7 @@
       const [u, l, cats] = await Promise.all([getProfile(), getLeagues(), getCategories()]);
       user = u; leagues = l; allCategories = cats;
       canManage = canManageModule(u, 'TORNEOS');
+      canManageConfig = canManageModule(u, 'CONFIGURACION');
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudieron cargar los torneos.';
     }
@@ -205,6 +208,10 @@
     showDeleteModal = true;
   }
 
+  async function openFlyerTemplate(tournament: Tournament) {
+    await goto(`/tournaments/${tournament.id}/flyer-template`);
+  }
+
   async function confirmDeleteTournament() {
     if (!deleteTarget) return;
     if (!deleteUsername.trim() || !deletePassword) { deleteError = 'Ingresá tu usuario y contraseña.'; return; }
@@ -279,6 +286,7 @@
                 <span>{tournament.league.name} · {tournament.year} · {genders.find(([value]) => value === tournament.gender)?.[1] ?? tournament.gender}</span>
               </div>
               <span class={statusClasses[tournament.status] ?? 'badge-muted'}>{statusLabels[tournament.status] ?? tournament.status}</span>
+              {#if canManageConfig}<button class="icon-button" onclick={() => openFlyerTemplate(tournament)} aria-label={`Plantilla de flyer de ${tournament.name}`}>Flyer</button>{/if}
               {#if canManage}<button class="icon-button" onclick={() => openEdit(tournament)} aria-label={`Editar ${tournament.name}`}>Editar</button>{/if}
             </article>
           {/each}

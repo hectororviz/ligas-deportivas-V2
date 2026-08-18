@@ -234,6 +234,21 @@ export interface SiteIdentity {
   favicon?: { basePath: string; updatedAt: number } | null;
 }
 
+export interface FlyerToken {
+  token: string;
+  description: string;
+  example?: string | null;
+  usage?: string | null;
+}
+
+export interface FlyerTemplate {
+  backgroundUrl: string | null;
+  layoutPreviewUrl: string | null;
+  layoutFileName: string | null;
+  updatedAt: string | null;
+  hasCustomTemplate: boolean;
+}
+
 export interface PaginatedClubs {
   data: Club[];
   total: number;
@@ -798,6 +813,61 @@ export async function updateSiteIdentity(input: FormData): Promise<SiteIdentity>
   const response = await fetch(`${API_BASE_URL}/site-identity`, { method: 'PUT', headers, body: input });
   if (!response.ok) throw new Error('No se pudo actualizar la identidad del sitio.');
   return response.json();
+}
+
+export async function getMatchFlyerTokens(): Promise<FlyerToken[]> {
+  return request<FlyerToken[]>('/matches/flyer/tokens');
+}
+
+export async function getFlyerTemplate(competitionId: number): Promise<FlyerTemplate> {
+  return request<FlyerTemplate>(`/competitions/${competitionId}/flyer-template`);
+}
+
+export async function upsertFlyerTemplate(competitionId: number, formData: FormData): Promise<FlyerTemplate> {
+  const headers = new Headers();
+  const accessToken = getStored(ACCESS_TOKEN_KEY);
+  if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
+  const response = await fetch(`${API_BASE_URL}/competitions/${competitionId}/flyer-template`, {
+    method: 'PUT',
+    headers,
+    body: formData
+  });
+  if (!response.ok) {
+    let message = 'No se pudo guardar la plantilla del flyer.';
+    try {
+      const body = await response.json();
+      const msg = body.message;
+      message = Array.isArray(msg) ? msg.join(', ') : (typeof msg === 'string' && msg ? msg : message);
+    } catch {}
+    throw new Error(message);
+  }
+  return response.json();
+}
+
+export async function deleteFlyerTemplate(competitionId: number): Promise<void> {
+  await request(`/competitions/${competitionId}/flyer-template`, { method: 'DELETE' });
+}
+
+export function matchFlyerUrl(matchId: number): string {
+  return `${API_BASE_URL}/matches/${matchId}/flyer`;
+}
+
+export async function fetchFlyerTemplatePreview(competitionId: number): Promise<string> {
+  const headers = new Headers();
+  const accessToken = getStored(ACCESS_TOKEN_KEY);
+  if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
+  const response = await fetch(`${API_BASE_URL}/competitions/${competitionId}/flyer-template/preview`, { headers });
+  if (!response.ok) {
+    let message = 'No se pudo generar la vista previa.';
+    try {
+      const body = await response.json();
+      const msg = body.message;
+      message = Array.isArray(msg) ? msg.join(', ') : (typeof msg === 'string' && msg ? msg : message);
+    } catch {}
+    throw new Error(message);
+  }
+  const blob = await response.blob();
+  return URL.createObjectURL(blob);
 }
 
 export interface ClubAdminTournament {
