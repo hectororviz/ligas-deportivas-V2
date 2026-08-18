@@ -429,6 +429,8 @@
 {/if}
 
 <style>
+  .league-row .league-info { flex: 1; }
+
   .tournament-color { background: var(--league-color, var(--color-accent)); color: #fff; }
   .tournament-list { align-self: start; }
 

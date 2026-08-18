@@ -75,7 +75,7 @@
 
   async function signOut() {
     await logout();
-    await goto('/');
+    window.location.href = '/';
   }
 </script>
 

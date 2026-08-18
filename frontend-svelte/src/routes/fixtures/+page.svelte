@@ -51,6 +51,7 @@
   let notice = $state('');
 
   let canManage = $derived(canManageModule(user, 'TORNEOS') || canManageModule(user, 'ZONAS'));
+  let dateText = $state('');
 
   let currentMatchday = $derived.by(() => {
     if (!matchesData || selectedMatchday == null) return null;
@@ -305,8 +306,49 @@
     return Number.isFinite(n) && n > 0 ? n : null;
   }
 
-  function dateValue(md: ZoneMatchday | null): string {
-    return md?.date ? md.date.slice(0, 10) : '';
+  function isoToDisplay(iso: string): string {
+    if (!iso) return '';
+    const [y, m, d] = iso.slice(0, 10).split('-');
+    if (!y || !m || !d) return '';
+    return `${d}/${m}/${y}`;
+  }
+
+  function displayToIso(text: string): string | null {
+    const match = text.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!match) return null;
+    const d = Number(match[1]);
+    const m = Number(match[2]);
+    const y = Number(match[3]);
+    if (m < 1 || m > 12 || d < 1 || d > 31) return null;
+    return `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  }
+
+  function formatDateInput(raw: string): string {
+    const digits = raw.replace(/\D/g, '').slice(0, 8);
+    const dd = digits.slice(0, 2);
+    const mm = digits.slice(2, 4);
+    const yyyy = digits.slice(4, 8);
+    let out = dd;
+    if (mm) out += '/' + mm;
+    if (yyyy) out += '/' + yyyy;
+    return out;
+  }
+
+  $effect(() => {
+    dateText = isoToDisplay(currentMatchday?.date ?? '');
+  });
+
+  async function commitDate() {
+    if (!dateText) {
+      await onDateChange('');
+      return;
+    }
+    const iso = displayToIso(dateText);
+    if (iso == null) {
+      dateText = isoToDisplay(currentMatchday?.date ?? '');
+      return;
+    }
+    await onDateChange(iso);
   }
 
   function statusLabel(status: string): string {
@@ -507,10 +549,14 @@
     <label class="date-field">
       Día de juego
       <input
-        type="date"
-        value={dateValue(currentMatchday)}
+        type="text"
+        inputmode="numeric"
+        placeholder="dd/mm/aaaa"
+        maxlength="10"
+        value={dateText}
         disabled={updatingDate}
-        onchange={(e) => onDateChange((e.currentTarget as HTMLInputElement).value)}
+        oninput={(e) => (dateText = formatDateInput(e.currentTarget.value))}
+        onchange={() => commitDate()}
       />
     </label>
     {#if currentMatchday?.date}

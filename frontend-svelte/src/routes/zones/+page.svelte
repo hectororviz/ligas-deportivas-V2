@@ -453,7 +453,6 @@
                     <span>{zone.tournament.name} {zone.tournament.year} · {zone.tournament.league.name}{#if clubs.length} · {clubs.length} clubes{/if}</span>
                   </div>
                   <div class="zone-actions" onclick={(e) => e.stopPropagation()}>
-                    <a class="button secondary" href={`/zones/${zone.id}/standings`}>Posiciones</a>
                     {#if canManage}
                       <button class="button primary" disabled={saving || (zone._count?.matches ?? 0) > 0} onclick={() => openFixtureModal(zone)}>Generar fixture</button>
                     {/if}

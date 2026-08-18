@@ -30,6 +30,10 @@
 
   $: canManage = canManageModule(user, 'CATEGORIAS');
 
+  function genderLabel(gender: string): string {
+    return genders.find(([value]) => value === gender)?.[1] ?? gender;
+  }
+
   function openCreate() {
     editing = null;
     form = { name: '', birthYearMin: 2010, birthYearMax: 2015, gender: 'MIXTO', minPlayers: 5, mandatory: false, promotional: false, active: true };
@@ -100,25 +104,39 @@
       {#if categories.length === 0}
         <div class="empty-state compact-empty"><h2>Sin categorías todavía</h2><p>Crea la primera categoría para comenzar.</p></div>
       {:else}
-        <div class="categories-grid">
-          {#each categories as category}
-            <article class="category-card card-surface">
-              <div class="category-card-header">
-                <h3>{category.name}</h3>
-                {#if canManage}<button class="icon-button" onclick={() => openEdit(category)} aria-label={`Editar ${category.name}`}>Editar</button>{/if}
-              </div>
-              <div class="category-meta">
-                <span class="category-tag">{genders.find(([v]) => v === category.gender)?.[1] ?? category.gender}</span>
-                <span class="category-tag">{category.birthYearMin} – {category.birthYearMax}</span>
-                <span class="category-tag">Mín. {category.minPlayers} jug.</span>
-              </div>
-              <div class="category-flags">
-                {#if category.mandatory}<span class="flag flag-mandatory">Obligatoria</span>{/if}
-                {#if category.promotional}<span class="flag flag-promotional">Promocional</span>{/if}
-                {#if !category.active}<span class="flag flag-inactive">Inactiva</span>{/if}
-              </div>
-            </article>
-          {/each}
+        <div class="cat-table-wrapper">
+          <table class="cat-table">
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Género</th>
+                <th>Años de nacimiento</th>
+                <th class="num">Mín. jugadores</th>
+                <th>Estado</th>
+                <th class="actions-col"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each categories as category}
+                <tr>
+                  <td class="cat-name">{category.name}</td>
+                  <td>{genderLabel(category.gender)}</td>
+                  <td>{category.birthYearMin} – {category.birthYearMax}</td>
+                  <td class="num">{category.minPlayers}</td>
+                  <td>
+                    <span class="cat-flags">
+                      {#if category.mandatory}<span class="flag flag-mandatory">Obligatoria</span>{/if}
+                      {#if category.promotional}<span class="flag flag-promotional">Promocional</span>{/if}
+                      {#if !category.active}<span class="flag flag-inactive">Inactiva</span>{/if}
+                    </span>
+                  </td>
+                  <td class="actions-col">
+                    {#if canManage}<button class="icon-button" onclick={() => openEdit(category)} aria-label={`Editar ${category.name}`}>Editar</button>{/if}
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
         </div>
       {/if}
     </section>
@@ -146,13 +164,16 @@
 </main>
 
 <style>
-  .categories-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; margin-top: 1.5rem; }
-  .category-card { padding: 1.2rem; }
-  .category-card-header { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
-  .category-card-header h3 { margin: 0; font-family: 'Space Grotesk', sans-serif; font-size: 1.15rem; letter-spacing: -.03em; }
-  .category-meta { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .8rem; }
-  .category-tag { padding: .2rem .55rem; border-radius: 999px; color: var(--color-accent-text); background: var(--color-accent-bg); font-size: .72rem; font-weight: 600; }
-  .category-flags { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .6rem; }
+  .cat-table-wrapper { margin-top: 1.5rem; overflow-x: auto; }
+  .cat-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+  .cat-table th, .cat-table td { padding: .75rem .6rem; border-bottom: 1px solid var(--color-border); text-align: left; vertical-align: middle; }
+  .cat-table th { color: var(--color-text-muted); font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+  .cat-table tbody tr:hover { background: var(--color-surface-hover); }
+  .cat-table tbody tr:last-child td { border-bottom: 0; }
+  .cat-name { font-weight: 600; }
+  .num { text-align: right; }
+  .actions-col { text-align: right; width: 1%; white-space: nowrap; }
+  .cat-flags { display: inline-flex; flex-wrap: wrap; gap: .35rem; }
   .flag { padding: .15rem .5rem; border-radius: 999px; font-size: .68rem; font-weight: 700; }
   .flag-mandatory { color: var(--color-accent-text); background: var(--color-accent-bg); }
   .flag-promotional { color: #6b4e16; background: #fbf0d9; }
