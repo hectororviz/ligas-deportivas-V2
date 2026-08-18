@@ -97,7 +97,6 @@
         <h1 class="page-title">Resultado</h1>
       </div>
       <div class="header-actions">
-        <a class="button secondary" href={matchPosterUrl(match.id)} target="_blank" rel="noopener">Descargar placa (1080x1920)</a>
         <a class="button secondary" href={backHref}>Volver al fixture</a>
       </div>
     </header>
@@ -127,6 +126,11 @@
         </div>
         <strong class="club-name">{match.awayClub?.name ?? '—'}</strong>
         <span class="points">{pointsLabel(match.pointsAway)}</span>
+      </div>
+
+      <div class="versus-actions">
+        <a class="button secondary" href={matchPosterUrl(match.id)} target="_blank" rel="noopener">Flyer</a>
+        <button class="button secondary" disabled>Listado</button>
       </div>
     </div>
 
@@ -185,6 +189,7 @@
   .header-actions { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
 
   .versus {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -194,6 +199,15 @@
     border-radius: 1.2rem;
     background: var(--color-surface);
     box-shadow: 0 16px 45px var(--color-shadow);
+  }
+  .versus-actions {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: .5rem;
   }
   .club-block {
     flex: 1;

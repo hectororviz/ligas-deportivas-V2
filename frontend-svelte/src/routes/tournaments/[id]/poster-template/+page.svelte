@@ -666,8 +666,11 @@
   .preview-controls { display: flex; align-items: flex-end; gap: .75rem; margin-bottom: 1rem; }
   .preview-controls .full { flex: 1; }
   .preview-controls .button { flex-shrink: 0; }
-  .preview-frame { display: flex; justify-content: center; max-height: 70vh; overflow: auto; }
-  .preview-frame img { max-width: 100%; height: auto; border: 1px solid var(--color-border); border-radius: .75rem; }
+  .preview-frame { display: flex; align-items: center; justify-content: center; max-height: 70vh; overflow: auto; }
+  .preview-frame img {
+    max-width: 100%; max-height: 70vh; width: auto; height: auto; object-fit: contain;
+    border: 1px solid var(--color-border); border-radius: .75rem;
+  }
   .form-error { color: var(--color-error); font-size: .85rem; }
 
   @media (max-width: 860px) {
