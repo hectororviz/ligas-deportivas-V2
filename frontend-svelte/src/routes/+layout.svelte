@@ -3,12 +3,30 @@
   import '../app.css';
   import Sidebar from '$lib/Sidebar.svelte';
   import { usePalette } from '$lib/palette.svelte';
+  import { getSiteIdentity } from '$lib/api';
 
   const palette = usePalette();
   palette.initPalette();
 
+  $effect(() => {
+    getSiteIdentity()
+      .then((identity) => {
+        if (identity.favicon?.basePath) {
+          const href = `${identity.favicon.basePath}/favicon.ico?v=${identity.favicon.updatedAt}`;
+          let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+          if (!link) {
+            link = document.createElement('link');
+            link.rel = 'icon';
+            document.head.appendChild(link);
+          }
+          link.href = href;
+        }
+      })
+      .catch(() => {});
+  });
+
 const publicRoutes = ['/login'];
-$: isPublic = publicRoutes.some((route) => $page.url.pathname === route || $page.url.pathname.startsWith(route + '/'));
+let isPublic = $derived(publicRoutes.some((route) => $page.url.pathname === route || $page.url.pathname.startsWith(route + '/')));
 </script>
 
 <svelte:head>

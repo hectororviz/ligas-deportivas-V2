@@ -228,14 +228,10 @@ export interface PaginatedUsers {
 
 export interface SiteIdentity {
   title: string;
-  iconKey?: string | null;
-  flyerKey?: string | null;
-  backgroundImage?: string | null;
-  layoutSvg?: string | null;
-  faviconHash?: string | null;
-  iconUrl?: string;
-  flyerUrl?: string;
+  iconUrl?: string | null;
+  flyerUrl?: string | null;
   paletteId?: string | null;
+  favicon?: { basePath: string; updatedAt: number } | null;
 }
 
 export interface PaginatedClubs {

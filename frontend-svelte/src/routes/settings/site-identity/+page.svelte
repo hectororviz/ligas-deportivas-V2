@@ -162,8 +162,11 @@
             {#if faviconFile}<span class="muted" style="font-size:.78rem;">{faviconFile.name}</span>{/if}
           </label>
 
-          {#if identity?.faviconHash}
-            <p class="muted" style="font-size:.78rem;">Favicon actual: /favicon-{identity.faviconHash}.ico</p>
+          {#if identity?.favicon}
+            <div style="display:flex;align-items:center;gap:.6rem;margin-top:.25rem;">
+              <img src={`${identity.favicon.basePath}/favicon-32x32.png`} alt="Favicon actual" style="width:32px;height:32px;border-radius:.25rem;" />
+              <p class="muted" style="font-size:.78rem;">Favicon configurado.</p>
+            </div>
           {/if}
 
           <div class="form-actions">
