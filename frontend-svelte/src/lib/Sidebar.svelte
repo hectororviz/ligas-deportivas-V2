@@ -3,12 +3,13 @@
   import { goto } from '$app/navigation';
   import { NAV_ITEMS, sidebarState, type NavItem, type NavChild } from './navigation.svelte';
   import { loginModalState } from './login-modal.svelte';
-  import { getProfile, hasSession, logout, canViewModule, canManageModule, type AuthUser } from './api';
+  import { getProfile, getSiteIdentity, hasSession, logout, canViewModule, canManageModule, type AuthUser, type SiteIdentity } from './api';
   import { MorphIcon } from 'morphicons/svelte';
   import { Menu, X, ChevronDown, ChevronRight, ChevronLeft } from 'lucide';
   import { LogOut, LogIn } from '@lucide/svelte';
 
   let user: AuthUser | null = $state(null);
+  let identity = $state<SiteIdentity | null>(null);
   let expandedGroups = $state<Record<string, boolean>>({});
 
   const CHILD_MODULES: Record<string, string> = {
@@ -45,6 +46,7 @@
     sidebarState.initMobile();
     sidebarState.ensureBodyClass();
     if (hasSession()) getProfile().then((u) => user = u).catch(() => {});
+    getSiteIdentity().then((i) => identity = i).catch(() => {});
   });
 
   function isActive(item: NavItem): boolean {
@@ -90,12 +92,14 @@
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="drawer-overlay" onclick={() => sidebarState.toggleDrawer()}></div>
     <aside class="sidebar sidebar-mobile">
-      {#if user}
-        <div class="sidebar-user">
-          <div class="sidebar-avatar">{user.firstName[0]}{user.lastName[0]}</div>
-          <div><strong>{user.firstName} {user.lastName}</strong><span>@{user.username}</span></div>
-        </div>
-      {/if}
+      <div class="sidebar-user">
+        {#if identity?.iconUrl}
+          <img class="sidebar-logo" src={identity.iconUrl} alt={identity.title ?? 'Ligas Deportivas'} />
+        {:else}
+          <div class="sidebar-avatar">LD</div>
+        {/if}
+        <div><strong>{identity?.title ?? 'Ligas Deportivas'}</strong></div>
+      </div>
       <nav class="sidebar-nav">
         {#each visibleItems as item}
           {@const Icon = item.icon}
@@ -137,16 +141,16 @@
   {/if}
 {:else}
   <aside class="sidebar sidebar-desktop" class:collapsed={sidebarState.collapsed}>
-    {#if !sidebarState.collapsed || user}
-      <div class="sidebar-user">
-        {#if user}
-          <div class="sidebar-avatar">{user.firstName[0]}{user.lastName[0]}</div>
-          {#if !sidebarState.collapsed}
-            <div><strong>{user.firstName}</strong></div>
-          {/if}
-        {/if}
-      </div>
-    {/if}
+    <div class="sidebar-user">
+      {#if identity?.iconUrl}
+        <img class="sidebar-logo" src={identity.iconUrl} alt={identity.title ?? 'Ligas Deportivas'} />
+      {:else}
+        <div class="sidebar-avatar">LD</div>
+      {/if}
+      {#if !sidebarState.collapsed}
+        <div><strong>{identity?.title ?? 'Ligas Deportivas'}</strong></div>
+      {/if}
+    </div>
 
     <nav class="sidebar-nav">
       {#each visibleItems as item}
@@ -249,12 +253,26 @@
   .collapsed .sidebar-user { justify-content: center; padding: 1.2rem .5rem; }
   .sidebar-user div { display: grid; gap: .1rem; min-width: 0; }
   .sidebar-user strong { font-size: .88rem; font-family: 'Space Grotesk', sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .sidebar-user span { font-size: .72rem; color: var(--color-text-light); }
 
   .sidebar-avatar {
-    width: 2.2rem; height: 2.2rem; display: grid; place-items: center; flex-shrink: 0;
-    border-radius: .7rem; color: var(--color-hero-text); background: var(--color-hero);
-    font-size: .78rem; font-weight: 700; font-family: 'Space Grotesk', sans-serif;
+    width: 2.2rem;
+    height: 2.2rem;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    border-radius: .7rem;
+    color: var(--color-hero-text);
+    background: var(--color-hero);
+    font-size: .78rem;
+    font-weight: 700;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+  .sidebar-logo {
+    width: 2.2rem;
+    height: 2.2rem;
+    object-fit: contain;
+    flex-shrink: 0;
+    border-radius: .7rem;
   }
 
   .sidebar-nav { flex: 1; display: flex; flex-direction: column; gap: .15rem; padding: .5rem; overflow-y: auto; }
