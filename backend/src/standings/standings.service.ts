@@ -319,6 +319,8 @@ export class StandingsService {
         tournamentCategoryId: number;
         categoryId: number;
         categoryName: string;
+        birthYearMin: number;
+        birthYearMax: number;
         countsForGeneral: boolean;
         standings: any[];
       }
@@ -333,6 +335,8 @@ export class StandingsService {
           tournamentCategoryId: entry.tournamentCategoryId,
           categoryId: category.categoryId,
           categoryName: category.category.name,
+          birthYearMin: category.category.birthYearMin,
+          birthYearMax: category.category.birthYearMax,
           countsForGeneral: category.countsForGeneral,
           standings: [],
         });

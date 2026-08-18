@@ -17,9 +17,9 @@
     return categories.sort((a, b) => {
       if (a.isGeneral) return -1;
       if (b.isGeneral) return 1;
-      const aAge = Number(a.categoryName.match(/\d+/)?.[0] ?? Number.POSITIVE_INFINITY);
-      const bAge = Number(b.categoryName.match(/\d+/)?.[0] ?? Number.POSITIVE_INFINITY);
-      return aAge - bAge || a.categoryName.localeCompare(b.categoryName, 'es');
+      const aBirthYear = 'birthYearMax' in a ? a.birthYearMax : 0;
+      const bBirthYear = 'birthYearMax' in b ? b.birthYearMax : 0;
+      return bBirthYear - aBirthYear || a.categoryName.localeCompare(b.categoryName, 'es');
     });
   });
 
@@ -88,5 +88,5 @@
   .standings-table td:nth-child(2) { text-align: left; font-weight: 600; }
   .standings-table .position { display: inline-grid; }
   .standings-table .pts { font-weight: 700; color: var(--color-heading); }
-  .standings-table tr.club-highlight td { font-weight: 800; }
+  .standings-table tr.club-highlight td { background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface)); font-weight: 800; }
 </style>

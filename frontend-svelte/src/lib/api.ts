@@ -166,6 +166,8 @@ export interface ZoneStanding {
     tournamentCategoryId: number;
     categoryId: number;
     categoryName: string;
+    birthYearMin: number;
+    birthYearMax: number;
     countsForGeneral: boolean;
     standings: StandingRow[];
   }[];
