@@ -208,8 +208,8 @@
     showDeleteModal = true;
   }
 
-  async function openFlyerTemplate(tournament: Tournament) {
-    await goto(`/tournaments/${tournament.id}/flyer-template`);
+  async function openPosterTemplate(tournament: Tournament) {
+    await goto(`/tournaments/${tournament.id}/poster-template`);
   }
 
   async function confirmDeleteTournament() {
@@ -286,7 +286,7 @@
                 <span>{tournament.league.name} · {tournament.year} · {genders.find(([value]) => value === tournament.gender)?.[1] ?? tournament.gender}</span>
               </div>
               <span class={statusClasses[tournament.status] ?? 'badge-muted'}>{statusLabels[tournament.status] ?? tournament.status}</span>
-              {#if canManageConfig}<button class="icon-button" onclick={() => openFlyerTemplate(tournament)} aria-label={`Plantilla de flyer de ${tournament.name}`}>Flyer</button>{/if}
+              {#if canManageConfig}<button class="icon-button" onclick={() => openPosterTemplate(tournament)} aria-label={`Plantilla de placa de ${tournament.name}`}>Placa</button>{/if}
               {#if canManage}<button class="icon-button" onclick={() => openEdit(tournament)} aria-label={`Editar ${tournament.name}`}>Editar</button>{/if}
             </article>
           {/each}

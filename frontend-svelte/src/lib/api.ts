@@ -229,23 +229,55 @@ export interface PaginatedUsers {
 export interface SiteIdentity {
   title: string;
   iconUrl?: string | null;
-  flyerUrl?: string | null;
   paletteId?: string | null;
   favicon?: { basePath: string; updatedAt: number } | null;
 }
 
-export interface FlyerToken {
+export interface PosterToken {
   token: string;
   description: string;
   example?: string | null;
-  usage?: string | null;
 }
 
-export interface FlyerTemplate {
-  backgroundUrl: string | null;
-  layoutPreviewUrl: string | null;
-  layoutFileName: string | null;
+export type PosterLayerType = 'text' | 'image' | 'shape';
+
+export interface PosterLayer {
+  id: string;
+  type: PosterLayerType;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation?: number;
+  opacity?: number;
+  zIndex?: number;
+  locked?: boolean;
+  text?: string;
+  fontSize?: number;
+  fontFamily?: string;
+  fontWeight?: number | string;
+  fontStyle?: string;
+  color?: string;
+  align?: 'left' | 'center' | 'right';
+  strokeColor?: string;
+  strokeWidth?: number;
+  src?: string;
+  fit?: 'cover' | 'contain';
+  isBackground?: boolean;
+  shape?: 'rect';
+  fill?: string;
+  radius?: number;
+}
+
+export interface PosterTemplate {
+  layers: PosterLayer[];
+}
+
+export interface PosterTemplateResponse {
+  template: PosterTemplate;
+  version: number;
   updatedAt: string | null;
+  backgroundUrl: string | null;
   hasCustomTemplate: boolean;
 }
 
@@ -815,25 +847,33 @@ export async function updateSiteIdentity(input: FormData): Promise<SiteIdentity>
   return response.json();
 }
 
-export async function getMatchFlyerTokens(): Promise<FlyerToken[]> {
-  return request<FlyerToken[]>('/matches/flyer/tokens');
+export async function getMatchPosterTokens(): Promise<PosterToken[]> {
+  return request<PosterToken[]>('/matches/poster/tokens');
 }
 
-export async function getFlyerTemplate(competitionId: number): Promise<FlyerTemplate> {
-  return request<FlyerTemplate>(`/competitions/${competitionId}/flyer-template`);
+export async function getPosterTemplate(competitionId: number): Promise<PosterTemplateResponse> {
+  return request<PosterTemplateResponse>(`/competitions/${competitionId}/poster-template`);
 }
 
-export async function upsertFlyerTemplate(competitionId: number, formData: FormData): Promise<FlyerTemplate> {
+export async function upsertPosterTemplate(
+  competitionId: number,
+  template: PosterTemplate,
+  backgroundFile?: File
+): Promise<PosterTemplateResponse> {
+  const formData = new FormData();
+  formData.append('template', JSON.stringify({ layers: template.layers }));
+  if (backgroundFile) formData.append('background', backgroundFile);
+
   const headers = new Headers();
   const accessToken = getStored(ACCESS_TOKEN_KEY);
   if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
-  const response = await fetch(`${API_BASE_URL}/competitions/${competitionId}/flyer-template`, {
+  const response = await fetch(`${API_BASE_URL}/competitions/${competitionId}/poster-template`, {
     method: 'PUT',
     headers,
     body: formData
   });
   if (!response.ok) {
-    let message = 'No se pudo guardar la plantilla del flyer.';
+    let message = 'No se pudo guardar la plantilla de la placa.';
     try {
       const body = await response.json();
       const msg = body.message;
@@ -844,19 +884,18 @@ export async function upsertFlyerTemplate(competitionId: number, formData: FormD
   return response.json();
 }
 
-export async function deleteFlyerTemplate(competitionId: number): Promise<void> {
-  await request(`/competitions/${competitionId}/flyer-template`, { method: 'DELETE' });
+export function matchPosterUrl(matchId: number): string {
+  return `${API_BASE_URL}/matches/${matchId}/poster`;
 }
 
-export function matchFlyerUrl(matchId: number): string {
-  return `${API_BASE_URL}/matches/${matchId}/flyer`;
-}
-
-export async function fetchFlyerTemplatePreview(competitionId: number): Promise<string> {
+export async function fetchPosterTemplatePreview(competitionId: number, matchId: number): Promise<string> {
   const headers = new Headers();
   const accessToken = getStored(ACCESS_TOKEN_KEY);
   if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
-  const response = await fetch(`${API_BASE_URL}/competitions/${competitionId}/flyer-template/preview`, { headers });
+  const response = await fetch(
+    `${API_BASE_URL}/competitions/${competitionId}/poster-template/preview?matchId=${matchId}`,
+    { headers }
+  );
   if (!response.ok) {
     let message = 'No se pudo generar la vista previa.';
     try {

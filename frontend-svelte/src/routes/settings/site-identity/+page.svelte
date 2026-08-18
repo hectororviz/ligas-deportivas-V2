@@ -13,11 +13,9 @@
 
   let title = $state('');
   let iconFile = $state<File | null>(null);
-  let flyerFile = $state<File | null>(null);
   let faviconFile = $state<File | null>(null);
 
   let iconInput = $state<HTMLInputElement>();
-  let flyerInput = $state<HTMLInputElement>();
   let faviconInput = $state<HTMLInputElement>();
 
   let selectedPaletteId = $state(paletteState.id);
@@ -35,10 +33,6 @@
 
   function handleIconChange() {
     iconFile = iconInput?.files?.[0] ?? null;
-  }
-
-  function handleFlyerChange() {
-    flyerFile = flyerInput?.files?.[0] ?? null;
   }
 
   function handleFaviconChange() {
@@ -62,11 +56,9 @@
       formData.append('title', title.trim());
       formData.append('paletteId', selectedPaletteId);
       if (iconFile) formData.append('icon', iconFile);
-      if (flyerFile) formData.append('flyer', flyerFile);
       const updated = await updateSiteIdentity(formData);
       identity = updated;
       if (iconFile) { iconFile = null; if (iconInput) iconInput.value = ''; }
-      if (flyerFile) { flyerFile = null; if (flyerInput) flyerInput.value = ''; }
       notice = 'Identidad del sitio actualizada correctamente.';
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudo actualizar la identidad.';
@@ -111,7 +103,7 @@
     <div>
       <p class="eyebrow">Configuración</p>
       <h1>Identidad del sitio</h1>
-      <p class="muted">Personaliza el título, ícono, flyer, favicon y paleta de colores de la plataforma.</p>
+      <p class="muted">Personaliza el título, ícono, favicon y paleta de colores de la plataforma.</p>
     </div>
   </header>
 
@@ -133,12 +125,6 @@
             Ícono
             <input type="file" bind:this={iconInput} onchange={handleIconChange} accept="image/*" disabled={saving} />
             {#if iconFile}<span class="muted" style="font-size:.78rem;">{iconFile.name}</span>{/if}
-          </label>
-
-          <label>
-            Flyer
-            <input type="file" bind:this={flyerInput} onchange={handleFlyerChange} accept="image/*" disabled={saving} />
-            {#if flyerFile}<span class="muted" style="font-size:.78rem;">{flyerFile.name}</span>{/if}
           </label>
 
           {#if identity?.iconUrl}

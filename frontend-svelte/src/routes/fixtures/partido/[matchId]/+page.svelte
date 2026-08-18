@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
-  import { getMatchDetail, getProfile, canManageModule, matchFlyerUrl, type MatchDetail, type MatchClub, type AuthUser } from '$lib/api';
+  import { getMatchDetail, getProfile, canManageModule, matchPosterUrl, type MatchDetail, type MatchClub, type AuthUser } from '$lib/api';
   import PlayerGoalsModal from '$lib/PlayerGoalsModal.svelte';
 
   let match: MatchDetail | null = $state(null);
@@ -97,7 +97,7 @@
         <h1 class="page-title">Resultado</h1>
       </div>
       <div class="header-actions">
-        <a class="button secondary" href={matchFlyerUrl(match.id)} target="_blank" rel="noopener">Descargar flyer</a>
+        <a class="button secondary" href={matchPosterUrl(match.id)} target="_blank" rel="noopener">Descargar placa (1080x1920)</a>
         <a class="button secondary" href={backHref}>Volver al fixture</a>
       </div>
     </header>
