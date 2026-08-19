@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getHomeSummary, getProfile, hasSession, logout, type AuthUser, type HomeSummary, type HomeMatchday } from '$lib/api';
+  import { getHomeSummary, getProfile, hasSession, logout, listAllClubs, getSiteIdentity, type AuthUser, type HomeSummary, type HomeMatchday, type Club, type HomeBackgroundConfig } from '$lib/api';
   import { loginModalState } from '$lib/login-modal.svelte';
 
   let user: AuthUser | null = null;
@@ -8,17 +8,40 @@
   let loading = true;
   let error = '';
   let selectedTournamentId: number | null = null;
+  let clubs: Club[] = [];
+  let bannerShields: { logoUrl: string | null | undefined; color: string | null | undefined; label: string }[] = [];
+  let homeBg: HomeBackgroundConfig = { enabled: true, opacity: 0.6, speed: 25, shieldSize: 90, shieldGap: 30 };
 
   onMount(async () => {
     try {
       const profilePromise = hasSession() ? getProfile().catch(() => null) : Promise.resolve(null);
-      [user, summary] = await Promise.all([profilePromise, getHomeSummary()]);
+      const clubsPromise = listAllClubs().catch(() => [] as Club[]);
+      const identityPromise = getSiteIdentity().catch(() => null);
+      const [u, s, cs, ident] = await Promise.all([profilePromise, getHomeSummary(), clubsPromise, identityPromise]);
+      user = u;
+      summary = s;
+      clubs = cs;
+      if (ident?.homeBackground) homeBg = ident.homeBackground;
+      bannerShields = buildBannerShields(cs);
     } catch {
       error = 'No pudimos cargar el resumen de torneos.';
     } finally {
       loading = false;
     }
   });
+
+  function buildBannerShields(list: Club[]) {
+    let base: typeof bannerShields;
+    if (list.length > 0) {
+      base = list.slice(0, 16).map((c) => ({ logoUrl: c.logoUrl, color: c.primaryColor, label: c.shortName || c.name }));
+    } else {
+      const palette = ['#759b51', '#3b82c4', '#c46a3b', '#7c5cbf', '#d46050', '#b8860b', '#0062a8', '#c05078'];
+      base = palette.map((color) => ({ logoUrl: null, color, label: '' }));
+    }
+    let arr = base;
+    while (arr.length < 8) arr = arr.concat(base);
+    return arr;
+  }
 
   function toggleTournament(id: number) {
     selectedTournamentId = selectedTournamentId === id ? null : id;
@@ -46,24 +69,67 @@
   <main class="loading-screen">Cargando sesión...</main>
 {:else}
   <main class="dashboard-shell">
-    <section class="dashboard-card dashboard-hero">
-      <div>
-        <p class="eyebrow">Ligas Deportivas</p>
-        <h1>{user ? `Hola, ${user.firstName}` : 'Torneos vigentes'}</h1>
-        <p class="muted">Resumen de torneos activos y posiciones por zona.</p>
-      </div>
-      <div class="user-summary">
-        {#if user}
-          <span>@{user.username}</span>
-          <div class="dashboard-actions">
-            <a class="button secondary" href="/leagues">Ver ligas</a>
+    <section
+      class="home-banner"
+      style={`--shield-size: ${homeBg.shieldSize}px; --shield-gap: ${homeBg.shieldGap}px; --marquee-speed: ${homeBg.speed}s; --glass-opacity: ${homeBg.opacity};`}
+    >
+      {#if homeBg.enabled}
+        <div class="banner-engine" aria-hidden="true">
+          <div class="shield-row row-1">
+            <div class="shield-track track-right">
+              {#each [...bannerShields, ...bannerShields] as shield, i (i)}
+                <span class="shield" style={shield.color ? `background:${shield.color}` : ''}>
+                  {#if shield.logoUrl}
+                    <img src={shield.logoUrl} alt="" loading="lazy" />
+                  {:else}
+                    <span class="shield-initials">{shield.label.slice(0, 2).toUpperCase()}</span>
+                  {/if}
+                </span>
+              {/each}
+            </div>
+          </div>
+          <div class="shield-row row-2">
+            <div class="shield-track track-left">
+              {#each [...bannerShields, ...bannerShields] as shield, i (i)}
+                <span class="shield" style={shield.color ? `background:${shield.color}` : ''}>
+                  {#if shield.logoUrl}
+                    <img src={shield.logoUrl} alt="" loading="lazy" />
+                  {:else}
+                    <span class="shield-initials">{shield.label.slice(0, 2).toUpperCase()}</span>
+                  {/if}
+                </span>
+              {/each}
+            </div>
+          </div>
+          <div class="shield-row row-3">
+            <div class="shield-track track-right">
+              {#each [...bannerShields, ...bannerShields] as shield, i (i)}
+                <span class="shield" style={shield.color ? `background:${shield.color}` : ''}>
+                  {#if shield.logoUrl}
+                    <img src={shield.logoUrl} alt="" loading="lazy" />
+                  {:else}
+                    <span class="shield-initials">{shield.label.slice(0, 2).toUpperCase()}</span>
+                  {/if}
+                </span>
+              {/each}
+            </div>
+          </div>
+        </div>
+        <div class="banner-glass"></div>
+      {/if}
+
+      <div class="banner-content">
+        <p class="banner-eyebrow">{user ? `Hola, ${user.firstName}` : 'Ligas Deportivas'}</p>
+        <h1>Torneos vigentes</h1>
+        <p class="banner-sub">Resumen de torneos activos y posiciones por zona.</p>
+        <div class="banner-actions">
+          {#if user}
+            <a class="button primary" href="/leagues">Ver ligas</a>
             <button class="button secondary" onclick={signOut}>Cerrar sesión</button>
-          </div>
-        {:else}
-          <div class="dashboard-actions">
+          {:else}
             <button class="button primary" onclick={() => loginModalState.openModal()}>Ingresar</button>
-          </div>
-        {/if}
+          {/if}
+        </div>
       </div>
     </section>
     {#if error}
@@ -137,6 +203,103 @@
 {/if}
 
 <style>
+  /* ===== Banner ===== */
+  .home-banner {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 340px;
+    border-radius: 1.5rem;
+    background: var(--color-hero);
+    box-shadow: 0 24px 60px var(--color-shadow);
+    padding: clamp(2rem, 5vw, 4rem);
+  }
+  .banner-engine { position: absolute; inset: 0; pointer-events: none; }
+  .shield-row {
+    position: absolute;
+    left: -10%;
+    right: -10%;
+    overflow: hidden;
+  }
+  .shield-row.row-1 { top: -6%; transform: skewX(-30deg); }
+  .shield-row.row-2 { top: 34%; transform: skewX(30deg); }
+  .shield-row.row-3 { bottom: -6%; transform: skewX(-30deg); }
+  .shield-track { display: flex; width: max-content; }
+  .track-right { animation: marquee-right var(--marquee-speed) linear infinite; }
+  .track-left { animation: marquee-left var(--marquee-speed) linear infinite; }
+  .shield {
+    flex: 0 0 auto;
+    width: var(--shield-size);
+    height: var(--shield-size);
+    margin-right: var(--shield-gap);
+    border-radius: 50%;
+    background: var(--color-accent);
+    display: grid;
+    place-items: center;
+    color: #fff;
+    font-weight: 700;
+    overflow: hidden;
+    box-shadow: 0 4px 14px rgba(0,0,0,.25);
+  }
+  .shield img { width: 100%; height: 100%; object-fit: cover; }
+  .shield-initials { font-size: calc(var(--shield-size) * 0.3); }
+  .row-1 .shield, .row-3 .shield { transform: skewX(30deg); }
+  .row-2 .shield { transform: skewX(-30deg); }
+
+  .banner-glass {
+    position: absolute;
+    inset: 0;
+    backdrop-filter: blur(8px);
+    background: rgba(15, 23, 42, var(--glass-opacity));
+  }
+
+  .banner-content {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: .5rem;
+    color: #fff;
+  }
+  .banner-eyebrow {
+    margin: 0;
+    font-size: .74rem;
+    font-weight: 700;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,.8);
+    text-shadow: 0 2px 8px rgba(0,0,0,.4);
+  }
+  .banner-content h1 {
+    margin: 0;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: clamp(2rem, 5vw, 3.6rem);
+    letter-spacing: -.04em;
+    line-height: 1.05;
+    text-shadow: 0 3px 16px rgba(0,0,0,.45);
+  }
+  .banner-sub {
+    margin: 0;
+    color: rgba(255,255,255,.88);
+    text-shadow: 0 2px 8px rgba(0,0,0,.4);
+    line-height: 1.5;
+  }
+  .banner-actions { display: flex; gap: .6rem; flex-wrap: wrap; justify-content: center; margin-top: .75rem; }
+
+  @keyframes marquee-right {
+    from { transform: translateX(-50%); }
+    to { transform: translateX(0); }
+  }
+  @keyframes marquee-left {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+
   .tournament-chips {
     display: flex;
     flex-wrap: wrap;

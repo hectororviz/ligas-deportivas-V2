@@ -26,7 +26,24 @@ export interface SiteIdentityResponse {
   } | null;
   flyerUrl: string | null;
   paletteId: string | null;
+  homeBackground: HomeBackgroundConfig;
 }
+
+export interface HomeBackgroundConfig {
+  enabled: boolean;
+  opacity: number;
+  speed: number;
+  shieldSize: number;
+  shieldGap: number;
+}
+
+const DEFAULT_HOME_BACKGROUND: HomeBackgroundConfig = {
+  enabled: true,
+  opacity: 0.6,
+  speed: 25,
+  shieldSize: 90,
+  shieldGap: 30,
+};
 
 export interface SiteIdentityIcon {
   path: string;
@@ -91,6 +108,9 @@ export class SiteIdentityService {
         iconKey: iconKey !== undefined ? iconKey : existing.iconKey,
         flyerKey: flyerKey !== undefined ? flyerKey : existing.flyerKey,
         paletteId: dto.paletteId !== undefined ? dto.paletteId : existing.paletteId,
+        homeBackground: dto.homeBackground !== undefined
+          ? this.parseHomeBackground(dto.homeBackground) as unknown as Prisma.InputJsonValue
+          : existing.homeBackground,
       },
       create: {
         id: existing.id,
@@ -98,6 +118,9 @@ export class SiteIdentityService {
         iconKey: iconKey ?? null,
         flyerKey: flyerKey ?? null,
         paletteId: dto.paletteId ?? null,
+        homeBackground: dto.homeBackground !== undefined
+          ? this.parseHomeBackground(dto.homeBackground) as unknown as Prisma.InputJsonValue
+          : null,
       },
     });
 
@@ -323,6 +346,36 @@ export class SiteIdentityService {
       favicon,
       flyerUrl,
       paletteId: identity.paletteId ?? null,
+      homeBackground: this.normalizeHomeBackground(identity.homeBackground),
+    };
+  }
+
+  private parseHomeBackground(raw: string): HomeBackgroundConfig {
+    let parsed: unknown = null;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      parsed = null;
+    }
+    return this.normalizeHomeBackground(parsed);
+  }
+
+  private normalizeHomeBackground(value: unknown): HomeBackgroundConfig {
+    const source =
+      value && typeof value === 'object'
+        ? (value as Record<string, unknown>)
+        : {};
+    const clamp = (input: unknown, min: number, max: number, fallback: number) => {
+      const num = typeof input === 'number' ? input : Number(input);
+      if (!Number.isFinite(num)) return fallback;
+      return Math.min(max, Math.max(min, num));
+    };
+    return {
+      enabled: typeof source.enabled === 'boolean' ? source.enabled : DEFAULT_HOME_BACKGROUND.enabled,
+      opacity: clamp(source.opacity, 0.1, 0.9, DEFAULT_HOME_BACKGROUND.opacity),
+      speed: clamp(source.speed, 10, 40, DEFAULT_HOME_BACKGROUND.speed),
+      shieldSize: clamp(source.shieldSize, 60, 120, DEFAULT_HOME_BACKGROUND.shieldSize),
+      shieldGap: clamp(source.shieldGap, 10, 50, DEFAULT_HOME_BACKGROUND.shieldGap),
     };
   }
 

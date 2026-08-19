@@ -1,19 +1,23 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getSiteIdentity, updateSiteIdentity, uploadFavicon, type SiteIdentity } from '$lib/api';
+  import { getSiteIdentity, updateSiteIdentity, uploadFavicon, type SiteIdentity, type HomeBackgroundConfig } from '$lib/api';
   import { usePalette } from '$lib/palette.svelte';
 
   const paletteState = usePalette();
 
+  const defaultBg: HomeBackgroundConfig = { enabled: true, opacity: 0.6, speed: 25, shieldSize: 90, shieldGap: 30 };
+
   let identity = $state<SiteIdentity | null>(null);
   let loading = $state(true);
   let saving = $state(false);
+  let savingBg = $state(false);
   let error = $state('');
   let notice = $state('');
 
   let title = $state('');
   let iconFile = $state<File | null>(null);
   let faviconFile = $state<File | null>(null);
+  let bg = $state<HomeBackgroundConfig>({ ...defaultBg });
 
   let iconInput = $state<HTMLInputElement>();
   let faviconInput = $state<HTMLInputElement>();
@@ -24,6 +28,7 @@
     try {
       identity = await getSiteIdentity();
       title = identity.title;
+      if (identity.homeBackground) bg = { ...identity.homeBackground };
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudo cargar la identidad del sitio.';
     } finally {
@@ -74,6 +79,25 @@
       formData.append('paletteId', selectedPaletteId);
       await updateSiteIdentity(formData);
     } catch {}
+  }
+
+  async function saveBackground() {
+    error = '';
+    notice = '';
+    savingBg = true;
+    try {
+      const formData = new FormData();
+      formData.append('title', title.trim() || 'Ligas Deportivas');
+      formData.append('paletteId', selectedPaletteId);
+      formData.append('homeBackground', JSON.stringify(bg));
+      const updated = await updateSiteIdentity(formData);
+      identity = updated;
+      notice = 'Fondo dinámico del home actualizado correctamente.';
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'No se pudo actualizar el fondo del home.';
+    } finally {
+      savingBg = false;
+    }
   }
 
   async function saveFavicon() {
@@ -187,6 +211,36 @@
           </div>
         </label>
       </section>
+      <section class="card-surface">
+        <div class="list-header">
+          <div><p class="eyebrow">Home</p><h2>Fondo dinámico del Home</h2></div>
+        </div>
+        <form onsubmit={(event) => { event.preventDefault(); saveBackground(); }}>
+          <label class="range-label">
+            <span>Opacidad del vidrio esmerilado — <strong>{bg.opacity.toFixed(1)}</strong></span>
+            <input type="range" min="0.1" max="0.9" step="0.1" bind:value={bg.opacity} disabled={savingBg} />
+          </label>
+          <label class="range-label">
+            <span>Velocidad de desplazamiento — <strong>{bg.speed}s</strong></span>
+            <input type="range" min="10" max="40" step="1" bind:value={bg.speed} disabled={savingBg} />
+          </label>
+          <label class="range-label">
+            <span>Tamaño de escudos — <strong>{bg.shieldSize}px</strong></span>
+            <input type="range" min="60" max="120" step="5" bind:value={bg.shieldSize} disabled={savingBg} />
+          </label>
+          <label class="range-label">
+            <span>Separación entre escudos — <strong>{bg.shieldGap}px</strong></span>
+            <input type="range" min="10" max="50" step="5" bind:value={bg.shieldGap} disabled={savingBg} />
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" bind:checked={bg.enabled} disabled={savingBg} />
+            Activar fondo animado
+          </label>
+          <div class="form-actions">
+            <button class="button primary" type="submit" disabled={savingBg}>{savingBg ? 'Guardando...' : 'Guardar fondo'}</button>
+          </div>
+        </form>
+      </section>
     </div>
   {/if}
 </main>
@@ -217,4 +271,6 @@
     width: 18px; height: 18px; border-radius: 50%;
     box-shadow: 0 1px 3px var(--color-shadow);
   }
+  .range-label { display: grid; gap: .4rem; }
+  .range-label strong { color: var(--color-text); }
 </style>

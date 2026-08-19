@@ -227,11 +227,20 @@ export interface PaginatedUsers {
   pageSize: number;
 }
 
+export interface HomeBackgroundConfig {
+  enabled: boolean;
+  opacity: number;
+  speed: number;
+  shieldSize: number;
+  shieldGap: number;
+}
+
 export interface SiteIdentity {
   title: string;
   iconUrl?: string | null;
   paletteId?: string | null;
   favicon?: { url: string; previewUrl: string; updatedAt: number } | null;
+  homeBackground?: HomeBackgroundConfig | null;
 }
 
 export interface PosterToken {

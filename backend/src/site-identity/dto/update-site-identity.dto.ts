@@ -35,4 +35,8 @@ export class UpdateSiteIdentityDto {
   @IsOptional()
   @IsString()
   paletteId?: string;
+
+  @IsOptional()
+  @IsString()
+  homeBackground?: string;
 }
