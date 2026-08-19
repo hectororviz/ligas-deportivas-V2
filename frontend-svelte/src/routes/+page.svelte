@@ -7,6 +7,7 @@
   let summary: HomeSummary | null = null;
   let loading = true;
   let error = '';
+  let selectedTournamentId: number | null = null;
 
   onMount(async () => {
     try {
@@ -18,6 +19,10 @@
       loading = false;
     }
   });
+
+  function toggleTournament(id: number) {
+    selectedTournamentId = selectedTournamentId === id ? null : id;
+  }
 
   async function signOut() {
     await logout();
@@ -75,33 +80,56 @@
           <p class="eyebrow">Competencia</p>
           <h2>Torneos vigentes</h2>
         </div>
-        <span class="count-pill">{summary?.tournaments.length ?? 0} torneos</span>
       </section>
-      <section class="tournament-grid">
+
+      <div class="tournament-chips">
         {#each summary?.tournaments ?? [] as tournament}
-          <article class="tournament-card">
-            <p class="card-kicker">{tournament.leagueName}</p>
-            <h3>{tournament.name} <span>{tournament.year}</span></h3>
-            <div class="zone-list">
-              {#each tournament.zones as zone}
-                <div class="zone-block">
-                  <div class="zone-title"><strong>Zona {zone.name}</strong></div>
-                  {#if zone.top.length}
+          <button
+            class="chip"
+            class:active={selectedTournamentId === tournament.id}
+            onclick={() => toggleTournament(tournament.id)}
+          >
+            {tournament.leagueName} - {tournament.year}
+          </button>
+        {/each}
+      </div>
+
+      <section class="zone-grid">
+        {#each summary?.tournaments ?? [] as tournament}
+          {#if selectedTournamentId == null || tournament.id === selectedTournamentId}
+            {#each tournament.zones as zone}
+              <article class="zone-card">
+                <div class="zone-header">
+                  <div class="zone-heading">
+                    <p class="card-kicker">{tournament.leagueName} · {tournament.year}</p>
+                    <h3>Zona {zone.name}</h3>
+                  </div>
+                  <div class="zone-actions">
+                    <a class="zone-btn" href={`/fixtures?torneo=${tournament.id}&zona=${zone.id}`}>Fixture</a>
+                    <a class="zone-btn" href={`/standings?torneo=${tournament.id}&zona=${zone.id}`}>Tabla</a>
+                  </div>
+                </div>
+
+                {#if zone.top.length}
+                  <div class="standings">
                     {#each zone.top as row, index}
-                      <div class="standing-row">
-                        <span class="position">{index + 1}</span>
-                        <span>{row.clubName}</span>
-                        <strong>{row.points} pts</strong>
+                      <div class="stand-row">
+                        <span class="stand-pos">{index + 1}</span>
+                        <span class="stand-club">{row.clubName}</span>
+                        <span class="stand-pts">{row.points} pts</span>
                       </div>
                     {/each}
-                  {:else}
-                    <p class="muted compact">Todavía no hay posiciones.</p>
-                  {/if}
-                  <div class="zone-footer">{formatNextMatchday(zone.nextMatchday)}</div>
+                  </div>
+                {:else}
+                  <p class="muted compact">Todavía no hay posiciones.</p>
+                {/if}
+
+                <div class="zone-footer">
+                  {#if zone.nextMatchday}Próxima Fecha: {formatNextMatchday(zone.nextMatchday)}{:else}Sin próxima fecha{/if}
                 </div>
-              {/each}
-            </div>
-          </article>
+              </article>
+            {/each}
+          {/if}
         {/each}
       </section>
     {/if}
@@ -109,8 +137,123 @@
 {/if}
 
 <style>
+  .tournament-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    margin: .75rem 0 1.5rem;
+  }
+  .chip {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+    padding: .45rem .95rem;
+    border-radius: 999px;
+    font-size: .84rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+  }
+  .chip:hover { background: var(--color-surface-hover); color: var(--color-text); }
+  .chip.active {
+    background: var(--color-accent-bg);
+    border-color: var(--color-accent);
+    color: var(--color-accent-text);
+  }
+
+  .zone-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 1rem;
+  }
+  .zone-card {
+    display: flex;
+    flex-direction: column;
+    padding: 1.25rem;
+    border: 1px solid var(--color-border);
+    border-radius: 1.2rem;
+    background: var(--color-surface);
+    box-shadow: 0 16px 45px var(--color-shadow);
+  }
+  .zone-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: .75rem;
+  }
+  .zone-heading { min-width: 0; }
+  .zone-heading h3 {
+    margin: .25rem 0 0;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 1.25rem;
+    letter-spacing: -.02em;
+  }
+  .card-kicker {
+    margin: 0;
+    color: var(--color-accent-text);
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+  .zone-actions {
+    display: flex;
+    gap: .35rem;
+    flex: 0 0 auto;
+  }
+  .zone-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: .35rem .6rem;
+    border: 1px solid var(--color-border);
+    border-radius: .55rem;
+    color: var(--color-accent-text);
+    background: var(--color-accent-bg);
+    font-size: .74rem;
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background 150ms ease, border-color 150ms ease;
+  }
+  .zone-btn:hover { background: var(--color-accent); border-color: var(--color-accent); color: #fff; }
+
+  .standings { margin-top: .9rem; }
+  .stand-row {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .4rem 0;
+    border-top: 1px solid var(--color-border);
+    font-size: .88rem;
+  }
+  .stand-pos {
+    width: 1.35rem;
+    height: 1.35rem;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    color: var(--color-accent-text);
+    background: var(--color-accent-bg);
+    font-size: .68rem;
+    font-weight: 700;
+    flex: 0 0 auto;
+  }
+  .stand-club {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+  }
+  .stand-pts {
+    color: var(--color-text-muted);
+    font-size: .78rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
   .zone-footer {
-    margin-top: .6rem;
+    margin-top: auto;
     padding-top: .6rem;
     border-top: 1px solid var(--color-border);
     color: var(--color-accent-text);
