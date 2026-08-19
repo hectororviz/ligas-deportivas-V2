@@ -20,7 +20,7 @@
   let showFilters = $state(false);
   let logoFile: File | null = $state(null);
   let form = $state({
-    name: '', shortName: '', slug: '', primaryColor: '', secondaryColor: '',
+    name: '', shortName: '', slug: '', description: '', primaryColor: '', secondaryColor: '',
     instagram: '', facebook: '', homeAddress: '', latitude: '', longitude: '', active: true
   });
 
@@ -49,14 +49,14 @@
 
   function openCreate() {
     editing = null; showForm = true; error = ''; logoFile = null;
-    form = { name: '', shortName: '', slug: '', primaryColor: '', secondaryColor: '', instagram: '', facebook: '', homeAddress: '', latitude: '', longitude: '', active: true };
+    form = { name: '', shortName: '', slug: '', description: '', primaryColor: '', secondaryColor: '', instagram: '', facebook: '', homeAddress: '', latitude: '', longitude: '', active: true };
   }
 
   function openEdit(club: Club, event: MouseEvent) {
     event.stopPropagation();
     editing = club; showForm = true; error = ''; logoFile = null;
     form = {
-      name: club.name, shortName: club.shortName ?? '', slug: club.slug ?? '',
+      name: club.name, shortName: club.shortName ?? '', slug: club.slug ?? '', description: club.description ?? '',
       primaryColor: club.primaryColor ?? '', secondaryColor: club.secondaryColor ?? '',
       instagram: club.instagramUrl ?? '', facebook: club.facebookUrl ?? '',
       homeAddress: club.homeAddress ?? '', latitude: club.latitude != null ? String(club.latitude) : '',
@@ -92,6 +92,7 @@
     saving = true;
     const payload: Record<string, unknown> = {
       name: form.name.trim(), shortName: form.shortName.trim() || undefined,
+      description: form.description.trim() || undefined,
       slug: slugify(form.slug) || slugify(form.name),
       primaryColor: form.primaryColor.trim() || undefined,
       secondaryColor: form.secondaryColor.trim() || undefined,
@@ -196,6 +197,8 @@
       {#if error}<p class="form-error">{error}</p>{/if}
       <form onsubmit={(event) => { event.preventDefault(); save(); }}>
         <label>Nombre<input bind:value={form.name} placeholder="Club Atlético..." disabled={saving} /></label>
+
+        <label>Descripción / eslogan<textarea bind:value={form.description} placeholder="Pasión y trabajo en equipo..." rows="2" disabled={saving}></textarea></label>
 
         <div class="form-row-grid two">
           <label>Nombre corto<input bind:value={form.shortName} placeholder="CA..." disabled={saving} /></label>

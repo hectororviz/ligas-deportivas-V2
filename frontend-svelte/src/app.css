@@ -46,8 +46,8 @@ button, input, select { font: inherit; }
 
 form { display: grid; gap: 1rem; margin-top: 2rem; }
 label { display: grid; gap: .45rem; color: var(--color-text-muted); font-size: .88rem; font-weight: 600; }
-input, select { width: 100%; border: 1px solid var(--color-input-border); border-radius: .7rem; padding: .85rem 1rem; color: var(--color-text); background: var(--color-input); outline: none; }
-input:focus, select:focus { border-color: var(--color-input-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-input-focus) 33%, transparent); }
+input, select, textarea { width: 100%; border: 1px solid var(--color-input-border); border-radius: .7rem; padding: .85rem 1rem; color: var(--color-text); background: var(--color-input); outline: none; font-family: inherit; }
+input:focus, select:focus, textarea:focus { border-color: var(--color-input-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-input-focus) 33%, transparent); }
 
 .button { border: 0; border-radius: .7rem; padding: .85rem 1rem; cursor: pointer; font-weight: 700; }
 .button:disabled { cursor: wait; opacity: .65; }

@@ -21,6 +21,11 @@ export class CreateClubDto {
   shortName?: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  description?: string;
+
+  @IsOptional()
   @Matches(/^[a-z0-9-]+$/)
   slug?: string;
 

@@ -85,6 +85,11 @@ export class ClubsController {
     return this.clubsService.listAvailableTournaments(clubId);
   }
 
+  @Get('clubs/:clubId/upcoming-events')
+  listUpcomingEvents(@Param('clubId', ParseIntPipe) clubId: number) {
+    return this.clubsService.listUpcomingEvents(clubId);
+  }
+
   @Get('clubs/:clubId/roster')
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @Permissions({ module: Module.CLUBES, action: Action.VIEW })

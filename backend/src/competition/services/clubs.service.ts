@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Gender, Prisma, TournamentStatus, ZoneStatus } from '@prisma/client';
+import { Gender, MatchdayStatus, Prisma, TournamentStatus, ZoneStatus } from '@prisma/client';
 import { Express } from 'express';
 
 import { slugify } from '../../common/utils/slugify';
@@ -54,6 +54,7 @@ export class ClubsService {
         data: {
           name: dto.name.trim(),
           shortName: dto.shortName?.trim(),
+          description: dto.description?.trim() ?? null,
           slug,
           leagueId: dto.leagueId,
           primaryColor: dto.primaryColor?.toUpperCase(),
@@ -319,6 +320,7 @@ export class ClubsService {
         id: club.id,
         name: club.name,
         shortName: club.shortName,
+        description: club.description,
         slug: club.slug,
         active: club.active,
         primaryColor: club.primaryColor,
@@ -332,6 +334,75 @@ export class ClubsService {
       },
       tournaments,
     };
+  }
+
+  async listUpcomingEvents(clubId: number) {
+    await this.prisma.club.findUniqueOrThrow({ where: { id: clubId } });
+
+    const assignments = await this.prisma.clubZone.findMany({
+      where: { clubId },
+      include: {
+        zone: {
+          include: {
+            tournament: {
+              include: {
+                league: true,
+                categories: { where: { enabled: true }, select: { kickoffTime: true } },
+              },
+            },
+            matchdays: {
+              where: { status: { not: MatchdayStatus.PLAYED } },
+              orderBy: { matchday: 'asc' },
+            },
+          },
+        },
+      },
+    });
+
+    const events = assignments
+      .filter((assignment) => assignment.zone && assignment.zone.matchdays.length > 0)
+      .map((assignment) => {
+        const zone = assignment.zone!;
+        const matchday = zone.matchdays[0];
+        return {
+          tournamentId: zone.tournament.id,
+          tournamentName: zone.tournament.name,
+          leagueName: zone.tournament.league?.name ?? '—',
+          zoneName: zone.name,
+          matchday: matchday.matchday,
+          date: matchday.date ? matchday.date.toISOString() : null,
+          kickoffTime: this.findEarliestKickoffTime(
+            zone.tournament.categories.map((category) => category.kickoffTime),
+          ),
+        };
+      })
+      .sort((a, b) => {
+        if (a.date && b.date) return a.date.localeCompare(b.date);
+        if (a.date) return -1;
+        if (b.date) return 1;
+        return a.matchday - b.matchday;
+      })
+      .slice(0, 5);
+
+    return events;
+  }
+
+  private findEarliestKickoffTime(times: Array<string | null>) {
+    const normalized = times
+      .map((time) => time?.trim())
+      .filter((time): time is string => Boolean(time));
+    if (normalized.length === 0) {
+      return null;
+    }
+    return normalized.reduce((earliest, current) =>
+      this.compareKickoffTimes(current, earliest) < 0 ? current : earliest,
+    );
+  }
+
+  private compareKickoffTimes(left: string, right: string) {
+    const [leftHours, leftMinutes] = left.split(':').map(Number);
+    const [rightHours, rightMinutes] = right.split(':').map(Number);
+    return leftHours * 60 + leftMinutes - (rightHours * 60 + rightMinutes);
   }
 
   async listAssignedPlayers(
@@ -1130,6 +1201,9 @@ export class ClubsService {
       }
       if (dto.shortName !== undefined) {
         data.shortName = dto.shortName ? dto.shortName.trim() : null;
+      }
+      if (Object.prototype.hasOwnProperty.call(dto, 'description')) {
+        data.description = dto.description?.trim() ?? null;
       }
       if (dto.leagueId !== undefined) {
         data.league = { connect: { id: dto.leagueId } };

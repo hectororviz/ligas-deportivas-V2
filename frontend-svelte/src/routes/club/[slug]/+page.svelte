@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
-  import { getClubAdmin, getAvailableTournaments, joinTournament, leaveTournament, getProfile, canManageModule, type ClubAdminOverview, type AvailableTournament, type AuthUser } from '$lib/api';
+  import { getClubAdmin, getAvailableTournaments, joinTournament, leaveTournament, getProfile, canManageModule, getClubUpcomingEvents, type ClubAdminOverview, type AvailableTournament, type AuthUser, type ClubUpcomingEvent } from '$lib/api';
   import Modal from '$lib/Modal.svelte';
-  import { Plus, MapPin, Navigation, ArrowUpRight, ChevronDown } from '@lucide/svelte';
+  import { Plus, MapPin, Navigation, ArrowUpRight, ChevronDown, Calendar } from '@lucide/svelte';
 
   const statusLabels: Record<string, string> = {
     DRAFT: 'Borrador', ACTIVE: 'Activo', FINISHED: 'Finalizado', CANCELLED: 'Cancelado'
@@ -11,8 +11,10 @@
   const statusClasses: Record<string, string> = {
     DRAFT: 'badge-muted', ACTIVE: 'badge-active', FINISHED: 'badge-finished', CANCELLED: 'badge-cancelled'
   };
+  const MONTHS = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
 
   let data: ClubAdminOverview | null = $state(null);
+  let events: ClubUpcomingEvent[] = $state([]);
   let user = $state<AuthUser | null>(null);
   let loading = $state(true);
   let error = $state('');
@@ -76,6 +78,8 @@
     return '';
   });
 
+  let heroNeedsOverlay = $derived.by(() => isLightColor(data?.club.primaryColor));
+
   function genderChipLabel(g: string): string {
     if (g === 'MASCULINO') return 'Fútbol Masculino';
     if (g === 'FEMENINO') return 'Fútbol Femenino';
@@ -98,8 +102,42 @@
     return clean;
   }
 
-  onMount(() => {
-    fetchData();
+  function isLightColor(hex: string | null | undefined): boolean {
+    if (!hex) return false;
+    const h = hex.replace('#', '');
+    if (h.length < 6) return false;
+    const r = parseInt(h.slice(0, 2), 16);
+    const g = parseInt(h.slice(2, 4), 16);
+    const b = parseInt(h.slice(4, 6), 16);
+    if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return false;
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6;
+  }
+
+  function eventDay(date: string | null): string {
+    if (!date) return '—';
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return '—';
+    return String(d.getUTCDate());
+  }
+
+  function eventMonth(date: string | null): string {
+    if (!date) return '';
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return '';
+    return MONTHS[d.getUTCMonth()] ?? '';
+  }
+
+  function eventDetail(ev: ClubUpcomingEvent): string {
+    const parts: string[] = [];
+    if (ev.leagueName && ev.leagueName !== '—') parts.push(ev.leagueName);
+    parts.push(`Zona ${ev.zoneName}`);
+    if (ev.kickoffTime) parts.push(ev.kickoffTime);
+    return parts.join(' · ');
+  }
+
+  onMount(async () => {
+    await fetchData();
+    if (data) await loadEvents();
     getProfile().then((u) => user = u).catch(() => {});
   });
 
@@ -126,6 +164,13 @@
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudo cargar la informacion del club.';
     } finally { loading = false; }
+  }
+
+  async function loadEvents() {
+    if (!data) return;
+    try {
+      events = await getClubUpcomingEvents(data.club.id);
+    } catch { events = []; }
   }
 
   async function openJoinModal() {
@@ -194,11 +239,11 @@
   {:else if data}
     <section
       class="club-hero"
-      style={`--club-primary: ${data.club.primaryColor || '#759b51'}; --club-secondary: ${data.club.secondaryColor || '#d0e87c'};`}
+      class:light={heroNeedsOverlay}
+      style={`--club-primary: ${data.club.primaryColor || '#759b51'}; --club-secondary: ${data.club.secondaryColor || '#38622e'};`}
     >
-      <div class="hero-shape hero-shape-a"></div>
-      <div class="hero-shape hero-shape-b"></div>
-      <div class="hero-stripes"></div>
+      <div class="hero-overlay"></div>
+      <span class="hero-status" class:inactive={!data.club.active}>{data.club.active ? 'Activo' : 'Inactivo'}</span>
 
       <div class="hero-inner">
         <div class="hero-logo">
@@ -210,13 +255,14 @@
         </div>
 
         <div class="hero-text">
-          <p class="hero-kicker">Club</p>
           <h1>{data.club.name}</h1>
           {#if data.club.shortName && data.club.shortName !== data.club.name}
-            <p class="hero-short">{data.club.shortName}</p>
+            <h2>{data.club.shortName}</h2>
+          {/if}
+          {#if data.club.description}
+            <p class="hero-tagline">{data.club.description}</p>
           {/if}
           <div class="hero-badges">
-            <span class="hero-badge" class:inactive={!data.club.active}>{data.club.active ? 'Activo' : 'Inactivo'}</span>
             {#each genderBadges as g}<span class="hero-badge">{g}</span>{/each}
             <span class="hero-badge">{data.tournaments.length} {data.tournaments.length === 1 ? 'torneo' : 'torneos'}</span>
             {#if categoryCount > 0}<span class="hero-badge">{categoryCount} {categoryCount === 1 ? 'categoría' : 'categorías'}</span>{/if}
@@ -243,155 +289,188 @@
     {#if error && !showJoinModal}<p class="error-banner">{error}</p>{/if}
     {#if notice}<p class="success-banner">{notice}</p>{/if}
 
-    <div class="profile-grid" class:single={socials.length === 0}>
-      <section class="card-surface participation-card">
-        <div class="list-header">
-          <div>
-            <p class="eyebrow">Competencia</p>
-            <h2>Mi participación</h2>
+    <div class="club-layout">
+      <div class="club-main">
+        <section class="card-surface">
+          <div class="section-title-row">
+            <div>
+              <p class="eyebrow">Competencia</p>
+              <h2>Mi participación</h2>
+            </div>
+            <div class="title-actions">
+              <button class="button primary small" disabled={saving || !canManageClubes} onclick={openJoinModal}>
+                <Plus size={14} strokeWidth={2} />
+                Participar
+              </button>
+              <span class="count-pill">{data.tournaments.length}</span>
+            </div>
           </div>
-          <div style="display:flex;align-items:center;gap:.5rem">
-            <button class="button primary small" disabled={saving || !canManageClubes} onclick={openJoinModal}>
-              <Plus size={14} strokeWidth={2} />
-              Participar
-            </button>
-            <span class="count-pill">{data.tournaments.length}</span>
-          </div>
-        </div>
 
-        {#if data.tournaments.length === 0}
-          <div class="empty-state compact-empty">
-            <h2>Sin torneos</h2>
-            <p>El club no participa en ningun torneo actualmente.</p>
-          </div>
-        {:else}
-          <div class="tournament-list">
-            {#each data.tournaments as tournament}
-              <article class="club-tournament">
-                <div class="t-card-top">
-                  <div class="t-card-heading">
-                    <span class="t-year">{tournament.year}</span>
-                    <h3>{tournament.name}</h3>
-                    <p class="muted">{tournament.leagueName}</p>
+          {#if data.tournaments.length === 0}
+            <div class="empty-state compact-empty">
+              <h2>Sin torneos</h2>
+              <p>El club no participa en ningun torneo actualmente.</p>
+            </div>
+          {:else}
+            <div class="tournament-list">
+              {#each data.tournaments as tournament}
+                <article class="tournament-card">
+                  <div class="t-head">
+                    <div class="t-title">
+                      <span class="t-year">{tournament.year}</span>
+                      <h3>{tournament.leagueName} - {tournament.name}</h3>
+                      {#if tournament.zone}
+                        <span class="t-zone">Zona: {tournament.zone.name}</span>
+                      {/if}
+                    </div>
+                    <div class="t-actions">
+                      {#if tournament.status && statusLabels[tournament.status]}
+                        <span class={statusClasses[tournament.status] ?? 'badge-muted'}>{statusLabels[tournament.status]}</span>
+                      {/if}
+                      <a class="button primary small" href={`/standings?torneo=${tournament.id}`}>Ver torneo ></a>
+                    </div>
                   </div>
-                  {#if tournament.status && statusLabels[tournament.status]}
-                    <span class={statusClasses[tournament.status] ?? 'badge-muted'}>{statusLabels[tournament.status]}</span>
+
+                  {#if tournament.categories.length > 0}
+                    <button
+                      class="accordion-toggle"
+                      class:open={expandedTournaments.has(tournament.id)}
+                      onclick={() => toggleTournament(tournament.id)}
+                      aria-expanded={expandedTournaments.has(tournament.id)}
+                    >
+                      <span>Ver categorías ({tournament.categories.length})</span>
+                      <span class="chevron"><ChevronDown size={14} strokeWidth={2} /></span>
+                    </button>
+
+                    {#if expandedTournaments.has(tournament.id)}
+                      <div class="t-card-cats">
+                        {#each tournament.categories as cat}
+                          <span class="cat-chip">
+                            {cat.category.name}
+                            {#if cat.kickoffTime}<span class="cat-chip-time">{cat.kickoffTime}</span>{/if}
+                            {#if cat.countsForGeneral}<span class="cat-chip-general">General</span>{/if}
+                          </span>
+                        {/each}
+                      </div>
+                    {/if}
                   {/if}
-                </div>
 
-                <div class="t-card-meta">
-                  {#if tournament.zone}
-                    <span class="chip"><MapPin size={13} strokeWidth={2} /> Zona {tournament.zone.name}</span>
-                  {/if}
-                  <span class="chip">{tournament.categories.length} {tournament.categories.length === 1 ? 'categoría' : 'categorías'}</span>
-                </div>
-
-                {#if tournament.categories.length > 0}
-                  <button
-                    class="accordion-toggle"
-                    class:open={expandedTournaments.has(tournament.id)}
-                    onclick={() => toggleTournament(tournament.id)}
-                    aria-expanded={expandedTournaments.has(tournament.id)}
-                  >
-                    <span>Ver categorías ({tournament.categories.length})</span>
-                    <span class="chevron"><ChevronDown size={14} strokeWidth={2} /></span>
-                  </button>
-
-                  {#if expandedTournaments.has(tournament.id)}
-                    <div class="t-card-cats">
-                      {#each tournament.categories as cat}
-                        <span class="cat-chip">
-                          {cat.category.name}
-                          {#if cat.kickoffTime}<span class="cat-chip-time">{cat.kickoffTime}</span>{/if}
-                          {#if cat.countsForGeneral}<span class="cat-chip-general">General</span>{/if}
-                        </span>
-                      {/each}
+                  {#if canManageClubes}
+                    <div class="t-foot">
+                      <button
+                        class="leave-btn"
+                        disabled={leaving === tournament.id}
+                        onclick={() => handleLeaveTournament(tournament.id)}
+                      >
+                        {leaving === tournament.id ? 'Saliendo...' : 'Salir del torneo'}
+                      </button>
                     </div>
                   {/if}
-                {/if}
+                </article>
+              {/each}
+            </div>
+          {/if}
+        </section>
 
-                <div class="t-card-actions">
-                  <button
-                    class="leave-btn"
-                    disabled={leaving === tournament.id || !canManageClubes}
-                    onclick={() => handleLeaveTournament(tournament.id)}
-                  >
-                    {leaving === tournament.id ? 'Saliendo...' : 'Salir del torneo'}
-                  </button>
-                  <a class="button primary small" href={`/standings?torneo=${tournament.id}`}>Ver torneo</a>
-                </div>
-              </article>
-            {/each}
-          </div>
-        {/if}
-      </section>
-
-      {#if socials.length > 0}
-        <aside class="card-surface follow-card">
-          <p class="eyebrow">Redes sociales</p>
-          <h2>Seguinos</h2>
-          <div class="follow-list">
-            {#each socials as s}
-              <a class="follow-row" href={s.href} target="_blank" rel="noopener noreferrer">
-                <span class="follow-icon">
-                  {#if s.kind === 'facebook'}
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
-                  {:else if s.kind === 'instagram'}
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="20" x="2" y="2" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
-                  {/if}
-                </span>
-                <span class="follow-text">
-                  <strong>{s.label}</strong>
-                  {#if s.handle}<span class="muted">{s.handle}</span>{/if}
-                </span>
-                <ArrowUpRight size={16} strokeWidth={2} class="follow-arrow" />
+        <section class="card-surface location-card">
+          <div class="section-title-row">
+            <div>
+              <p class="eyebrow">Ubicación</p>
+              <h2 class="icon-title"><MapPin size={20} strokeWidth={2} class="icon-accent" /> Dónde estamos</h2>
+            </div>
+            {#if mapsHref}
+              <a class="button secondary outline" href={mapsHref} target="_blank" rel="noopener noreferrer">
+                Cómo llegar
+                <ArrowUpRight size={15} strokeWidth={2} />
               </a>
-            {/each}
-          </div>
-        </aside>
-      {/if}
-    </div>
-
-    <section class="card-surface location-card">
-      <div class="location-header">
-        <div>
-          <p class="eyebrow">Ubicación</p>
-          <h2>Dónde estamos</h2>
-        </div>
-        {#if mapsHref}
-          <a class="button primary" href={mapsHref} target="_blank" rel="noopener noreferrer">
-            <Navigation size={16} strokeWidth={2} />
-            Cómo llegar
-          </a>
-        {/if}
-      </div>
-
-      <div class="location-body">
-        {#if data.club.homeAddress || data.club.primaryColor || data.club.secondaryColor}
-          <div class="location-info">
-            {#if data.club.homeAddress}
-              <p class="location-address">
-                <MapPin size={16} strokeWidth={2} class="addr-icon" />
-                <span>{data.club.homeAddress}</span>
-              </p>
             {/if}
-            {#if data.club.primaryColor || data.club.secondaryColor}
-              <div class="location-colors">
-                <span class="info-label">Colores del club</span>
-                <div class="color-swatches">
-                  {#if data.club.primaryColor}<span class="color-swatch" style={`background:${data.club.primaryColor}`}></span>{/if}
-                  {#if data.club.secondaryColor}<span class="color-swatch" style={`background:${data.club.secondaryColor}`}></span>{/if}
+          </div>
+
+          <div class="location-grid">
+            <div class="location-info">
+              {#if data.club.homeAddress}
+                <p class="location-address">
+                  <MapPin size={16} strokeWidth={2} class="addr-icon" />
+                  <span>{data.club.homeAddress}</span>
+                </p>
+              {/if}
+              {#if data.club.primaryColor || data.club.secondaryColor}
+                <div class="location-colors">
+                  <span class="info-label">Colores del club</span>
+                  <div class="color-dots">
+                    {#if data.club.primaryColor}<span class="color-dot" style={`background:${data.club.primaryColor}`}></span>{/if}
+                    {#if data.club.secondaryColor}<span class="color-dot" style={`background:${data.club.secondaryColor}`}></span>{/if}
+                  </div>
                 </div>
-              </div>
+              {/if}
+            </div>
+
+            {#if data.club.latitude != null && data.club.longitude != null}
+              <div class="map-container" id="club-map"></div>
             {/if}
           </div>
+        </section>
+      </div>
+
+      <div class="club-side">
+        {#if socials.length > 0}
+          <aside class="card-surface">
+            <div class="section-title-row">
+              <div>
+                <p class="eyebrow">Redes</p>
+                <h2>Seguinos</h2>
+              </div>
+            </div>
+            <div class="follow-list">
+              {#each socials as s}
+                <a class="follow-row" href={s.href} target="_blank" rel="noopener noreferrer">
+                  <span class="follow-icon">
+                    {#if s.kind === 'facebook'}
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+                    {:else if s.kind === 'instagram'}
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="20" x="2" y="2" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
+                    {/if}
+                  </span>
+                  <span class="follow-text">
+                    <strong>{s.label}</strong>
+                    {#if s.handle}<span class="muted">{s.handle}</span>{/if}
+                  </span>
+                  <span class="follow-arrow">></span>
+                </a>
+              {/each}
+            </div>
+          </aside>
         {/if}
 
-        {#if data.club.latitude != null && data.club.longitude != null}
-          <div class="map-container" id="club-map"></div>
-        {/if}
+        <aside class="card-surface">
+          <div class="section-title-row">
+            <div>
+              <p class="eyebrow">Agenda</p>
+              <h2 class="icon-title"><Calendar size={20} strokeWidth={2} class="icon-accent" /> Próximos eventos</h2>
+            </div>
+          </div>
+
+          {#if events.length > 0}
+            <div class="event-list">
+              {#each events as ev}
+                <div class="event-row">
+                  <div class="event-date">
+                    <strong>{eventDay(ev.date)}</strong>
+                    {#if eventMonth(ev.date)}<span>{eventMonth(ev.date)}</span>{/if}
+                  </div>
+                  <div class="event-info">
+                    <strong>{ev.tournamentName}</strong>
+                    <span class="muted">{eventDetail(ev)}</span>
+                  </div>
+                </div>
+              {/each}
+            </div>
+          {:else}
+            <p class="muted">Sin próximos eventos.</p>
+          {/if}
+        </aside>
       </div>
-    </section>
+    </div>
   {/if}
 </main>
 
@@ -428,50 +507,37 @@
 <style>
   .club-page { max-width: 1200px; margin: 0 auto; }
 
-  /* Hero */
+  /* ===== Hero ===== */
   .club-hero {
     position: relative;
     overflow: hidden;
     border-radius: 1.5rem;
     color: #fff;
     padding: clamp(1.75rem, 4vw, 3rem);
-    background:
-      radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--club-primary) 50%, transparent) 0%, transparent 55%),
-      radial-gradient(100% 90% at 0% 100%, color-mix(in srgb, var(--club-secondary) 38%, transparent) 0%, transparent 55%),
-      linear-gradient(125deg, #0c1612 0%, #172a22 100%);
+    background: linear-gradient(45deg, var(--club-primary), var(--club-secondary));
     box-shadow: 0 24px 60px var(--color-shadow);
   }
-  .hero-shape {
-    position: absolute;
-    z-index: 0;
-    border-radius: 1.5rem;
-    pointer-events: none;
-  }
-  .hero-shape-a {
-    width: 420px; height: 420px; right: -130px; top: -170px;
-    background: color-mix(in srgb, var(--club-primary) 45%, transparent);
-    transform: rotate(28deg);
-  }
-  .hero-shape-b {
-    width: 300px; height: 300px; left: -110px; bottom: -150px;
-    background: color-mix(in srgb, var(--club-secondary) 32%, transparent);
-    transform: rotate(-18deg);
-  }
-  .hero-stripes {
+  .hero-overlay {
     position: absolute;
     inset: 0;
-    z-index: 0;
-    opacity: .28;
-    background: repeating-linear-gradient(
-      115deg,
-      transparent 0 26px,
-      color-mix(in srgb, var(--club-primary) 30%, transparent) 26px 28px,
-      transparent 28px 54px,
-      color-mix(in srgb, var(--club-secondary) 25%, transparent) 54px 56px,
-      transparent 56px 84px
-    );
-    mask-image: linear-gradient(180deg, rgba(0,0,0,.9) 0%, rgba(0,0,0,.2) 60%, transparent 100%);
+    background: rgba(0, 0, 0, 0);
+    transition: background 200ms ease;
+    pointer-events: none;
   }
+  .club-hero.light .hero-overlay { background: rgba(0, 0, 0, 0.45); }
+  .hero-status {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    z-index: 2;
+    padding: .35rem .85rem;
+    border-radius: 999px;
+    background: var(--color-success);
+    color: #fff;
+    font-size: .78rem;
+    font-weight: 700;
+  }
+  .hero-status.inactive { background: var(--color-error); }
   .hero-inner {
     position: relative;
     z-index: 2;
@@ -486,16 +552,12 @@
     height: clamp(88px, 12vw, 120px);
     display: grid;
     place-items: center;
-    border-radius: 1.5rem;
+    border-radius: 12px;
     background: #fff;
     box-shadow: 0 16px 40px rgba(0,0,0,.35);
     padding: .75rem;
   }
-  .hero-logo img {
-    width: 100%; height: 100%;
-    object-fit: contain;
-    border-radius: 1rem;
-  }
+  .hero-logo img { width: 100%; height: 100%; object-fit: contain; border-radius: 8px; }
   .hero-logo span {
     font-family: 'Space Grotesk', sans-serif;
     font-weight: 700;
@@ -503,27 +565,25 @@
     color: var(--club-primary);
   }
   .hero-text { flex: 1 1 320px; min-width: 0; }
-  .hero-kicker {
-    margin: 0;
-    font-size: .74rem;
-    font-weight: 700;
-    letter-spacing: .18em;
-    text-transform: uppercase;
-    color: rgba(255,255,255,.65);
-  }
   .hero-text h1 {
-    margin: .35rem 0 0;
+    margin: 0;
     font-family: 'Space Grotesk', sans-serif;
-    font-size: clamp(2rem, 5vw, 3.4rem);
+    font-size: clamp(2rem, 5vw, 3.2rem);
     letter-spacing: -.04em;
     line-height: 1.05;
     text-wrap: balance;
   }
-  .hero-short {
+  .hero-text h2 {
     margin: .4rem 0 0;
-    color: rgba(255,255,255,.75);
-    font-weight: 500;
     font-size: 1rem;
+    font-weight: 500;
+    color: rgba(255,255,255,.85);
+  }
+  .hero-tagline {
+    margin: .6rem 0 0;
+    color: rgba(255,255,255,.9);
+    line-height: 1.5;
+    max-width: 46ch;
   }
   .hero-badges {
     display: flex;
@@ -537,12 +597,8 @@
     font-size: .78rem;
     font-weight: 600;
     color: #fff;
-    background: rgba(255,255,255,.14);
-    border: 1px solid rgba(255,255,255,.18);
-  }
-  .hero-badge.inactive {
-    background: rgba(214, 74, 64, .4);
-    border-color: rgba(255,255,255,.25);
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.3);
   }
   .hero-socials {
     display: flex;
@@ -554,77 +610,73 @@
     display: inline-flex;
     align-items: center;
     gap: .45rem;
-    padding: .55rem .8rem;
+    padding: .55rem .85rem;
     border-radius: 999px;
     color: #fff;
     text-decoration: none;
     font-size: .82rem;
     font-weight: 600;
-    background: rgba(255,255,255,.14);
-    border: 1px solid rgba(255,255,255,.2);
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.55);
     transition: background 150ms ease, transform 150ms ease;
   }
-  .hero-social:hover { background: rgba(255,255,255,.24); transform: translateY(-1px); }
+  .hero-social:hover { background: rgba(255,255,255,0.18); transform: translateY(-1px); }
   .hero-social:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 
-  /* Grid */
-  .profile-grid {
+  /* ===== Layout ===== */
+  .club-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 340px);
+    grid-template-columns: minmax(0, 7fr) minmax(0, 3fr);
     gap: 1.5rem;
     margin-top: 1.5rem;
     align-items: start;
   }
-  .profile-grid.single { grid-template-columns: minmax(0, 1fr); }
-  .participation-card, .follow-card, .location-card { padding: 1.5rem; }
-  .participation-card h2, .follow-card h2, .location-card h2 {
+  .club-main { display: grid; gap: 1.5rem; min-width: 0; }
+  .club-side { display: grid; gap: 1.5rem; min-width: 0; }
+  .club-layout .card-surface { padding: 1.5rem; }
+
+  .section-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .section-title-row h2 {
     margin: .35rem 0 0;
     font-family: 'Space Grotesk', sans-serif;
     letter-spacing: -.04em;
     font-size: 1.5rem;
   }
+  .section-title-row h2.icon-title { display: inline-flex; align-items: center; gap: .5rem; }
+  .icon-accent { color: var(--color-accent-text); }
+  .title-actions { display: flex; align-items: center; gap: .5rem; }
 
-  /* Participation */
+  /* ===== Participación ===== */
   .tournament-list { margin-top: 1.25rem; display: grid; gap: .9rem; }
-  .club-tournament {
+  .tournament-card {
     padding: 1.25rem;
     border: 1px solid var(--color-border);
     border-radius: 1rem;
     background: var(--color-input);
   }
-  .t-card-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 1rem;
-  }
-  .t-card-heading .t-year {
-    font-size: .72rem;
-    font-weight: 700;
-    letter-spacing: .1em;
-    text-transform: uppercase;
-    color: var(--color-accent-text);
-  }
-  .t-card-heading h3 {
-    margin: .25rem 0 0;
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 1.2rem;
-    letter-spacing: -.02em;
-  }
-  .t-card-heading .muted { margin: .15rem 0 0; font-size: .82rem; }
-  .t-card-meta { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .85rem; }
-  .chip {
-    display: inline-flex;
-    align-items: center;
-    gap: .35rem;
-    padding: .25rem .6rem;
-    border-radius: 999px;
-    font-size: .76rem;
+  .t-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+  .t-title { min-width: 0; }
+  .t-title .t-year {
+    font-size: .78rem;
     font-weight: 600;
     color: var(--color-text-muted);
-    background: var(--color-surface-hover);
   }
-  .t-card-cats { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .85rem; }
+  .t-title h3 {
+    margin: .2rem 0 0;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 1.25rem;
+    letter-spacing: -.02em;
+    overflow-wrap: break-word;
+  }
+  .t-title .t-zone { display: block; margin-top: .3rem; font-size: .84rem; color: var(--color-text-muted); }
+  .t-actions { display: flex; align-items: center; gap: .6rem; flex: 0 0 auto; }
+
   .accordion-toggle {
     display: flex;
     align-items: center;
@@ -644,6 +696,8 @@
   .accordion-toggle:hover { background: var(--color-surface-hover); color: var(--color-text); }
   .accordion-toggle .chevron { display: inline-flex; align-items: center; transition: transform 150ms ease; }
   .accordion-toggle.open .chevron { transform: rotate(180deg); }
+
+  .t-card-cats { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .85rem; }
   .cat-chip {
     display: inline-flex;
     align-items: center;
@@ -664,15 +718,8 @@
     color: var(--color-success);
     background: var(--color-success-bg);
   }
-  .t-card-actions {
-    display: flex;
-    align-items: center;
-    gap: .75rem;
-    margin-top: 1rem;
-    padding-top: 1rem;
-    border-top: 1px solid var(--color-border);
-  }
-  .t-card-actions .button.primary { margin-left: auto; }
+
+  .t-foot { margin-top: 1rem; padding-top: .75rem; border-top: 1px solid var(--color-border); }
   .leave-btn {
     border: 0;
     background: transparent;
@@ -686,43 +733,14 @@
   .leave-btn:hover:not(:disabled) { background: var(--color-error-bg); color: var(--color-error); }
   .leave-btn:disabled { opacity: .5; cursor: default; }
 
-  /* Seguinos */
-  .follow-list { display: grid; gap: .4rem; margin-top: 1rem; }
-  .follow-row {
-    display: flex;
+  /* ===== Ubicación ===== */
+  .location-grid {
+    margin-top: 1.25rem;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 1.25rem;
     align-items: center;
-    gap: .75rem;
-    padding: .7rem .75rem;
-    border-radius: .75rem;
-    text-decoration: none;
-    color: var(--color-text);
-    transition: background 150ms ease;
   }
-  .follow-row:hover { background: var(--color-surface-hover); }
-  .follow-row:focus-visible { outline: 2px solid var(--color-input-focus); outline-offset: 2px; }
-  .follow-icon {
-    width: 2.4rem; height: 2.4rem;
-    display: grid; place-items: center;
-    flex: 0 0 auto;
-    border-radius: .7rem;
-    color: var(--color-accent-text);
-    background: var(--color-accent-bg);
-  }
-  .follow-text { flex: 1; min-width: 0; display: grid; gap: .1rem; }
-  .follow-text strong { font-size: .9rem; }
-  .follow-text .muted { font-size: .78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .follow-arrow { color: var(--color-text-light); flex: 0 0 auto; }
-
-  /* Location */
-  .location-card { margin-top: 1.5rem; }
-  .location-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 1rem;
-    flex-wrap: wrap;
-  }
-  .location-body { margin-top: 1.25rem; display: grid; gap: 1rem; }
   .location-address {
     display: flex;
     align-items: center;
@@ -733,10 +751,11 @@
   }
   .addr-icon { color: var(--color-accent-text); flex: 0 0 auto; }
   .location-colors { margin-top: 1rem; }
-  .location-colors .info-label { display: block; margin-bottom: .3rem; }
+  .location-colors .info-label { display: block; margin-bottom: .4rem; }
   .info-label { color: var(--color-text-muted); font-size: .78rem; font-weight: 600; text-transform: uppercase; }
-  .color-swatches { display: flex; gap: .4rem; }
-  .color-swatch { width: 1.5rem; height: 1.5rem; border-radius: .4rem; border: 1px solid var(--color-border); }
+  .color-dots { display: flex; gap: .5rem; }
+  .color-dot { width: 1.75rem; height: 1.75rem; border-radius: 50%; border: 1px solid var(--color-border); }
+
   .map-container {
     padding: 0;
     overflow: hidden;
@@ -751,6 +770,72 @@
   .map-container :global(.leaflet-top),
   .map-container :global(.leaflet-bottom) { z-index: 1; }
 
+  .button.outline {
+    border: 1px solid var(--color-border);
+    background: transparent;
+    color: var(--color-text);
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+  }
+  .button.outline:hover { background: var(--color-surface-hover); }
+
+  /* ===== Seguinos ===== */
+  .follow-list { margin-top: 1rem; }
+  .follow-row {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: .8rem 0;
+    border-bottom: 1px solid var(--color-border);
+    text-decoration: none;
+    color: var(--color-text);
+    transition: opacity 150ms ease;
+  }
+  .follow-row:first-child { padding-top: .4rem; }
+  .follow-row:last-child { border-bottom: 0; padding-bottom: .4rem; }
+  .follow-row:hover { opacity: .75; }
+  .follow-icon {
+    width: 2.4rem; height: 2.4rem;
+    display: grid; place-items: center;
+    flex: 0 0 auto;
+    border-radius: .7rem;
+    color: var(--color-accent-text);
+    background: var(--color-accent-bg);
+  }
+  .follow-text { flex: 1; min-width: 0; display: grid; gap: .1rem; }
+  .follow-text strong { font-size: .9rem; }
+  .follow-text .muted { font-size: .78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .follow-arrow { color: var(--color-text-light); font-weight: 700; flex: 0 0 auto; }
+
+  /* ===== Eventos ===== */
+  .event-list { margin-top: 1rem; }
+  .event-row {
+    display: flex;
+    align-items: center;
+    gap: .9rem;
+    padding: .7rem 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .event-row:first-child { padding-top: .3rem; }
+  .event-row:last-child { border-bottom: 0; }
+  .event-date {
+    width: 3rem; height: 3rem;
+    border-radius: .9rem;
+    background: var(--color-accent-bg);
+    color: var(--color-accent-text);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+  }
+  .event-date strong { font-size: 1.1rem; line-height: 1; font-family: 'Space Grotesk', sans-serif; }
+  .event-date span { font-size: .62rem; font-weight: 700; letter-spacing: .06em; }
+  .event-info { min-width: 0; display: grid; gap: .15rem; }
+  .event-info strong { font-size: .9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .event-info .muted { font-size: .78rem; }
+
   .button.small { padding: .4rem .7rem; font-size: .8rem; display: inline-flex; align-items: center; gap: .4rem; }
 
   .tournament-join-list { display: grid; gap: .5rem; margin: .5rem 0; }
@@ -762,9 +847,12 @@
   .join-row strong { font-size: .88rem; display: block; }
   .join-row span { font-size: .75rem; }
 
+  @media (max-width: 900px) {
+    .club-layout { grid-template-columns: 1fr; }
+  }
   @media (max-width: 767px) {
-    .profile-grid { grid-template-columns: 1fr; }
     .hero-inner { flex-direction: column; align-items: flex-start; }
     .hero-socials { width: 100%; }
+    .location-grid { grid-template-columns: 1fr; }
   }
 </style>

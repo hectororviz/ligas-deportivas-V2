@@ -100,6 +100,7 @@ export interface Club {
   active: boolean;
   slug?: string | null;
   shortName?: string | null;
+  description?: string | null;
   primaryColor?: string | null;
   secondaryColor?: string | null;
   instagramUrl?: string | null;
@@ -918,8 +919,22 @@ export interface ClubAdminTournament {
 }
 
 export interface ClubAdminOverview {
-  club: { id: number; name: string; shortName?: string|null; slug: string; logoUrl?: string|null; primaryColor?: string|null; secondaryColor?: string|null; instagramUrl?: string|null; facebookUrl?: string|null; homeAddress?: string|null; latitude?: number|null; longitude?: number|null; active: boolean };
+  club: { id: number; name: string; shortName?: string|null; description?: string|null; slug: string; logoUrl?: string|null; primaryColor?: string|null; secondaryColor?: string|null; instagramUrl?: string|null; facebookUrl?: string|null; homeAddress?: string|null; latitude?: number|null; longitude?: number|null; active: boolean };
   tournaments: ClubAdminTournament[];
+}
+
+export interface ClubUpcomingEvent {
+  tournamentId: number;
+  tournamentName: string;
+  leagueName: string;
+  zoneName: string;
+  matchday: number;
+  date: string | null;
+  kickoffTime: string | null;
+}
+
+export async function getClubUpcomingEvents(clubId: number): Promise<ClubUpcomingEvent[]> {
+  return request<ClubUpcomingEvent[]>(`/clubs/${clubId}/upcoming-events`);
 }
 
 export interface RosterPlayer {
