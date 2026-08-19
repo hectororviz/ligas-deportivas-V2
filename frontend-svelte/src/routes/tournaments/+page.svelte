@@ -303,52 +303,58 @@
       <h2>{editing ? editing.name : 'Crear torneo'}</h2>
       {#if error}<p class="form-error">{error}</p>{/if}
       <form onsubmit={(event) => { event.preventDefault(); save(); }}>
-        <div class="form-grid">
-          <div class="form-col">
-            <label>Liga
-              <select bind:value={form.leagueId} disabled={saving}>
-                <option value="">Seleccionar liga...</option>
-                {#each leagues as league}<option value={league.id}>{league.name}</option>{/each}
-              </select>
-            </label>
-            <label>Nombre<input bind:value={form.name} placeholder="Torneo Apertura 2026" disabled={saving} /></label>
-            <label>Año<input type="number" bind:value={form.year} disabled={saving} /></label>
-            <label>Género
-              <select bind:value={form.gender} disabled={saving}>
-                {#each genders as [value, label]}<option value={value}>{label}</option>{/each}
-              </select>
-            </label>
-            <label>Modo de campeón
-              <select bind:value={form.championMode} disabled={saving}>
-                {#each championModes as [value, label]}<option value={value}>{label}</option>{/each}
-              </select>
-            </label>
-          </div>
-          <div class="form-col">
-            <div class="form-row">
-              <label>Pts Victoria<input type="number" bind:value={form.pointsWin} disabled={saving} /></label>
-              <label>Pts Empate<input type="number" bind:value={form.pointsDraw} disabled={saving} /></label>
-              <label>Pts Derrota<input type="number" bind:value={form.pointsLoss} disabled={saving} /></label>
-            </div>
-            <label>Fecha de inicio<input type="date" bind:value={form.startDate} disabled={saving} /></label>
-            <label>Fecha de fin<input type="date" bind:value={form.endDate} disabled={saving} /></label>
-            <label class="checkbox-label"><input type="checkbox" bind:checked={form.controlsPlayers} disabled={saving} /> Controlar jugadores</label>
+        <div class="form-row-grid two">
+          <label>Liga
+            <select bind:value={form.leagueId} disabled={saving}>
+              <option value="">Seleccionar liga...</option>
+              {#each leagues as league}<option value={league.id}>{league.name}</option>{/each}
+            </select>
+          </label>
+          <label>Nombre<input bind:value={form.name} placeholder="Torneo Apertura 2026" disabled={saving} /></label>
+        </div>
 
-            <div class="categories-section">
-              <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;">
-                <label class="cat-label">Categorías ({catCount} seleccionadas)</label>
-                <button type="button" class="button secondary small" disabled={!form.gender || saving} onclick={openCatPicker}>
-                  Seleccionar
-                </button>
-              </div>
-              {#if catCount > 0}
-                <div class="cat-tags">
-                  {#each formCategories.filter(c => c.enabled) as c}
-                    <span class="cat-tag">{c.name}</span>
-                  {/each}
-                </div>
-              {/if}
+        <div class="form-row-grid three">
+          <label>Género
+            <select bind:value={form.gender} disabled={saving}>
+              {#each genders as [value, label]}<option value={value}>{label}</option>{/each}
+            </select>
+          </label>
+          <label>Año<input type="number" bind:value={form.year} disabled={saving} /></label>
+          <label>Modo de campeón
+            <select bind:value={form.championMode} disabled={saving}>
+              {#each championModes as [value, label]}<option value={value}>{label}</option>{/each}
+            </select>
+          </label>
+        </div>
+
+        <div class="form-row-grid two">
+          <label>Fecha de inicio<input type="date" bind:value={form.startDate} disabled={saving} /></label>
+          <label>Fecha de fin<input type="date" bind:value={form.endDate} disabled={saving} /></label>
+        </div>
+
+        <div class="form-row-grid three">
+          <label>Pts Victoria<input type="number" bind:value={form.pointsWin} disabled={saving} /></label>
+          <label>Pts Empate<input type="number" bind:value={form.pointsDraw} disabled={saving} /></label>
+          <label>Pts Derrota<input type="number" bind:value={form.pointsLoss} disabled={saving} /></label>
+        </div>
+
+        <div class="form-row-grid two">
+          <label class="checkbox-label"><input type="checkbox" bind:checked={form.controlsPlayers} disabled={saving} /> Controlar jugadores</label>
+
+          <div class="categories-section">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;">
+              <label class="cat-label">Categorías ({catCount} seleccionadas)</label>
+              <button type="button" class="button secondary small" disabled={!form.gender || saving} onclick={openCatPicker}>
+                Seleccionar
+              </button>
             </div>
+            {#if catCount > 0}
+              <div class="cat-tags">
+                {#each formCategories.filter(c => c.enabled) as c}
+                  <span class="cat-tag">{c.name}</span>
+                {/each}
+              </div>
+            {/if}
           </div>
         </div>
         <div class="form-actions">
@@ -434,10 +440,9 @@
   .tournament-color { background: var(--league-color, var(--color-accent)); color: #fff; }
   .tournament-list { align-self: start; }
 
-  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1.5rem; align-items: start; }
-  .form-grid label { display: block; margin-bottom: .75rem; }
-  .form-grid label:last-child { margin-bottom: 0; }
-  .form-col { display: flex; flex-direction: column; }
+  .form-row-grid { display: grid; gap: .75rem 1.5rem; }
+  .form-row-grid.two { grid-template-columns: 1fr 1fr; }
+  .form-row-grid.three { grid-template-columns: 1fr 1fr 1fr; }
 
   .categories-section { margin-top: .5rem; padding-top: .75rem; border-top: 1px solid var(--color-border); }
   .cat-label { font-size: .78rem; font-weight: 600; color: var(--color-text-muted); text-transform: uppercase; margin: 0; }
@@ -470,7 +475,6 @@
   .delete-modal .muted strong { color: var(--color-error); }
 
   @media (max-width: 600px) {
-    .form-grid { grid-template-columns: 1fr; }
-    .form-col { gap: 0; }
+    .form-row-grid.two, .form-row-grid.three { grid-template-columns: 1fr; }
   }
 </style>

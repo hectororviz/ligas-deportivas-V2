@@ -15,7 +15,7 @@
   let showForm = false;
   let form = {
     name: '', birthYearMin: 2010, birthYearMax: 2015, gender: 'MIXTO',
-    minPlayers: 5, mandatory: false, promotional: false, active: true
+    minPlayers: 5, promotional: false, active: true
   };
 
   onMount(async () => {
@@ -36,7 +36,7 @@
 
   function openCreate() {
     editing = null;
-    form = { name: '', birthYearMin: 2010, birthYearMax: 2015, gender: 'MIXTO', minPlayers: 5, mandatory: false, promotional: false, active: true };
+    form = { name: '', birthYearMin: 2010, birthYearMax: 2015, gender: 'MIXTO', minPlayers: 5, promotional: false, active: true };
     error = '';
     showForm = true;
   }
@@ -45,7 +45,7 @@
     editing = category;
     form = {
       name: category.name, birthYearMin: category.birthYearMin, birthYearMax: category.birthYearMax,
-      gender: category.gender, minPlayers: category.minPlayers, mandatory: category.mandatory,
+      gender: category.gender, minPlayers: category.minPlayers,
       promotional: category.promotional, active: category.active
     };
     error = '';
@@ -65,7 +65,7 @@
     saving = true;
     const input: Record<string, unknown> = {
       name: form.name.trim(), birthYearMin: form.birthYearMin, birthYearMax: form.birthYearMax,
-      gender: form.gender, minPlayers: form.minPlayers, mandatory: form.mandatory,
+      gender: form.gender, minPlayers: form.minPlayers, mandatory: !form.promotional,
       promotional: form.promotional, active: form.active
     };
     try {
@@ -152,11 +152,14 @@
           <label>Año nac. (desde)<input type="number" bind:value={form.birthYearMin} min={1900} max={2030} disabled={saving} /></label>
           <label>Año nac. (hasta)<input type="number" bind:value={form.birthYearMax} min={1900} max={2030} disabled={saving} /></label>
         </div>
-        <label>Género<select bind:value={form.gender} disabled={saving}>{#each genders as [value, label]}<option value={value}>{label}</option>{/each}</select></label>
-        <label>Jugadores mínimos<input type="number" bind:value={form.minPlayers} min={1} max={99} disabled={saving} /></label>
-        <label class="checkbox-label"><input type="checkbox" bind:checked={form.mandatory} disabled={saving} /> Categoría obligatoria</label>
-        <label class="checkbox-label"><input type="checkbox" bind:checked={form.promotional} disabled={saving} /> Categoría promocional</label>
-        <label class="checkbox-label"><input type="checkbox" bind:checked={form.active} disabled={saving} /> Categoría activa</label>
+        <div class="form-row">
+          <label>Género<select bind:value={form.gender} disabled={saving}>{#each genders as [value, label]}<option value={value}>{label}</option>{/each}</select></label>
+          <label>Jugadores mínimos<input type="number" bind:value={form.minPlayers} min={1} max={99} disabled={saving} /></label>
+        </div>
+        <div class="form-row">
+          <label class="checkbox-label"><input type="checkbox" bind:checked={form.promotional} disabled={saving} /> Categoría promocional</label>
+          <label class="checkbox-label"><input type="checkbox" bind:checked={form.active} disabled={saving} /> Categoría activa</label>
+        </div>
         <div class="form-actions"><button class="button primary" type="submit" disabled={saving}>{saving ? 'Guardando...' : editing ? 'Guardar cambios' : 'Crear categoría'}</button>{#if editing}<button class="button secondary" type="button" onclick={openCreate} disabled={saving}>Cancelar</button>{/if}</div>
       </form>
     </Modal>

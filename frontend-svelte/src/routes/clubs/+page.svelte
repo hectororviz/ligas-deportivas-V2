@@ -196,24 +196,38 @@
       {#if error}<p class="form-error">{error}</p>{/if}
       <form onsubmit={(event) => { event.preventDefault(); save(); }}>
         <label>Nombre<input bind:value={form.name} placeholder="Club Atlético..." disabled={saving} /></label>
-        <label>Nombre corto<input bind:value={form.shortName} placeholder="CA..." disabled={saving} /></label>
-        <label>Identificador<input bind:value={form.slug} placeholder="club-atletico" disabled={saving} /></label>
-        <div class="form-row">
+
+        <div class="form-row-grid two">
+          <label>Nombre corto<input bind:value={form.shortName} placeholder="CA..." disabled={saving} /></label>
+          <label>Identificador<input bind:value={form.slug} placeholder="club-atletico" disabled={saving} /></label>
+        </div>
+
+        <div class="form-row-grid three">
           <label>Color principal<div class="color-input"><input type="color" bind:value={form.primaryColor} disabled={saving} /><input bind:value={form.primaryColor} placeholder="#0057b8" disabled={saving} /></div></label>
           <label>Color secundario<div class="color-input"><input type="color" bind:value={form.secondaryColor} disabled={saving} /><input bind:value={form.secondaryColor} placeholder="#ffffff" disabled={saving} /></div></label>
+          <label>Escudo (200×200 – 500×500 px)
+            <input type="file" accept="image/*" onchange={(e) => { handleLogoFile((e.target as HTMLInputElement).files?.[0]); }} disabled={saving} />
+          </label>
         </div>
-        <label>Escudo (200×200 – 500×500 px)
-          <input type="file" accept="image/*" onchange={(e) => { handleLogoFile((e.target as HTMLInputElement).files?.[0]); }} disabled={saving} />
-        </label>
-        <label>Instagram<input bind:value={form.instagram} placeholder="@club" disabled={saving} /></label>
-        <label>Facebook<input bind:value={form.facebook} placeholder="@club" disabled={saving} /></label>
+
+        <div class="form-row-grid two">
+          <label>Instagram<input bind:value={form.instagram} placeholder="@club" disabled={saving} /></label>
+          <label>Facebook<input bind:value={form.facebook} placeholder="@club" disabled={saving} /></label>
+        </div>
+
         <label>Dirección<input bind:value={form.homeAddress} placeholder="Calle 123" disabled={saving} /></label>
-        <div class="form-row">
+
+        <div class="form-row-grid two">
           <label>Latitud<input bind:value={form.latitude} placeholder="-34.6037" disabled={saving} /></label>
           <label>Longitud<input bind:value={form.longitude} placeholder="-58.3816" disabled={saving} /></label>
         </div>
-        <label class="checkbox-label"><input type="checkbox" bind:checked={form.active} disabled={saving} /> Club activo</label>
-        <div class="form-actions"><button class="button primary" type="submit" disabled={saving}>{saving ? 'Guardando...' : editing ? 'Guardar cambios' : 'Crear club'}</button></div>
+
+        <div class="form-row-grid two actions-row">
+          <label class="checkbox-label"><input type="checkbox" bind:checked={form.active} disabled={saving} /> Club activo</label>
+          <div class="form-actions">
+            <button class="button primary" type="submit" disabled={saving}>{saving ? 'Guardando...' : editing ? 'Guardar cambios' : 'Crear club'}</button>
+          </div>
+        </div>
       </form>
     </div>
   </Modal>
@@ -232,4 +246,12 @@
   .modal-form h2 { margin: .5rem 0 1.5rem; font-family: 'Space Grotesk', sans-serif; font-size: 1.6rem; letter-spacing: -.04em; }
   .modal-form form { margin-top: 0; }
   input[type="file"] { padding: .6rem .8rem; font-size: .85rem; }
+  .form-row-grid { display: grid; gap: .75rem 1.5rem; }
+  .form-row-grid.two { grid-template-columns: 1fr 1fr; }
+  .form-row-grid.three { grid-template-columns: 1fr 1fr 1fr; }
+  .actions-row { align-items: center; }
+  .actions-row .form-actions { justify-content: flex-end; }
+  @media (max-width: 600px) {
+    .form-row-grid.two, .form-row-grid.three { grid-template-columns: 1fr; }
+  }
 </style>

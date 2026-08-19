@@ -322,25 +322,29 @@
       <h2>{editing ? `${editing.firstName} ${editing.lastName}` : 'Crear jugador'}</h2>
       {#if error}<p class="form-error">{error}</p>{/if}
       <form onsubmit={(event) => { event.preventDefault(); save(); }}>
-        <label>Nombre<input bind:value={form.firstName} placeholder="Juan" disabled={saving} /></label>
-        <label>Apellido<input bind:value={form.lastName} placeholder="Pérez" disabled={saving} /></label>
-        <label>DNI<input bind:value={form.dni} placeholder="12345678" disabled={saving} /></label>
-        <div class="form-row">
+        <div class="form-row-grid two">
+          <label>Nombre<input bind:value={form.firstName} placeholder="Juan" disabled={saving} /></label>
+          <label>Apellido<input bind:value={form.lastName} placeholder="Pérez" disabled={saving} /></label>
+        </div>
+
+        <div class="form-row-grid three">
+          <label>DNI<input bind:value={form.dni} placeholder="12345678" disabled={saving} /></label>
           <label>Fecha de nacimiento<input type="date" bind:value={form.birthDate} disabled={saving} /></label>
           <label>Género<select bind:value={form.gender} disabled={saving}><option value="MASCULINO">Masculino</option><option value="FEMENINO">Femenino</option></select></label>
         </div>
+
         <label class="checkbox-label"><input type="checkbox" bind:checked={form.active} disabled={saving} /> Jugador activo</label>
 
         <h3>Dirección</h3>
         <label>Calle<input bind:value={form.addressStreet} placeholder="Av. Siempre Viva" disabled={saving} /></label>
-        <div class="form-row">
+        <div class="form-row-grid two">
           <label>Número<input bind:value={form.addressNumber} placeholder="742" disabled={saving} /></label>
           <label>Ciudad<input bind:value={form.addressCity} placeholder="Springfield" disabled={saving} /></label>
         </div>
 
         <h3>Contacto de emergencia</h3>
         <label>Nombre<input bind:value={form.emergencyName} placeholder="María Pérez" disabled={saving} /></label>
-        <div class="form-row">
+        <div class="form-row-grid two">
           <label>Parentesco<input bind:value={form.emergencyRelationship} placeholder="Madre" disabled={saving} /></label>
           <label>Teléfono<input bind:value={form.emergencyPhone} placeholder="+549..." disabled={saving} /></label>
         </div>
@@ -482,6 +486,12 @@
   .modal-form h2 { margin: .5rem 0 1.5rem; font-family: 'Space Grotesk', sans-serif; font-size: 1.6rem; letter-spacing: -.04em; }
   .modal-form h3 { margin: 1.5rem 0 .75rem; font-family: 'Space Grotesk', sans-serif; font-size: 1.05rem; color: var(--color-text-muted); }
   .modal-form form { margin-top: 0; }
+  .form-row-grid { display: grid; gap: .75rem 1.5rem; }
+  .form-row-grid.two { grid-template-columns: 1fr 1fr; }
+  .form-row-grid.three { grid-template-columns: 1fr 1fr 1fr; }
+  @media (max-width: 600px) {
+    .form-row-grid.two, .form-row-grid.three { grid-template-columns: 1fr; }
+  }
 
   .add-btn { padding: .55rem .8rem; font-size: 1.2rem; line-height: 1; font-weight: 700; border-radius: .6rem; min-width: 2.5rem; }
   .add-dropdown {
