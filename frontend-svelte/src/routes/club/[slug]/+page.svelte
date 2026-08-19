@@ -3,7 +3,7 @@
   import { page } from '$app/stores';
   import { getClubAdmin, getAvailableTournaments, joinTournament, leaveTournament, getProfile, canManageModule, type ClubAdminOverview, type AvailableTournament, type AuthUser } from '$lib/api';
   import Modal from '$lib/Modal.svelte';
-  import { Plus, MapPin, Navigation, ArrowUpRight } from '@lucide/svelte';
+  import { Plus, MapPin, Navigation, ArrowUpRight, ChevronDown } from '@lucide/svelte';
 
   const statusLabels: Record<string, string> = {
     DRAFT: 'Borrador', ACTIVE: 'Activo', FINISHED: 'Finalizado', CANCELLED: 'Cancelado'
@@ -23,6 +23,14 @@
   let showJoinModal = $state(false);
   let availableTournaments = $state<AvailableTournament[]>([]);
   let loadingAvailable = $state(false);
+  let expandedTournaments = $state<Set<number>>(new Set());
+
+  function toggleTournament(id: number) {
+    const next = new Set(expandedTournaments);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    expandedTournaments = next;
+  }
 
   let canManageClubes = $derived.by(() => {
     if (canManageModule(user, 'CLUBES')) return true;
@@ -279,15 +287,27 @@
                 </div>
 
                 {#if tournament.categories.length > 0}
-                  <div class="t-card-cats">
-                    {#each tournament.categories as cat}
-                      <span class="cat-chip">
-                        {cat.category.name}
-                        {#if cat.kickoffTime}<span class="cat-chip-time">{cat.kickoffTime}</span>{/if}
-                        {#if cat.countsForGeneral}<span class="cat-chip-general">General</span>{/if}
-                      </span>
-                    {/each}
-                  </div>
+                  <button
+                    class="accordion-toggle"
+                    class:open={expandedTournaments.has(tournament.id)}
+                    onclick={() => toggleTournament(tournament.id)}
+                    aria-expanded={expandedTournaments.has(tournament.id)}
+                  >
+                    <span>Ver categorías ({tournament.categories.length})</span>
+                    <span class="chevron"><ChevronDown size={14} strokeWidth={2} /></span>
+                  </button>
+
+                  {#if expandedTournaments.has(tournament.id)}
+                    <div class="t-card-cats">
+                      {#each tournament.categories as cat}
+                        <span class="cat-chip">
+                          {cat.category.name}
+                          {#if cat.kickoffTime}<span class="cat-chip-time">{cat.kickoffTime}</span>{/if}
+                          {#if cat.countsForGeneral}<span class="cat-chip-general">General</span>{/if}
+                        </span>
+                      {/each}
+                    </div>
+                  {/if}
                 {/if}
 
                 <div class="t-card-actions">
@@ -605,6 +625,25 @@
     background: var(--color-surface-hover);
   }
   .t-card-cats { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .85rem; }
+  .accordion-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    margin-top: .85rem;
+    padding: .5rem .75rem;
+    border: 1px solid var(--color-border);
+    border-radius: .5rem;
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+    font-size: .82rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: left;
+  }
+  .accordion-toggle:hover { background: var(--color-surface-hover); color: var(--color-text); }
+  .accordion-toggle .chevron { display: inline-flex; align-items: center; transition: transform 150ms ease; }
+  .accordion-toggle.open .chevron { transform: rotate(180deg); }
   .cat-chip {
     display: inline-flex;
     align-items: center;

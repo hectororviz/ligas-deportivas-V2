@@ -83,6 +83,20 @@
   }
   let clubZones = $derived(clubZonesFor(selectedClubId));
 
+  let freeClub = $derived.by(() => {
+    if (selectedClubId != null || selectedZoneId == null || selectedMatchday == null || !matchesData) return null;
+    const zone = zones.find((z) => z.id === selectedZoneId);
+    if (!zone) return null;
+    const remaining = new Set((zone.clubZones ?? []).map((cz) => cz.club.id));
+    for (const match of currentMatches) {
+      if (match.homeClubId != null) remaining.delete(match.homeClubId);
+      if (match.awayClubId != null) remaining.delete(match.awayClubId);
+    }
+    if (remaining.size !== 1) return null;
+    const freeId = [...remaining][0];
+    return (zone.clubZones ?? []).find((cz) => cz.club.id === freeId)?.club ?? null;
+  });
+
   onMount(async () => {
     try {
       [leagues, tournaments, zones, user] = await Promise.all([
@@ -536,6 +550,13 @@
             <PartidoCard {match} onclick={onMatchClick} />
           {/each}
         </div>
+        {#if freeClub}
+          <div class="bye-card">
+            <span class="bye-label">Libre</span>
+            <span class="bye-club">{freeClub.shortName ?? freeClub.name}</span>
+            <span class="bye-hint">descansa en esta fecha</span>
+          </div>
+        {/if}
       {/if}
     {/if}
   {/if}
@@ -593,6 +614,31 @@
   @media (min-width: 720px) {
     .matches-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
+
+  .bye-card {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    margin-top: .6rem;
+    padding: .75rem 1rem;
+    border: 1px dashed var(--color-border);
+    border-radius: .8rem;
+    background: var(--color-surface-hover);
+    font-size: .9rem;
+  }
+  .bye-label {
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    padding: .2rem .55rem;
+    border-radius: 999px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+  }
+  .bye-club { font-weight: 700; color: var(--color-heading); }
+  .bye-hint { color: var(--color-text-muted); font-size: .82rem; }
 
   .page-shell.with-footer { padding-bottom: 4.5rem; }
 
