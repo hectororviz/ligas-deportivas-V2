@@ -8,8 +8,8 @@
   let error = '';
   let selectedTournamentId: number | null = null;
   let clubs: Club[] = [];
-  let bannerShields: { logoUrl: string | null | undefined; color: string | null | undefined; label: string }[] = [];
-  let homeBg: HomeBackgroundConfig = { enabled: true, opacity: 0.6, speed: 25, shieldSize: 90, shieldGap: 30 };
+  let bannerShields: { logoUrl: string | null | undefined; label: string }[] = [];
+  let homeBg: HomeBackgroundConfig = { enabled: true, opacity: 0.6, speed: 25, shieldSize: 90, shieldGap: 30, backgroundColor: '#173d35' };
   let siteTitle = 'Ligas Deportivas';
   let siteSlogan = '';
 
@@ -36,15 +36,9 @@
   });
 
   function buildBannerShields(list: Club[]) {
-    let base: typeof bannerShields;
-    if (list.length > 0) {
-      base = list.slice(0, 16).map((c) => ({ logoUrl: c.logoUrl, color: c.primaryColor, label: c.shortName || c.name }));
-    } else {
-      const palette = ['#759b51', '#3b82c4', '#c46a3b', '#7c5cbf', '#d46050', '#b8860b', '#0062a8', '#c05078'];
-      base = palette.map((color) => ({ logoUrl: null, color, label: '' }));
-    }
+    const base = list.slice(0, 16).map((c) => ({ logoUrl: c.logoUrl, label: c.shortName || c.name }));
     let arr = base;
-    while (arr.length < 8) arr = arr.concat(base);
+    while (arr.length > 0 && arr.length < 8) arr = arr.concat(base);
     return arr;
   }
 
@@ -71,14 +65,14 @@
   <main class="dashboard-shell">
     <section
       class="home-banner"
-      style={`--shield-size: ${homeBg.shieldSize}px; --shield-gap: ${homeBg.shieldGap}px; --marquee-speed: ${homeBg.speed}s; --glass-opacity: ${homeBg.opacity};`}
+      style={`--shield-size: ${homeBg.shieldSize}px; --shield-gap: ${homeBg.shieldGap}px; --marquee-speed: ${homeBg.speed}s; --glass-opacity: ${homeBg.opacity}; --banner-bg: ${homeBg.backgroundColor};`}
     >
       {#if homeBg.enabled}
         <div class="banner-engine" aria-hidden="true">
           <div class="shield-row row-1">
             <div class="shield-track track-right">
               {#each [...bannerShields, ...bannerShields] as shield, i (i)}
-                <span class="shield" style={shield.color ? `background:${shield.color}` : ''}>
+                <span class="shield">
                   {#if shield.logoUrl}
                     <img src={shield.logoUrl} alt="" loading="lazy" />
                   {:else}
@@ -91,7 +85,7 @@
           <div class="shield-row row-2">
             <div class="shield-track track-left">
               {#each [...bannerShields, ...bannerShields] as shield, i (i)}
-                <span class="shield" style={shield.color ? `background:${shield.color}` : ''}>
+                <span class="shield">
                   {#if shield.logoUrl}
                     <img src={shield.logoUrl} alt="" loading="lazy" />
                   {:else}
@@ -104,7 +98,7 @@
           <div class="shield-row row-3">
             <div class="shield-track track-right">
               {#each [...bannerShields, ...bannerShields] as shield, i (i)}
-                <span class="shield" style={shield.color ? `background:${shield.color}` : ''}>
+                <span class="shield">
                   {#if shield.logoUrl}
                     <img src={shield.logoUrl} alt="" loading="lazy" />
                   {:else}
@@ -209,7 +203,7 @@
     justify-content: center;
     min-height: 272px;
     border-radius: 1.5rem;
-    background: var(--color-hero);
+    background: var(--banner-bg, var(--color-hero));
     box-shadow: 0 24px 60px var(--color-shadow);
     padding: clamp(2rem, 5vw, 4rem);
   }
@@ -231,17 +225,18 @@
     width: var(--shield-size);
     height: var(--shield-size);
     margin-right: var(--shield-gap);
-    border-radius: 50%;
-    background: var(--color-accent);
     display: grid;
     place-items: center;
     color: #fff;
     font-weight: 700;
-    overflow: hidden;
-    box-shadow: 0 4px 14px rgba(0,0,0,.25);
   }
-  .shield img { width: 100%; height: 100%; object-fit: cover; }
-  .shield-initials { font-size: calc(var(--shield-size) * 0.3); }
+  .shield img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,.35));
+  }
+  .shield-initials { font-size: calc(var(--shield-size) * 0.3); text-shadow: 0 2px 6px rgba(0,0,0,.5); }
   .row-1 .shield, .row-3 .shield { transform: skewX(30deg); }
   .row-2 .shield { transform: skewX(-30deg); }
 

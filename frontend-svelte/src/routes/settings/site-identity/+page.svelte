@@ -5,7 +5,7 @@
 
   const paletteState = usePalette();
 
-  const defaultBg: HomeBackgroundConfig = { enabled: true, opacity: 0.6, speed: 25, shieldSize: 90, shieldGap: 30 };
+  const defaultBg: HomeBackgroundConfig = { enabled: true, opacity: 0.6, speed: 25, shieldSize: 90, shieldGap: 30, backgroundColor: '#173d35' };
 
   let identity = $state<SiteIdentity | null>(null);
   let loading = $state(true);
@@ -221,6 +221,9 @@
           <div><p class="eyebrow">Home</p><h2>Fondo dinámico del Home</h2></div>
         </div>
         <form onsubmit={(event) => { event.preventDefault(); saveBackground(); }}>
+          <label>Color del fondo
+            <div class="color-input"><input type="color" bind:value={bg.backgroundColor} disabled={savingBg} /><input bind:value={bg.backgroundColor} placeholder="#173d35" disabled={savingBg} /></div>
+          </label>
           <label class="range-label">
             <span>Opacidad del vidrio esmerilado — <strong>{bg.opacity.toFixed(1)}</strong></span>
             <input type="range" min="0.1" max="0.9" step="0.1" bind:value={bg.opacity} disabled={savingBg} />

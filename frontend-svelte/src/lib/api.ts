@@ -233,6 +233,7 @@ export interface HomeBackgroundConfig {
   speed: number;
   shieldSize: number;
   shieldGap: number;
+  backgroundColor: string;
 }
 
 export interface SiteIdentity {

@@ -36,6 +36,7 @@ export interface HomeBackgroundConfig {
   speed: number;
   shieldSize: number;
   shieldGap: number;
+  backgroundColor: string;
 }
 
 const DEFAULT_HOME_BACKGROUND: HomeBackgroundConfig = {
@@ -44,6 +45,7 @@ const DEFAULT_HOME_BACKGROUND: HomeBackgroundConfig = {
   speed: 25,
   shieldSize: 90,
   shieldGap: 30,
+  backgroundColor: '#173d35',
 };
 
 export interface SiteIdentityIcon {
@@ -374,12 +376,17 @@ export class SiteIdentityService {
       if (!Number.isFinite(num)) return fallback;
       return Math.min(max, Math.max(min, num));
     };
+    const isValidHex = (value: unknown): value is string =>
+      typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value);
     return {
       enabled: typeof source.enabled === 'boolean' ? source.enabled : DEFAULT_HOME_BACKGROUND.enabled,
       opacity: clamp(source.opacity, 0.1, 0.9, DEFAULT_HOME_BACKGROUND.opacity),
       speed: clamp(source.speed, 10, 40, DEFAULT_HOME_BACKGROUND.speed),
       shieldSize: clamp(source.shieldSize, 60, 120, DEFAULT_HOME_BACKGROUND.shieldSize),
       shieldGap: clamp(source.shieldGap, 10, 50, DEFAULT_HOME_BACKGROUND.shieldGap),
+      backgroundColor: isValidHex(source.backgroundColor)
+        ? source.backgroundColor
+        : DEFAULT_HOME_BACKGROUND.backgroundColor,
     };
   }
 
