@@ -15,6 +15,7 @@
   let notice = $state('');
 
   let title = $state('');
+  let slogan = $state('');
   let iconFile = $state<File | null>(null);
   let faviconFile = $state<File | null>(null);
   let bg = $state<HomeBackgroundConfig>({ ...defaultBg });
@@ -28,6 +29,7 @@
     try {
       identity = await getSiteIdentity();
       title = identity.title;
+      slogan = identity.slogan ?? '';
       if (identity.homeBackground) bg = { ...identity.homeBackground };
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudo cargar la identidad del sitio.';
@@ -59,6 +61,7 @@
     try {
       const formData = new FormData();
       formData.append('title', title.trim());
+      formData.append('slogan', slogan.trim());
       formData.append('paletteId', selectedPaletteId);
       if (iconFile) formData.append('icon', iconFile);
       const updated = await updateSiteIdentity(formData);
@@ -144,6 +147,8 @@
         </div>
         <form onsubmit={(event) => { event.preventDefault(); saveIdentity(); }}>
           <label>Título del sitio<input bind:value={title} placeholder="Ligas Deportivas" disabled={saving} /></label>
+
+          <label>Slogan del sitio<input bind:value={slogan} placeholder="Pasión por el deporte" disabled={saving} /></label>
 
           <label>
             Ícono

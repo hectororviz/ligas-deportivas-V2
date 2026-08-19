@@ -18,6 +18,7 @@ const sharp = require('sharp');
 
 export interface SiteIdentityResponse {
   title: string;
+  slogan: string | null;
   iconUrl: string | null;
   favicon: {
     url: string;
@@ -105,6 +106,7 @@ export class SiteIdentityService {
       where: { id: existing.id },
       update: {
         title: dto.title,
+        slogan: dto.slogan !== undefined ? (dto.slogan.trim() || null) : existing.slogan,
         iconKey: iconKey !== undefined ? iconKey : existing.iconKey,
         flyerKey: flyerKey !== undefined ? flyerKey : existing.flyerKey,
         paletteId: dto.paletteId !== undefined ? dto.paletteId : existing.paletteId,
@@ -115,6 +117,7 @@ export class SiteIdentityService {
       create: {
         id: existing.id,
         title: dto.title,
+        slogan: dto.slogan?.trim() || null,
         iconKey: iconKey ?? null,
         flyerKey: flyerKey ?? null,
         paletteId: dto.paletteId ?? null,
@@ -342,6 +345,7 @@ export class SiteIdentityService {
     }
     return {
       title: identity.title,
+      slogan: identity.slogan ?? null,
       iconUrl,
       favicon,
       flyerUrl,

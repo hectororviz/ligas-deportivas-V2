@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getHomeSummary, getProfile, hasSession, logout, listAllClubs, getSiteIdentity, type AuthUser, type HomeSummary, type HomeMatchday, type Club, type HomeBackgroundConfig } from '$lib/api';
-  import { loginModalState } from '$lib/login-modal.svelte';
+  import { getHomeSummary, getProfile, hasSession, listAllClubs, getSiteIdentity, type AuthUser, type HomeSummary, type HomeMatchday, type Club, type HomeBackgroundConfig } from '$lib/api';
 
   let user: AuthUser | null = null;
   let summary: HomeSummary | null = null;
@@ -11,6 +10,8 @@
   let clubs: Club[] = [];
   let bannerShields: { logoUrl: string | null | undefined; color: string | null | undefined; label: string }[] = [];
   let homeBg: HomeBackgroundConfig = { enabled: true, opacity: 0.6, speed: 25, shieldSize: 90, shieldGap: 30 };
+  let siteTitle = 'Ligas Deportivas';
+  let siteSlogan = '';
 
   onMount(async () => {
     try {
@@ -22,6 +23,10 @@
       summary = s;
       clubs = cs;
       if (ident?.homeBackground) homeBg = ident.homeBackground;
+      if (ident) {
+        if (ident.title) siteTitle = ident.title;
+        siteSlogan = ident.slogan ?? '';
+      }
       bannerShields = buildBannerShields(cs);
     } catch {
       error = 'No pudimos cargar el resumen de torneos.';
@@ -45,11 +50,6 @@
 
   function toggleTournament(id: number) {
     selectedTournamentId = selectedTournamentId === id ? null : id;
-  }
-
-  async function signOut() {
-    await logout();
-    window.location.href = '/';
   }
 
   function formatNextMatchday(md: HomeMatchday | null): string {
@@ -118,18 +118,15 @@
         <div class="banner-glass"></div>
       {/if}
 
+      {#if user}
+        <p class="banner-greeting">Hola, {user.firstName}</p>
+      {/if}
+
       <div class="banner-content">
-        <p class="banner-eyebrow">{user ? `Hola, ${user.firstName}` : 'Ligas Deportivas'}</p>
-        <h1>Torneos vigentes</h1>
-        <p class="banner-sub">Resumen de torneos activos y posiciones por zona.</p>
-        <div class="banner-actions">
-          {#if user}
-            <a class="button primary" href="/leagues">Ver ligas</a>
-            <button class="button secondary" onclick={signOut}>Cerrar sesión</button>
-          {:else}
-            <button class="button primary" onclick={() => loginModalState.openModal()}>Ingresar</button>
-          {/if}
-        </div>
+        <h1>{siteTitle}</h1>
+        {#if siteSlogan}
+          <p class="banner-sub">{siteSlogan}</p>
+        {/if}
       </div>
     </section>
     {#if error}
@@ -212,6 +209,7 @@
     justify-content: center;
     min-height: 340px;
     border-radius: 1.5rem;
+    border: 1px solid rgba(0, 0, 0, 0.4);
     background: var(--color-hero);
     box-shadow: 0 24px 60px var(--color-shadow);
     padding: clamp(2rem, 5vw, 4rem);
@@ -255,6 +253,17 @@
     background: rgba(15, 23, 42, var(--glass-opacity));
   }
 
+  .banner-greeting {
+    position: absolute;
+    top: 1rem;
+    left: 1.25rem;
+    z-index: 10;
+    margin: 0;
+    font-size: .9rem;
+    font-weight: 600;
+    color: rgba(255,255,255,.92);
+    text-shadow: 0 2px 8px rgba(0,0,0,.45);
+  }
   .banner-content {
     position: relative;
     z-index: 10;
@@ -265,15 +274,6 @@
     text-align: center;
     gap: .5rem;
     color: #fff;
-  }
-  .banner-eyebrow {
-    margin: 0;
-    font-size: .74rem;
-    font-weight: 700;
-    letter-spacing: .18em;
-    text-transform: uppercase;
-    color: rgba(255,255,255,.8);
-    text-shadow: 0 2px 8px rgba(0,0,0,.4);
   }
   .banner-content h1 {
     margin: 0;
@@ -288,8 +288,8 @@
     color: rgba(255,255,255,.88);
     text-shadow: 0 2px 8px rgba(0,0,0,.4);
     line-height: 1.5;
+    max-width: 56ch;
   }
-  .banner-actions { display: flex; gap: .6rem; flex-wrap: wrap; justify-content: center; margin-top: .75rem; }
 
   @keyframes marquee-right {
     from { transform: translateX(-50%); }

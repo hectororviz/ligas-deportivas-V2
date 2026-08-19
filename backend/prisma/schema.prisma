@@ -206,6 +206,7 @@ model Club {
 model SiteIdentity {
   id        Int      @id @default(1)
   title     String   @default("Ligas Deportivas")
+  slogan    String?
   iconKey   String?
   faviconHash String?
   flyerKey  String?

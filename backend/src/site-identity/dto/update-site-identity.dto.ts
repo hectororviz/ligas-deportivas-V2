@@ -7,6 +7,11 @@ export class UpdateSiteIdentityDto {
   title!: string;
 
   @IsOptional()
+  @IsString()
+  @Length(0, 160)
+  slogan?: string;
+
+  @IsOptional()
   @IsBoolean()
   @Transform(({ value }) => {
     if (typeof value === 'boolean') {

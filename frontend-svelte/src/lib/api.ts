@@ -237,6 +237,7 @@ export interface HomeBackgroundConfig {
 
 export interface SiteIdentity {
   title: string;
+  slogan?: string | null;
   iconUrl?: string | null;
   paletteId?: string | null;
   favicon?: { url: string; previewUrl: string; updatedAt: number } | null;
