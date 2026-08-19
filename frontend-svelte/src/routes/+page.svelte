@@ -207,9 +207,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 340px;
+    min-height: 272px;
     border-radius: 1.5rem;
-    border: 1px solid rgba(0, 0, 0, 0.4);
     background: var(--color-hero);
     box-shadow: 0 24px 60px var(--color-shadow);
     padding: clamp(2rem, 5vw, 4rem);
@@ -278,10 +277,15 @@
   .banner-content h1 {
     margin: 0;
     font-family: 'Space Grotesk', sans-serif;
-    font-size: clamp(2rem, 5vw, 3.6rem);
+    font-size: clamp(3rem, 7.5vw, 5.4rem);
     letter-spacing: -.04em;
     line-height: 1.05;
-    text-shadow: 0 3px 16px rgba(0,0,0,.45);
+    text-shadow:
+      0 3px 16px rgba(0,0,0,.45),
+      -1px -1px 0 rgba(0,0,0,.55),
+      1px -1px 0 rgba(0,0,0,.55),
+      -1px 1px 0 rgba(0,0,0,.55),
+      1px 1px 0 rgba(0,0,0,.55);
   }
   .banner-sub {
     margin: 0;
