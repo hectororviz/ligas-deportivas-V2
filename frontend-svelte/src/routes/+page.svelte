@@ -100,13 +100,13 @@
             {#each tournament.zones as zone}
               <article class="zone-card">
                 <div class="zone-header">
-                  <div class="zone-heading">
-                    <p class="card-kicker">{tournament.leagueName} · {tournament.year}</p>
+                  <p class="card-kicker">{tournament.leagueName} · {tournament.year}</p>
+                  <div class="zone-title-row">
                     <h3>Zona {zone.name}</h3>
-                  </div>
-                  <div class="zone-actions">
-                    <a class="zone-btn" href={`/fixtures?torneo=${tournament.id}&zona=${zone.id}`}>Fixture</a>
-                    <a class="zone-btn" href={`/standings?torneo=${tournament.id}&zona=${zone.id}`}>Tabla</a>
+                    <div class="zone-actions">
+                      <a class="zone-btn" href={`/fixtures?torneo=${tournament.id}&zona=${zone.id}`}>Fixture</a>
+                      <a class="zone-btn" href={`/standings?torneo=${tournament.id}&zona=${zone.id}`}>Tabla</a>
+                    </div>
                   </div>
                 </div>
 
@@ -163,7 +163,7 @@
 
   .zone-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap: 1rem;
   }
   .zone-card {
@@ -175,18 +175,23 @@
     background: var(--color-surface);
     box-shadow: 0 16px 45px var(--color-shadow);
   }
-  .zone-header {
+  .zone-header { display: block; }
+  .zone-title-row {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     gap: .75rem;
+    margin-top: .35rem;
   }
-  .zone-heading { min-width: 0; }
-  .zone-heading h3 {
-    margin: .25rem 0 0;
+  .zone-title-row h3 {
+    margin: 0;
     font-family: 'Space Grotesk', sans-serif;
     font-size: 1.25rem;
     letter-spacing: -.02em;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .card-kicker {
     margin: 0;
@@ -246,6 +251,7 @@
     font-weight: 500;
   }
   .stand-pts {
+    margin-left: auto;
     color: var(--color-text-muted);
     font-size: .78rem;
     font-weight: 700;
