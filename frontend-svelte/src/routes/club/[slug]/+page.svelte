@@ -3,7 +3,14 @@
   import { page } from '$app/stores';
   import { getClubAdmin, getAvailableTournaments, joinTournament, leaveTournament, getProfile, canManageModule, type ClubAdminOverview, type AvailableTournament, type AuthUser } from '$lib/api';
   import Modal from '$lib/Modal.svelte';
-  import { Plus, ChevronDown } from '@lucide/svelte';
+  import { Plus, MapPin, Navigation, ArrowUpRight } from '@lucide/svelte';
+
+  const statusLabels: Record<string, string> = {
+    DRAFT: 'Borrador', ACTIVE: 'Activo', FINISHED: 'Finalizado', CANCELLED: 'Cancelado'
+  };
+  const statusClasses: Record<string, string> = {
+    DRAFT: 'badge-muted', ACTIVE: 'badge-active', FINISHED: 'badge-finished', CANCELLED: 'badge-cancelled'
+  };
 
   let data: ClubAdminOverview | null = $state(null);
   let user = $state<AuthUser | null>(null);
@@ -16,7 +23,6 @@
   let showJoinModal = $state(false);
   let availableTournaments = $state<AvailableTournament[]>([]);
   let loadingAvailable = $state(false);
-  let expandedTournaments = $state<Set<number>>(new Set());
 
   let canManageClubes = $derived.by(() => {
     if (canManageModule(user, 'CLUBES')) return true;
@@ -25,11 +31,63 @@
     return user.moduleLevels?.CLUBES === 'MODIFICACION_CLUB' && clubId != null && clubId === data.club.id;
   });
 
-  function toggleTournament(id: number) {
-    const next = new Set(expandedTournaments);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    expandedTournaments = next;
+  let socials = $derived.by(() => {
+    const c = data?.club;
+    if (!c) return [];
+    const list: { kind: 'facebook' | 'instagram'; label: string; href: string; handle: string }[] = [];
+    if (c.facebookUrl) list.push({ kind: 'facebook', label: 'Facebook', href: socialHref(c.facebookUrl, 'facebook'), handle: socialHandle(c.facebookUrl, 'facebook') });
+    if (c.instagramUrl) list.push({ kind: 'instagram', label: 'Instagram', href: socialHref(c.instagramUrl, 'instagram'), handle: socialHandle(c.instagramUrl, 'instagram') });
+    return list;
+  });
+
+  let genderBadges = $derived.by(() => {
+    if (!data) return [];
+    const genders = new Set<string>();
+    for (const t of data.tournaments) for (const c of t.categories) if (c.gender) genders.add(c.gender);
+    return [...genders].sort().map(genderChipLabel);
+  });
+
+  let categoryCount = $derived.by(() => {
+    if (!data) return 0;
+    const names = new Set<string>();
+    for (const t of data.tournaments) for (const c of t.categories) names.add(c.category.name);
+    return names.size;
+  });
+
+  let mapsHref = $derived.by(() => {
+    const c = data?.club;
+    if (!c) return '';
+    const lat = Number(c.latitude);
+    const lon = Number(c.longitude);
+    if (c.latitude != null && c.longitude != null && Number.isFinite(lat) && Number.isFinite(lon)) {
+      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lat},${lon}`)}`;
+    }
+    if (c.homeAddress) {
+      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.homeAddress)}`;
+    }
+    return '';
+  });
+
+  function genderChipLabel(g: string): string {
+    if (g === 'MASCULINO') return 'Fútbol Masculino';
+    if (g === 'FEMENINO') return 'Fútbol Femenino';
+    if (g === 'MIXTO') return 'Fútbol Mixto';
+    return g;
+  }
+
+  function socialHref(url: string, kind: 'facebook' | 'instagram'): string {
+    if (/^https?:\/\//i.test(url)) return url;
+    const base = kind === 'instagram' ? 'https://instagram.com/' : 'https://facebook.com/';
+    return base + url.replace(/^@/, '').replace(/^\/+/, '');
+  }
+
+  function socialHandle(url: string, kind: 'facebook' | 'instagram'): string {
+    const clean = url
+      .replace(/^https?:\/\/(www\.)?(instagram|facebook)\.com\//i, '')
+      .replace(/^@/, '')
+      .replace(/\/+$/, '');
+    if (kind === 'instagram' && clean) return `@${clean}`;
+    return clean;
   }
 
   onMount(() => {
@@ -119,159 +177,201 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </svelte:head>
 
-<main class="page-shell">
+<main class="page-shell club-page">
   {#if loading && !data}
     <section class="loading-card">Cargando club...</section>
   {:else if error && !data}
     <header class="page-header"><div><p class="eyebrow">Club</p><h1>Error</h1></div></header>
     <p class="error-banner">{error}</p>
   {:else if data}
-    <header class="page-header">
-      <div>
-        <p class="eyebrow">Club</p>
-        <div class="club-title-row">
+    <section
+      class="club-hero"
+      style={`--club-primary: ${data.club.primaryColor || '#759b51'}; --club-secondary: ${data.club.secondaryColor || '#d0e87c'};`}
+    >
+      <div class="hero-shape hero-shape-a"></div>
+      <div class="hero-shape hero-shape-b"></div>
+      <div class="hero-stripes"></div>
+
+      <div class="hero-inner">
+        <div class="hero-logo">
           {#if data.club.logoUrl}
-            <img class="club-logo" src={data.club.logoUrl} alt={data.club.name} />
+            <img src={data.club.logoUrl} alt={`Escudo de ${data.club.name}`} />
           {:else}
-            <span class="club-avatar" style={data.club.primaryColor ? `background:${data.club.primaryColor}` : ''}>{initials(data)}</span>
+            <span>{initials(data)}</span>
           {/if}
-          <h1>{data.club.name}</h1>
         </div>
-        {#if data.club.shortName && data.club.shortName !== data.club.name}
-          <p class="muted">{data.club.shortName}</p>
+
+        <div class="hero-text">
+          <p class="hero-kicker">Club</p>
+          <h1>{data.club.name}</h1>
+          {#if data.club.shortName && data.club.shortName !== data.club.name}
+            <p class="hero-short">{data.club.shortName}</p>
+          {/if}
+          <div class="hero-badges">
+            <span class="hero-badge" class:inactive={!data.club.active}>{data.club.active ? 'Activo' : 'Inactivo'}</span>
+            {#each genderBadges as g}<span class="hero-badge">{g}</span>{/each}
+            <span class="hero-badge">{data.tournaments.length} {data.tournaments.length === 1 ? 'torneo' : 'torneos'}</span>
+            {#if categoryCount > 0}<span class="hero-badge">{categoryCount} {categoryCount === 1 ? 'categoría' : 'categorías'}</span>{/if}
+          </div>
+        </div>
+
+        {#if socials.length > 0}
+          <div class="hero-socials">
+            {#each socials as s}
+              <a class="hero-social" href={s.href} target="_blank" rel="noopener noreferrer" aria-label={s.label}>
+                {#if s.kind === 'facebook'}
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+                {:else if s.kind === 'instagram'}
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="20" x="2" y="2" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
+                {/if}
+                <span>{s.label}</span>
+              </a>
+            {/each}
+          </div>
         {/if}
       </div>
-    </header>
+    </section>
+
     {#if error && !showJoinModal}<p class="error-banner">{error}</p>{/if}
     {#if notice}<p class="success-banner">{notice}</p>{/if}
 
-    <div class="club-detail-grid">
-      <section class="club-sidebar">
-        <div class="card-surface club-info-card">
-          <p class="eyebrow">Informacion</p>
-
-          {#if data.club.primaryColor || data.club.secondaryColor}
-            <div class="club-colors" style="margin-bottom:.75rem">
-              <span class="info-label">Colores</span>
-              <div class="color-swatches">
-                {#if data.club.primaryColor}<span class="color-swatch" style={`background:${data.club.primaryColor}`}></span>{/if}
-                {#if data.club.secondaryColor}<span class="color-swatch" style={`background:${data.club.secondaryColor}`}></span>{/if}
-              </div>
-            </div>
-          {/if}
-
-          {#if data.club.homeAddress}
-            <div class="info-row">
-              <span class="info-label">Direccion</span>
-              <span class="info-value">{data.club.homeAddress}</span>
-            </div>
-          {/if}
-
-          <div class="info-row">
-            <span class="info-label">Estado</span>
-            <span class={data.club.active ? 'badge-active' : 'badge-cancelled'}>{data.club.active ? 'Activo' : 'Inactivo'}</span>
+    <div class="profile-grid" class:single={socials.length === 0}>
+      <section class="card-surface participation-card">
+        <div class="list-header">
+          <div>
+            <p class="eyebrow">Competencia</p>
+            <h2>Mi participación</h2>
           </div>
-
-          {#if data.club.instagramUrl || data.club.facebookUrl}
-            <div class="social-links">
-              {#if data.club.instagramUrl}
-                <a class="social-link" href={data.club.instagramUrl.startsWith('http') ? data.club.instagramUrl : `https://instagram.com/${data.club.instagramUrl.replace('@', '')}`} target="_blank" rel="noopener noreferrer">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="20" x="2" y="2" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
-                  Instagram
-                </a>
-              {/if}
-              {#if data.club.facebookUrl}
-                <a class="social-link" href={data.club.facebookUrl.startsWith('http') ? data.club.facebookUrl : `https://facebook.com/${data.club.facebookUrl.replace('@', '')}`} target="_blank" rel="noopener noreferrer">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
-                  Facebook
-                </a>
-              {/if}
-            </div>
-          {/if}
+          <div style="display:flex;align-items:center;gap:.5rem">
+            <button class="button primary small" disabled={saving || !canManageClubes} onclick={openJoinModal}>
+              <Plus size={14} strokeWidth={2} />
+              Participar
+            </button>
+            <span class="count-pill">{data.tournaments.length}</span>
+          </div>
         </div>
 
-        {#if data.club.latitude != null && data.club.longitude != null}
-          <div class="card-surface map-container" id="club-map"></div>
+        {#if data.tournaments.length === 0}
+          <div class="empty-state compact-empty">
+            <h2>Sin torneos</h2>
+            <p>El club no participa en ningun torneo actualmente.</p>
+          </div>
+        {:else}
+          <div class="tournament-list">
+            {#each data.tournaments as tournament}
+              <article class="club-tournament">
+                <div class="t-card-top">
+                  <div class="t-card-heading">
+                    <span class="t-year">{tournament.year}</span>
+                    <h3>{tournament.name}</h3>
+                    <p class="muted">{tournament.leagueName}</p>
+                  </div>
+                  {#if tournament.status && statusLabels[tournament.status]}
+                    <span class={statusClasses[tournament.status] ?? 'badge-muted'}>{statusLabels[tournament.status]}</span>
+                  {/if}
+                </div>
+
+                <div class="t-card-meta">
+                  {#if tournament.zone}
+                    <span class="chip"><MapPin size={13} strokeWidth={2} /> Zona {tournament.zone.name}</span>
+                  {/if}
+                  <span class="chip">{tournament.categories.length} {tournament.categories.length === 1 ? 'categoría' : 'categorías'}</span>
+                </div>
+
+                {#if tournament.categories.length > 0}
+                  <div class="t-card-cats">
+                    {#each tournament.categories as cat}
+                      <span class="cat-chip">
+                        {cat.category.name}
+                        {#if cat.kickoffTime}<span class="cat-chip-time">{cat.kickoffTime}</span>{/if}
+                        {#if cat.countsForGeneral}<span class="cat-chip-general">General</span>{/if}
+                      </span>
+                    {/each}
+                  </div>
+                {/if}
+
+                <div class="t-card-actions">
+                  <button
+                    class="leave-btn"
+                    disabled={leaving === tournament.id || !canManageClubes}
+                    onclick={() => handleLeaveTournament(tournament.id)}
+                  >
+                    {leaving === tournament.id ? 'Saliendo...' : 'Salir del torneo'}
+                  </button>
+                  <a class="button primary small" href={`/standings?torneo=${tournament.id}`}>Ver torneo</a>
+                </div>
+              </article>
+            {/each}
+          </div>
         {/if}
       </section>
 
-      <section class="club-main">
-        <div class="card-surface">
-          <div class="list-header">
-            <div>
-              <p class="eyebrow">Participacion</p>
-              <h2>Torneos</h2>
-            </div>
-            <div style="display:flex;align-items:center;gap:.5rem">
-              <button class="button primary small" disabled={saving || !canManageClubes} onclick={openJoinModal}>
-                <Plus size={14} strokeWidth={2} />
-                Participar
-              </button>
-              <span class="count-pill">{data.tournaments.length}</span>
-            </div>
+      {#if socials.length > 0}
+        <aside class="card-surface follow-card">
+          <p class="eyebrow">Redes sociales</p>
+          <h2>Seguinos</h2>
+          <div class="follow-list">
+            {#each socials as s}
+              <a class="follow-row" href={s.href} target="_blank" rel="noopener noreferrer">
+                <span class="follow-icon">
+                  {#if s.kind === 'facebook'}
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+                  {:else if s.kind === 'instagram'}
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="20" x="2" y="2" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
+                  {/if}
+                </span>
+                <span class="follow-text">
+                  <strong>{s.label}</strong>
+                  {#if s.handle}<span class="muted">{s.handle}</span>{/if}
+                </span>
+                <ArrowUpRight size={16} strokeWidth={2} class="follow-arrow" />
+              </a>
+            {/each}
           </div>
-
-          {#if data.tournaments.length === 0}
-            <div class="empty-state compact-empty">
-              <h2>Sin torneos</h2>
-              <p>El club no participa en ningun torneo actualmente.</p>
-            </div>
-          {:else}
-            <div class="tournament-list">
-              {#each data.tournaments as tournament}
-                <article class="tournament-card club-tournament">
-                  <div class="tournament-head">
-                    <div>
-                      <p class="card-kicker">{tournament.year}</p>
-                      <h3>{tournament.leagueName} · {tournament.name}</h3>
-                    </div>
-                    <button
-                      class="button secondary leave-btn"
-                      disabled={leaving === tournament.id || !canManageClubes}
-                      onclick={() => handleLeaveTournament(tournament.id)}
-                    >
-                      {leaving === tournament.id ? 'Saliendo...' : 'Salir del torneo'}
-                    </button>
-                  </div>
-
-                  {#if tournament.zone}
-                    <p class="muted" style="margin:.5rem 0 0">Zona: {tournament.zone.name}</p>
-                  {/if}
-
-                  <button
-                    class="accordion-toggle"
-                    class:open={expandedTournaments.has(tournament.id)}
-                    onclick={() => toggleTournament(tournament.id)}
-                    aria-expanded={expandedTournaments.has(tournament.id)}
-                  >
-                    <span>Categorías ({tournament.categories.length})</span>
-                    <span class="chevron"><ChevronDown size={14} strokeWidth={2} /></span>
-                  </button>
-
-                  {#if expandedTournaments.has(tournament.id)}
-                    {#if tournament.categories.length > 0}
-                      <div class="category-list">
-                        {#each tournament.categories as cat}
-                          <div class="category-item">
-                            <span>{cat.category.name}</span>
-                            <div class="category-meta">
-                              {#if cat.kickoffTime}<span class="badge-muted">{cat.kickoffTime}</span>{/if}
-                              {#if cat.countsForGeneral}<span class="tag tag-green">General</span>{/if}
-                            </div>
-                          </div>
-                        {/each}
-                      </div>
-                    {:else}
-                      <p class="muted" style="margin-top:.5rem">Sin categorías asignadas.</p>
-                    {/if}
-                  {/if}
-                </article>
-              {/each}
-            </div>
-          {/if}
-        </div>
-      </section>
+        </aside>
+      {/if}
     </div>
+
+    <section class="card-surface location-card">
+      <div class="location-header">
+        <div>
+          <p class="eyebrow">Ubicación</p>
+          <h2>Dónde estamos</h2>
+        </div>
+        {#if mapsHref}
+          <a class="button primary" href={mapsHref} target="_blank" rel="noopener noreferrer">
+            <Navigation size={16} strokeWidth={2} />
+            Cómo llegar
+          </a>
+        {/if}
+      </div>
+
+      <div class="location-body">
+        {#if data.club.homeAddress || data.club.primaryColor || data.club.secondaryColor}
+          <div class="location-info">
+            {#if data.club.homeAddress}
+              <p class="location-address">
+                <MapPin size={16} strokeWidth={2} class="addr-icon" />
+                <span>{data.club.homeAddress}</span>
+              </p>
+            {/if}
+            {#if data.club.primaryColor || data.club.secondaryColor}
+              <div class="location-colors">
+                <span class="info-label">Colores del club</span>
+                <div class="color-swatches">
+                  {#if data.club.primaryColor}<span class="color-swatch" style={`background:${data.club.primaryColor}`}></span>{/if}
+                  {#if data.club.secondaryColor}<span class="color-swatch" style={`background:${data.club.secondaryColor}`}></span>{/if}
+                </div>
+              </div>
+            {/if}
+          </div>
+        {/if}
+
+        {#if data.club.latitude != null && data.club.longitude != null}
+          <div class="map-container" id="club-map"></div>
+        {/if}
+      </div>
+    </section>
   {/if}
 </main>
 
@@ -306,76 +406,313 @@
 {/if}
 
 <style>
-  .club-title-row {
-    display: flex; align-items: center; gap: .8rem; margin-top: .35rem;
+  .club-page { max-width: 1200px; margin: 0 auto; }
+
+  /* Hero */
+  .club-hero {
+    position: relative;
+    overflow: hidden;
+    border-radius: 1.5rem;
+    color: #fff;
+    padding: clamp(1.75rem, 4vw, 3rem);
+    background:
+      radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--club-primary) 50%, transparent) 0%, transparent 55%),
+      radial-gradient(100% 90% at 0% 100%, color-mix(in srgb, var(--club-secondary) 38%, transparent) 0%, transparent 55%),
+      linear-gradient(125deg, #0c1612 0%, #172a22 100%);
+    box-shadow: 0 24px 60px var(--color-shadow);
   }
-  .club-title-row h1 {
-    margin: 0; font-family: 'Space Grotesk', sans-serif;
-    font-size: clamp(2.5rem, 5vw, 4.5rem); color: var(--color-heading); letter-spacing: -.04em;
+  .hero-shape {
+    position: absolute;
+    z-index: 0;
+    border-radius: 1.5rem;
+    pointer-events: none;
   }
-  .club-logo { width: 3.5rem; height: 3.5rem; border-radius: .75rem; object-fit: contain; }
-  .club-avatar {
-    width: 3.5rem; height: 3.5rem; display: grid; place-items: center;
-    border-radius: .75rem; color: #fff; background: var(--color-accent);
-    font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 1.2rem;
+  .hero-shape-a {
+    width: 420px; height: 420px; right: -130px; top: -170px;
+    background: color-mix(in srgb, var(--club-primary) 45%, transparent);
+    transform: rotate(28deg);
   }
-  .club-detail-grid {
-    display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); gap: 1.5rem; margin-top: 1rem;
+  .hero-shape-b {
+    width: 300px; height: 300px; left: -110px; bottom: -150px;
+    background: color-mix(in srgb, var(--club-secondary) 32%, transparent);
+    transform: rotate(-18deg);
   }
-  .club-info-card { padding: 1.4rem; }
-  .info-label { color: var(--color-text-muted); font-size: .78rem; font-weight: 600; text-transform: uppercase; }
-  .info-row {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: .6rem 0; border-top: 1px solid var(--color-border);
+  .hero-stripes {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    opacity: .28;
+    background: repeating-linear-gradient(
+      115deg,
+      transparent 0 26px,
+      color-mix(in srgb, var(--club-primary) 30%, transparent) 26px 28px,
+      transparent 28px 54px,
+      color-mix(in srgb, var(--club-secondary) 25%, transparent) 54px 56px,
+      transparent 56px 84px
+    );
+    mask-image: linear-gradient(180deg, rgba(0,0,0,.9) 0%, rgba(0,0,0,.2) 60%, transparent 100%);
   }
-  .info-row:first-of-type { border-top: 0; }
-  .info-value { color: var(--color-text); font-weight: 500; text-align: right; max-width: 60%; }
-  .color-swatches { display: flex; gap: .4rem; margin-top: .3rem; }
-  .color-swatch { width: 1.5rem; height: 1.5rem; border-radius: .4rem; border: 1px solid var(--color-border); }
-  .social-links { display: flex; gap: .5rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--color-border); }
-  .social-link {
-    display: flex; align-items: center; gap: .4rem; padding: .45rem .7rem;
-    border-radius: .5rem; color: var(--color-text-muted); text-decoration: none;
-    font-size: .82rem; font-weight: 600; transition: background 150ms ease;
-  }
-  .social-link:hover { background: var(--color-surface-hover); color: var(--color-text); }
-  .map-container { padding: 0; overflow: hidden; height: 250px; border-radius: .7rem; position: relative; z-index: 0; }
-  .map-container :global(.leaflet-container) { width: 100%; height: 100%; border-radius: .7rem; z-index: 0; }
-  .map-container :global(.leaflet-pane),
-  .map-container :global(.leaflet-top),
-  .map-container :global(.leaflet-bottom) { z-index: 1; }
-  .tournament-list { margin-top: 1rem; display: grid; gap: .75rem; }
-  .club-tournament { padding: 1.4rem; }
-  .club-tournament h3 { font-family: 'Space Grotesk', sans-serif; font-size: 1.25rem; margin: .25rem 0 0; }
-  .tournament-head { display: flex; justify-content: space-between; align-items: start; gap: 1rem; }
-  .leave-btn { white-space: nowrap; font-size: .82rem; padding: .55rem .85rem; }
-  .accordion-toggle {
+  .hero-inner {
+    position: relative;
+    z-index: 2;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    margin-top: .75rem;
-    padding: .5rem .75rem;
+    gap: clamp(1.25rem, 3vw, 2.25rem);
+    flex-wrap: wrap;
+  }
+  .hero-logo {
+    flex: 0 0 auto;
+    width: clamp(88px, 12vw, 120px);
+    height: clamp(88px, 12vw, 120px);
+    display: grid;
+    place-items: center;
+    border-radius: 1.5rem;
+    background: #fff;
+    box-shadow: 0 16px 40px rgba(0,0,0,.35);
+    padding: .75rem;
+  }
+  .hero-logo img {
+    width: 100%; height: 100%;
+    object-fit: contain;
+    border-radius: 1rem;
+  }
+  .hero-logo span {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: clamp(1.8rem, 4vw, 2.6rem);
+    color: var(--club-primary);
+  }
+  .hero-text { flex: 1 1 320px; min-width: 0; }
+  .hero-kicker {
+    margin: 0;
+    font-size: .74rem;
+    font-weight: 700;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,.65);
+  }
+  .hero-text h1 {
+    margin: .35rem 0 0;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: clamp(2rem, 5vw, 3.4rem);
+    letter-spacing: -.04em;
+    line-height: 1.05;
+    text-wrap: balance;
+  }
+  .hero-short {
+    margin: .4rem 0 0;
+    color: rgba(255,255,255,.75);
+    font-weight: 500;
+    font-size: 1rem;
+  }
+  .hero-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .45rem;
+    margin-top: 1rem;
+  }
+  .hero-badge {
+    padding: .3rem .7rem;
+    border-radius: 999px;
+    font-size: .78rem;
+    font-weight: 600;
+    color: #fff;
+    background: rgba(255,255,255,.14);
+    border: 1px solid rgba(255,255,255,.18);
+  }
+  .hero-badge.inactive {
+    background: rgba(214, 74, 64, .4);
+    border-color: rgba(255,255,255,.25);
+  }
+  .hero-socials {
+    display: flex;
+    gap: .5rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .hero-social {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    padding: .55rem .8rem;
+    border-radius: 999px;
+    color: #fff;
+    text-decoration: none;
+    font-size: .82rem;
+    font-weight: 600;
+    background: rgba(255,255,255,.14);
+    border: 1px solid rgba(255,255,255,.2);
+    transition: background 150ms ease, transform 150ms ease;
+  }
+  .hero-social:hover { background: rgba(255,255,255,.24); transform: translateY(-1px); }
+  .hero-social:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+  /* Grid */
+  .profile-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 340px);
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+    align-items: start;
+  }
+  .profile-grid.single { grid-template-columns: minmax(0, 1fr); }
+  .participation-card, .follow-card, .location-card { padding: 1.5rem; }
+  .participation-card h2, .follow-card h2, .location-card h2 {
+    margin: .35rem 0 0;
+    font-family: 'Space Grotesk', sans-serif;
+    letter-spacing: -.04em;
+    font-size: 1.5rem;
+  }
+
+  /* Participation */
+  .tournament-list { margin-top: 1.25rem; display: grid; gap: .9rem; }
+  .club-tournament {
+    padding: 1.25rem;
     border: 1px solid var(--color-border);
+    border-radius: 1rem;
+    background: var(--color-input);
+  }
+  .t-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  .t-card-heading .t-year {
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--color-accent-text);
+  }
+  .t-card-heading h3 {
+    margin: .25rem 0 0;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 1.2rem;
+    letter-spacing: -.02em;
+  }
+  .t-card-heading .muted { margin: .15rem 0 0; font-size: .82rem; }
+  .t-card-meta { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .85rem; }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: .25rem .6rem;
+    border-radius: 999px;
+    font-size: .76rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    background: var(--color-surface-hover);
+  }
+  .t-card-cats { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .85rem; }
+  .cat-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .3rem .6rem;
     border-radius: .5rem;
-    background: var(--color-surface);
+    font-size: .8rem;
+    font-weight: 600;
+    color: var(--color-accent-text);
+    background: var(--color-accent-bg);
+  }
+  .cat-chip-time { font-weight: 500; opacity: .8; }
+  .cat-chip-general {
+    font-size: .68rem;
+    font-weight: 700;
+    padding: .1rem .4rem;
+    border-radius: 999px;
+    color: var(--color-success);
+    background: var(--color-success-bg);
+  }
+  .t-card-actions {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--color-border);
+  }
+  .t-card-actions .button.primary { margin-left: auto; }
+  .leave-btn {
+    border: 0;
+    background: transparent;
     color: var(--color-text-muted);
     font-size: .82rem;
     font-weight: 600;
     cursor: pointer;
-    text-align: left;
+    padding: .5rem .6rem;
+    border-radius: .5rem;
   }
-  .accordion-toggle:hover { background: var(--color-surface-hover); color: var(--color-text); }
-  .accordion-toggle .chevron { display: inline-flex; align-items: center; transition: transform 150ms ease; }
-  .accordion-toggle.open .chevron { transform: rotate(180deg); }
-  .category-list { margin-top: .75rem; display: grid; gap: .35rem; }
-  .category-item {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: .55rem .75rem; border-radius: .5rem; background: var(--color-surface-hover);
-    font-size: .88rem; font-weight: 500;
+  .leave-btn:hover:not(:disabled) { background: var(--color-error-bg); color: var(--color-error); }
+  .leave-btn:disabled { opacity: .5; cursor: default; }
+
+  /* Seguinos */
+  .follow-list { display: grid; gap: .4rem; margin-top: 1rem; }
+  .follow-row {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: .7rem .75rem;
+    border-radius: .75rem;
+    text-decoration: none;
+    color: var(--color-text);
+    transition: background 150ms ease;
   }
-  .category-meta { display: flex; align-items: center; gap: .4rem; }
-  .club-title-row { margin-top: .35rem; }
+  .follow-row:hover { background: var(--color-surface-hover); }
+  .follow-row:focus-visible { outline: 2px solid var(--color-input-focus); outline-offset: 2px; }
+  .follow-icon {
+    width: 2.4rem; height: 2.4rem;
+    display: grid; place-items: center;
+    flex: 0 0 auto;
+    border-radius: .7rem;
+    color: var(--color-accent-text);
+    background: var(--color-accent-bg);
+  }
+  .follow-text { flex: 1; min-width: 0; display: grid; gap: .1rem; }
+  .follow-text strong { font-size: .9rem; }
+  .follow-text .muted { font-size: .78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .follow-arrow { color: var(--color-text-light); flex: 0 0 auto; }
+
+  /* Location */
+  .location-card { margin-top: 1.5rem; }
+  .location-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .location-body { margin-top: 1.25rem; display: grid; gap: 1rem; }
+  .location-address {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin: 0;
+    font-weight: 500;
+    color: var(--color-text);
+  }
+  .addr-icon { color: var(--color-accent-text); flex: 0 0 auto; }
+  .location-colors { margin-top: 1rem; }
+  .location-colors .info-label { display: block; margin-bottom: .3rem; }
+  .info-label { color: var(--color-text-muted); font-size: .78rem; font-weight: 600; text-transform: uppercase; }
+  .color-swatches { display: flex; gap: .4rem; }
+  .color-swatch { width: 1.5rem; height: 1.5rem; border-radius: .4rem; border: 1px solid var(--color-border); }
+  .map-container {
+    padding: 0;
+    overflow: hidden;
+    height: 260px;
+    border-radius: .8rem;
+    border: 1px solid var(--color-border);
+    position: relative;
+    z-index: 0;
+  }
+  .map-container :global(.leaflet-container) { width: 100%; height: 100%; border-radius: .8rem; z-index: 0; }
+  .map-container :global(.leaflet-pane),
+  .map-container :global(.leaflet-top),
+  .map-container :global(.leaflet-bottom) { z-index: 1; }
+
+  .button.small { padding: .4rem .7rem; font-size: .8rem; display: inline-flex; align-items: center; gap: .4rem; }
 
   .tournament-join-list { display: grid; gap: .5rem; margin: .5rem 0; }
   .join-row {
@@ -386,10 +723,9 @@
   .join-row strong { font-size: .88rem; display: block; }
   .join-row span { font-size: .75rem; }
 
-  .button.small { padding: .4rem .7rem; font-size: .8rem; }
-
   @media (max-width: 767px) {
-    .club-detail-grid { grid-template-columns: 1fr; }
-    .tournament-head { flex-direction: column; }
+    .profile-grid { grid-template-columns: 1fr; }
+    .hero-inner { flex-direction: column; align-items: flex-start; }
+    .hero-socials { width: 100%; }
   }
 </style>

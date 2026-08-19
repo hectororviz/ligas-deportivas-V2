@@ -911,7 +911,9 @@ export async function fetchPosterTemplatePreview(competitionId: number, matchId:
 
 export interface ClubAdminTournament {
   id: number; name: string; year: number; leagueName: string;
-  categories: { id: number; category: { id: number; name: string }; kickoffTime?: string|null; countsForGeneral: boolean }[];
+  status?: string;
+  canLeave?: boolean;
+  categories: { id: number; category: { id: number; name: string }; kickoffTime?: string|null; countsForGeneral: boolean; gender?: string }[];
   zone?: { id: number; name: string }|null;
 }
 
