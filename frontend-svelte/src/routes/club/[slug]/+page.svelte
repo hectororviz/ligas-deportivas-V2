@@ -78,8 +78,6 @@
     return '';
   });
 
-  let heroNeedsOverlay = $derived.by(() => isLightColor(data?.club.primaryColor));
-
   function genderChipLabel(g: string): string {
     if (g === 'MASCULINO') return 'Fútbol Masculino';
     if (g === 'FEMENINO') return 'Fútbol Femenino';
@@ -100,17 +98,6 @@
       .replace(/\/+$/, '');
     if (kind === 'instagram' && clean) return `@${clean}`;
     return clean;
-  }
-
-  function isLightColor(hex: string | null | undefined): boolean {
-    if (!hex) return false;
-    const h = hex.replace('#', '');
-    if (h.length < 6) return false;
-    const r = parseInt(h.slice(0, 2), 16);
-    const g = parseInt(h.slice(2, 4), 16);
-    const b = parseInt(h.slice(4, 6), 16);
-    if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return false;
-    return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6;
   }
 
   function eventDay(date: string | null): string {
@@ -239,10 +226,15 @@
   {:else if data}
     <section
       class="club-hero"
-      class:light={heroNeedsOverlay}
       style={`--club-primary: ${data.club.primaryColor || '#759b51'}; --club-secondary: ${data.club.secondaryColor || '#38622e'};`}
     >
-      <div class="hero-overlay"></div>
+      <div class="hero-layer hero-dots"></div>
+      <div class="hero-layer hero-lines"></div>
+      <div class="hero-layer hero-wedge"></div>
+      <div class="hero-layer hero-accent"></div>
+      <div class="hero-layer hero-light"></div>
+      <div class="hero-layer hero-shadow"></div>
+
       <span class="hero-status" class:inactive={!data.club.active}>{data.club.active ? 'Activo' : 'Inactivo'}</span>
 
       <div class="hero-inner">
@@ -453,7 +445,7 @@
           {#if events.length > 0}
             <div class="event-list">
               {#each events as ev}
-                <div class="event-row">
+                <a class="event-row" href={`/fixtures?torneo=${ev.tournamentId}&zona=${ev.zoneId}&fecha=${ev.matchday}`}>
                   <div class="event-date">
                     <strong>{eventDay(ev.date)}</strong>
                     {#if eventMonth(ev.date)}<span>{eventMonth(ev.date)}</span>{/if}
@@ -462,7 +454,7 @@
                     <strong>{ev.tournamentName}</strong>
                     <span class="muted">{eventDetail(ev)}</span>
                   </div>
-                </div>
+                </a>
               {/each}
             </div>
           {:else}
@@ -514,22 +506,68 @@
     border-radius: 1.5rem;
     color: #fff;
     padding: clamp(1.75rem, 4vw, 3rem);
-    background: linear-gradient(45deg, var(--club-primary), var(--club-secondary));
+    background-color: var(--club-primary);
     box-shadow: 0 24px 60px var(--color-shadow);
   }
-  .hero-overlay {
-    position: absolute;
+
+  /* Capas geométricas */
+  .hero-layer { position: absolute; pointer-events: none; }
+
+  .hero-dots {
     inset: 0;
-    background: rgba(0, 0, 0, 0);
-    transition: background 200ms ease;
-    pointer-events: none;
+    z-index: 0;
+    background-image: radial-gradient(rgba(255,255,255,0.08) 1px, transparent 1px);
+    background-size: 18px 18px;
   }
-  .club-hero.light .hero-overlay { background: rgba(0, 0, 0, 0.45); }
+  .hero-lines {
+    inset: 0;
+    z-index: 0;
+    background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.05) 0 1px, transparent 1px 14px);
+  }
+  .hero-wedge {
+    top: -80%;
+    right: -10%;
+    width: 60%;
+    height: 250%;
+    transform: skewX(-25deg);
+    z-index: 1;
+    background: linear-gradient(135deg, transparent 40%, var(--club-secondary) 100%);
+    opacity: 0.4;
+  }
+  .hero-accent {
+    bottom: -40%;
+    left: -10%;
+    width: 40%;
+    height: 80%;
+    transform: rotate(15deg) skewX(-15deg);
+    border-radius: 60px;
+    z-index: 1;
+    background: var(--club-secondary);
+    opacity: 0.15;
+  }
+  .hero-light {
+    top: -40%;
+    left: -15%;
+    width: 40%;
+    height: 120%;
+    transform: rotate(45deg);
+    z-index: 1;
+    background: rgba(255,255,255,0.15);
+  }
+  .hero-shadow {
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 45%;
+    z-index: 1;
+    background: linear-gradient(to top, rgba(0,0,0,0.15), transparent);
+  }
+
   .hero-status {
     position: absolute;
     top: 1rem;
     right: 1rem;
-    z-index: 2;
+    z-index: 10;
     padding: .35rem .85rem;
     border-radius: 999px;
     background: var(--color-success);
@@ -540,7 +578,7 @@
   .hero-status.inactive { background: var(--color-error); }
   .hero-inner {
     position: relative;
-    z-index: 2;
+    z-index: 10;
     display: flex;
     align-items: center;
     gap: clamp(1.25rem, 3vw, 2.25rem);
@@ -548,8 +586,8 @@
   }
   .hero-logo {
     flex: 0 0 auto;
-    width: clamp(88px, 12vw, 120px);
-    height: clamp(88px, 12vw, 120px);
+    width: clamp(114px, 15vw, 156px);
+    height: clamp(114px, 15vw, 156px);
     display: grid;
     place-items: center;
     border-radius: 12px;
@@ -561,7 +599,7 @@
   .hero-logo span {
     font-family: 'Space Grotesk', sans-serif;
     font-weight: 700;
-    font-size: clamp(1.8rem, 4vw, 2.6rem);
+    font-size: clamp(2.3rem, 5vw, 3.3rem);
     color: var(--club-primary);
   }
   .hero-text { flex: 1 1 320px; min-width: 0; }
@@ -572,18 +610,21 @@
     letter-spacing: -.04em;
     line-height: 1.05;
     text-wrap: balance;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.3);
   }
   .hero-text h2 {
     margin: .4rem 0 0;
     font-size: 1rem;
     font-weight: 500;
     color: rgba(255,255,255,.85);
+    text-shadow: 0 1px 6px rgba(0,0,0,0.3);
   }
   .hero-tagline {
     margin: .6rem 0 0;
     color: rgba(255,255,255,.9);
     line-height: 1.5;
     max-width: 46ch;
+    text-shadow: 0 1px 6px rgba(0,0,0,0.3);
   }
   .hero-badges {
     display: flex;
@@ -816,7 +857,11 @@
     gap: .9rem;
     padding: .7rem 0;
     border-bottom: 1px solid var(--color-border);
+    text-decoration: none;
+    color: var(--color-text);
+    transition: opacity 150ms ease;
   }
+  .event-row:hover { opacity: .7; }
   .event-row:first-child { padding-top: .3rem; }
   .event-row:last-child { border-bottom: 0; }
   .event-date {

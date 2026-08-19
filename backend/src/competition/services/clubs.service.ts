@@ -368,6 +368,7 @@ export class ClubsService {
           tournamentId: zone.tournament.id,
           tournamentName: zone.tournament.name,
           leagueName: zone.tournament.league?.name ?? '—',
+          zoneId: zone.id,
           zoneName: zone.name,
           matchday: matchday.matchday,
           date: matchday.date ? matchday.date.toISOString() : null,

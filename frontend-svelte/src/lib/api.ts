@@ -927,6 +927,7 @@ export interface ClubUpcomingEvent {
   tournamentId: number;
   tournamentName: string;
   leagueName: string;
+  zoneId: number;
   zoneName: string;
   matchday: number;
   date: string | null;
