@@ -1079,6 +1079,9 @@ class FixtureMatchRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final clubNameStyle = theme.textTheme.bodyLarge?.copyWith(
+      color: theme.colorScheme.onSurface,
+    );
     final homePointsLabel = homePoints?.toString() ?? '-';
     final awayPointsLabel = awayPoints?.toString() ?? '-';
     final basePointsStyle = theme.textTheme.bodyMedium;
@@ -1089,7 +1092,7 @@ class FixtureMatchRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
       child: Row(
         children: [
-          Expanded(child: Text(homeName, style: theme.textTheme.bodyLarge)),
+          Expanded(child: Text(homeName, style: clubNameStyle)),
           const SizedBox(width: 8),
           Row(
             mainAxisSize: MainAxisSize.min,
@@ -1106,7 +1109,7 @@ class FixtureMatchRow extends StatelessWidget {
             child: Text(
               awayName,
               textAlign: TextAlign.right,
-              style: theme.textTheme.bodyLarge,
+              style: clubNameStyle,
             ),
           ),
         ],

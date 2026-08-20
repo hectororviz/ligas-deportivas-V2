@@ -275,36 +275,7 @@ class _ZoneMatchDetailContentState extends ConsumerState<_ZoneMatchDetailContent
                     ],
                   ),
                   const SizedBox(height: 16),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Wrap(
-                      spacing: 12,
-                      children: [
-                        OutlinedButton.icon(
-                          onPressed: _downloadingPoster ? null : _downloadPoster,
-                          icon: _downloadingPoster
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : const Icon(Icons.image_outlined),
-                          label: const Text('Descargar placa (1080x1920)'),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: widget.canDownloadSheet && !_downloadingSheet ? _downloadSheet : null,
-                          icon: _downloadingSheet
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : const Icon(Icons.picture_as_pdf_outlined),
-                          label: const Text('Descargar planilla'),
-                        ),
-                      ],
-                    ),
-                  ),
+                  if (!isMobile) _buildDownloadActions(isMobile: false),
                   const SizedBox(height: 24),
                   if (match.categories.isEmpty)
                     Padding(
@@ -316,17 +287,56 @@ class _ZoneMatchDetailContentState extends ConsumerState<_ZoneMatchDetailContent
                       ),
                     )
                   else
-                  _CategoriesTable(
-                    match: match,
-                    zoneId: zoneId,
-                    canEditScores: canEditScores,
-                    canViewPlayerNames: widget.canViewPlayerNames,
-                  ),
+                    _CategoriesTable(
+                      match: match,
+                      zoneId: zoneId,
+                      canEditScores: canEditScores,
+                      canViewPlayerNames: widget.canViewPlayerNames,
+                    ),
+                  if (isMobile) ...[
+                    const SizedBox(height: 24),
+                    _buildDownloadActions(isMobile: true),
+                  ],
                 ],
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildDownloadActions({required bool isMobile}) {
+    return Align(
+      alignment: isMobile ? Alignment.center : Alignment.centerRight,
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 12,
+        runSpacing: 8,
+        children: [
+          OutlinedButton.icon(
+            onPressed: _downloadingPoster ? null : _downloadPoster,
+            icon: _downloadingPoster
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.image_outlined),
+            label: const Text('Descargar placa (1080x1920)'),
+          ),
+          OutlinedButton.icon(
+            onPressed: widget.canDownloadSheet && !_downloadingSheet ? _downloadSheet : null,
+            icon: _downloadingSheet
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.picture_as_pdf_outlined),
+            label: const Text('Descargar planilla'),
+          ),
+        ],
       ),
     );
   }
