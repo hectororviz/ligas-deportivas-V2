@@ -214,9 +214,9 @@
     right: -10%;
     overflow: hidden;
   }
-  .shield-row.row-1 { top: -6%; transform: skewX(-30deg); }
-  .shield-row.row-2 { top: 34%; transform: skewX(30deg); }
-  .shield-row.row-3 { bottom: -6%; transform: skewX(-30deg); }
+  .shield-row.row-1 { top: calc(var(--shield-size) * -0.5); transform: skewX(-30deg); }
+  .shield-row.row-2 { top: 50%; transform: translateY(-50%) skewX(30deg); }
+  .shield-row.row-3 { bottom: calc(var(--shield-size) * -0.5); transform: skewX(-30deg); }
   .shield-track { display: flex; width: max-content; }
   .track-right { animation: marquee-right var(--marquee-speed) linear infinite; }
   .track-left { animation: marquee-left var(--marquee-speed) linear infinite; }
