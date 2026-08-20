@@ -1,9 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
-  import { getClubAdmin, getAvailableTournaments, joinTournament, leaveTournament, getProfile, canManageModule, getClubUpcomingEvents, type ClubAdminOverview, type AvailableTournament, type AuthUser, type ClubUpcomingEvent } from '$lib/api';
+  import { getClubAdmin, getAvailableTournaments, joinTournament, leaveTournament, getProfile, canManageModule, getClubUpcomingEvents, type ClubAdminOverview, type ClubAdminTournament, type AvailableTournament, type AuthUser, type ClubUpcomingEvent } from '$lib/api';
   import Modal from '$lib/Modal.svelte';
-  import { Plus, MapPin, Navigation, ArrowUpRight, ChevronDown, Calendar } from '@lucide/svelte';
+  import { Plus, MapPin, ArrowUpRight, Calendar } from '@lucide/svelte';
+  import CrossTable from '$lib/CrossTable.svelte';
 
   const statusLabels: Record<string, string> = {
     DRAFT: 'Borrador', ACTIVE: 'Activo', FINISHED: 'Finalizado', CANCELLED: 'Cancelado'
@@ -25,13 +26,19 @@
   let showJoinModal = $state(false);
   let availableTournaments = $state<AvailableTournament[]>([]);
   let loadingAvailable = $state(false);
-  let expandedTournaments = $state<Set<number>>(new Set());
 
-  function toggleTournament(id: number) {
-    const next = new Set(expandedTournaments);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    expandedTournaments = next;
+  let showCrosses = $state(false);
+  let crossesTournament: ClubAdminTournament | null = $state(null);
+
+  function openCrosses(tournament: ClubAdminTournament) {
+    if (!tournament.zone) return;
+    crossesTournament = tournament;
+    showCrosses = true;
+  }
+
+  function closeCrosses() {
+    showCrosses = false;
+    crossesTournament = null;
   }
 
   let canManageClubes = $derived.by(() => {
@@ -317,45 +324,25 @@
                     </div>
                     <div class="t-actions">
                       {#if tournament.status && statusLabels[tournament.status]}
-                        <span class={statusClasses[tournament.status] ?? 'badge-muted'}>{statusLabels[tournament.status]}</span>
+                        <span class="t-status {statusClasses[tournament.status] ?? 'badge-muted'}">{statusLabels[tournament.status]}</span>
                       {/if}
-                      <a class="button primary small" href={`/standings?torneo=${tournament.id}`}>Ver torneo ></a>
                     </div>
                   </div>
 
-                  {#if tournament.categories.length > 0}
-                    <button
-                      class="accordion-toggle"
-                      class:open={expandedTournaments.has(tournament.id)}
-                      onclick={() => toggleTournament(tournament.id)}
-                      aria-expanded={expandedTournaments.has(tournament.id)}
-                    >
-                      <span>Ver categorías ({tournament.categories.length})</span>
-                      <span class="chevron"><ChevronDown size={14} strokeWidth={2} /></span>
-                    </button>
-
-                    {#if expandedTournaments.has(tournament.id)}
-                      <div class="t-card-cats">
-                        {#each tournament.categories as cat}
-                          <span class="cat-chip">
-                            {cat.category.name}
-                            {#if cat.kickoffTime}<span class="cat-chip-time">{cat.kickoffTime}</span>{/if}
-                            {#if cat.countsForGeneral}<span class="cat-chip-general">General</span>{/if}
-                          </span>
-                        {/each}
-                      </div>
-                    {/if}
-                  {/if}
-
                   {#if canManageClubes}
                     <div class="t-foot">
-                      <button
-                        class="leave-btn"
-                        disabled={leaving === tournament.id}
-                        onclick={() => handleLeaveTournament(tournament.id)}
-                      >
-                        {leaving === tournament.id ? 'Saliendo...' : 'Salir del torneo'}
-                      </button>
+                      <button class="t-btn" onclick={() => openCrosses(tournament)}>Cruces</button>
+                      <a class="t-btn" href={`/standings?club=${data.club.id}`}>Tabla</a>
+                      <a class="t-btn" href={`/fixtures?club=${data.club.id}`}>Fixture</a>
+                      {#if user?.isAdmin}
+                        <button
+                          class="t-btn t-btn-danger"
+                          disabled={!tournament.canLeave || leaving === tournament.id}
+                          onclick={() => handleLeaveTournament(tournament.id)}
+                        >
+                          {leaving === tournament.id ? 'Saliendo...' : 'Salir del torneo'}
+                        </button>
+                      {/if}
                     </div>
                   {/if}
                 </article>
@@ -492,6 +479,14 @@
           {/each}
         </div>
       {/if}
+    </div>
+  </Modal>
+{/if}
+
+{#if showCrosses && crossesTournament?.zone && data}
+  <Modal onclose={closeCrosses} wide>
+    <div class="modal-form cross-modal">
+      <CrossTable zoneId={crossesTournament.zone.id} clubId={data.club.id} />
     </div>
   </Modal>
 {/if}
@@ -718,61 +713,33 @@
   .t-title .t-zone { display: block; margin-top: .3rem; font-size: .84rem; color: var(--color-text-muted); }
   .t-actions { display: flex; align-items: center; gap: .6rem; flex: 0 0 auto; }
 
-  .accordion-toggle {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    margin-top: .85rem;
-    padding: .5rem .75rem;
+  .t-status {
+    padding: .25rem .75rem;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .t-foot { margin-top: 1rem; display: flex; flex-wrap: wrap; gap: .5rem; }
+  .t-btn {
+    padding: .45rem .8rem;
+    border-radius: .6rem;
     border: 1px solid var(--color-border);
-    border-radius: .5rem;
     background: var(--color-surface);
-    color: var(--color-text-muted);
+    color: var(--color-text);
     font-size: .82rem;
     font-weight: 600;
     cursor: pointer;
-    text-align: left;
-  }
-  .accordion-toggle:hover { background: var(--color-surface-hover); color: var(--color-text); }
-  .accordion-toggle .chevron { display: inline-flex; align-items: center; transition: transform 150ms ease; }
-  .accordion-toggle.open .chevron { transform: rotate(180deg); }
-
-  .t-card-cats { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .85rem; }
-  .cat-chip {
+    text-decoration: none;
     display: inline-flex;
     align-items: center;
     gap: .4rem;
-    padding: .3rem .6rem;
-    border-radius: .5rem;
-    font-size: .8rem;
-    font-weight: 600;
-    color: var(--color-accent-text);
-    background: var(--color-accent-bg);
   }
-  .cat-chip-time { font-weight: 500; opacity: .8; }
-  .cat-chip-general {
-    font-size: .68rem;
-    font-weight: 700;
-    padding: .1rem .4rem;
-    border-radius: 999px;
-    color: var(--color-success);
-    background: var(--color-success-bg);
-  }
-
-  .t-foot { margin-top: 1rem; padding-top: .75rem; border-top: 1px solid var(--color-border); }
-  .leave-btn {
-    border: 0;
-    background: transparent;
-    color: var(--color-text-muted);
-    font-size: .82rem;
-    font-weight: 600;
-    cursor: pointer;
-    padding: .5rem .6rem;
-    border-radius: .5rem;
-  }
-  .leave-btn:hover:not(:disabled) { background: var(--color-error-bg); color: var(--color-error); }
-  .leave-btn:disabled { opacity: .5; cursor: default; }
+  .t-btn:hover { background: var(--color-surface-hover); }
+  .t-btn:disabled { opacity: .45; cursor: default; }
+  .t-btn-danger { color: var(--color-error); }
+  .t-btn-danger:hover:not(:disabled) { background: var(--color-error-bg); }
+  .cross-modal { max-width: 960px; width: 100%; margin: 0 auto; }
 
   /* ===== Ubicación ===== */
   .location-grid {

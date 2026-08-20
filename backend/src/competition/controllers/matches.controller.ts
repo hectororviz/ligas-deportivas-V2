@@ -43,6 +43,14 @@ export class MatchesController {
     return this.matchesService.listByZone(zoneId);
   }
 
+  @Get('zones/:zoneId/clubs/:clubId/cross-table')
+  getClubCrossTable(
+    @Param('zoneId', ParseIntPipe) zoneId: number,
+    @Param('clubId', ParseIntPipe) clubId: number
+  ) {
+    return this.matchesService.getClubCrossTable(zoneId, clubId);
+  }
+
   @Get('matches/:matchId')
   getMatchDetail(@Param('matchId', ParseIntPipe) matchId: number) {
     return this.matchesService.getMatchDetail(matchId);

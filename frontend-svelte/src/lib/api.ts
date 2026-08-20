@@ -572,6 +572,47 @@ export async function getZoneStandings(zoneId: number): Promise<ZoneStanding> {
   return request<ZoneStanding>(`/zones/${zoneId}/standings`);
 }
 
+export interface CrossTableCell {
+  gf: number;
+  ga: number;
+  closedAt: string | null;
+  isPending: boolean;
+}
+
+export interface CrossTableRow {
+  matchId: number;
+  matchday: number;
+  round: string;
+  date: string | null;
+  local: boolean;
+  rival: { id: number; name: string; shortName: string | null } | null;
+  cells: Record<number, CrossTableCell | null>;
+}
+
+export interface ClubCrossTable {
+  zone: {
+    id: number;
+    name: string;
+    tournamentId: number;
+    tournamentName: string;
+    tournamentYear: number;
+    leagueName: string;
+  };
+  club: { id: number; name: string; shortName: string | null };
+  categories: {
+    tournamentCategoryId: number;
+    categoryId: number;
+    categoryName: string;
+    countsForGeneral: boolean;
+    birthYearMin: number;
+  }[];
+  rows: CrossTableRow[];
+}
+
+export async function getClubCrossTable(zoneId: number, clubId: number): Promise<ClubCrossTable> {
+  return request<ClubCrossTable>(`/zones/${zoneId}/clubs/${clubId}/cross-table`);
+}
+
 export async function getTournamentStandings(tournamentId: number): Promise<unknown> {
   return request(`/tournaments/${tournamentId}/standings`);
 }
@@ -941,7 +982,7 @@ export interface ClubAdminTournament {
   status?: string;
   canLeave?: boolean;
   categories: { id: number; category: { id: number; name: string }; kickoffTime?: string|null; countsForGeneral: boolean; gender?: string }[];
-  zone?: { id: number; name: string }|null;
+  zone?: { id: number; name: string; status?: string }|null;
 }
 
 export interface ClubAdminOverview {

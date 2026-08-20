@@ -613,6 +613,128 @@ export class MatchesService {
     };
   }
 
+  async getClubCrossTable(zoneId: number, clubId: number) {
+    const zone = await this.prisma.zone.findUnique({
+      where: { id: zoneId },
+      include: {
+        tournament: {
+          include: {
+            league: true,
+            categories: {
+              where: { enabled: true },
+              include: { category: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!zone) {
+      throw new NotFoundException('Zona no encontrada');
+    }
+
+    const membership = await this.prisma.clubZone.findFirst({
+      where: { clubId, zoneId },
+    });
+    if (!membership) {
+      throw new NotFoundException('El club no pertenece a la zona indicada');
+    }
+
+    const club = await this.prisma.club.findUnique({ where: { id: clubId } });
+    if (!club) {
+      throw new NotFoundException('Club no encontrado');
+    }
+
+    const categories = zone.tournament.categories
+      .map((tournamentCategory) => ({
+        tournamentCategoryId: tournamentCategory.id,
+        categoryId: tournamentCategory.categoryId,
+        categoryName: tournamentCategory.category.name,
+        countsForGeneral: tournamentCategory.countsForGeneral,
+        birthYearMin: tournamentCategory.category.birthYearMin,
+      }))
+      .sort((a, b) => {
+        if (a.countsForGeneral !== b.countsForGeneral) {
+          return a.countsForGeneral ? -1 : 1;
+        }
+        return a.birthYearMin - b.birthYearMin;
+      });
+
+    const matches = await this.prisma.match.findMany({
+      where: {
+        zoneId,
+        OR: [{ homeClubId: clubId }, { awayClubId: clubId }],
+      },
+      orderBy: [{ matchday: 'asc' }, { round: 'asc' }, { id: 'asc' }],
+      include: {
+        homeClub: true,
+        awayClub: true,
+        categories: {
+          include: {
+            tournamentCategory: {
+              include: { category: true },
+            },
+          },
+        },
+      },
+    });
+
+    const rows = matches.map((match) => {
+      const isHome = match.homeClubId === clubId;
+      const rival = isHome ? match.awayClub : match.homeClub;
+      const cells: Record<
+        number,
+        { gf: number; ga: number; closedAt: string | null; isPending: boolean } | null
+      > = {};
+
+      for (const category of categories) {
+        const matchCategory = match.categories.find(
+          (entry) => entry.tournamentCategoryId === category.tournamentCategoryId,
+        );
+        if (!matchCategory) {
+          cells[category.tournamentCategoryId] = null;
+          continue;
+        }
+        cells[category.tournamentCategoryId] = {
+          gf: isHome ? matchCategory.homeScore : matchCategory.awayScore,
+          ga: isHome ? matchCategory.awayScore : matchCategory.homeScore,
+          closedAt: matchCategory.closedAt ? matchCategory.closedAt.toISOString() : null,
+          isPending: matchCategory.isPending,
+        };
+      }
+
+      return {
+        matchId: match.id,
+        matchday: match.matchday,
+        round: match.round,
+        date: match.date ? match.date.toISOString() : null,
+        local: isHome,
+        rival: rival
+          ? { id: rival.id, name: rival.name, shortName: rival.shortName }
+          : null,
+        cells,
+      };
+    });
+
+    return {
+      zone: {
+        id: zone.id,
+        name: zone.name,
+        tournamentId: zone.tournamentId,
+        tournamentName: zone.tournament.name,
+        tournamentYear: zone.tournament.year,
+        leagueName: zone.tournament.league?.name ?? '',
+      },
+      club: {
+        id: club.id,
+        name: club.name,
+        shortName: club.shortName,
+      },
+      categories,
+      rows,
+    };
+  }
+
   async buildMatchDownloadFilename(matchId: number) {
     const match = await this.prisma.match.findUnique({
       where: { id: matchId },
