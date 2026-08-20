@@ -75,17 +75,35 @@
 </section>
 
 <style>
-  .standings-section { padding: 1.25rem 0; border-bottom: 1px solid var(--color-border); }
+  .standings-section { padding: 1.25rem 0; border-bottom: 1px solid var(--color-border); min-width: 0; }
   .zone-heading h2 { margin: .25rem 0 0; font-family: 'Space Grotesk', sans-serif; font-size: 1.5rem; letter-spacing: -.04em; }
   .zone-heading .eyebrow { margin: 0; }
-  .category-block { margin-top: 1.5rem; }
+  .category-block { margin-top: 1.5rem; min-width: 0; }
   .category-title { margin: 0 0 .8rem; font-family: 'Space Grotesk', sans-serif; font-size: 1.15rem; color: var(--color-text); }
-  .table-scroll { overflow-x: auto; }
-  .standings-table { width: 100%; min-width: 620px; border-collapse: collapse; font-size: .9rem; }
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .standings-table { width: 100%; min-width: 620px; border-collapse: separate; border-spacing: 0; font-size: .9rem; }
   .standings-table th { padding: .6rem .4rem; border-bottom: 2px solid var(--color-border); color: var(--color-accent-text); font-size: .75rem; font-weight: 700; text-transform: uppercase; text-align: center; }
   .standings-table th:nth-child(2) { text-align: left; }
   .standings-table td { padding: .55rem .4rem; border-top: 1px solid var(--color-border); text-align: center; }
+  .standings-table tbody tr:first-child td { border-top: 0; }
   .standings-table td:nth-child(2) { text-align: left; font-weight: 600; }
+  .standings-table th:nth-child(1),
+  .standings-table td:nth-child(1) {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    width: 2.75rem;
+    min-width: 2.75rem;
+    background: var(--color-bg);
+  }
+  .standings-table th:nth-child(2),
+  .standings-table td:nth-child(2) {
+    position: sticky;
+    left: 2.75rem;
+    z-index: 2;
+    background: var(--color-bg);
+    box-shadow: 1px 0 0 var(--color-border);
+  }
   .standings-table .position { display: inline-grid; }
   .standings-table .pts { font-weight: 700; color: var(--color-heading); }
   .standings-table tr.club-highlight td { background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface)); font-weight: 800; }
