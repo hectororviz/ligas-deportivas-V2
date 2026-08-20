@@ -191,6 +191,7 @@
   .versus {
     position: relative;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: center;
     gap: clamp(1rem, 4vw, 3rem);
@@ -278,6 +279,13 @@
 
   @media (max-width: 560px) {
     .versus { flex-direction: row; gap: .75rem; padding: 1rem; }
+    .versus-actions {
+      position: static;
+      flex: 0 0 100%;
+      flex-direction: row;
+      justify-content: center;
+      order: 3;
+    }
     .club-block { max-width: 40%; }
     .crest { width: 3.25rem; height: 3.25rem; }
     .club-name { font-size: .9rem; }

@@ -42,6 +42,7 @@
     border: 1px solid var(--color-border);
     border-radius: .8rem;
     background: var(--color-surface);
+    color: var(--color-text);
     cursor: pointer;
     text-align: left;
     transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
