@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { page } from '$app/stores';
   import { assignClubToZone, createZone, deleteZone, finalizeZone, generateFixture, generateManualFixture, getProfile, getTournamentZoneClubs, getTournaments, getZones, previewFixture, removeClubFromZone, canManageModule, type AuthUser, type Tournament, type TournamentZoneClub, type Zone } from '$lib/api';
   import Modal from '$lib/Modal.svelte';
   import { X, Plus, ChevronDown } from '@lucide/svelte';
@@ -45,6 +46,14 @@
     try {
       const [u, z, t] = await Promise.all([getProfile(), getZones(true), getTournaments(true)]);
       user = u; zones = z; tournaments = t;
+      const zoneId = Number($page.url.searchParams.get('zona'));
+      const zoneTarget = z.find((zone) => zone.id === zoneId);
+      if (zoneTarget) openFixtureModal(zoneTarget);
+      const tournamentId = Number($page.url.searchParams.get('torneo'));
+      if (t.find((tournament) => tournament.id === tournamentId)) {
+        openCreateZone();
+        newZoneTournamentId = tournamentId;
+      }
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudieron cargar las zonas.';
     } finally { loading = false; }

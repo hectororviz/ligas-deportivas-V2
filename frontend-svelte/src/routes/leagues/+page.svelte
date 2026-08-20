@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { page } from '$app/stores';
   import { createLeague, getLeagues, getProfile, updateLeague, canManageModule, type AuthUser, type League } from '$lib/api';
   import Modal from '$lib/Modal.svelte';
 
@@ -22,6 +23,9 @@
     try {
       const [u, l] = await Promise.all([getProfile(), getLeagues()]);
       user = u; leagues = l;
+      const editId = Number($page.url.searchParams.get('editar'));
+      const target = l.find((league) => league.id === editId);
+      if (target) openEdit(target);
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudieron cargar las ligas.';
     } finally {

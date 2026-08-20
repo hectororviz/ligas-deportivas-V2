@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import Modal from '$lib/Modal.svelte';
   import { SlidersHorizontal } from '@lucide/svelte';
@@ -68,6 +69,14 @@
       error = cause instanceof Error ? cause.message : 'No se pudieron cargar los torneos.';
     }
     await fetchTournaments();
+    const editId = Number($page.url.searchParams.get('editar'));
+    const target = tournaments.find((tournament) => tournament.id === editId);
+    if (target) {
+      openEdit(target);
+    } else if ($page.url.searchParams.get('liga')) {
+      openCreate();
+      form.leagueId = $page.url.searchParams.get('liga') ?? '';
+    }
   });
 
   function openCreate() {

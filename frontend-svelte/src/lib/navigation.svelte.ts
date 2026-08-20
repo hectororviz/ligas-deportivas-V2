@@ -22,10 +22,8 @@ export const NAV_ITEMS: NavItem[] = [
     id: 'gestion',
     label: 'Gestión',
     icon: Trophy,
+    path: '/management',
     children: [
-      { id: 'leagues', label: 'Ligas', path: '/leagues' },
-      { id: 'tournaments', label: 'Torneos', path: '/tournaments' },
-      { id: 'zones', label: 'Zonas', path: '/zones' },
       { id: 'categories', label: 'Categorías', path: '/categories' },
     ]
   },
