@@ -172,10 +172,14 @@
   }
 
   async function onLeagueSaved(saved: League) {
-    await refreshLeagues();
     showLeagueForm = false;
     editingLeague = null;
     notice = `Liga "${saved.name}" guardada.`;
+    try {
+      await refreshLeagues();
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'No se pudo actualizar la lista.';
+    }
   }
 
   function openNewTournament(leagueId: number) {
@@ -191,10 +195,16 @@
   }
 
   async function onTournamentSaved() {
-    await refreshData();
+    const wasEditing = Boolean(editingTournament);
     showTournamentForm = false;
     editingTournament = null;
-    notice = editingTournament ? 'Torneo actualizado.' : 'Torneo creado.';
+    presetLeagueId = null;
+    notice = wasEditing ? 'Torneo actualizado.' : 'Torneo creado.';
+    try {
+      await refreshData();
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'No se pudo actualizar la lista.';
+    }
   }
 
   function openNewZone(tournamentId: number) {
@@ -203,9 +213,14 @@
   }
 
   async function onZoneCreated() {
-    await refreshData();
     showZoneCreate = false;
+    presetTournamentId = null;
     notice = 'Zona creada.';
+    try {
+      await refreshData();
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'No se pudo actualizar la lista.';
+    }
   }
 
   function openFixture(zone: Zone) {
@@ -214,9 +229,13 @@
   }
 
   async function onFixtureChanged() {
-    await refreshData();
     fixtureZone = null;
     notice = 'Fixture generado.';
+    try {
+      await refreshData();
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'No se pudo actualizar la lista.';
+    }
   }
 
   async function handleDeleteZone(zone: Zone) {
@@ -444,7 +463,7 @@
 {/if}
 
 {#if showTournamentForm}
-  <TournamentFormModal editing={editingTournament} {presetLeagueId} {leagues} {allCategories} onclose={() => { showTournamentForm = false; editingTournament = null; }} onsaved={onTournamentSaved} />
+  <TournamentFormModal editing={editingTournament} {presetLeagueId} {leagues} {allCategories} onclose={() => { showTournamentForm = false; editingTournament = null; presetLeagueId = null; }} onsaved={onTournamentSaved} />
 {/if}
 
 {#if showZoneCreate}

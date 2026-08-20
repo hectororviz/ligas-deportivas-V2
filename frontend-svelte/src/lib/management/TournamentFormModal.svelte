@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import Modal from '$lib/Modal.svelte';
   import {
     createTournament,
@@ -36,25 +37,15 @@
   let saving = $state(false);
   let error = $state('');
   let showCatPicker = $state(false);
-  let form = $state({
-    leagueId: '', name: '', year: new Date().getFullYear(), gender: 'MASCULINO',
-    championMode: 'ROUND_AND_ANNUAL', pointsWin: 3, pointsDraw: 1, pointsLoss: 0,
-    startDate: '', endDate: '', controlsPlayers: true
-  });
-  let formCategories = $state<FormCategory[]>([]);
+  let form = $state(initialForm());
+  let formCategories = $state<FormCategory[]>(genderCategories(form.gender));
   let catPickerData = $state<FormCategory[]>([]);
 
   let catCount = $derived(formCategories.filter((c) => c.enabled).length);
 
-  function genderCategories(gender: string) {
-    return allCategories.filter((c) => c.active && c.gender === gender).map((c) => ({
-      categoryId: c.id, name: c.name, enabled: false, countsForGeneral: true, kickoffTime: ''
-    }));
-  }
-
-  $effect(() => {
+  function initialForm() {
     if (editing) {
-      form = {
+      return {
         leagueId: String(editing.leagueId),
         name: editing.name,
         year: editing.year,
@@ -67,19 +58,28 @@
         endDate: editing.endDate ? editing.endDate.split('T')[0] : '',
         controlsPlayers: editing.controlsPlayers ?? true
       };
-    } else {
-      form = {
-        leagueId: presetLeagueId ? String(presetLeagueId) : '', name: '', year: new Date().getFullYear(), gender: 'MASCULINO',
-        championMode: 'ROUND_AND_ANNUAL', pointsWin: 3, pointsDraw: 1, pointsLoss: 0,
-        startDate: '', endDate: '', controlsPlayers: true
-      };
     }
-    formCategories = genderCategories(form.gender);
-    error = '';
-    showCatPicker = false;
+    return {
+      leagueId: presetLeagueId ? String(presetLeagueId) : '',
+      name: '', year: new Date().getFullYear(), gender: 'MASCULINO',
+      championMode: 'ROUND_AND_ANNUAL', pointsWin: 3, pointsDraw: 1, pointsLoss: 0,
+      startDate: '', endDate: '', controlsPlayers: true
+    };
+  }
 
+  function genderCategories(gender: string) {
+    return allCategories.filter((c) => c.active && c.gender === gender).map((c) => ({
+      categoryId: c.id, name: c.name, enabled: false, countsForGeneral: true, kickoffTime: ''
+    }));
+  }
+
+  onMount(() => {
     if (editing) loadExistingCategories(editing.id);
   });
+
+  function onGenderChange() {
+    formCategories = genderCategories(form.gender);
+  }
 
   async function loadExistingCategories(tournamentId: number) {
     try {
@@ -170,7 +170,7 @@
 
       <div class="form-row-grid three">
         <label>Género
-          <select bind:value={form.gender} disabled={saving}>
+          <select bind:value={form.gender} onchange={onGenderChange} disabled={saving}>
             {#each genders as [value, label]}<option value={value}>{label}</option>{/each}
           </select>
         </label>
