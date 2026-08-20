@@ -581,16 +581,12 @@
   }
   .hero-logo {
     flex: 0 0 auto;
-    width: clamp(114px, 15vw, 156px);
-    height: clamp(114px, 15vw, 156px);
+    width: clamp(148px, 19.5vw, 203px);
+    height: clamp(148px, 19.5vw, 203px);
     display: grid;
     place-items: center;
-    border-radius: 12px;
-    background: #fff;
-    box-shadow: 0 16px 40px rgba(0,0,0,.35);
-    padding: .75rem;
   }
-  .hero-logo img { width: 100%; height: 100%; object-fit: contain; border-radius: 8px; }
+  .hero-logo img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 12px 24px rgba(0,0,0,.45)); }
   .hero-logo span {
     font-family: 'Space Grotesk', sans-serif;
     font-weight: 700;
