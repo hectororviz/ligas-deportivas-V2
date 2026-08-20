@@ -244,6 +244,7 @@ export interface SiteIdentity {
   favicon?: { url: string; previewUrl: string; updatedAt: number } | null;
   homeBackground?: HomeBackgroundConfig | null;
   loadingAnimationUrl?: string | null;
+  loadingAnimationDuration?: number | null;
 }
 
 export interface PosterToken {

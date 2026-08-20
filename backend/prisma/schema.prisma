@@ -215,6 +215,7 @@ model SiteIdentity {
   tokenConfig     Json?
   paletteId       String?
   loadingAnimationKey String?
+  loadingAnimationDuration Int @default(5000)
   homeBackground  Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

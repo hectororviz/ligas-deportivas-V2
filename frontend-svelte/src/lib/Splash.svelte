@@ -4,10 +4,11 @@
 
   interface Props {
     url: string;
+    duration: number;
     onDone: () => void;
   }
 
-  let { url, onDone }: Props = $props();
+  let { url, duration, onDone }: Props = $props();
 
   let container = $state<HTMLDivElement>();
   let fading = $state(false);
@@ -26,13 +27,14 @@
       animation = undefined;
     }
 
+    const fadeMs = 450;
     const showTimer = setTimeout(() => {
       fading = true;
-    }, 5000);
+    }, duration);
 
     const doneTimer = setTimeout(() => {
       onDone();
-    }, 5450);
+    }, duration + fadeMs);
 
     return () => {
       clearTimeout(showTimer);

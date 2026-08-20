@@ -1,5 +1,6 @@
 <script lang="ts">
   import '../app.css';
+  import { browser } from '$app/environment';
   import Sidebar from '$lib/Sidebar.svelte';
   import LoginModal from '$lib/LoginModal.svelte';
   import Splash from '$lib/Splash.svelte';
@@ -9,8 +10,41 @@
   const palette = usePalette();
   palette.initPalette();
 
-  let loadingAnimationUrl = $state<string | null>(null);
-  let showSplash = $state(false);
+  const SPLASH_STORAGE_KEY = 'ligas.splash';
+  const DEFAULT_SPLASH_DURATION = 5000;
+
+  interface CachedSplash {
+    url: string;
+    duration: number;
+  }
+
+  function readCachedSplash(): CachedSplash | null {
+    if (!browser) return null;
+    try {
+      const raw = localStorage.getItem(SPLASH_STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.url === 'string' && parsed.url) {
+        return { url: parsed.url, duration: Number(parsed.duration) || DEFAULT_SPLASH_DURATION };
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  function writeCachedSplash(cache: CachedSplash) {
+    if (!browser) return;
+    try {
+      localStorage.setItem(SPLASH_STORAGE_KEY, JSON.stringify(cache));
+    } catch {}
+  }
+
+  const cachedSplash = readCachedSplash();
+
+  let loadingAnimationUrl = $state<string | null>(cachedSplash?.url ?? null);
+  let loadingAnimationDuration = $state<number>(cachedSplash?.duration ?? DEFAULT_SPLASH_DURATION);
+  let showSplash = $state(cachedSplash?.url != null);
 
   $effect(() => {
     getSiteIdentity()
@@ -25,9 +59,21 @@
           }
           link.href = href;
         }
-        if (identity.loadingAnimationUrl) {
-          loadingAnimationUrl = identity.loadingAnimationUrl;
-          showSplash = true;
+
+        const freshUrl = identity.loadingAnimationUrl ?? null;
+        if (freshUrl) {
+          const duration = identity.loadingAnimationDuration ?? DEFAULT_SPLASH_DURATION;
+          writeCachedSplash({ url: freshUrl, duration });
+          if (!showSplash) {
+            loadingAnimationUrl = freshUrl;
+            loadingAnimationDuration = duration;
+            showSplash = true;
+          }
+        } else {
+          try {
+            localStorage.removeItem(SPLASH_STORAGE_KEY);
+          } catch {}
+          showSplash = false;
         }
       })
       .catch(() => {});
@@ -44,7 +90,7 @@
 <LoginModal />
 
 {#if showSplash && loadingAnimationUrl}
-  <Splash url={loadingAnimationUrl} onDone={() => (showSplash = false)} />
+  <Splash url={loadingAnimationUrl} duration={loadingAnimationDuration} onDone={() => (showSplash = false)} />
 {/if}
 
 <style>

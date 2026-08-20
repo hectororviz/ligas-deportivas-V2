@@ -27,6 +27,7 @@ export interface SiteIdentityResponse {
   } | null;
   flyerUrl: string | null;
   loadingAnimationUrl: string | null;
+  loadingAnimationDuration: number;
   paletteId: string | null;
   homeBackground: HomeBackgroundConfig;
 }
@@ -131,6 +132,10 @@ export class SiteIdentityService {
         flyerKey: flyerKey !== undefined ? flyerKey : existing.flyerKey,
         loadingAnimationKey:
           loadingAnimationKey !== undefined ? loadingAnimationKey : existing.loadingAnimationKey,
+        loadingAnimationDuration:
+          dto.loadingAnimationDuration !== undefined
+            ? dto.loadingAnimationDuration
+            : existing.loadingAnimationDuration,
         paletteId: dto.paletteId !== undefined ? dto.paletteId : existing.paletteId,
         homeBackground: dto.homeBackground !== undefined
           ? this.parseHomeBackground(dto.homeBackground) as unknown as Prisma.InputJsonValue
@@ -143,6 +148,7 @@ export class SiteIdentityService {
         iconKey: iconKey ?? null,
         flyerKey: flyerKey ?? null,
         loadingAnimationKey: loadingAnimationKey ?? null,
+        loadingAnimationDuration: dto.loadingAnimationDuration ?? 5000,
         paletteId: dto.paletteId ?? null,
         homeBackground: dto.homeBackground !== undefined
           ? this.parseHomeBackground(dto.homeBackground) as unknown as Prisma.InputJsonValue
@@ -403,6 +409,7 @@ export class SiteIdentityService {
       favicon,
       flyerUrl,
       loadingAnimationUrl,
+      loadingAnimationDuration: identity.loadingAnimationDuration ?? 5000,
       paletteId: identity.paletteId ?? null,
       homeBackground: this.normalizeHomeBackground(identity.homeBackground),
     };

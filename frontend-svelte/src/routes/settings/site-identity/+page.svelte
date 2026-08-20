@@ -19,6 +19,7 @@
   let iconFile = $state<File | null>(null);
   let faviconFile = $state<File | null>(null);
   let loadingAnimationFile = $state<File | null>(null);
+  let loadingAnimationDuration = $state(5000);
   let bg = $state<HomeBackgroundConfig>({ ...defaultBg });
 
   let iconInput = $state<HTMLInputElement>();
@@ -33,6 +34,7 @@
       title = identity.title;
       slogan = identity.slogan ?? '';
       if (identity.homeBackground) bg = { ...identity.homeBackground };
+      loadingAnimationDuration = identity.loadingAnimationDuration ?? 5000;
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudo cargar la identidad del sitio.';
     } finally {
@@ -131,20 +133,20 @@
   async function saveLoadingAnimation() {
     error = '';
     notice = '';
-    if (!loadingAnimationFile) { error = 'Selecciona un archivo JSON de Lottie.'; return; }
     saving = true;
     try {
       const formData = new FormData();
       formData.append('title', title.trim() || 'Ligas Deportivas');
       formData.append('paletteId', selectedPaletteId);
-      formData.append('loadingAnimation', loadingAnimationFile);
+      formData.append('loadingAnimationDuration', String(loadingAnimationDuration));
+      if (loadingAnimationFile) formData.append('loadingAnimation', loadingAnimationFile);
       const updated = await updateSiteIdentity(formData);
       identity = updated;
       loadingAnimationFile = null;
       if (loadingAnimationInput) loadingAnimationInput.value = '';
       notice = 'Animación de carga actualizada correctamente.';
     } catch (cause) {
-      error = cause instanceof Error ? cause.message : 'No se pudo subir la animación de carga.';
+      error = cause instanceof Error ? cause.message : 'No se pudo actualizar la animación de carga.';
     } finally {
       saving = false;
     }
@@ -159,6 +161,7 @@
       const formData = new FormData();
       formData.append('title', title.trim() || 'Ligas Deportivas');
       formData.append('paletteId', selectedPaletteId);
+      formData.append('loadingAnimationDuration', String(loadingAnimationDuration));
       formData.append('removeLoadingAnimation', 'true');
       const updated = await updateSiteIdentity(formData);
       identity = updated;
@@ -249,6 +252,12 @@
             {#if loadingAnimationFile}<span class="muted" style="font-size:.78rem;">{loadingAnimationFile.name}</span>{/if}
           </label>
 
+          <label>
+            Duración (milisegundos)
+            <input type="number" min="0" max="60000" step="500" bind:value={loadingAnimationDuration} disabled={saving} />
+            <span class="muted" style="font-size:.78rem;">Cuánto tiempo se muestra la animación al cargar el sitio.</span>
+          </label>
+
           {#if identity?.loadingAnimationUrl}
             <div style="display:flex;align-items:center;gap:.6rem;margin-top:.25rem;">
               <p class="muted" style="font-size:.78rem;">Animación configurada.</p>
@@ -256,7 +265,7 @@
           {/if}
 
           <div class="form-actions">
-            <button class="button primary" type="submit" disabled={saving}>{saving ? 'Subiendo...' : 'Subir animación'}</button>
+            <button class="button primary" type="submit" disabled={saving}>{saving ? 'Guardando...' : 'Guardar'}</button>
             {#if identity?.loadingAnimationUrl}
               <button class="button secondary" type="button" disabled={saving} onclick={removeLoadingAnimation}>Quitar animación</button>
             {/if}

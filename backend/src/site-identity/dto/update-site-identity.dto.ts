@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsBoolean, IsOptional, IsString, Length } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsString, Length, Max, Min } from 'class-validator';
 
 export class UpdateSiteIdentityDto {
   @IsString()
@@ -53,6 +53,18 @@ export class UpdateSiteIdentityDto {
   @IsOptional()
   @IsString()
   paletteId?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === '' || value === undefined || value === null) {
+      return undefined;
+    }
+    return Number(value);
+  })
+  @IsInt()
+  @Min(0)
+  @Max(60000)
+  loadingAnimationDuration?: number;
 
   @IsOptional()
   @IsString()
