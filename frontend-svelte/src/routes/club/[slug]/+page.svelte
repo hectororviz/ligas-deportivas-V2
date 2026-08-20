@@ -329,22 +329,20 @@
                     </div>
                   </div>
 
-                  {#if canManageClubes}
-                    <div class="t-foot">
-                      <button class="t-btn" onclick={() => openCrosses(tournament)}>Cruces</button>
-                      <a class="t-btn" href={`/standings?club=${data.club.id}`}>Tabla</a>
-                      <a class="t-btn" href={`/fixtures?club=${data.club.id}`}>Fixture</a>
-                      {#if user?.isAdmin}
-                        <button
-                          class="t-btn t-btn-danger"
-                          disabled={!tournament.canLeave || leaving === tournament.id}
-                          onclick={() => handleLeaveTournament(tournament.id)}
-                        >
-                          {leaving === tournament.id ? 'Saliendo...' : 'Salir del torneo'}
-                        </button>
-                      {/if}
-                    </div>
-                  {/if}
+                  <div class="t-foot">
+                    <button class="t-btn" onclick={() => openCrosses(tournament)}>Cruces</button>
+                    <a class="t-btn" href={`/standings?club=${data.club.id}`}>Tabla</a>
+                    <a class="t-btn" href={`/fixtures?club=${data.club.id}`}>Fixture</a>
+                    {#if user?.isAdmin}
+                      <button
+                        class="t-btn t-btn-danger"
+                        disabled={!tournament.canLeave || leaving === tournament.id}
+                        onclick={() => handleLeaveTournament(tournament.id)}
+                      >
+                        {leaving === tournament.id ? 'Saliendo...' : 'Salir del torneo'}
+                      </button>
+                    {/if}
+                  </div>
                 </article>
               {/each}
             </div>
