@@ -362,7 +362,7 @@
       <h1>Plantilla de placa</h1>
       <p class="muted">{tournamentName || `Torneo ${competitionId}`} · 1080×1920</p>
     </div>
-    <a class="button secondary" href="/tournaments">Volver a torneos</a>
+    <a class="button secondary" href="/management">Volver a gestión</a>
   </header>
 
   {#if loading}

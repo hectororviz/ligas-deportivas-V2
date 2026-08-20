@@ -6,6 +6,8 @@
     assignClubToZone,
     canManageModule,
     deleteTournament,
+    deleteZone,
+    getCategories,
     getLeagues,
     getProfile,
     getTournaments,
@@ -13,11 +15,16 @@
     getZones,
     removeClubFromZone,
     type AuthUser,
+    type Category,
     type League,
     type Tournament,
     type TournamentZoneClub,
     type Zone
   } from '$lib/api';
+  import LeagueFormModal from '$lib/management/LeagueFormModal.svelte';
+  import TournamentFormModal from '$lib/management/TournamentFormModal.svelte';
+  import ZoneCreateModal from '$lib/management/ZoneCreateModal.svelte';
+  import FixtureModal from '$lib/management/FixtureModal.svelte';
 
   const genderLabels: Record<string, string> = {
     MASCULINO: 'Masculino',
@@ -46,11 +53,24 @@
   let leagues: League[] = $state([]);
   let tournaments: Tournament[] = $state([]);
   let zones: Zone[] = $state([]);
+  let allCategories: Category[] = $state([]);
   let loading = $state(true);
   let error = $state('');
   let notice = $state('');
   let expandedLeagues = $state(new Set<number>());
   let expandedTournaments = $state(new Set<number>());
+
+  let showLeagueForm = $state(false);
+  let editingLeague = $state<League | null>(null);
+
+  let showTournamentForm = $state(false);
+  let editingTournament = $state<Tournament | null>(null);
+  let presetLeagueId = $state<number | null>(null);
+
+  let showZoneCreate = $state(false);
+  let presetTournamentId = $state<number | null>(null);
+
+  let fixtureZone = $state<Zone | null>(null);
 
   let clubModalOpen = $state(false);
   let clubModalZone: Zone | null = $state(null);
@@ -68,19 +88,22 @@
   const canManageLeagues = $derived(canManageModule(user, 'LIGAS'));
   const canManageTournaments = $derived(canManageModule(user, 'TORNEOS'));
   const canManageZones = $derived(canManageModule(user, 'ZONAS'));
+  const canManageConfig = $derived(canManageModule(user, 'CONFIGURACION'));
 
   onMount(async () => {
     try {
-      const [profile, leagueRows, tournamentRows, zoneRows] = await Promise.all([
+      const [profile, leagueRows, tournamentRows, zoneRows, categoryRows] = await Promise.all([
         getProfile(),
         getLeagues(),
         getTournaments(true),
-        getZones(true)
+        getZones(true),
+        getCategories()
       ]);
       user = profile;
       leagues = leagueRows;
       tournaments = tournamentRows;
       zones = zoneRows;
+      allCategories = categoryRows;
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'No se pudo cargar la gestión.';
     } finally {
@@ -128,35 +151,83 @@
     return tournament.status !== 'ACTIVE';
   }
 
-  function openFixture(zone: Zone) {
-    if (!fixtureAvailable(zone)) return;
-    goto(`/zones?zona=${zone.id}`);
-  }
-
-  function openNewLeague() {
-    goto('/leagues');
-  }
-
-  function openNewTournament(leagueId: number) {
-    goto(`/tournaments?liga=${leagueId}`);
-  }
-
-  function openEditTournament(tournament: Tournament) {
-    goto(`/tournaments?editar=${tournament.id}`);
-  }
-
-  function openNewZone(tournamentId: number) {
-    goto(`/zones?torneo=${tournamentId}`);
-  }
-
-  function openEditLeague(league: League) {
-    goto(`/leagues?editar=${league.id}`);
-  }
-
   async function refreshData() {
     const [tournamentRows, zoneRows] = await Promise.all([getTournaments(true), getZones(true)]);
     tournaments = tournamentRows;
     zones = zoneRows;
+  }
+
+  async function refreshLeagues() {
+    leagues = await getLeagues();
+  }
+
+  function openNewLeague() {
+    editingLeague = null;
+    showLeagueForm = true;
+  }
+
+  function openEditLeague(league: League) {
+    editingLeague = league;
+    showLeagueForm = true;
+  }
+
+  async function onLeagueSaved(saved: League) {
+    await refreshLeagues();
+    showLeagueForm = false;
+    editingLeague = null;
+    notice = `Liga "${saved.name}" guardada.`;
+  }
+
+  function openNewTournament(leagueId: number) {
+    editingTournament = null;
+    presetLeagueId = leagueId;
+    showTournamentForm = true;
+  }
+
+  function openEditTournament(tournament: Tournament) {
+    editingTournament = tournament;
+    presetLeagueId = null;
+    showTournamentForm = true;
+  }
+
+  async function onTournamentSaved() {
+    await refreshData();
+    showTournamentForm = false;
+    editingTournament = null;
+    notice = editingTournament ? 'Torneo actualizado.' : 'Torneo creado.';
+  }
+
+  function openNewZone(tournamentId: number) {
+    presetTournamentId = tournamentId;
+    showZoneCreate = true;
+  }
+
+  async function onZoneCreated() {
+    await refreshData();
+    showZoneCreate = false;
+    notice = 'Zona creada.';
+  }
+
+  function openFixture(zone: Zone) {
+    if (!fixtureAvailable(zone)) return;
+    fixtureZone = zone;
+  }
+
+  async function onFixtureChanged() {
+    await refreshData();
+    fixtureZone = null;
+    notice = 'Fixture generado.';
+  }
+
+  async function handleDeleteZone(zone: Zone) {
+    if (!confirm(`¿Eliminar la Zona ${zone.name}?`)) return;
+    try {
+      await deleteZone(zone.id);
+      await refreshData();
+      notice = `Zona ${zone.name} eliminada.`;
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'No se pudo eliminar la zona.';
+    }
   }
 
   async function openClubModal(zone: Zone) {
@@ -248,6 +319,10 @@
       deleting = false;
     }
   }
+
+  function openFlyer(tournament: Tournament) {
+    goto(`/flyer/${tournament.id}`);
+  }
 </script>
 
 <svelte:head><title>Torneos | Ligas Deportivas</title></svelte:head>
@@ -327,6 +402,7 @@
                         <div class="row-actions">
                           {#if canManageTournaments}<button class="row-button" onclick={() => openEditTournament(tournament)}>Editar</button>{/if}
                           {#if canManageZones}<button class="row-button primary-row" onclick={() => openNewZone(tournament.id)}>Nueva zona</button>{/if}
+                          {#if canManageConfig}<button class="row-button" onclick={() => openFlyer(tournament)}>Flyer</button>{/if}
                           {#if canManageTournaments && isInactiveTournament(tournament)}<button class="row-button danger" onclick={() => openDeleteModal(tournament)}>Eliminar</button>{/if}
                         </div>
                       </div>
@@ -345,6 +421,7 @@
                               <div class="row-actions">
                                 <button class="row-button" class:disabled-button={!canManageZones || (zone._count?.matches ?? 0) > 0} onclick={() => openClubModal(zone)}>Editar</button>
                                 <button class="row-button primary-row" class:disabled-button={!fixtureAvailable(zone)} disabled={!fixtureAvailable(zone)} onclick={() => openFixture(zone)}>Generar fixture</button>
+                                {#if canManageZones && zone.status === 'OPEN'}<button class="row-button danger" onclick={() => handleDeleteZone(zone)}>Eliminar</button>{/if}
                               </div>
                             </div>
                           {/each}
@@ -361,6 +438,22 @@
     </section>
   {/if}
 </main>
+
+{#if showLeagueForm}
+  <LeagueFormModal editing={editingLeague} onclose={() => { showLeagueForm = false; editingLeague = null; }} onsaved={onLeagueSaved} />
+{/if}
+
+{#if showTournamentForm}
+  <TournamentFormModal editing={editingTournament} {presetLeagueId} {leagues} {allCategories} onclose={() => { showTournamentForm = false; editingTournament = null; }} onsaved={onTournamentSaved} />
+{/if}
+
+{#if showZoneCreate}
+  <ZoneCreateModal {tournaments} {presetTournamentId} onclose={() => { showZoneCreate = false; }} oncreated={onZoneCreated} />
+{/if}
+
+{#if fixtureZone}
+  <FixtureModal zone={fixtureZone} onclose={() => { fixtureZone = null; }} onchanged={onFixtureChanged} />
+{/if}
 
 {#if clubModalOpen && clubModalZone}
   <Modal onclose={closeClubModal}>

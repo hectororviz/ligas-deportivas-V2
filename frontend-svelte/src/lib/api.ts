@@ -493,6 +493,21 @@ export async function updateCategory(id: number, input: Record<string, unknown>)
   return request<Category>(`/categories/${id}`, { method: 'PATCH', body: JSON.stringify(input) });
 }
 
+export interface TournamentCategoryAssignment {
+  tournamentCategoryId: number;
+  categoryId: number;
+  name: string;
+  birthYearMin: number;
+  birthYearMax: number;
+  gender: string;
+  kickoffTime: string | null;
+  countsForGeneral: boolean;
+}
+
+export async function getTournamentCategories(tournamentId: number): Promise<TournamentCategoryAssignment[]> {
+  return request<TournamentCategoryAssignment[]>(`/tournaments/${tournamentId}/categories`);
+}
+
 export async function getTournaments(includeInactive = false): Promise<Tournament[]> {
   return request<Tournament[]>(`/tournaments${includeInactive ? '?includeInactive=true' : ''}`);
 }
