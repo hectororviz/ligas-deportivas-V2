@@ -26,6 +26,7 @@ export interface SiteIdentityResponse {
     updatedAt: number;
   } | null;
   flyerUrl: string | null;
+  loadingAnimationUrl: string | null;
   paletteId: string | null;
   homeBackground: HomeBackgroundConfig;
 }
@@ -70,10 +71,12 @@ export class SiteIdentityService {
     dto: UpdateSiteIdentityDto,
     iconFile?: Express.Multer.File,
     flyerFile?: Express.Multer.File,
+    loadingAnimationFile?: Express.Multer.File,
   ): Promise<SiteIdentityResponse> {
     const existing = await this.ensureIdentity();
     let iconKey: string | null | undefined;
     let flyerKey: string | null | undefined;
+    let loadingAnimationKey: string | null | undefined;
 
     if (dto.removeIcon) {
       if (existing.iconKey) {
@@ -104,6 +107,21 @@ export class SiteIdentityService {
       flyerKey = await this.storageService.saveAttachment(flyerFile);
     }
 
+    if (dto.removeLoadingAnimation) {
+      if (existing.loadingAnimationKey) {
+        await this.storageService.deleteAttachment(existing.loadingAnimationKey);
+      }
+      loadingAnimationKey = null;
+    }
+
+    if (loadingAnimationFile) {
+      await this.validateLoadingAnimationFile(loadingAnimationFile);
+      if (existing.loadingAnimationKey && !dto.removeLoadingAnimation) {
+        await this.storageService.deleteAttachment(existing.loadingAnimationKey);
+      }
+      loadingAnimationKey = await this.storageService.saveAttachment(loadingAnimationFile);
+    }
+
     const updated = await this.prisma.siteIdentity.upsert({
       where: { id: existing.id },
       update: {
@@ -111,6 +129,8 @@ export class SiteIdentityService {
         slogan: dto.slogan !== undefined ? (dto.slogan.trim() || null) : existing.slogan,
         iconKey: iconKey !== undefined ? iconKey : existing.iconKey,
         flyerKey: flyerKey !== undefined ? flyerKey : existing.flyerKey,
+        loadingAnimationKey:
+          loadingAnimationKey !== undefined ? loadingAnimationKey : existing.loadingAnimationKey,
         paletteId: dto.paletteId !== undefined ? dto.paletteId : existing.paletteId,
         homeBackground: dto.homeBackground !== undefined
           ? this.parseHomeBackground(dto.homeBackground) as unknown as Prisma.InputJsonValue
@@ -122,6 +142,7 @@ export class SiteIdentityService {
         slogan: dto.slogan?.trim() || null,
         iconKey: iconKey ?? null,
         flyerKey: flyerKey ?? null,
+        loadingAnimationKey: loadingAnimationKey ?? null,
         paletteId: dto.paletteId ?? null,
         homeBackground: dto.homeBackground !== undefined
           ? this.parseHomeBackground(dto.homeBackground) as unknown as Prisma.InputJsonValue
@@ -299,6 +320,31 @@ export class SiteIdentityService {
     };
   }
 
+  async getLoadingAnimationFile(): Promise<SiteIdentityIcon> {
+    const identity = await this.ensureIdentity();
+    if (!identity.loadingAnimationKey) {
+      throw new NotFoundException('El sitio no tiene una animación de carga configurada.');
+    }
+
+    let filePath: string;
+    try {
+      filePath = this.storageService.resolveAttachmentPath(identity.loadingAnimationKey);
+    } catch {
+      throw new NotFoundException('El archivo de la animación no existe.');
+    }
+
+    try {
+      await fs.access(filePath);
+    } catch {
+      throw new NotFoundException('El archivo de la animación no existe.');
+    }
+
+    return {
+      path: filePath,
+      mimeType: 'application/json',
+    };
+  }
+
   private async ensureIdentity(): Promise<SiteIdentity> {
     if (!this.schemaHealth.isReady()) {
       throw new ServiceUnavailableException('DB not migrated');
@@ -345,12 +391,18 @@ export class SiteIdentityService {
       const version = identity.updatedAt.getTime();
       flyerUrl = `/api/v1/site-identity/flyer?v=${version}`;
     }
+    let loadingAnimationUrl: string | null = null;
+    if (identity.loadingAnimationKey) {
+      const version = identity.updatedAt.getTime();
+      loadingAnimationUrl = `/api/v1/site-identity/loading-animation?v=${version}`;
+    }
     return {
       title: identity.title,
       slogan: identity.slogan ?? null,
       iconUrl,
       favicon,
       flyerUrl,
+      loadingAnimationUrl,
       paletteId: identity.paletteId ?? null,
       homeBackground: this.normalizeHomeBackground(identity.homeBackground),
     };
@@ -421,6 +473,43 @@ export class SiteIdentityService {
     }
   }
 
+  private async validateLoadingAnimationFile(file: Express.Multer.File) {
+    if (!file?.buffer) {
+      throw new BadRequestException('Debes adjuntar un archivo válido.');
+    }
+
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      throw new BadRequestException('La animación supera el tamaño máximo permitido de 5 MB.');
+    }
+
+    if (path.extname(file.originalname).toLowerCase() !== '.json') {
+      throw new BadRequestException('La animación debe ser un archivo JSON exportado desde Lottie.');
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(file.buffer.toString('utf8'));
+    } catch {
+      throw new BadRequestException('El archivo no es un JSON válido.');
+    }
+
+    const isObject = parsed && typeof parsed === 'object' && !Array.isArray(parsed);
+    if (!isObject) {
+      throw new BadRequestException('El JSON no tiene el formato de una animación Lottie.');
+    }
+
+    const animation = parsed as Record<string, unknown>;
+    const hasLayers = Array.isArray(animation.layers);
+    const hasTiming =
+      typeof animation.ip === 'number' ||
+      typeof animation.op === 'number' ||
+      typeof animation.fr === 'number';
+    if (!hasLayers && !hasTiming) {
+      throw new BadRequestException('El JSON no parece ser una animación Lottie válida.');
+    }
+  }
+
   private createFaviconSharpInput(file: Express.Multer.File) {
     if (file.mimetype === 'image/svg+xml') {
       return sharp(file.buffer, { density: 300 });
@@ -485,6 +574,8 @@ export class SiteIdentityService {
         return 'image/svg+xml';
       case '.ico':
         return 'image/x-icon';
+      case '.json':
+        return 'application/json';
       case '.bmp':
         return 'image/bmp';
       default:

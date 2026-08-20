@@ -18,10 +18,12 @@
   let slogan = $state('');
   let iconFile = $state<File | null>(null);
   let faviconFile = $state<File | null>(null);
+  let loadingAnimationFile = $state<File | null>(null);
   let bg = $state<HomeBackgroundConfig>({ ...defaultBg });
 
   let iconInput = $state<HTMLInputElement>();
   let faviconInput = $state<HTMLInputElement>();
+  let loadingAnimationInput = $state<HTMLInputElement>();
 
   let selectedPaletteId = $state(paletteState.id);
 
@@ -44,6 +46,10 @@
 
   function handleFaviconChange() {
     faviconFile = faviconInput?.files?.[0] ?? null;
+  }
+
+  function handleLoadingAnimationChange() {
+    loadingAnimationFile = loadingAnimationInput?.files?.[0] ?? null;
   }
 
   function handlePaletteChange() {
@@ -121,6 +127,48 @@
       saving = false;
     }
   }
+
+  async function saveLoadingAnimation() {
+    error = '';
+    notice = '';
+    if (!loadingAnimationFile) { error = 'Selecciona un archivo JSON de Lottie.'; return; }
+    saving = true;
+    try {
+      const formData = new FormData();
+      formData.append('title', title.trim() || 'Ligas Deportivas');
+      formData.append('paletteId', selectedPaletteId);
+      formData.append('loadingAnimation', loadingAnimationFile);
+      const updated = await updateSiteIdentity(formData);
+      identity = updated;
+      loadingAnimationFile = null;
+      if (loadingAnimationInput) loadingAnimationInput.value = '';
+      notice = 'Animación de carga actualizada correctamente.';
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'No se pudo subir la animación de carga.';
+    } finally {
+      saving = false;
+    }
+  }
+
+  async function removeLoadingAnimation() {
+    error = '';
+    notice = '';
+    if (!identity?.loadingAnimationUrl) { error = 'No hay una animación de carga configurada.'; return; }
+    saving = true;
+    try {
+      const formData = new FormData();
+      formData.append('title', title.trim() || 'Ligas Deportivas');
+      formData.append('paletteId', selectedPaletteId);
+      formData.append('removeLoadingAnimation', 'true');
+      const updated = await updateSiteIdentity(formData);
+      identity = updated;
+      notice = 'Animación de carga eliminada correctamente.';
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'No se pudo eliminar la animación de carga.';
+    } finally {
+      saving = false;
+    }
+  }
 </script>
 
 <svelte:head><title>Identidad | Ligas Deportivas</title></svelte:head>
@@ -186,6 +234,32 @@
 
           <div class="form-actions">
             <button class="button primary" type="submit" disabled={saving}>{saving ? 'Subiendo...' : 'Subir favicon'}</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card-surface">
+        <div class="list-header">
+          <div><p class="eyebrow">Carga</p><h2>Animación de carga</h2></div>
+        </div>
+        <form onsubmit={(event) => { event.preventDefault(); saveLoadingAnimation(); }}>
+          <label>
+            Animación (JSON de Lottie)
+            <input type="file" bind:this={loadingAnimationInput} onchange={handleLoadingAnimationChange} accept=".json,application/json" disabled={saving} />
+            {#if loadingAnimationFile}<span class="muted" style="font-size:.78rem;">{loadingAnimationFile.name}</span>{/if}
+          </label>
+
+          {#if identity?.loadingAnimationUrl}
+            <div style="display:flex;align-items:center;gap:.6rem;margin-top:.25rem;">
+              <p class="muted" style="font-size:.78rem;">Animación configurada.</p>
+            </div>
+          {/if}
+
+          <div class="form-actions">
+            <button class="button primary" type="submit" disabled={saving}>{saving ? 'Subiendo...' : 'Subir animación'}</button>
+            {#if identity?.loadingAnimationUrl}
+              <button class="button secondary" type="button" disabled={saving} onclick={removeLoadingAnimation}>Quitar animación</button>
+            {/if}
           </div>
         </form>
       </section>

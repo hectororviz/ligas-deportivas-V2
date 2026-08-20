@@ -214,6 +214,7 @@ model SiteIdentity {
   layoutSvg       String?
   tokenConfig     Json?
   paletteId       String?
+  loadingAnimationKey String?
   homeBackground  Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -2,11 +2,15 @@
   import '../app.css';
   import Sidebar from '$lib/Sidebar.svelte';
   import LoginModal from '$lib/LoginModal.svelte';
+  import Splash from '$lib/Splash.svelte';
   import { usePalette } from '$lib/palette.svelte';
   import { getSiteIdentity } from '$lib/api';
 
   const palette = usePalette();
   palette.initPalette();
+
+  let loadingAnimationUrl = $state<string | null>(null);
+  let showSplash = $state(false);
 
   $effect(() => {
     getSiteIdentity()
@@ -21,6 +25,10 @@
           }
           link.href = href;
         }
+        if (identity.loadingAnimationUrl) {
+          loadingAnimationUrl = identity.loadingAnimationUrl;
+          showSplash = true;
+        }
       })
       .catch(() => {});
   });
@@ -34,6 +42,10 @@
 <Sidebar />
 <main class="app-main"><slot /></main>
 <LoginModal />
+
+{#if showSplash && loadingAnimationUrl}
+  <Splash url={loadingAnimationUrl} onDone={() => (showSplash = false)} />
+{/if}
 
 <style>
   .app-main { margin-left: 240px; min-height: 100vh; transition: margin-left 200ms ease; }

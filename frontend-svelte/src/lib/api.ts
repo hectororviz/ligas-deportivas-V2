@@ -243,6 +243,7 @@ export interface SiteIdentity {
   paletteId?: string | null;
   favicon?: { url: string; previewUrl: string; updatedAt: number } | null;
   homeBackground?: HomeBackgroundConfig | null;
+  loadingAnimationUrl?: string | null;
 }
 
 export interface PosterToken {

@@ -45,6 +45,14 @@ export class SiteIdentityController {
     return res.sendFile(file.path);
   }
 
+  @Get('loading-animation')
+  async getLoadingAnimation(@Res() res: Response) {
+    const file = await this.siteIdentityService.getLoadingAnimationFile();
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.type(file.mimeType);
+    return res.sendFile(file.path);
+  }
+
   @Get('favicon')
   async getFavicon(@Res() res: Response) {
     const file = await this.siteIdentityService.getFaviconFile('favicon.ico');
@@ -67,6 +75,7 @@ export class SiteIdentityController {
   @UseInterceptors(FileFieldsInterceptor([
     { name: 'icon', maxCount: 1 },
     { name: 'flyer', maxCount: 1 },
+    { name: 'loadingAnimation', maxCount: 1 },
   ]))
   updateIdentity(
     @Body() dto: UpdateSiteIdentityDto,
@@ -74,11 +83,13 @@ export class SiteIdentityController {
     files?: {
       icon?: Express.Multer.File[];
       flyer?: Express.Multer.File[];
+      loadingAnimation?: Express.Multer.File[];
     },
   ) {
     const icon = files?.icon?.[0];
     const flyer = files?.flyer?.[0];
-    return this.siteIdentityService.updateIdentity(dto, icon, flyer);
+    const loadingAnimation = files?.loadingAnimation?.[0];
+    return this.siteIdentityService.updateIdentity(dto, icon, flyer, loadingAnimation);
   }
 
   @Post('favicon')
