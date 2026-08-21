@@ -173,7 +173,7 @@
       <div class="club-grid">
         {#each filteredClubs as club (club.id)}
           <a class="club-card" href={`/club/${club.slug ?? ''}`} title={club.name} aria-label={club.name}>
-            <span class="club-shield" style={club.primaryColor ? `--club-color: ${club.primaryColor}` : ''}>
+            <span class="club-shield" class:has-logo={!!club.logoUrl} style={club.primaryColor ? `--club-color: ${club.primaryColor}` : ''}>
               {#if club.logoUrl}
                 <img src={club.logoUrl} alt={`Escudo de ${club.name}`} loading="lazy" />
               {:else}
@@ -272,17 +272,20 @@
   .club-shield {
     width: clamp(6.5rem, 9vw, 7.5rem);
     height: clamp(6.5rem, 9vw, 7.5rem);
-    border-radius: 50%;
     display: grid;
     place-items: center;
+    transition: transform 200ms ease, box-shadow 200ms ease;
+  }
+  .club-shield:not(.has-logo) {
+    border-radius: 50%;
     overflow: hidden;
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     box-shadow: 0 8px 24px var(--color-shadow);
-    transition: transform 200ms ease, box-shadow 200ms ease;
   }
-  .club-card:hover .club-shield, .club-card:focus-visible .club-shield { transform: scale(1.08); box-shadow: 0 14px 32px var(--color-shadow); }
-  .club-shield img { width: 100%; height: 100%; object-fit: cover; }
+  .club-card:hover .club-shield, .club-card:focus-visible .club-shield { transform: scale(1.08); }
+  .club-card:hover .club-shield:not(.has-logo), .club-card:focus-visible .club-shield:not(.has-logo) { box-shadow: 0 14px 32px var(--color-shadow); }
+  .club-shield img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 10px 18px var(--color-shadow)); }
   .club-initials {
     width: 100%; height: 100%;
     display: grid; place-items: center;
