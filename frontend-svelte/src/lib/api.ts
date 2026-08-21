@@ -395,12 +395,12 @@ export async function updateLeague(id: number, input: Partial<Omit<League, 'id'>
   });
 }
 
-export async function getClubs(search = '', status = '', page = 1): Promise<PaginatedClubs> {
+export async function getClubs(search = '', status = '', page = 1, pageSize = 25): Promise<PaginatedClubs> {
   const params = new URLSearchParams();
   if (search) params.set('search', search);
   if (status) params.set('status', status);
   params.set('page', String(page));
-  params.set('pageSize', '25');
+  params.set('pageSize', String(pageSize));
   return request<PaginatedClubs>(`/clubs?${params}`);
 }
 

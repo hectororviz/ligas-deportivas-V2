@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
-  import { getClubAdmin, getAvailableTournaments, joinTournament, leaveTournament, getProfile, canManageModule, getClubUpcomingEvents, type ClubAdminOverview, type ClubAdminTournament, type AvailableTournament, type AuthUser, type ClubUpcomingEvent } from '$lib/api';
+  import { getClubAdmin, getAvailableTournaments, joinTournament, leaveTournament, updateClub, uploadClubLogo, getProfile, canManageModule, getClubUpcomingEvents, type ClubAdminOverview, type ClubAdminTournament, type AvailableTournament, type AuthUser, type ClubUpcomingEvent } from '$lib/api';
   import Modal from '$lib/Modal.svelte';
-  import { Plus, MapPin, ArrowUpRight, Calendar } from '@lucide/svelte';
+  import { Plus, MapPin, ArrowUpRight, Calendar, Pencil } from '@lucide/svelte';
   import CrossTable from '$lib/CrossTable.svelte';
 
   const statusLabels: Record<string, string> = {
@@ -29,6 +29,15 @@
 
   let showCrosses = $state(false);
   let crossesTournament: ClubAdminTournament | null = $state(null);
+
+  let showEdit = $state(false);
+  let editSaving = $state(false);
+  let editError = $state('');
+  let logoFile: File | null = $state(null);
+  let editForm = $state({
+    name: '', shortName: '', slug: '', description: '', primaryColor: '', secondaryColor: '',
+    instagram: '', facebook: '', homeAddress: '', latitude: '', longitude: '', active: true
+  });
 
   function openCrosses(tournament: ClubAdminTournament) {
     if (!tournament.zone) return;
@@ -216,6 +225,88 @@
     if (!d) return '??';
     return (d.club.shortName || d.club.name).slice(0, 2).toUpperCase();
   }
+
+  function slugify(value: string) {
+    return value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  }
+
+  function openEdit() {
+    if (!data) return;
+    const c = data.club;
+    editError = '';
+    logoFile = null;
+    editForm = {
+      name: c.name,
+      shortName: c.shortName ?? '',
+      slug: c.slug ?? '',
+      description: c.description ?? '',
+      primaryColor: c.primaryColor ?? '',
+      secondaryColor: c.secondaryColor ?? '',
+      instagram: c.instagramUrl ?? '',
+      facebook: c.facebookUrl ?? '',
+      homeAddress: c.homeAddress ?? '',
+      latitude: c.latitude != null ? String(c.latitude) : '',
+      longitude: c.longitude != null ? String(c.longitude) : '',
+      active: c.active
+    };
+    showEdit = true;
+  }
+
+  function closeEdit() { showEdit = false; editError = ''; logoFile = null; }
+
+  function handleLogoFile(f: File | undefined) {
+    if (!f) { logoFile = null; return; }
+    const img = new Image();
+    const url = URL.createObjectURL(f);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      if (img.width < 200 || img.height < 200 || img.width > 500 || img.height > 500) {
+        editError = `Dimensiones inválidas (${img.width}x${img.height}). El escudo debe medir entre 200x200 y 500x500 píxeles.`;
+        logoFile = null;
+        return;
+      }
+      logoFile = f;
+      editError = '';
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); editError = 'No se pudo leer la imagen.'; logoFile = null; };
+    img.src = url;
+  }
+
+  async function saveEdit() {
+    if (!data) return;
+    editError = '';
+    if (!editForm.name.trim()) { editError = 'Ingresa el nombre del club.'; return; }
+    editSaving = true;
+    const payload: Record<string, unknown> = {
+      name: editForm.name.trim(), shortName: editForm.shortName.trim() || undefined,
+      description: editForm.description.trim() || undefined,
+      slug: slugify(editForm.slug) || slugify(editForm.name),
+      primaryColor: editForm.primaryColor.trim() || undefined,
+      secondaryColor: editForm.secondaryColor.trim() || undefined,
+      instagram: editForm.instagram.trim() || undefined,
+      facebook: editForm.facebook.trim() || undefined,
+      homeAddress: editForm.homeAddress.trim() || undefined,
+      active: editForm.active
+    };
+    if (editForm.latitude.trim()) payload.latitude = Number(editForm.latitude);
+    if (editForm.longitude.trim()) payload.longitude = Number(editForm.longitude);
+    try {
+      const saved = await updateClub(data.club.id, payload);
+      if (logoFile) {
+        try { await uploadClubLogo(data.club.id, logoFile); }
+        catch (logoErr) { notice = (logoErr instanceof Error ? logoErr.message : 'No se pudo subir el escudo.') + ' Los demás datos se guardaron correctamente.'; }
+      }
+      if (!notice) notice = 'Club actualizado correctamente.';
+      showEdit = false; logoFile = null;
+      data = await getClubAdmin(saved.slug ?? $page.params.slug!);
+      await loadEvents();
+    } catch (cause) {
+      editError = cause instanceof Error ? cause.message : 'No se pudo guardar el club.';
+    } finally {
+      editSaving = false;
+      setTimeout(() => notice = '', 2500);
+    }
+  }
 </script>
 
 <svelte:head>
@@ -242,8 +333,15 @@
       <div class="hero-layer hero-light"></div>
       <div class="hero-layer hero-shadow"></div>
 
-      <span class="hero-status" class:inactive={!data.club.active}>{data.club.active ? 'Activo' : 'Inactivo'}</span>
-
+      <div class="hero-top">
+        <span class="hero-status" class:inactive={!data.club.active}>{data.club.active ? 'Activo' : 'Inactivo'}</span>
+        {#if canManageClubes}
+          <button class="hero-edit" onclick={openEdit} aria-label="Editar club">
+            <Pencil size={14} strokeWidth={2} />
+            Editar
+          </button>
+        {/if}
+      </div>
       <div class="hero-inner">
         <div class="hero-logo">
           {#if data.club.logoUrl}
@@ -489,6 +587,53 @@
   </Modal>
 {/if}
 
+{#if showEdit && data}
+  <Modal onclose={closeEdit}>
+    <div class="modal-form">
+      <p class="eyebrow">Editar club</p>
+      <h2>{data.club.name}</h2>
+      {#if editError}<p class="form-error">{editError}</p>{/if}
+      <form onsubmit={(event) => { event.preventDefault(); saveEdit(); }}>
+        <label>Nombre<input bind:value={editForm.name} placeholder="Club Atlético..." disabled={editSaving} /></label>
+
+        <label>Descripción / eslogan<textarea bind:value={editForm.description} placeholder="Pasión y trabajo en equipo..." rows="2" disabled={editSaving}></textarea></label>
+
+        <div class="form-row-grid two">
+          <label>Nombre corto<input bind:value={editForm.shortName} placeholder="CA..." disabled={editSaving} /></label>
+          <label>Identificador<input bind:value={editForm.slug} placeholder="club-atletico" disabled={editSaving} /></label>
+        </div>
+
+        <div class="form-row-grid three">
+          <label>Color principal<div class="color-input"><input type="color" bind:value={editForm.primaryColor} disabled={editSaving} /><input bind:value={editForm.primaryColor} placeholder="#0057b8" disabled={editSaving} /></div></label>
+          <label>Color secundario<div class="color-input"><input type="color" bind:value={editForm.secondaryColor} disabled={editSaving} /><input bind:value={editForm.secondaryColor} placeholder="#ffffff" disabled={editSaving} /></div></label>
+          <label>Escudo (200×200 – 500×500 px)
+            <input type="file" accept="image/*" onchange={(e) => { handleLogoFile((e.target as HTMLInputElement).files?.[0]); }} disabled={editSaving} />
+          </label>
+        </div>
+
+        <div class="form-row-grid two">
+          <label>Instagram<input bind:value={editForm.instagram} placeholder="@club" disabled={editSaving} /></label>
+          <label>Facebook<input bind:value={editForm.facebook} placeholder="@club" disabled={editSaving} /></label>
+        </div>
+
+        <label>Dirección<input bind:value={editForm.homeAddress} placeholder="Calle 123" disabled={editSaving} /></label>
+
+        <div class="form-row-grid two">
+          <label>Latitud<input bind:value={editForm.latitude} placeholder="-34.6037" disabled={editSaving} /></label>
+          <label>Longitud<input bind:value={editForm.longitude} placeholder="-58.3816" disabled={editSaving} /></label>
+        </div>
+
+        <div class="form-row-grid two actions-row">
+          <label class="checkbox-label"><input type="checkbox" bind:checked={editForm.active} disabled={editSaving} /> Club activo</label>
+          <div class="form-actions">
+            <button class="button primary" type="submit" disabled={editSaving}>{editSaving ? 'Guardando...' : 'Guardar cambios'}</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </Modal>
+{/if}
+
 <style>
   .club-page { max-width: 1200px; margin: 0 auto; }
 
@@ -556,11 +701,16 @@
     background: linear-gradient(to top, rgba(0,0,0,0.15), transparent);
   }
 
-  .hero-status {
+  .hero-top {
     position: absolute;
     top: 1rem;
     right: 1rem;
     z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+  }
+  .hero-status {
     padding: .35rem .85rem;
     border-radius: 999px;
     background: var(--color-success);
@@ -569,6 +719,22 @@
     font-weight: 700;
   }
   .hero-status.inactive { background: var(--color-error); }
+  .hero-edit {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: .35rem .85rem;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.55);
+    color: #fff;
+    font-size: .78rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 150ms ease;
+  }
+  .hero-edit:hover { background: rgba(255,255,255,0.28); }
+  .hero-edit:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
   .hero-inner {
     position: relative;
     z-index: 10;
@@ -853,6 +1019,13 @@
   .join-row strong { font-size: .88rem; display: block; }
   .join-row span { font-size: .75rem; }
 
+  .form-row-grid { display: grid; gap: .75rem 1.5rem; }
+  .form-row-grid.two { grid-template-columns: 1fr 1fr; }
+  .form-row-grid.three { grid-template-columns: 1fr 1fr 1fr; }
+  .actions-row { align-items: center; }
+  .actions-row .form-actions { justify-content: flex-end; }
+  input[type="file"] { padding: .6rem .8rem; font-size: .85rem; }
+
   @media (max-width: 900px) {
     .club-layout { grid-template-columns: 1fr; }
   }
@@ -860,5 +1033,8 @@
     .hero-inner { flex-direction: column; align-items: flex-start; }
     .hero-socials { width: 100%; }
     .location-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 600px) {
+    .form-row-grid.two, .form-row-grid.three { grid-template-columns: 1fr; }
   }
 </style>
