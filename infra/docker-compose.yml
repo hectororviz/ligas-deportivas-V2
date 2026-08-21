@@ -15,7 +15,7 @@ services:
       timeout: 5s
       retries: 5
 
-  backend:
+  ligas-backend:
     image: ${BACKEND_IMAGE:-ghcr.io/hectororviz/ligas-deportivas-v2/backend}:${IMAGE_TAG:-latest}
     restart: "no"
     environment:
@@ -51,18 +51,18 @@ services:
     image: ${FRONTEND_IMAGE:-ghcr.io/hectororviz/ligas-deportivas-v2/frontend}:${IMAGE_TAG:-latest}
     restart: unless-stopped
     depends_on:
-      - backend
+      - ligas-backend
     networks:
       - default
       - caddy_net
     labels:
       caddy: ligas.csdsoler.com.ar
       caddy.0_handle: /storage/*
-      caddy.0_handle.0_reverse_proxy: backend:3000
+      caddy.0_handle.0_reverse_proxy: ligas-backend:3000
       caddy.1_handle: /api/*
-      caddy.1_handle.0_reverse_proxy: backend:3000
+      caddy.1_handle.0_reverse_proxy: ligas-backend:3000
       caddy.2_handle: /site-identity/*
-      caddy.2_handle.0_reverse_proxy: backend:3000
+      caddy.2_handle.0_reverse_proxy: ligas-backend:3000
       caddy.3_handle: /*
       caddy.3_handle.0_reverse_proxy: "{{upstreams 3000}}"
 

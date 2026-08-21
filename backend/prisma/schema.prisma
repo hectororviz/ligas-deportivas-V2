@@ -182,6 +182,7 @@ model Club {
   active            Boolean            @default(true)
   logoKey           String?
   logoUrl           String?
+  sourceTeamIds     Json?
   instagramUrl      String?
   facebookUrl       String?
   homeAddress       String?
