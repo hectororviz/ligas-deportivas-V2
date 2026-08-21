@@ -281,11 +281,11 @@
     overflow: hidden;
     background: var(--color-surface);
     border: 1px solid var(--color-border);
-    box-shadow: 0 8px 24px var(--color-shadow);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, .18);
   }
   .club-card:hover .club-shield, .club-card:focus-visible .club-shield { transform: scale(1.08); }
-  .club-card:hover .club-shield:not(.has-logo), .club-card:focus-visible .club-shield:not(.has-logo) { box-shadow: 0 14px 32px var(--color-shadow); }
-  .club-shield img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 10px 18px var(--color-shadow)); }
+  .club-card:hover .club-shield:not(.has-logo), .club-card:focus-visible .club-shield:not(.has-logo) { box-shadow: 0 18px 36px rgba(0, 0, 0, .28); }
+  .club-shield img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 12px 24px rgba(0, 0, 0, .35)); }
   .club-initials {
     width: 100%; height: 100%;
     display: grid; place-items: center;
