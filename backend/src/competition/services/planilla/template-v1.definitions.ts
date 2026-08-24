@@ -96,12 +96,16 @@ export interface ClubColumn {
   visitor: Rect; // fila visitante (abajo)
 }
 
-/** Etiquetas del pie (debajo de la línea de firma). */
-export interface SignLabels {
-  local: Rect;
-  visitor: Rect;
-  referee: Rect;
-  sign: Rect;
+/** Pie: línea de firma, áreas de firma y aclaración de cada rol, y campo de fecha. */
+export interface SignArea {
+  line: Rect; // línea continua de firma
+  aclaracion: Rect; // rótulo "FIRMA Y ACLARACION"
+  entries: {
+    local: Rect; // Representante Local
+    visitor: Rect; // Representante Visitante
+    referee: Rect; // Arbitro
+  };
+  date: Rect; // campo para la fecha
 }
 
 export interface PlanillaRegions {
@@ -124,11 +128,8 @@ export interface PlanillaRegions {
     bottomRight: Rect;
     bottomLeft: Rect;
   };
-  /** Línea continua de firma y etiquetas debajo. */
-  signLine: {
-    line: Rect;
-    labels: SignLabels;
-  };
+  /** Línea de firma, firma y aclaración por rol, y campo de fecha. */
+  signLine: SignArea;
   /** Posición vertical (y) de la línea de corte. */
   cutLineY: number;
 }
@@ -163,10 +164,10 @@ export function buildPlanillaRegions(): PlanillaRegions {
 
   // El título se coloca por debajo de los marcadores ArUco superiores (que son
   // los "cuadros guía de centrado"), para no quedar detrás de ellos.
-  const title: Rect = { x: marginX, y: 66, width: leftWidth, height: 26 };
+  const title: Rect = { x: marginX, y: 66, width: leftWidth, height: 30 };
 
-  // Detalle del partido en una sola línea.
-  const detail: Rect = { x: marginX, y: title.y + title.height + 5, width: leftWidth, height: 14 };
+  // Detalle del partido en una sola línea, con mayor separación del título.
+  const detail: Rect = { x: marginX, y: title.y + title.height + 16, width: leftWidth, height: 14 };
 
   const tableLabel: Rect = { x: marginX, y: detail.y + detail.height + 6, width: leftWidth, height: 14 };
 
@@ -220,21 +221,27 @@ export function buildPlanillaRegions(): PlanillaRegions {
     bottomLeft: { x: 8, y: arucoBottomY, width: arucoSize, height: arucoSize },
   };
 
-  // Línea continua de firma y etiquetas debajo.
-  const lineY = tableEndY + 18;
-  const signLine = {
+  // Línea continua de firma, firma y aclaración por rol, y campo de fecha.
+  const lineY = tableEndY + 16;
+  const aclaracion: Rect = { x: marginX, y: lineY - 16, width: A4_WIDTH - marginX * 2, height: 12 };
+  const entriesTop = lineY + 8;
+  const entriesGap = 12;
+  const entriesW = (A4_WIDTH - marginX * 2 - entriesGap * 2) / 3;
+  const entryH = 38;
+  const signArea: SignArea = {
     line: { x: marginX, y: lineY, width: A4_WIDTH - marginX * 2, height: 1 },
-  };
-  const labelTop = lineY + 6;
-  const labelsW = A4_WIDTH - marginX * 2;
-  const labelsGap = 10;
-  const cells = 4;
-  const labelW = (labelsW - labelsGap * (cells - 1)) / cells;
-  const labels: SignLabels = {
-    local: { x: marginX, y: labelTop, width: labelW, height: 16 },
-    visitor: { x: marginX + (labelW + labelsGap), y: labelTop, width: labelW, height: 16 },
-    referee: { x: marginX + (labelW + labelsGap) * 2, y: labelTop, width: labelW, height: 16 },
-    sign: { x: marginX + (labelW + labelsGap) * 3, y: labelTop, width: labelW, height: 16 },
+    aclaracion,
+    entries: {
+      local: { x: marginX, y: entriesTop, width: entriesW, height: entryH },
+      visitor: { x: marginX + (entriesW + entriesGap), y: entriesTop, width: entriesW, height: entryH },
+      referee: {
+        x: marginX + (entriesW + entriesGap) * 2,
+        y: entriesTop,
+        width: entriesW,
+        height: entryH,
+      },
+    },
+    date: { x: marginX, y: entriesTop + entryH + 8, width: 200, height: 16 },
   };
 
   return {
@@ -246,7 +253,7 @@ export function buildPlanillaRegions(): PlanillaRegions {
     tableLabel,
     qr,
     arucos,
-    signLine: { ...signLine, labels },
+    signLine: signArea,
     cutLineY: PLANILLA_HEIGHT,
   };
 }

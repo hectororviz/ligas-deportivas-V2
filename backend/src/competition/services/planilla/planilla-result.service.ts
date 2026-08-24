@@ -186,9 +186,9 @@ export class PlanillaResultService {
     data: PlanillaPageData,
   ) {
     const { title, detail } = regions;
-    draw.setLineWidth(1);
-    const size = 14;
-    const baseline = title.y + title.height - 6;
+    draw.setLineWidth(1.2);
+    const size = 18;
+    const baseline = title.y + title.height - 8;
 
     const vsLabel = ' VS ';
     // Estimación de ancho en Helvetica-Bold: ~0.62 del tamaño por carácter.
@@ -352,22 +352,37 @@ export class PlanillaResultService {
 
   private drawSignLine(draw: PlanillaPdfDraw, regions: ReturnType<typeof buildPlanillaRegions>) {
     const { signLine } = regions;
+
     // Línea continua de firma.
-    draw.setLineWidth(0.7);
+    draw.setLineWidth(0.8);
     draw.line(signLine.line.x, signLine.line.y, signLine.line.x + signLine.line.width, signLine.line.y);
 
-    // Etiquetas de los campos debajo de la línea.
+    // Rótulo de la sección.
     draw.setLineWidth(0.4);
-    const cells: { key: 'local' | 'visitor' | 'referee' | 'sign'; label: string }[] = [
+    draw.textCentered(
+      'FIRMA Y ACLARACION',
+      signLine.aclaracion.x,
+      signLine.aclaracion.y,
+      signLine.aclaracion.width,
+      9,
+      true,
+    );
+
+    // Tres entradas de firma y aclaración (Rep. Local, Rep. Visitante, Arbitro).
+    const entries: { key: 'local' | 'visitor' | 'referee'; label: string }[] = [
       { key: 'local', label: 'Representante Local' },
       { key: 'visitor', label: 'Representante Visitante' },
       { key: 'referee', label: 'Arbitro' },
-      { key: 'sign', label: 'Firma' },
     ];
-    for (const cell of cells) {
-      const rect = signLine.labels[cell.key];
-      draw.textCentered(cell.label, rect.x, rect.y, rect.width, 9);
+    for (const entry of entries) {
+      const r = signLine.entries[entry.key];
+      draw.textCentered(entry.label, r.x, r.y + 2, r.width, 9, true);
+      draw.line(r.x + 6, r.y + r.height - 2, r.x + r.width - 6, r.y + r.height - 2);
     }
+
+    // Campo de fecha.
+    draw.text('Fecha:', signLine.date.x, signLine.date.y, 9);
+    draw.line(signLine.date.x + 36, signLine.date.y + 8, signLine.date.x + signLine.date.width, signLine.date.y + 8);
   }
 
   private drawCutLine(draw: PlanillaPdfDraw, regions: ReturnType<typeof buildPlanillaRegions>) {
