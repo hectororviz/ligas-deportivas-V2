@@ -7,6 +7,7 @@ import sharp = require('sharp');
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../storage/storage.service';
+import { PlanillaResultService } from './planilla/planilla-result.service';
 
 const PAGE_WIDTH = 595.28;
 const PAGE_HEIGHT = 841.89;
@@ -63,6 +64,7 @@ export class MatchSheetService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storageService: StorageService,
+    private readonly planillaResultService: PlanillaResultService,
   ) {}
 
   async generate(
@@ -98,7 +100,8 @@ export class MatchSheetService {
     const pages: SheetPageData[] = [];
     const sortedCategories = [...match.categories].sort((left, right) => {
       const leftKickoffTime = left.tournamentCategory?.kickoffTime || left.kickoffTime || '99:99';
-      const rightKickoffTime = right.tournamentCategory?.kickoffTime || right.kickoffTime || '99:99';
+      const rightKickoffTime =
+        right.tournamentCategory?.kickoffTime || right.kickoffTime || '99:99';
 
       const byKickoffTime = leftKickoffTime.localeCompare(rightKickoffTime);
       if (byKickoffTime !== 0) {
@@ -151,8 +154,16 @@ export class MatchSheetService {
       });
     }
 
+    // Planilla IA Ready V1 (TEMPLATE 1) como primera página, seguidas de las
+    // páginas existentes del Listado (sin cambios).
+    const planillaPage = await this.planillaResultService.buildPlanillaPage(matchId);
+    const preparedPages: PreparedPage[] = [planillaPage];
+    for (const page of pages) {
+      preparedPages.push(await this.renderPageStream(page));
+    }
+
     return {
-      buffer: await this.buildPdf(pages),
+      buffer: await this.buildPdf(preparedPages),
       contentType: 'application/pdf',
       fileExtension: 'pdf',
     };
@@ -218,7 +229,7 @@ export class MatchSheetService {
     return `${day}/${month}/${year}`;
   }
 
-  private async buildPdf(pages: SheetPageData[]) {
+  private async buildPdf(preparedPages: PreparedPage[]) {
     const objects: string[] = [];
     objects.push('<< /Type /Catalog /Pages 2 0 R >>');
     objects.push('');
@@ -226,8 +237,7 @@ export class MatchSheetService {
 
     const pageObjectNumbers: number[] = [];
 
-    for (const page of pages) {
-      const preparedPage = await this.renderPageStream(page);
+    for (const preparedPage of preparedPages) {
       const imageResourceRefs: string[] = [];
       for (const image of preparedPage.images) {
         const imageObjectNumber = objects.length + 1;
@@ -361,7 +371,18 @@ export class MatchSheetService {
     const columns = [24, 40, 82, 82, 64, 72, 64, 63, 21, 21];
     const usedWidth = columns.reduce((total, colWidth) => total + colWidth, 0);
     columns[7] += width - usedWidth;
-    const labels = ['Nº', 'Número', 'Apellido', 'Nombre', 'DNI', 'F.Nac.', 'Firma', 'Goles', 'A', 'R'];
+    const labels = [
+      'Nº',
+      'Número',
+      'Apellido',
+      'Nombre',
+      'DNI',
+      'F.Nac.',
+      'Firma',
+      'Goles',
+      'A',
+      'R',
+    ];
 
     let y = startY;
     draw.rectTop(x, y, width, titleHeight);

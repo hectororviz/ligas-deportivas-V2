@@ -28,6 +28,7 @@ import { FlyerTemplatesService } from './services/flyer-templates.service';
 import { MatchPosterService } from './services/match-poster.service';
 import { PosterTemplatesService } from './services/poster-templates.service';
 import { MatchSheetService } from './services/match-sheet.service';
+import { PlanillaResultService } from './services/planilla/planilla-result.service';
 import { CompetitionController } from './controllers/competition.controller';
 import { HomeSummaryController } from './controllers/home-summary.controller';
 import { HomeSummaryService } from './services/home-summary.service';
@@ -46,6 +47,7 @@ import { LeaderboardsController } from './controllers/leaderboards.controller';
     MatchFlyerService,
     MatchPosterService,
     MatchSheetService,
+    PlanillaResultService,
     FlyerTemplatesService,
     PosterTemplatesService,
     StandingsService,
@@ -53,7 +55,7 @@ import { LeaderboardsController } from './controllers/leaderboards.controller';
     TeamsService,
     ZonesService,
     HomeSummaryService,
-    LeaderboardsService
+    LeaderboardsService,
   ],
   controllers: [
     LeaguesController,
@@ -68,7 +70,7 @@ import { LeaderboardsController } from './controllers/leaderboards.controller';
     TeamsController,
     ZonesController,
     HomeSummaryController,
-    LeaderboardsController
-  ]
+    LeaderboardsController,
+  ],
 })
 export class CompetitionModule {}
