@@ -48,12 +48,12 @@ describe('TEMPLATE 1 - geometría', () => {
 
   it('el pie define una línea de firma y etiquetas debajo', () => {
     const regions = buildPlanillaRegions();
-    expect(regions.signLine.line).toBeDefined();
-    expect(regions.signLine.aclaracion).toBeDefined();
-    expect(regions.signLine.entries.local).toBeDefined();
-    expect(regions.signLine.entries.visitor).toBeDefined();
-    expect(regions.signLine.entries.referee).toBeDefined();
-    expect(regions.signLine.date).toBeDefined();
+    expect(regions.signLine.local.line).toBeDefined();
+    expect(regions.signLine.local.label).toBeDefined();
+    expect(regions.signLine.visitor.line).toBeDefined();
+    expect(regions.signLine.visitor.label).toBeDefined();
+    expect(regions.signLine.referee.line).toBeDefined();
+    expect(regions.signLine.referee.label).toBeDefined();
   });
 
   it('usa el diccionario ArUco 4x4_50 con IDs fijos 0..3', () => {

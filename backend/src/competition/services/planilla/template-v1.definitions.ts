@@ -96,16 +96,17 @@ export interface ClubColumn {
   visitor: Rect; // fila visitante (abajo)
 }
 
-/** Pie: línea de firma, áreas de firma y aclaración de cada rol, y campo de fecha. */
+/** Un bloque de firma: línea de fondo y etiqueta debajo. */
+export interface SignatureBlock {
+  line: Rect; // línea de fondo (firma)
+  label: Rect; // etiqueta "Rep. X - Firma y aclaracion"
+}
+
+/** Panel de firmas: Rep. Local y Visitante (arriba) y Arbitro (abajo, centrado). */
 export interface SignArea {
-  line: Rect; // línea continua de firma
-  aclaracion: Rect; // rótulo "FIRMA Y ACLARACION"
-  entries: {
-    local: Rect; // Representante Local
-    visitor: Rect; // Representante Visitante
-    referee: Rect; // Arbitro
-  };
-  date: Rect; // campo para la fecha
+  local: SignatureBlock;
+  visitor: SignatureBlock;
+  referee: SignatureBlock;
 }
 
 export interface PlanillaRegions {
@@ -221,27 +222,45 @@ export function buildPlanillaRegions(): PlanillaRegions {
     bottomLeft: { x: 8, y: arucoBottomY, width: arucoSize, height: arucoSize },
   };
 
-  // Línea continua de firma, firma y aclaración por rol, y campo de fecha.
-  const lineY = tableEndY + 16;
-  const aclaracion: Rect = { x: marginX, y: lineY - 16, width: A4_WIDTH - marginX * 2, height: 12 };
-  const entriesTop = lineY + 8;
-  const entriesGap = 12;
-  const entriesW = (A4_WIDTH - marginX * 2 - entriesGap * 2) / 3;
-  const entryH = 38;
-  const signArea: SignArea = {
-    line: { x: marginX, y: lineY, width: A4_WIDTH - marginX * 2, height: 1 },
-    aclaracion,
-    entries: {
-      local: { x: marginX, y: entriesTop, width: entriesW, height: entryH },
-      visitor: { x: marginX + (entriesW + entriesGap), y: entriesTop, width: entriesW, height: entryH },
-      referee: {
-        x: marginX + (entriesW + entriesGap) * 2,
-        y: entriesTop,
-        width: entriesW,
-        height: entryH,
-      },
+  // Panel de firmas con márgenes de 2 cm.
+  const margin2cm = 56.7; // 2 cm en puntos PDF
+  const rowWidth = A4_WIDTH - marginX * 2;
+
+  // Primera línea de fondo: 2 cm por debajo de la tabla.
+  const topLineY = tableEndY + margin2cm;
+
+  // Fila 1: Representante Local (izquierda) y Representante Visitante (derecha).
+  const halfGap = 24;
+  const halfW = (rowWidth - halfGap) / 2;
+  const lineLen = halfW * 0.72;
+  const labelTop1 = topLineY + 6;
+  const localBlock: SignatureBlock = {
+    line: { x: marginX + (halfW - lineLen) / 2, y: topLineY, width: lineLen, height: 1 },
+    label: { x: marginX, y: labelTop1, width: halfW, height: 16 },
+  };
+  const visitorBlock: SignatureBlock = {
+    line: {
+      x: marginX + halfW + halfGap + (halfW - lineLen) / 2,
+      y: topLineY,
+      width: lineLen,
+      height: 1,
     },
-    date: { x: marginX, y: entriesTop + entryH + 8, width: 200, height: 16 },
+    label: { x: marginX + halfW + halfGap, y: labelTop1, width: halfW, height: 16 },
+  };
+
+  // Última línea de fondo (Arbitro, centrada): 2 cm antes del fondo de la planilla.
+  const refereeLineY = PLANILLA_HEIGHT - margin2cm;
+  const refLen = 220;
+  const refX = marginX + (rowWidth - refLen) / 2;
+  const refereeBlock: SignatureBlock = {
+    line: { x: refX, y: refereeLineY, width: refLen, height: 1 },
+    label: { x: marginX, y: refereeLineY + 6, width: rowWidth, height: 16 },
+  };
+
+  const signArea: SignArea = {
+    local: localBlock,
+    visitor: visitorBlock,
+    referee: refereeBlock,
   };
 
   return {

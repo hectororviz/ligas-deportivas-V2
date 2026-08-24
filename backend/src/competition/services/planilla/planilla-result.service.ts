@@ -10,6 +10,7 @@ import { PdfImageObject, buildPngImageObject } from '../../utils/pdf-image';
 import {
   buildPlanillaRegions,
   ArucoId,
+  SignatureBlock,
 } from './template-v1.definitions';
 import { generateArUcoMarkers, ArucoMarkerAsset } from './aruco.renderer';
 import { buildPlanillaQrPayload, generatePlanillaQrPng } from './qr';
@@ -353,36 +354,18 @@ export class PlanillaResultService {
   private drawSignLine(draw: PlanillaPdfDraw, regions: ReturnType<typeof buildPlanillaRegions>) {
     const { signLine } = regions;
 
-    // Línea continua de firma.
-    draw.setLineWidth(0.8);
-    draw.line(signLine.line.x, signLine.line.y, signLine.line.x + signLine.line.width, signLine.line.y);
+    const drawBlock = (block: SignatureBlock, label: string) => {
+      // Línea de fondo (firma).
+      draw.setLineWidth(0.8);
+      draw.line(block.line.x, block.line.y, block.line.x + block.line.width, block.line.y);
+      // Etiqueta "Rep. X - Firma y aclaracion" debajo, centrada.
+      draw.setLineWidth(0.4);
+      draw.textCentered(label, block.label.x, block.label.y, block.label.width, 9, true);
+    };
 
-    // Rótulo de la sección.
-    draw.setLineWidth(0.4);
-    draw.textCentered(
-      'FIRMA Y ACLARACION',
-      signLine.aclaracion.x,
-      signLine.aclaracion.y,
-      signLine.aclaracion.width,
-      9,
-      true,
-    );
-
-    // Tres entradas de firma y aclaración (Rep. Local, Rep. Visitante, Arbitro).
-    const entries: { key: 'local' | 'visitor' | 'referee'; label: string }[] = [
-      { key: 'local', label: 'Representante Local' },
-      { key: 'visitor', label: 'Representante Visitante' },
-      { key: 'referee', label: 'Arbitro' },
-    ];
-    for (const entry of entries) {
-      const r = signLine.entries[entry.key];
-      draw.textCentered(entry.label, r.x, r.y + 2, r.width, 9, true);
-      draw.line(r.x + 6, r.y + r.height - 2, r.x + r.width - 6, r.y + r.height - 2);
-    }
-
-    // Campo de fecha.
-    draw.text('Fecha:', signLine.date.x, signLine.date.y, 9);
-    draw.line(signLine.date.x + 36, signLine.date.y + 8, signLine.date.x + signLine.date.width, signLine.date.y + 8);
+    drawBlock(signLine.local, 'Rep. Local - Firma y aclaracion');
+    drawBlock(signLine.visitor, 'Rep. Visitante - Firma y aclaracion');
+    drawBlock(signLine.referee, 'Arbitro - Firma y aclaracion');
   }
 
   private drawCutLine(draw: PlanillaPdfDraw, regions: ReturnType<typeof buildPlanillaRegions>) {
