@@ -142,6 +142,111 @@ export class MatchesService {
 
     return {
       id: match.id,
+      uuid: match.uuid,
+      matchday: match.matchday,
+      round: match.round,
+      status: match.status,
+      date: match.date,
+      zone: { id: match.zone.id, name: match.zone.name },
+      homeClub: match.homeClub
+        ? {
+            id: match.homeClub.id,
+            name: match.homeClub.name,
+            shortName: match.homeClub.shortName,
+            logoUrl: match.homeClub.logoUrl,
+            primaryColor: match.homeClub.primaryColor,
+            secondaryColor: match.homeClub.secondaryColor,
+          }
+        : null,
+      awayClub: match.awayClub
+        ? {
+            id: match.awayClub.id,
+            name: match.awayClub.name,
+            shortName: match.awayClub.shortName,
+            logoUrl: match.awayClub.logoUrl,
+            primaryColor: match.awayClub.primaryColor,
+            secondaryColor: match.awayClub.secondaryColor,
+          }
+        : null,
+      categories: match.categories
+        .map((category) => ({
+          tournamentCategoryId: category.tournamentCategoryId,
+          categoryName: category.tournamentCategory.category.name,
+          isPromocional: category.isPromocional,
+          countsForGeneral: category.tournamentCategory.countsForGeneral,
+          kickoffTime: category.kickoffTime,
+          homeScore: category.homeScore,
+          awayScore: category.awayScore,
+          closedAt: category.closedAt,
+          isPending: category.isPending,
+        }))
+        .sort((a, b) => {
+          if (!a.kickoffTime && !b.kickoffTime) return 0;
+          if (!a.kickoffTime) return 1;
+          if (!b.kickoffTime) return -1;
+          return a.kickoffTime.localeCompare(b.kickoffTime);
+        }),
+      tournament: {
+        id: tournament.id,
+        pointsWin: tournament.pointsWin,
+        pointsDraw: tournament.pointsDraw,
+        pointsLoss: tournament.pointsLoss,
+        controlsPlayers: tournament.controlsPlayers,
+      },
+      pointsHome: homeClubId ? pointsHome : 0,
+      pointsAway: awayClubId ? pointsAway : 0,
+    };
+  }
+
+  async getMatchByUuid(uuid: string) {
+    const match = await this.prisma.match.findUnique({
+      where: { uuid },
+      include: {
+        zone: true,
+        homeClub: true,
+        awayClub: true,
+        categories: {
+          include: {
+            tournamentCategory: {
+              include: { category: true }
+            }
+          }
+        }
+      }
+    });
+
+    if (!match) {
+      throw new NotFoundException('Partido no encontrado');
+    }
+
+    const tournament = await this.prisma.tournament.findUniqueOrThrow({
+      where: { id: match.tournamentId }
+    });
+
+    const homeClubId = match.homeClubId;
+    const awayClubId = match.awayClubId;
+
+    let pointsHome = 0;
+    let pointsAway = 0;
+
+    for (const category of match.categories) {
+      if (!category.tournamentCategory.countsForGeneral) continue;
+      if (!category.closedAt) continue;
+
+      const { home, away } = this.calculatePointsByScore(
+        category.homeScore,
+        category.awayScore,
+        tournament.pointsWin,
+        tournament.pointsDraw,
+        tournament.pointsLoss
+      );
+      pointsHome += home;
+      pointsAway += away;
+    }
+
+    return {
+      id: match.id,
+      uuid: match.uuid,
       matchday: match.matchday,
       round: match.round,
       status: match.status,
@@ -416,6 +521,7 @@ export class MatchesService {
       },
       matches: matches.map((match) => ({
         id: match.id,
+        uuid: match.uuid,
         round: match.round,
         homeClub: match.homeClub
           ? {
@@ -477,6 +583,7 @@ export class MatchesService {
       orderBy: [{ matchday: 'asc' }, { id: 'asc' }],
       select: {
         id: true,
+        uuid: true,
         matchday: true,
         round: true,
         date: true,
@@ -520,6 +627,7 @@ export class MatchesService {
           gameDate: this.formatGameDate(gameDate),
           matches: matchdayMatches.map((match) => ({
             matchId: match.id,
+            uuid: match.uuid,
             home: match.homeClub?.shortName || match.homeClub?.name || 'Local',
             away: match.awayClub?.shortName || match.awayClub?.name || 'Visitante'
           }))
@@ -597,6 +705,7 @@ export class MatchesService {
 
     return {
       matchId: match.id,
+      uuid: match.uuid,
       clubs: {
         home: {
           id: homeClubId,
@@ -705,6 +814,7 @@ export class MatchesService {
 
       return {
         matchId: match.id,
+        uuid: match.uuid,
         matchday: match.matchday,
         round: match.round,
         date: match.date ? match.date.toISOString() : null,

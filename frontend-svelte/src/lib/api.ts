@@ -642,6 +642,7 @@ export interface ZoneMatchCategory {
 
 export interface ZoneMatch {
   id: number;
+  uuid: string;
   matchday: number;
   round: string;
   date: string | null;
@@ -697,6 +698,7 @@ export interface MatchClub {
 
 export interface MatchDetail {
   id: number;
+  uuid: string;
   matchday: number;
   round: string;
   status: string;
@@ -728,6 +730,10 @@ export interface MatchDetail {
 
 export async function getMatchDetail(matchId: number): Promise<MatchDetail> {
   return request<MatchDetail>(`/matches/${matchId}`);
+}
+
+export async function getMatchByUuid(uuid: string): Promise<MatchDetail> {
+  return request<MatchDetail>(`/matches/uuid/${uuid}`);
 }
 
 export interface MatchCategoryResult {

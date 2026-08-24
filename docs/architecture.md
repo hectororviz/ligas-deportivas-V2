@@ -34,6 +34,12 @@ Este documento describe la arquitectura del proyecto **Ligas Deportivas**, los m
 - El esquema Prisma define entidades para organización (ligas, torneos, zonas, clubes), competitividad (partidos, resultados), personas (jugadores, planteles) y seguridad (usuarios, roles, permisos, tokens).
 - Las enum `Module`, `Action` y `Scope` modelan el RBAC.
 
+#### 2.5.1 Identidad de Partido (`id` vs `uuid`)
+- **`id`** — Identificador interno de base de datos. Entero autoincremental, PK y usado por todas las relaciones internas (FKs de `MatchCategory`, `MatchAttachment`, `MatchLog`, etc. referencian `id`). Nunca debe exponerse como identificador público/estable de cara a planillas, QRs o URLs públicas.
+- **`uuid`** — Identificador externo, público e inequívoco del partido. `UUID` generado por PostgreSQL (`gen_random_uuid()` de `pgcrypto`), `NOT NULL` y `UNIQUE`. Se utiliza para identificar partidos desde planillas físicas, códigos QR, importaciones de resultados y URLs públicas.
+
+**Regla conceptual**: usar `id` para todo uso interno (joins, FKs, consultas del backend). Usar `uuid` para cualquier uso externo/público (identificar un partido desde el mundo físico o exponerlo en URLs públicas). El `id` numérico sigue siendo el identificador primario de la base de datos; el `uuid` es su identidad pública complementaria.
+
 ## 3. Frontend (SvelteKit)
 
 ### 3.1 Estructura

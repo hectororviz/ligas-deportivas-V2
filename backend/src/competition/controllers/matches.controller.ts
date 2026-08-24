@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   ParseIntPipe,
+  ParseUUIDPipe,
   Patch,
   Post,
   Res,
@@ -50,6 +51,11 @@ export class MatchesController {
     @Param('clubId', ParseIntPipe) clubId: number
   ) {
     return this.matchesService.getClubCrossTable(zoneId, clubId);
+  }
+
+  @Get('matches/uuid/:uuid')
+  getMatchByUuid(@Param('uuid', ParseUUIDPipe) uuid: string) {
+    return this.matchesService.getMatchByUuid(uuid);
   }
 
   @Get('matches/:matchId')

@@ -148,6 +148,7 @@ class ZoneMatch {
     required this.homeClub,
     required this.awayClub,
     required this.categories,
+    this.uuid,
     this.date,
     this.status,
   });
@@ -177,12 +178,14 @@ class ZoneMatch {
       homeClub: json['homeClub'] != null ? FixtureClub.fromJson(json['homeClub'] as Map<String, dynamic>) : null,
       awayClub: json['awayClub'] != null ? FixtureClub.fromJson(json['awayClub'] as Map<String, dynamic>) : null,
       categories: categories,
+      uuid: json['uuid'] as String?,
       date: json['date'] != null ? DateTime.tryParse(json['date'] as String) : null,
       status: json['status'] as String?,
     );
   }
 
   final int id;
+  final String? uuid;
   final int matchday;
   final FixtureRound round;
   final FixtureClub? homeClub;

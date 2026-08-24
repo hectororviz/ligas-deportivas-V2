@@ -346,6 +346,7 @@ model RosterPlayer {
 
 model Match {
   id           Int               @id @default(autoincrement())
+  uuid         String            @unique @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tournamentId Int
   zoneId       Int
   matchday     Int
