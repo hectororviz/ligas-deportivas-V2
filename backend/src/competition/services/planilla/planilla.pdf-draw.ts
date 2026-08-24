@@ -1,9 +1,9 @@
-import { A4_HEIGHT } from './template-v1.definitions';
+import { A4_HEIGHT } from './planilla.definitions';
 
 /**
  * Generador de comandos de contenido PDF (graphics operators) con origen de
  * coordenadas en la esquina superior izquierda y con soporte para insertar
- * imágenes PNG. Reutilizado exclusivamente para la planilla TEMPLATE 1.
+ * imágenes PNG. Reutilizado exclusivamente para la planilla de resultados.
  */
 export class PlanillaPdfDraw {
   private commands: string[] = ['0.4 w'];

@@ -154,8 +154,8 @@ export class MatchSheetService {
       });
     }
 
-    // Planilla IA Ready V1 (TEMPLATE 1) como primera página, seguidas de las
-    // páginas existentes del Listado (sin cambios).
+    // Planilla de resultados como primera página, seguidas de las páginas
+    // existentes del Listado (sin cambios).
     const planillaPage = await this.planillaResultService.buildPlanillaPage(matchId);
     const preparedPages: PreparedPage[] = [planillaPage];
     for (const page of pages) {

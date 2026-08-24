@@ -1,7 +1,7 @@
 import { MatchSheetService } from './match-sheet.service';
 import { PlanillaResultService } from './planilla/planilla-result.service';
 
-describe('MatchSheetService - planilla IA colección primera página', () => {
+describe('MatchSheetService - planilla de resultados como primera página', () => {
   const prisma = {
     match: {
       findUnique: jest.fn(),
@@ -26,7 +26,7 @@ describe('MatchSheetService - planilla IA colección primera página', () => {
   };
 
   const planillaPage = {
-    stream: 'BT /F1 14 Tf 72 780 Td (PLANILLA IA READY V1) Tj ET',
+    stream: 'BT /F1 14 Tf 72 780 Td (PLANILLA DE RESULTADOS) Tj ET',
     images: [] as { name: string; width: number; height: number; object: string }[],
   };
 
@@ -51,6 +51,7 @@ describe('MatchSheetService - planilla IA colección primera página', () => {
 
     const text = result.buffer.toString('utf8');
     expect(text.startsWith('%PDF')).toBe(true);
+    expect(text).toContain('PLANILLA DE RESULTADOS');
 
     // El PDF debe tener 2 páginas (planilla + listado sin categorías).
     expect(planillaService.buildPlanillaPage).toHaveBeenCalledWith(130);
@@ -62,7 +63,7 @@ describe('MatchSheetService - planilla IA colección primera página', () => {
   it('la planilla aparece antes que las páginas del listado', async () => {
     const result = await service.generate(130);
     const text = result.buffer.toString('utf8');
-    const planillaIndex = text.indexOf('PLANILLA IA READY V1');
+    const planillaIndex = text.indexOf('PLANILLA DE RESULTADOS');
     const listadoIndex = text.indexOf('Sin categorias');
     expect(planillaIndex).toBeGreaterThan(-1);
     expect(listadoIndex).toBeGreaterThan(-1);

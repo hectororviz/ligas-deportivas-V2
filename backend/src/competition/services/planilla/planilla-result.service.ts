@@ -7,22 +7,10 @@ import sharp = require('sharp');
 import { PrismaService } from '../../../prisma/prisma.service';
 import { StorageService } from '../../../storage/storage.service';
 import { PdfImageObject, buildPngImageObject } from '../../utils/pdf-image';
-import {
-  buildPlanillaRegions,
-  ArucoId,
-  SignatureBlock,
-} from './template-v1.definitions';
-import { generateArUcoMarkers, ArucoMarkerAsset } from './aruco.renderer';
-import { buildPlanillaQrPayload, generatePlanillaQrPng } from './qr';
+import { buildPlanillaRegions, SignatureBlock } from './planilla.definitions';
 import { PlanillaPdfDraw } from './planilla.pdf-draw';
 
 export interface PlanillaPageData {
-  matchId: number;
-  uuid: string;
-  tournamentId: number;
-  zoneId: number;
-  homeClubId: number;
-  awayClubId: number;
   leagueName: string;
   tournamentName: string;
   tournamentYear: number;
@@ -31,7 +19,6 @@ export interface PlanillaPageData {
   matchDateLabel: string;
   homeClubName: string;
   awayClubName: string;
-  venue: string;
   homeClubLogo: PreparedLogo | null;
   awayClubLogo: PreparedLogo | null;
   categories: {
@@ -106,12 +93,6 @@ export class PlanillaResultService {
     });
 
     return {
-      matchId: match.id,
-      uuid: match.uuid,
-      tournamentId: match.tournamentId,
-      zoneId: match.zoneId,
-      homeClubId: match.homeClubId ?? 0,
-      awayClubId: match.awayClubId ?? 0,
       leagueName: match.tournament.league?.name ?? 'Liga',
       tournamentName: match.tournament.name,
       tournamentYear: match.tournament.year,
@@ -120,16 +101,15 @@ export class PlanillaResultService {
       matchDateLabel: this.formatDate(match.date),
       homeClubName: match.homeClub?.shortName || match.homeClub?.name || 'Club local',
       awayClubName: match.awayClub?.shortName || match.awayClub?.name || 'Club visitante',
-      venue: match.homeClub?.name ?? 'A confirmar',
       homeClubLogo: await this.loadLogoPng(
         match.homeClub?.logoUrl ?? null,
         match.homeClub?.logoKey ?? null,
-        20,
+        34,
       ),
       awayClubLogo: await this.loadLogoPng(
         match.awayClub?.logoUrl ?? null,
         match.awayClub?.logoKey ?? null,
-        20,
+        34,
       ),
       categories: sortedCategories.map((category) => ({
         name: category.tournamentCategory?.category?.name ?? 'Categoría',
@@ -145,18 +125,7 @@ export class PlanillaResultService {
   }
 
   private async renderPlanillaPage(data: PlanillaPageData): Promise<PreparedPage> {
-    const regions = buildPlanillaRegions();
-    const qrPng = await generatePlanillaQrPng(
-      buildPlanillaQrPayload({
-        uuid: data.uuid,
-        matchId: data.matchId,
-        tournamentId: data.tournamentId,
-        zoneId: data.zoneId,
-        homeClubId: data.homeClubId,
-        awayClubId: data.awayClubId,
-      }),
-    );
-    const arucos = await generateArUcoMarkers(8);
+    const regions = buildPlanillaRegions(data.categories.length);
 
     const draw = new PlanillaPdfDraw();
     const images: PdfImageObject[] = [];
@@ -171,149 +140,110 @@ export class PlanillaResultService {
       draw.image(name, rect.x, rect.y, rect.width, rect.height);
     };
 
-    await this.drawArUcos(draw, arucos, regions, addPng);
-    await this.drawQr(draw, qrPng, regions, addPng);
-    this.drawTitle(draw, regions, data);
-    await this.drawTable(draw, regions, data, addPng);
+    await this.drawHeader(draw, regions, data, addPng);
+    this.drawTable(draw, regions, data);
     this.drawSignLine(draw, regions);
     this.drawCutLine(draw, regions);
 
     return { stream: draw.build(), images };
   }
 
-  private drawTitle(
+  private async drawHeader(
+    draw: PlanillaPdfDraw,
+    regions: ReturnType<typeof buildPlanillaRegions>,
+    data: PlanillaPageData,
+    addPng: (
+      png: Buffer,
+      rect: { x: number; y: number; width: number; height: number },
+      name: string,
+    ) => Promise<void>,
+  ): Promise<void> {
+    const { title, escudos, detail } = regions;
+
+    const ops: Promise<void>[] = [];
+    if (data.homeClubLogo) {
+      ops.push(addPng(data.homeClubLogo.png, escudos.local, 'LogoHome'));
+    }
+    if (data.awayClubLogo) {
+      ops.push(addPng(data.awayClubLogo.png, escudos.visitor, 'LogoAway'));
+    }
+
+    // Título centrado con los nombres de los clubes.
+    draw.setLineWidth(1.2);
+    draw.textCentered(
+      `${data.homeClubName} VS ${data.awayClubName}`,
+      title.x,
+      title.y,
+      title.width,
+      18,
+      true,
+    );
+
+    // Detalle del partido en una sola línea.
+    draw.setLineWidth(0.5);
+    const detailParts = [
+      data.leagueName,
+      `${data.tournamentName} ${data.tournamentYear}`,
+      `Zona ${data.zoneName}`,
+      `Fecha ${data.matchday}`,
+    ];
+    if (data.matchDateLabel) {
+      detailParts.push(data.matchDateLabel);
+    }
+    draw.textCentered(detailParts.join(' - '), detail.x, detail.y, detail.width, 10);
+
+    await Promise.all(ops);
+  }
+
+  private drawTable(
     draw: PlanillaPdfDraw,
     regions: ReturnType<typeof buildPlanillaRegions>,
     data: PlanillaPageData,
   ) {
-    const { title, detail } = regions;
-    draw.setLineWidth(1.2);
-    const size = 18;
-    const baseline = title.y + title.height - 8;
-
-    const vsLabel = ' VS ';
-    // Estimación de ancho en Helvetica-Bold: ~0.62 del tamaño por carácter.
-    const width = (text: string) => text.length * size * 0.62;
-
-    let cursorX = title.x;
-    draw.text(data.homeClubName, cursorX, baseline, size, true);
-    cursorX += width(data.homeClubName);
-    draw.text(vsLabel, cursorX, baseline, size, true);
-    cursorX += width(vsLabel);
-    draw.text(data.awayClubName, cursorX, baseline, size, true);
-
-    // Detalle del partido en una sola línea.
-    draw.setLineWidth(0.5);
-    draw.text(
-      `${data.leagueName} - ${data.tournamentYear} - ${data.zoneName} - Fecha ${data.matchday}`,
-      detail.x,
-      detail.y,
-      10,
-    );
-  }
-
-  private drawArUcos(
-    draw: PlanillaPdfDraw,
-    arucos: ArucoMarkerAsset[],
-    regions: ReturnType<typeof buildPlanillaRegions>,
-    addPng: (
-      png: Buffer,
-      rect: { x: number; y: number; width: number; height: number },
-      name: string,
-    ) => Promise<void>,
-  ): Promise<void> {
-    const positions: Record<number, { x: number; y: number; width: number; height: number }> = {
-      [ArucoId.TOP_LEFT]: regions.arucos.topLeft,
-      [ArucoId.TOP_RIGHT]: regions.arucos.topRight,
-      [ArucoId.BOTTOM_RIGHT]: regions.arucos.bottomRight,
-      [ArucoId.BOTTOM_LEFT]: regions.arucos.bottomLeft,
-    };
-    const ops: Promise<void>[] = [];
-    for (const marker of arucos) {
-      const rect = positions[marker.id];
-      if (rect) {
-        ops.push(addPng(marker.buffer, rect, `Ar${marker.id}`));
-      }
-    }
-    return Promise.all(ops).then(() => undefined);
-  }
-
-  private drawQr(
-    draw: PlanillaPdfDraw,
-    qrPng: Buffer,
-    regions: ReturnType<typeof buildPlanillaRegions>,
-    addPng: (
-      png: Buffer,
-      rect: { x: number; y: number; width: number; height: number },
-      name: string,
-    ) => Promise<void>,
-  ): Promise<void> {
-    return addPng(qrPng, regions.qr, 'QR');
-  }
-
-  private async drawTable(
-    draw: PlanillaPdfDraw,
-    regions: ReturnType<typeof buildPlanillaRegions>,
-    data: PlanillaPageData,
-    addPng: (
-      png: Buffer,
-      rect: { x: number; y: number; width: number; height: number },
-      name: string,
-    ) => Promise<void>,
-  ): Promise<void> {
-    const { tableLabel, columns, clubColumn } = regions;
+    const { tableLabel, rowLabels, columns } = regions;
     draw.setLineWidth(0.8);
     draw.text('RESULTADOS', tableLabel.x, tableLabel.y, 10, true);
 
-    // Primera columna: escudo + nombre corto de cada club (local arriba,
-    // visitante abajo).
-    draw.setLineWidth(0.6);
-    draw.rectTop(clubColumn.local.x, clubColumn.local.y, clubColumn.local.width, clubColumn.local.height);
-    draw.rectTop(clubColumn.visitor.x, clubColumn.visitor.y, clubColumn.visitor.width, clubColumn.visitor.height);
+    if (columns.length === 0) {
+      draw.setLineWidth(0.6);
+      draw.textCentered(
+        'Sin categorías para este partido',
+        tableLabel.x,
+        tableLabel.y + 24,
+        tableLabel.width,
+        9,
+      );
+      return;
+    }
 
-    const ops: Promise<void>[] = [];
-    const nameX = clubColumn.local.x + 34;
-    if (data.homeClubLogo) {
-      ops.push(
-        addPng(
-          data.homeClubLogo.png,
-          {
-            x: clubColumn.local.x + 4,
-            y: clubColumn.local.y + 4,
-            width: 26,
-            height: 26,
-          },
-          'LogoHome',
-        ),
-      );
-    }
-    if (data.awayClubLogo) {
-      ops.push(
-        addPng(
-          data.awayClubLogo.png,
-          {
-            x: clubColumn.visitor.x + 4,
-            y: clubColumn.visitor.y + 4,
-            width: 26,
-            height: 26,
-          },
-          'LogoAway',
-        ),
-      );
-    }
-    draw.text(data.homeClubName, nameX, clubColumn.local.y + 14, 9, true);
-    draw.text(data.awayClubName, nameX, clubColumn.visitor.y + 14, 9, true);
+    // Etiquetas LOCAL / VISITANTE al costado izquierdo de la tabla.
+    draw.setLineWidth(0.6);
+    draw.textCentered(
+      'LOCAL',
+      rowLabels.local.x,
+      rowLabels.local.y + 16,
+      rowLabels.local.width,
+      9,
+      true,
+    );
+    draw.textCentered(
+      'VISITANTE',
+      rowLabels.visitor.x,
+      rowLabels.visitor.y + 16,
+      rowLabels.visitor.width,
+      9,
+      true,
+    );
 
     draw.setLineWidth(0.6);
     for (const col of columns) {
       const categoryData = data.categories[col.index];
-      const hasCategory = !!categoryData;
 
       draw.rectTop(col.category.x, col.category.y, col.category.width, col.category.height);
       draw.rectTop(col.local.x, col.local.y, col.local.width, col.local.height);
       draw.rectTop(col.visitor.x, col.visitor.y, col.visitor.width, col.visitor.height);
 
-      if (hasCategory) {
+      if (categoryData) {
         draw.textCentered(
           categoryData.name,
           col.category.x,
@@ -322,33 +252,8 @@ export class PlanillaResultService {
           8,
           true,
         );
-      } else {
-        this.drawCross(draw, col.local);
-        this.drawCross(draw, col.visitor);
       }
     }
-
-    await Promise.all(ops);
-  }
-
-  private drawCross(
-    draw: PlanillaPdfDraw,
-    rect: { x: number; y: number; width: number; height: number },
-  ) {
-    const inset = 5;
-    draw.setLineWidth(1.6);
-    draw.line(
-      rect.x + inset,
-      rect.y + inset,
-      rect.x + rect.width - inset,
-      rect.y + rect.height - inset,
-    );
-    draw.line(
-      rect.x + rect.width - inset,
-      rect.y + inset,
-      rect.x + inset,
-      rect.y + rect.height - inset,
-    );
   }
 
   private drawSignLine(draw: PlanillaPdfDraw, regions: ReturnType<typeof buildPlanillaRegions>) {
@@ -371,13 +276,13 @@ export class PlanillaResultService {
   private drawCutLine(draw: PlanillaPdfDraw, regions: ReturnType<typeof buildPlanillaRegions>) {
     draw.setDash('[3 3] 0 d');
     draw.setLineWidth(0.4);
-    draw.line(24, regions.cutLineY, 595.28 - 24, regions.cutLineY);
+    draw.line(16, regions.cutLineY, 595.28 - 16, regions.cutLineY);
     draw.setDash('[] 0 d');
   }
 
   private formatDate(date: Date | null): string {
     if (!date) {
-      return 'A confirmar';
+      return '';
     }
     const day = String(date.getUTCDate()).padStart(2, '0');
     const month = String(date.getUTCMonth() + 1).padStart(2, '0');
