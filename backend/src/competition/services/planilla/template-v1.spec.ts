@@ -46,11 +46,13 @@ describe('TEMPLATE 1 - geometría', () => {
     }
   });
 
-  it('el pie define bloques de Representante Local, Visitante y Referí', () => {
+  it('el pie define una línea de firma y etiquetas debajo', () => {
     const regions = buildPlanillaRegions();
-    expect(regions.footer.local).toBeDefined();
-    expect(regions.footer.visitor).toBeDefined();
-    expect(regions.footer.referee).toBeDefined();
+    expect(regions.signLine.line).toBeDefined();
+    expect(regions.signLine.labels.local).toBeDefined();
+    expect(regions.signLine.labels.visitor).toBeDefined();
+    expect(regions.signLine.labels.referee).toBeDefined();
+    expect(regions.signLine.labels.sign).toBeDefined();
   });
 
   it('usa el diccionario ArUco 4x4_50 con IDs fijos 0..3', () => {

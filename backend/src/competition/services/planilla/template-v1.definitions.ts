@@ -90,27 +90,29 @@ export interface ResultTableColumn {
   visitor: Rect; // Fila 3: resultado visitante
 }
 
-/** Líneas de información del encabezado (izquierda). */
-export interface PlanillaInfo {
-  league: Rect;
-  tournament: Rect;
-  zone: Rect;
-  date: Rect;
+/** Primera columna de la tabla: escudo + nombre corto de cada club. */
+export interface ClubColumn {
+  local: Rect; // fila local (arriba)
+  visitor: Rect; // fila visitante (abajo)
 }
 
-/** Campo administrativo del pie (nombre + firma). */
-export interface PlanillaSignBlock {
-  name: Rect;
+/** Etiquetas del pie (debajo de la línea de firma). */
+export interface SignLabels {
+  local: Rect;
+  visitor: Rect;
+  referee: Rect;
   sign: Rect;
 }
 
 export interface PlanillaRegions {
   /** Zona total de la planilla (media hoja superior). */
   sheet: Rect;
-  /** Título "Local VS Visitante" (izquierda). */
+  /** Título "Local VS Visitante" (izquierda, debajo de los ArUco). */
   title: Rect;
-  /** Información alineada a la izquierda bajo el título. */
-  info: PlanillaInfo;
+  /** Detalle del partido en una sola línea (Liga - año - zona - Fecha N). */
+  detail: Rect;
+  /** Primera columna de la tabla con escudos y nombres cortos de los clubes. */
+  clubColumn: ClubColumn;
   /** 10 columnas de la tabla horizontal (categoría / local / visitante). */
   columns: ResultTableColumn[];
   /** Etiqueta "RESULTADOS" sobre la tabla. */
@@ -122,11 +124,10 @@ export interface PlanillaRegions {
     bottomRight: Rect;
     bottomLeft: Rect;
   };
-  /** Bloques del pie: Representante Local, Representante Visitante, Referí. */
-  footer: {
-    local: PlanillaSignBlock;
-    visitor: PlanillaSignBlock;
-    referee: PlanillaSignBlock;
+  /** Línea continua de firma y etiquetas debajo. */
+  signLine: {
+    line: Rect;
+    labels: SignLabels;
   };
   /** Posición vertical (y) de la línea de corte. */
   cutLineY: number;
@@ -149,25 +150,6 @@ export function buildPlanillaRegions(): PlanillaRegions {
   const qrX = A4_WIDTH - marginX - qrSize; // 475.28
   const leftWidth = qrX - marginX - 12; // contenido izquierdo que no pisa el QR
 
-  const title: Rect = { x: marginX, y: 14, width: leftWidth, height: 24 };
-
-  const infoTop = title.y + title.height + 10;
-  const infoLineH = 15;
-  const info: PlanillaInfo = {
-    league: { x: marginX, y: infoTop, width: leftWidth, height: infoLineH },
-    tournament: { x: marginX, y: infoTop + infoLineH, width: leftWidth, height: infoLineH },
-    zone: { x: marginX, y: infoTop + infoLineH * 2, width: leftWidth, height: infoLineH },
-    date: { x: marginX, y: infoTop + infoLineH * 3, width: leftWidth, height: infoLineH },
-  };
-
-  // La tabla horizontal comienza por debajo del QR para no superponerse.
-  const tableLabel: Rect = {
-    x: marginX,
-    y: info.date.y + info.date.height + 4,
-    width: leftWidth,
-    height: 14,
-  };
-
   const arucoTopY = 10;
   const arucoBottomY = PLANILLA_HEIGHT - arucoSize - 8;
 
@@ -179,17 +161,43 @@ export function buildPlanillaRegions(): PlanillaRegions {
     height: qrSize,
   };
 
+  // El título se coloca por debajo de los marcadores ArUco superiores (que son
+  // los "cuadros guía de centrado"), para no quedar detrás de ellos.
+  const title: Rect = { x: marginX, y: 66, width: leftWidth, height: 26 };
+
+  // Detalle del partido en una sola línea.
+  const detail: Rect = { x: marginX, y: title.y + title.height + 5, width: leftWidth, height: 14 };
+
+  const tableLabel: Rect = { x: marginX, y: detail.y + detail.height + 6, width: leftWidth, height: 14 };
+
+  // La tabla horizontal comienza por debajo del QR para no superponerse.
   const tableTop = qr.y + qr.height + 4;
 
-  const colGap = 4;
-  const columnsWidth = A4_WIDTH - marginX * 2;
-  const colW = (columnsWidth - colGap * (CATEGORY_ROWS - 1)) / CATEGORY_ROWS;
   const catRowH = 24;
   const scoreRowH = 40;
 
+  // Primera columna: escudo + nombre corto de cada club (local arriba, visitante abajo).
+  const clubGap = 12;
+  const clubColW = 128;
+  const clubColumn: ClubColumn = {
+    local: { x: marginX, y: tableTop + catRowH, width: clubColW, height: scoreRowH },
+    visitor: {
+      x: marginX,
+      y: tableTop + catRowH + scoreRowH,
+      width: clubColW,
+      height: scoreRowH,
+    },
+  };
+
+  // Columnas de categorías (10), después de la primera columna de clubes.
+  const colGap = 4;
+  const columnsStartX = marginX + clubColW + clubGap;
+  const columnsWidth = A4_WIDTH - marginX - columnsStartX;
+  const colW = (columnsWidth - colGap * (CATEGORY_ROWS - 1)) / CATEGORY_ROWS;
+
   const columns: ResultTableColumn[] = [];
   for (let i = 0; i < CATEGORY_ROWS; i += 1) {
-    const x = marginX + i * (colW + colGap);
+    const x = columnsStartX + i * (colW + colGap);
     columns.push({
       index: i,
       category: { x, y: tableTop, width: colW, height: catRowH },
@@ -212,34 +220,33 @@ export function buildPlanillaRegions(): PlanillaRegions {
     bottomLeft: { x: 8, y: arucoBottomY, width: arucoSize, height: arucoSize },
   };
 
-  // Pie: Representante Local, Representante Visitante y Referí (nombre + firma).
-  const footerTop = tableEndY + 14;
-  const footerGap = 14;
-  const footerBlocks = 3;
-  const footerW = (A4_WIDTH - marginX * 2 - footerGap * (footerBlocks - 1)) / footerBlocks;
-  const nameH = 26;
-  const signH = 22;
-  const blockGap = 5;
-  const footerBlock = (x: number, y: number): PlanillaSignBlock => ({
-    name: { x, y, width: footerW, height: nameH },
-    sign: { x, y: y + nameH + blockGap, width: footerW, height: signH },
-  });
-
-  const footer = {
-    local: footerBlock(marginX, footerTop),
-    visitor: footerBlock(marginX + (footerW + footerGap), footerTop),
-    referee: footerBlock(marginX + (footerW + footerGap) * 2, footerTop),
+  // Línea continua de firma y etiquetas debajo.
+  const lineY = tableEndY + 18;
+  const signLine = {
+    line: { x: marginX, y: lineY, width: A4_WIDTH - marginX * 2, height: 1 },
+  };
+  const labelTop = lineY + 6;
+  const labelsW = A4_WIDTH - marginX * 2;
+  const labelsGap = 10;
+  const cells = 4;
+  const labelW = (labelsW - labelsGap * (cells - 1)) / cells;
+  const labels: SignLabels = {
+    local: { x: marginX, y: labelTop, width: labelW, height: 16 },
+    visitor: { x: marginX + (labelW + labelsGap), y: labelTop, width: labelW, height: 16 },
+    referee: { x: marginX + (labelW + labelsGap) * 2, y: labelTop, width: labelW, height: 16 },
+    sign: { x: marginX + (labelW + labelsGap) * 3, y: labelTop, width: labelW, height: 16 },
   };
 
   return {
     sheet,
     title,
-    info,
+    detail,
+    clubColumn,
     columns,
     tableLabel,
     qr,
     arucos,
-    footer,
+    signLine: { ...signLine, labels },
     cutLineY: PLANILLA_HEIGHT,
   };
 }

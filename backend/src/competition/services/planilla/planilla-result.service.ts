@@ -117,8 +117,8 @@ export class PlanillaResultService {
       zoneName: match.zone?.name ?? 'Sin zona',
       matchday: match.matchday,
       matchDateLabel: this.formatDate(match.date),
-      homeClubName: match.homeClub?.name ?? 'Club local',
-      awayClubName: match.awayClub?.name ?? 'Club visitante',
+      homeClubName: match.homeClub?.shortName || match.homeClub?.name || 'Club local',
+      awayClubName: match.awayClub?.shortName || match.awayClub?.name || 'Club visitante',
       venue: match.homeClub?.name ?? 'A confirmar',
       homeClubLogo: await this.loadLogoPng(
         match.homeClub?.logoUrl ?? null,
@@ -172,58 +172,12 @@ export class PlanillaResultService {
 
     await this.drawArUcos(draw, arucos, regions, addPng);
     await this.drawQr(draw, qrPng, regions, addPng);
-    await this.drawLogos(draw, data, regions, addPng);
     this.drawTitle(draw, regions, data);
-    this.drawTable(draw, regions, data);
-    this.drawFooter(draw, regions);
+    await this.drawTable(draw, regions, data, addPng);
+    this.drawSignLine(draw, regions);
     this.drawCutLine(draw, regions);
 
     return { stream: draw.build(), images };
-  }
-
-  private drawLogos(
-    draw: PlanillaPdfDraw,
-    data: PlanillaPageData,
-    regions: ReturnType<typeof buildPlanillaRegions>,
-    addPng: (
-      png: Buffer,
-      rect: { x: number; y: number; width: number; height: number },
-      name: string,
-    ) => Promise<void>,
-  ): Promise<void> {
-    const ops: Promise<void>[] = [];
-    const t = regions.title;
-    // Logos chicos a los costados del título "Local VS Visitante".
-    const margin = 4;
-    if (data.homeClubLogo) {
-      ops.push(
-        addPng(
-          data.homeClubLogo.png,
-          {
-            x: t.x,
-            y: t.y + 2,
-            width: data.homeClubLogo.displayWidth,
-            height: data.homeClubLogo.displayHeight,
-          },
-          'LogoHome',
-        ),
-      );
-    }
-    if (data.awayClubLogo) {
-      ops.push(
-        addPng(
-          data.awayClubLogo.png,
-          {
-            x: t.x + t.width - data.awayClubLogo.displayWidth - margin,
-            y: t.y + 2,
-            width: data.awayClubLogo.displayWidth,
-            height: data.awayClubLogo.displayHeight,
-          },
-          'LogoAway',
-        ),
-      );
-    }
-    return Promise.all(ops).then(() => undefined);
   }
 
   private drawTitle(
@@ -231,30 +185,30 @@ export class PlanillaResultService {
     regions: ReturnType<typeof buildPlanillaRegions>,
     data: PlanillaPageData,
   ) {
-    const { title, info } = regions;
-    draw.setLineWidth(0.8);
-    const size = 13;
+    const { title, detail } = regions;
+    draw.setLineWidth(1);
+    const size = 14;
     const baseline = title.y + title.height - 6;
 
-    const homeLogoW = data.homeClubLogo ? data.homeClubLogo.displayWidth + 6 : 0;
-
     const vsLabel = ' VS ';
-    const homeW = data.homeClubName.length * size * 0.48;
-    const vsW = vsLabel.length * size * 0.48;
-    const awayW = data.awayClubName.length * size * 0.48;
+    // Estimación de ancho en Helvetica-Bold: ~0.62 del tamaño por carácter.
+    const width = (text: string) => text.length * size * 0.62;
 
-    let cursorX = title.x + homeLogoW;
+    let cursorX = title.x;
     draw.text(data.homeClubName, cursorX, baseline, size, true);
-    cursorX += homeW;
+    cursorX += width(data.homeClubName);
     draw.text(vsLabel, cursorX, baseline, size, true);
-    cursorX += vsW;
+    cursorX += width(vsLabel);
     draw.text(data.awayClubName, cursorX, baseline, size, true);
 
+    // Detalle del partido en una sola línea.
     draw.setLineWidth(0.5);
-    draw.text(`Liga: ${data.leagueName}`, info.league.x, info.league.y, 9.5);
-    draw.text(`Torneo: ${data.tournamentName} ${data.tournamentYear}`, info.tournament.x, info.tournament.y, 9.5);
-    draw.text(`Zona: ${data.zoneName}`, info.zone.x, info.zone.y, 9.5);
-    draw.text(`Fecha (Jornada): ${data.matchday}`, info.date.x, info.date.y, 9.5);
+    draw.text(
+      `${data.leagueName} - ${data.tournamentYear} - ${data.zoneName} - Fecha ${data.matchday}`,
+      detail.x,
+      detail.y,
+      10,
+    );
   }
 
   private drawArUcos(
@@ -296,14 +250,58 @@ export class PlanillaResultService {
     return addPng(qrPng, regions.qr, 'QR');
   }
 
-  private drawTable(
+  private async drawTable(
     draw: PlanillaPdfDraw,
     regions: ReturnType<typeof buildPlanillaRegions>,
     data: PlanillaPageData,
-  ) {
-    const { tableLabel, columns } = regions;
+    addPng: (
+      png: Buffer,
+      rect: { x: number; y: number; width: number; height: number },
+      name: string,
+    ) => Promise<void>,
+  ): Promise<void> {
+    const { tableLabel, columns, clubColumn } = regions;
     draw.setLineWidth(0.8);
     draw.text('RESULTADOS', tableLabel.x, tableLabel.y, 10, true);
+
+    // Primera columna: escudo + nombre corto de cada club (local arriba,
+    // visitante abajo).
+    draw.setLineWidth(0.6);
+    draw.rectTop(clubColumn.local.x, clubColumn.local.y, clubColumn.local.width, clubColumn.local.height);
+    draw.rectTop(clubColumn.visitor.x, clubColumn.visitor.y, clubColumn.visitor.width, clubColumn.visitor.height);
+
+    const ops: Promise<void>[] = [];
+    const nameX = clubColumn.local.x + 34;
+    if (data.homeClubLogo) {
+      ops.push(
+        addPng(
+          data.homeClubLogo.png,
+          {
+            x: clubColumn.local.x + 4,
+            y: clubColumn.local.y + 4,
+            width: 26,
+            height: 26,
+          },
+          'LogoHome',
+        ),
+      );
+    }
+    if (data.awayClubLogo) {
+      ops.push(
+        addPng(
+          data.awayClubLogo.png,
+          {
+            x: clubColumn.visitor.x + 4,
+            y: clubColumn.visitor.y + 4,
+            width: 26,
+            height: 26,
+          },
+          'LogoAway',
+        ),
+      );
+    }
+    draw.text(data.homeClubName, nameX, clubColumn.local.y + 14, 9, true);
+    draw.text(data.awayClubName, nameX, clubColumn.visitor.y + 14, 9, true);
 
     draw.setLineWidth(0.6);
     for (const col of columns) {
@@ -328,6 +326,8 @@ export class PlanillaResultService {
         this.drawCross(draw, col.visitor);
       }
     }
+
+    await Promise.all(ops);
   }
 
   private drawCross(
@@ -350,22 +350,23 @@ export class PlanillaResultService {
     );
   }
 
-  private drawFooter(draw: PlanillaPdfDraw, regions: ReturnType<typeof buildPlanillaRegions>) {
-    const { footer } = regions;
-    draw.setLineWidth(0.6);
+  private drawSignLine(draw: PlanillaPdfDraw, regions: ReturnType<typeof buildPlanillaRegions>) {
+    const { signLine } = regions;
+    // Línea continua de firma.
+    draw.setLineWidth(0.7);
+    draw.line(signLine.line.x, signLine.line.y, signLine.line.x + signLine.line.width, signLine.line.y);
 
-    const blocks: { key: 'local' | 'visitor' | 'referee'; label: string }[] = [
+    // Etiquetas de los campos debajo de la línea.
+    draw.setLineWidth(0.4);
+    const cells: { key: 'local' | 'visitor' | 'referee' | 'sign'; label: string }[] = [
       { key: 'local', label: 'Representante Local' },
       { key: 'visitor', label: 'Representante Visitante' },
-      { key: 'referee', label: 'Referi' },
+      { key: 'referee', label: 'Arbitro' },
+      { key: 'sign', label: 'Firma' },
     ];
-
-    for (const block of blocks) {
-      const rect = footer[block.key];
-      draw.rectTop(rect.name.x, rect.name.y, rect.name.width, rect.name.height);
-      draw.rectTop(rect.sign.x, rect.sign.y, rect.sign.width, rect.sign.height);
-      draw.text(block.label, rect.name.x + 4, rect.name.y + 4, 9);
-      draw.text('Firma', rect.sign.x + 4, rect.sign.y + 4, 8);
+    for (const cell of cells) {
+      const rect = signLine.labels[cell.key];
+      draw.textCentered(cell.label, rect.x, rect.y, rect.width, 9);
     }
   }
 
