@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Param,
   ParseIntPipe,
@@ -15,7 +16,7 @@ import { MatchesService } from '../services/matches.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { PermissionsGuard } from '../../rbac/permissions.guard';
 import { Permissions } from '../../common/decorators/permissions.decorator';
-import { Action, Module } from '@prisma/client';
+import { Action, Module, Scope } from '@prisma/client';
 import { UpdateMatchDto } from '../dto/update-match.dto';
 import { RecordMatchResultDto } from '../dto/record-match-result.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -138,15 +139,64 @@ export class MatchesController {
   }
 
   @Get('matches/:matchId/planilla')
+  @UseGuards(JwtAuthGuard)
   async downloadSheet(
     @Param('matchId', ParseIntPipe) matchId: number,
+    @CurrentUser() user: RequestUser,
     @Res() res: Response,
   ) {
+    const detail = await this.matchesService.getMatchDetail(matchId);
+    const homeClubId = detail.homeClub?.id;
+    const awayClubId = detail.awayClub?.id;
+    this.assertCanDownloadSheet(user, homeClubId, awayClubId);
+
     const filenameBase = await this.matchesService.buildMatchDownloadFilename(matchId);
     const sheet = await this.matchSheetService.generate(matchId);
     res.setHeader('Content-Type', sheet.contentType);
     res.setHeader('Content-Disposition', `attachment; filename="${filenameBase}.${sheet.fileExtension}"`);
     return res.send(sheet.buffer);
+  }
+
+  private assertCanDownloadSheet(
+    user: RequestUser,
+    homeClubId: number | undefined,
+    awayClubId: number | undefined,
+  ) {
+    if (user.isAdmin) {
+      return;
+    }
+
+    const clubIds = [...new Set([homeClubId, awayClubId].filter((id): id is number => !!id))];
+
+    const relevantGrants = user.permissions.filter(
+      (grant) =>
+        grant.module === Module.PARTIDOS &&
+        (grant.action === Action.VIEW || grant.action === Action.MANAGE),
+    );
+
+    const hasGlobalView = relevantGrants.some((grant) => grant.scope === Scope.GLOBAL);
+    if (hasGlobalView) {
+      return;
+    }
+
+    const coversClub = relevantGrants.some(
+      (grant) =>
+        grant.scope === Scope.CLUB &&
+        grant.clubs?.some((clubId) => clubIds.includes(clubId)),
+    );
+    if (coversClub) {
+      return;
+    }
+
+    const isDelegateForMatch =
+      user.roles.includes('DELEGATE') &&
+      user.club?.id != null &&
+      clubIds.includes(user.club.id);
+    if (isDelegateForMatch) {
+      return;
+    }
+
+    throw new ForbiddenException('No tenés permiso para descargar la planilla de este partido.');
   }
 
   @Patch('matches/:matchId')

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
-  import { getMatchDetail, getProfile, canManageModule, matchPosterUrl, type MatchDetail, type MatchClub, type AuthUser } from '$lib/api';
+  import { getMatchDetail, getProfile, canManageModule, matchPosterUrl, downloadMatchPlanilla, canManageSheetForMatch, type MatchDetail, type MatchClub, type AuthUser } from '$lib/api';
   import PlayerGoalsModal from '$lib/PlayerGoalsModal.svelte';
 
   let match: MatchDetail | null = $state(null);
@@ -13,6 +13,9 @@
 
   let canManage = $derived(canManageModule(user, 'TORNEOS') || canManageModule(user, 'ZONAS'));
   let hasScores = $derived.by(() => match?.categories.some((c) => c.closedAt) ?? false);
+  let canDownloadPlanilla = $derived.by(() =>
+    canManageSheetForMatch(user, match?.homeClub?.id, match?.awayClub?.id)
+  );
 
   let backHref = $derived.by(() => {
     const zona = $page.url.searchParams.get('zona');
@@ -73,6 +76,32 @@
     openCategory = { tournamentCategoryId: cat.tournamentCategoryId, categoryName: cat.categoryName };
   }
 
+  let downloadingSheet = $state(false);
+
+  function clubLabel(club: MatchClub | null): string {
+    return club ? club.name : 'partido';
+  }
+
+  async function downloadSheet() {
+    if (!match) return;
+    try {
+      downloadingSheet = true;
+      const blob = await downloadMatchPlanilla(match.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `planilla-${clubLabel(match.homeClub)}-vs-${clubLabel(match.awayClub)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'No se pudo descargar la planilla.';
+    } finally {
+      downloadingSheet = false;
+    }
+  }
+
   async function refresh() {
     if (!match) return;
     try {
@@ -130,7 +159,11 @@
 
       <div class="versus-actions">
         <a class="button secondary" href={matchPosterUrl(match.id)} target="_blank" rel="noopener">Flyer</a>
-        <button class="button secondary" disabled>Listado</button>
+        {#if canDownloadPlanilla}
+          <button class="button secondary" onclick={downloadSheet} disabled={downloadingSheet}>
+            {downloadingSheet ? 'Descargando...' : 'Listado'}
+          </button>
+        {/if}
       </div>
     </div>
 

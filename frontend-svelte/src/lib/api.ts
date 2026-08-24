@@ -24,6 +24,15 @@ export const MATRIX_MODULES = [
 
 export type MatrixModule = (typeof MATRIX_MODULES)[number];
 
+export interface PermissionGrant {
+  module: string;
+  action: string;
+  scope: string;
+  leagues?: number[];
+  clubs?: number[];
+  categories?: number[];
+}
+
 export interface AuthUser {
   id: number;
   username: string;
@@ -31,7 +40,7 @@ export interface AuthUser {
   lastName: string;
   isAdmin: boolean;
   roles: string[];
-  permissions: unknown[];
+  permissions: PermissionGrant[];
   moduleLevels: Record<string, PermissionLevel>;
   club: { id: number; name: string } | null;
 }
@@ -956,6 +965,58 @@ export async function upsertPosterTemplate(
 
 export function matchPosterUrl(matchId: number): string {
   return `${API_BASE_URL}/matches/${matchId}/poster`;
+}
+
+export async function downloadMatchPlanilla(matchId: number): Promise<Blob> {
+  const headers = new Headers();
+  const accessToken = getStored(ACCESS_TOKEN_KEY);
+  if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
+  const response = await fetch(`${API_BASE_URL}/matches/${matchId}/planilla`, { headers });
+  if (!response.ok) {
+    let message = 'No se pudo descargar la planilla.';
+    try {
+      const body = await response.json();
+      const msg = body.message;
+      message = Array.isArray(msg) ? msg.join(', ') : (typeof msg === 'string' && msg ? msg : message);
+    } catch {}
+    throw new Error(message);
+  }
+  return response.blob();
+}
+
+export function allowedClubsFor(
+  user: AuthUser | null | undefined,
+  module: string,
+  action: string
+): Set<number> | null {
+  if (!user) return null;
+  if (user.isAdmin) return null;
+  const matching = (user.permissions ?? []).filter(
+    (grant) => grant.module === module && (grant.action === action || grant.action === 'MANAGE')
+  );
+  if (matching.length === 0) return null;
+  if (matching.some((grant) => grant.scope === 'GLOBAL')) return null;
+  const clubIds = new Set<number>();
+  for (const grant of matching) {
+    if (grant.scope === 'CLUB' && grant.clubs) {
+      for (const id of grant.clubs) clubIds.add(id);
+    }
+  }
+  return clubIds;
+}
+
+export function canManageSheetForMatch(
+  user: AuthUser | null | undefined,
+  homeClubId: number | null | undefined,
+  awayClubId: number | null | undefined
+): boolean {
+  if (!user) return false;
+  if (user.isAdmin) return true;
+  const clubIds = [...new Set([homeClubId, awayClubId].filter((id): id is number => !!id))];
+  const allowed = allowedClubsFor(user, 'PARTIDOS', 'VIEW');
+  if (allowed != null && clubIds.some((id) => allowed.has(id))) return true;
+  if ((user.roles ?? []).includes('DELEGATE') && user.club?.id != null && clubIds.includes(user.club.id)) return true;
+  return false;
 }
 
 export async function fetchPosterTemplatePreview(competitionId: number, matchId: number): Promise<string> {
