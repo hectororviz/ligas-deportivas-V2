@@ -9,16 +9,18 @@ import {
 import { buildPlanillaQrPayload, parsePlanillaQrPayload, generatePlanillaQrPng } from './qr';
 
 describe('TEMPLATE 1 - geometría', () => {
-  it('define exactamente 10 filas de categorías', () => {
+  it('define exactamente 10 posiciones de categorías', () => {
     const regions = buildPlanillaRegions();
-    expect(regions.rows).toHaveLength(10);
+    expect(regions.columns).toHaveLength(10);
     expect(CATEGORY_ROWS).toBe(10);
   });
 
   it('define 20 casilleros de resultado (10 local + 10 visitante)', () => {
     const regions = buildPlanillaRegions();
-    const locals = regions.rows.filter((row) => row.local.width > 0 && row.local.height > 0);
-    const visitors = regions.rows.filter((row) => row.visitor.width > 0 && row.visitor.height > 0);
+    const locals = regions.columns.filter((col) => col.local.width > 0 && col.local.height > 0);
+    const visitors = regions.columns.filter(
+      (col) => col.visitor.width > 0 && col.visitor.height > 0,
+    );
     expect(locals).toHaveLength(10);
     expect(visitors).toHaveLength(10);
   });
@@ -32,15 +34,23 @@ describe('TEMPLATE 1 - geometría', () => {
     expect(arucos.bottomRight).toBeDefined();
   });
 
-  it('cada fila tiene geometría de categoría, local y visitante independientes', () => {
+  it('cada columna tiene geometría de categoría, local y visitante independientes', () => {
     const regions = buildPlanillaRegions();
-    for (const row of regions.rows) {
-      expect(row.category).toBeDefined();
-      expect(row.local).toBeDefined();
-      expect(row.visitor).toBeDefined();
-      expect(row.local.width).toBeGreaterThan(0);
-      expect(row.visitor.width).toBeGreaterThan(0);
+    for (const col of regions.columns) {
+      expect(col.category).toBeDefined();
+      expect(col.local).toBeDefined();
+      expect(col.visitor).toBeDefined();
+      expect(col.category.width).toBeGreaterThan(0);
+      expect(col.local.width).toBeGreaterThan(0);
+      expect(col.visitor.width).toBeGreaterThan(0);
     }
+  });
+
+  it('el pie define bloques de Representante Local, Visitante y Referí', () => {
+    const regions = buildPlanillaRegions();
+    expect(regions.footer.local).toBeDefined();
+    expect(regions.footer.visitor).toBeDefined();
+    expect(regions.footer.referee).toBeDefined();
   });
 
   it('usa el diccionario ArUco 4x4_50 con IDs fijos 0..3', () => {

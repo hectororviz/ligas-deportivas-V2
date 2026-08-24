@@ -286,7 +286,7 @@ export class MatchSheetService {
     const draw = new PdfDraw();
     const fullWidth = PAGE_WIDTH - MARGIN * 2;
     const headerHeight = 90;
-    const logoSize = 84;
+    const logoSize = 42;
 
     const [homeLogo, awayLogo] = await Promise.all([
       this.loadLogoForPdf(data.homeClubLogoUrl, data.homeClubLogoKey, logoSize),

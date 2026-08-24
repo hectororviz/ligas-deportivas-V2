@@ -82,24 +82,39 @@ export interface Rect {
   height: number;
 }
 
-export interface CategoryResultRow {
+/** Una columna de la tabla horizontal de resultados (una por categoría). */
+export interface ResultTableColumn {
   index: number;
-  category: Rect;
-  local: Rect;
-  visitor: Rect;
+  category: Rect; // Fila 1: nombre de la categoría
+  local: Rect; // Fila 2: resultado local
+  visitor: Rect; // Fila 3: resultado visitante
+}
+
+/** Líneas de información del encabezado (izquierda). */
+export interface PlanillaInfo {
+  league: Rect;
+  tournament: Rect;
+  zone: Rect;
+  date: Rect;
+}
+
+/** Campo administrativo del pie (nombre + firma). */
+export interface PlanillaSignBlock {
+  name: Rect;
+  sign: Rect;
 }
 
 export interface PlanillaRegions {
   /** Zona total de la planilla (media hoja superior). */
   sheet: Rect;
+  /** Título "Local VS Visitante" (izquierda). */
   title: Rect;
-  matchInfo: Rect;
-  headers: {
-    category: Rect;
-    local: Rect;
-    visitor: Rect;
-  };
-  rows: CategoryResultRow[];
+  /** Información alineada a la izquierda bajo el título. */
+  info: PlanillaInfo;
+  /** 10 columnas de la tabla horizontal (categoría / local / visitante). */
+  columns: ResultTableColumn[];
+  /** Etiqueta "RESULTADOS" sobre la tabla. */
+  tableLabel: Rect;
   qr: Rect;
   arucos: {
     topLeft: Rect;
@@ -107,15 +122,12 @@ export interface PlanillaRegions {
     bottomRight: Rect;
     bottomLeft: Rect;
   };
-  administrative: {
-    arbitrator: Rect;
-    arbitratorSign: Rect;
-    localRepresentative: Rect;
-    localSign: Rect;
-    visitorRepresentative: Rect;
-    visitorSign: Rect;
+  /** Bloques del pie: Representante Local, Representante Visitante, Referí. */
+  footer: {
+    local: PlanillaSignBlock;
+    visitor: PlanillaSignBlock;
+    referee: PlanillaSignBlock;
   };
-  instruction: Rect;
   /** Posición vertical (y) de la línea de corte. */
   cutLineY: number;
 }
@@ -132,48 +144,29 @@ export function buildPlanillaRegions(): PlanillaRegions {
   const qrSize = 96; // ~34mm
   const arucoSize = 48;
 
-  // El borde/QR ocupa la franja derecha superior; el contenido y la tabla se
-  // mantienen a la izquierda de la columna del QR para no superponerse.
+  // El QR ocupa la franja derecha superior; el título y los datos van alineados
+  // a la izquierda para no superponerse con él.
   const qrX = A4_WIDTH - marginX - qrSize; // 475.28
+  const leftWidth = qrX - marginX - 12; // contenido izquierdo que no pisa el QR
 
-  const leftWidth = qrX - marginX - 12; // contenido que no pisa el QR (~375)
+  const title: Rect = { x: marginX, y: 14, width: leftWidth, height: 24 };
 
-  const title: Rect = { x: marginX, y: 12, width: leftWidth, height: 30 };
+  const infoTop = title.y + title.height + 10;
+  const infoLineH = 15;
+  const info: PlanillaInfo = {
+    league: { x: marginX, y: infoTop, width: leftWidth, height: infoLineH },
+    tournament: { x: marginX, y: infoTop + infoLineH, width: leftWidth, height: infoLineH },
+    zone: { x: marginX, y: infoTop + infoLineH * 2, width: leftWidth, height: infoLineH },
+    date: { x: marginX, y: infoTop + infoLineH * 3, width: leftWidth, height: infoLineH },
+  };
 
-  const matchInfo: Rect = {
+  // La tabla horizontal comienza por debajo del QR para no superponerse.
+  const tableLabel: Rect = {
     x: marginX,
-    y: title.y + title.height + 8,
+    y: info.date.y + info.date.height + 4,
     width: leftWidth,
-    height: 62,
+    height: 14,
   };
-
-  const rowsTop = matchInfo.y + matchInfo.height + 10;
-  const headerHeight = 13;
-  const rowHeight = 18;
-
-  const categoryWidth = 196;
-  const boxWidth = 88;
-  const localX = marginX + categoryWidth + 18;
-  const visitorX = localX + boxWidth + 16;
-
-  const headers: PlanillaRegions['headers'] = {
-    category: { x: marginX, y: rowsTop, width: categoryWidth, height: headerHeight },
-    local: { x: localX, y: rowsTop, width: boxWidth, height: headerHeight },
-    visitor: { x: visitorX, y: rowsTop, width: boxWidth, height: headerHeight },
-  };
-
-  const tableEndY = rowsTop + headerHeight + CATEGORY_ROWS * rowHeight;
-
-  const rows: CategoryResultRow[] = [];
-  for (let i = 0; i < CATEGORY_ROWS; i += 1) {
-    const y = rowsTop + headerHeight + i * rowHeight;
-    rows.push({
-      index: i,
-      category: { x: marginX, y, width: categoryWidth, height: rowHeight },
-      local: { x: localX, y, width: boxWidth, height: rowHeight },
-      visitor: { x: visitorX, y, width: boxWidth, height: rowHeight },
-    });
-  }
 
   const arucoTopY = 10;
   const arucoBottomY = PLANILLA_HEIGHT - arucoSize - 8;
@@ -185,6 +178,27 @@ export function buildPlanillaRegions(): PlanillaRegions {
     width: qrSize,
     height: qrSize,
   };
+
+  const tableTop = qr.y + qr.height + 4;
+
+  const colGap = 4;
+  const columnsWidth = A4_WIDTH - marginX * 2;
+  const colW = (columnsWidth - colGap * (CATEGORY_ROWS - 1)) / CATEGORY_ROWS;
+  const catRowH = 24;
+  const scoreRowH = 40;
+
+  const columns: ResultTableColumn[] = [];
+  for (let i = 0; i < CATEGORY_ROWS; i += 1) {
+    const x = marginX + i * (colW + colGap);
+    columns.push({
+      index: i,
+      category: { x, y: tableTop, width: colW, height: catRowH },
+      local: { x, y: tableTop + catRowH, width: colW, height: scoreRowH },
+      visitor: { x, y: tableTop + catRowH + scoreRowH, width: colW, height: scoreRowH },
+    });
+  }
+
+  const tableEndY = tableTop + catRowH + scoreRowH * 2;
 
   const arucos = {
     topLeft: { x: 8, y: arucoTopY, width: arucoSize, height: arucoSize },
@@ -198,67 +212,34 @@ export function buildPlanillaRegions(): PlanillaRegions {
     bottomLeft: { x: 8, y: arucoBottomY, width: arucoSize, height: arucoSize },
   };
 
-  const administrativeTop = tableEndY + 12;
+  // Pie: Representante Local, Representante Visitante y Referí (nombre + firma).
+  const footerTop = tableEndY + 14;
+  const footerGap = 14;
+  const footerBlocks = 3;
+  const footerW = (A4_WIDTH - marginX * 2 - footerGap * (footerBlocks - 1)) / footerBlocks;
+  const nameH = 26;
+  const signH = 22;
+  const blockGap = 5;
+  const footerBlock = (x: number, y: number): PlanillaSignBlock => ({
+    name: { x, y, width: footerW, height: nameH },
+    sign: { x, y: y + nameH + blockGap, width: footerW, height: signH },
+  });
 
-  const adminHalfWidth = 180;
-  const adminSignWidth = 60;
-  const adminGap = 14;
-
-  const arbitrator = { x: marginX, y: administrativeTop, width: adminHalfWidth, height: 24 };
-  const arbitratorSign = {
-    x: marginX + adminHalfWidth + adminGap,
-    y: administrativeTop,
-    width: adminSignWidth,
-    height: 24,
-  };
-
-  const secondRowY = administrativeTop + 24 + 8;
-  const localRepresentative = { x: marginX, y: secondRowY, width: adminHalfWidth, height: 24 };
-  const localSign = {
-    x: marginX + adminHalfWidth + adminGap,
-    y: secondRowY,
-    width: adminSignWidth,
-    height: 24,
-  };
-  const visitorRepresentative = {
-    x: marginX + adminHalfWidth + adminSignWidth + adminGap * 2 + 20,
-    y: secondRowY,
-    width: adminHalfWidth,
-    height: 24,
-  };
-  const visitorSign = {
-    x: A4_WIDTH - marginX - adminSignWidth,
-    y: secondRowY,
-    width: adminSignWidth,
-    height: 24,
-  };
-
-  const administrativeEndY = secondRowY + 24;
-
-  const instruction: Rect = {
-    x: marginX + 40,
-    y: administrativeEndY + 8,
-    width: A4_WIDTH - marginX * 2 - 80,
-    height: 24,
+  const footer = {
+    local: footerBlock(marginX, footerTop),
+    visitor: footerBlock(marginX + (footerW + footerGap), footerTop),
+    referee: footerBlock(marginX + (footerW + footerGap) * 2, footerTop),
   };
 
   return {
     sheet,
     title,
-    matchInfo,
-    headers,
-    rows,
+    info,
+    columns,
+    tableLabel,
     qr,
     arucos,
-    administrative: {
-      arbitrator,
-      arbitratorSign,
-      localRepresentative,
-      localSign,
-      visitorRepresentative,
-      visitorSign,
-    },
-    instruction,
+    footer,
     cutLineY: PLANILLA_HEIGHT,
   };
 }
