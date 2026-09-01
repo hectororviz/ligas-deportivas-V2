@@ -17,7 +17,7 @@
 
   function tick() {
     if (!scrollEl || isDragging || isHovered || scrollEl.scrollWidth <= scrollEl.clientWidth) return;
-    scrollEl.scrollLeft += 0.5;
+    scrollEl.scrollLeft += 0.25;
     if (scrollEl.scrollLeft + scrollEl.clientWidth >= scrollEl.scrollWidth - 1) scrollEl.scrollLeft = 0;
   }
 
