@@ -33,17 +33,36 @@ export class MatchesService {
       this.prisma.match.findMany({
         where: { zoneId },
         orderBy: [{ matchday: 'asc' }, { round: 'asc' }],
-        include: {
-          homeClub: true,
-          awayClub: true,
+        select: {
+          id: true,
+          uuid: true,
+          matchday: true,
+          round: true,
+          date: true,
+          status: true,
+          homeClubId: true,
+          awayClubId: true,
+          homeClub: { select: { id: true, name: true, shortName: true } },
+          awayClub: { select: { id: true, name: true, shortName: true } },
           categories: {
-            include: {
+            select: {
+              id: true,
+              tournamentCategoryId: true,
+              kickoffTime: true,
+              isPromocional: true,
+              homeScore: true,
+              awayScore: true,
+              closedAt: true,
+              isPending: true,
               tournamentCategory: {
-                include: { category: true }
-              }
-            }
-          }
-        }
+                select: {
+                  countsForGeneral: true,
+                  category: { select: { id: true, name: true } },
+                },
+              },
+            },
+          },
+        },
       }),
       this.prisma.zoneMatchday.findMany({
         where: { zoneId },

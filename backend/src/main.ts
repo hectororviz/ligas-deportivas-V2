@@ -4,6 +4,7 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
 import * as cookieParser from 'cookie-parser';
+import * as compression from 'compression';
 import { extname, join, sep } from 'path';
 import { NestExpressApplication } from '@nestjs/platform-express';
 
@@ -50,6 +51,7 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api/v1');
   app.use(helmet());
+  app.use(compression());
   app.use(cookieParser());
   const uploadsDir = join(process.cwd(), 'storage', 'uploads');
   const publicDir = join(process.cwd(), 'public');
