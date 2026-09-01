@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import type { Club } from './api';
 
   interface Props {
@@ -14,12 +15,14 @@
   let dragStartScroll = 0;
   let dragMoved = false;
 
-  $effect(() => {
-    const timer = window.setInterval(() => {
-      if (!scrollEl || isDragging || scrollEl.scrollWidth <= scrollEl.clientWidth) return;
-      scrollEl.scrollLeft += 0.35;
-      if (scrollEl.scrollLeft + scrollEl.clientWidth >= scrollEl.scrollWidth - 1) scrollEl.scrollLeft = 0;
-    }, 16);
+  function tick() {
+    if (!scrollEl || isDragging || scrollEl.scrollWidth <= scrollEl.clientWidth) return;
+    scrollEl.scrollLeft += 0.35;
+    if (scrollEl.scrollLeft + scrollEl.clientWidth >= scrollEl.scrollWidth - 1) scrollEl.scrollLeft = 0;
+  }
+
+  onMount(() => {
+    const timer = window.setInterval(tick, 16);
     return () => window.clearInterval(timer);
   });
 
