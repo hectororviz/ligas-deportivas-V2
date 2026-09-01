@@ -110,7 +110,11 @@ export class HomeSummaryService {
                     3
                   );
             const upcomingMatchday = zone.matchdays
-              .filter((matchday) => matchday.status !== MatchdayStatus.PLAYED)
+              .filter(
+                (matchday) =>
+                  matchday.status === MatchdayStatus.IN_PROGRESS ||
+                  matchday.status === MatchdayStatus.PENDING
+              )
               .sort((a, b) => a.matchday - b.matchday)[0];
 
             return {

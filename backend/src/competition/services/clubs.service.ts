@@ -351,7 +351,7 @@ export class ClubsService {
               },
             },
             matchdays: {
-              where: { status: { not: MatchdayStatus.PLAYED } },
+              where: { status: { in: [MatchdayStatus.IN_PROGRESS, MatchdayStatus.PENDING] } },
               orderBy: { matchday: 'asc' },
             },
           },
