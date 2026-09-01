@@ -52,10 +52,11 @@
     if (!md.date) return base;
     const d = new Date(md.date);
     if (isNaN(d.getTime())) return base;
-    const weekday = d.toLocaleDateString('es-AR', { weekday: 'long' });
-    const capitalized = weekday.charAt(0).toUpperCase() + weekday.slice(1);
-    const dayMonth = d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
-    return `${capitalized} ${dayMonth} - Fecha ${md.matchday}`;
+    const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    const weekday = days[d.getUTCDay()];
+    const dd = String(d.getUTCDate()).padStart(2, '0');
+    const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+    return `${weekday} ${dd}/${mm} - Fecha ${md.matchday}`;
   }
 </script>
 
