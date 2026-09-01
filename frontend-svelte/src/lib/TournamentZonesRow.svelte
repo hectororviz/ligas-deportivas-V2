@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import type { HomeMatchday, HomeTournament } from './api';
 
   interface Props {
@@ -8,54 +7,9 @@
 
   let { tournament }: Props = $props();
 
-  let scrollEl: HTMLDivElement;
-  let isDragging = $state(false);
-  let isHovered = $state(false);
-  let dragStartX = 0;
-  let dragStartScroll = 0;
-  let dragMoved = false;
-
-  function tick() {
-    if (!scrollEl || isDragging || isHovered || scrollEl.scrollWidth <= scrollEl.clientWidth) return;
-    scrollEl.scrollLeft += 0.25;
-    if (scrollEl.scrollLeft + scrollEl.clientWidth >= scrollEl.scrollWidth - 1) scrollEl.scrollLeft = 0;
-  }
-
-  onMount(() => {
-    const timer = window.setInterval(tick, 16);
-    return () => window.clearInterval(timer);
-  });
-
-  function startDrag(event: PointerEvent) {
-    if (!scrollEl) return;
-    isDragging = true;
-    dragMoved = false;
-    dragStartX = event.clientX;
-    dragStartScroll = scrollEl.scrollLeft;
-  }
-
-  function moveDrag(event: PointerEvent) {
-    if (!isDragging || !scrollEl) return;
-    const distance = event.clientX - dragStartX;
-    if (Math.abs(distance) > 4) {
-      dragMoved = true;
-      if (!scrollEl.hasPointerCapture(event.pointerId)) scrollEl.setPointerCapture(event.pointerId);
-    }
-    scrollEl.scrollLeft = dragStartScroll - distance;
-  }
-
-  function endDrag(event: PointerEvent) {
-    if (!isDragging) return;
-    isDragging = false;
-    if (scrollEl?.hasPointerCapture(event.pointerId)) scrollEl.releasePointerCapture(event.pointerId);
-  }
-
-  function handleClick(event: MouseEvent) {
-    if (dragMoved) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
-  }
+  let multi = $derived(tournament.zones.length > 1);
+  let marqueeDuration = $derived(Math.max(tournament.zones.length, 2) * 15);
+  let cards = $derived(multi ? [...tournament.zones, ...tournament.zones] : tournament.zones);
 
   function formatNextMatchday(md: HomeMatchday | null): string {
     if (!md) return 'Sin próxima fecha';
@@ -77,47 +31,46 @@
   </header>
 
   <div
-    class="zones-track"
-    class:dragging={isDragging}
+    class="marquee-viewport"
+    class:marquee={multi}
+    style={multi ? `--m-dur: ${marqueeDuration}s` : ''}
     role="region"
     aria-label={`Zonas de ${tournament.leagueName} ${tournament.name} ${tournament.year}`}
-    bind:this={scrollEl}
-    onpointerenter={() => (isHovered = true)}
-    onpointerleave={() => (isHovered = false)}
-    onpointerdown={startDrag}
-    onpointermove={moveDrag}
-    onpointerup={endDrag}
-    onpointercancel={endDrag}
   >
-    {#each tournament.zones as zone}
-      <article class="zone-card">
-        <div class="zone-title-row">
-          <h4>Zona {zone.name}</h4>
-          <div class="zone-actions">
-            <a class="zone-btn" href={`/fixtures?torneo=${tournament.id}&zona=${zone.id}`} onclick={handleClick}>Fixture</a>
-            <a class="zone-btn" href={`/standings?torneo=${tournament.id}&zona=${zone.id}`} onclick={handleClick}>Tabla</a>
+    <div class="marquee-track">
+      {#each cards as zone, i}
+        <article
+          class="zone-card"
+          aria-hidden={multi && i >= tournament.zones.length}
+        >
+          <div class="zone-title-row">
+            <h4>Zona {zone.name}</h4>
+            <div class="zone-actions">
+              <a class="zone-btn" href={`/fixtures?torneo=${tournament.id}&zona=${zone.id}`}>Fixture</a>
+              <a class="zone-btn" href={`/standings?torneo=${tournament.id}&zona=${zone.id}`}>Tabla</a>
+            </div>
           </div>
-        </div>
 
-        {#if zone.top.length}
-          <div class="standings">
-            {#each zone.top as row, index}
-              <div class="stand-row">
-                <span class="stand-pos">{index + 1}</span>
-                <span class="stand-club">{row.clubName}</span>
-                <span class="stand-pts">{row.points} pts</span>
-              </div>
-            {/each}
+          {#if zone.top.length}
+            <div class="standings">
+              {#each zone.top as row, index}
+                <div class="stand-row">
+                  <span class="stand-pos">{index + 1}</span>
+                  <span class="stand-club">{row.clubName}</span>
+                  <span class="stand-pts">{row.points} pts</span>
+                </div>
+              {/each}
+            </div>
+          {:else}
+            <p class="muted compact">Todavía no hay posiciones.</p>
+          {/if}
+
+          <div class="zone-footer">
+            {#if zone.nextMatchday}Próxima Fecha: {formatNextMatchday(zone.nextMatchday)}{:else}Sin próxima fecha{/if}
           </div>
-        {:else}
-          <p class="muted compact">Todavía no hay posiciones.</p>
-        {/if}
-
-        <div class="zone-footer">
-          {#if zone.nextMatchday}Próxima Fecha: {formatNextMatchday(zone.nextMatchday)}{:else}Sin próxima fecha{/if}
-        </div>
-      </article>
-    {/each}
+        </article>
+      {/each}
+    </div>
   </div>
 </section>
 
@@ -131,19 +84,15 @@
     letter-spacing: -.02em;
     color: var(--color-accent-text);
   }
-  .zones-track {
-    display: flex;
-    gap: 1rem;
+
+  .marquee-viewport {
     overflow-x: auto;
     padding: .25rem .1rem .5rem;
     scrollbar-width: none;
-    cursor: grab;
-    touch-action: pan-y;
-    user-select: none;
     -webkit-overflow-scrolling: touch;
   }
-  .zones-track::-webkit-scrollbar { display: none; }
-  .zones-track.dragging { cursor: grabbing; }
+  .marquee-viewport::-webkit-scrollbar { display: none; }
+  .marquee-track { display: flex; gap: 1rem; width: max-content; }
   .zone-card {
     flex: 0 0 auto;
     display: flex;
@@ -155,6 +104,25 @@
     background: var(--color-surface);
     box-shadow: 0 16px 45px var(--color-shadow);
   }
+
+  /* Desktop with pointer: auto-scroll (CSS marquee), pausing on hover to read */
+  @media (hover: hover) and (pointer: fine) and (min-width: 761px) {
+    .marquee-viewport.marquee { overflow: hidden; cursor: default; }
+    .marquee-viewport.marquee .marquee-track {
+      animation: home-marquee var(--m-dur) linear infinite;
+      will-change: transform;
+    }
+    .marquee-viewport.marquee:hover .marquee-track,
+    .marquee-viewport.marquee:active .marquee-track {
+      animation-play-state: paused;
+    }
+  }
+
+  @keyframes home-marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+
   .zone-title-row {
     display: flex;
     align-items: center;
